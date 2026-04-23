@@ -1,0 +1,58 @@
+# Bivalent ligand - bivalent receptor
+# No rings
+
+begin parameters
+ NA      system_avogadro # (molecules/mol)
+ f       0.10            # Fraction of the cell to simulate
+ Vo      f*1.0e-11       # Extracellular volume=1/cell_density (L)
+ V       f*3.0e-12       # Cytoplasmic volume (L)
+
+# Initial populations.
+ R0  1e4*f
+ L0  1e4*f
+
+# Rate constants
+ kp1 2.3e7/(NA*V)
+ km1 1
+ kp2 2.3e10/(NA*V)
+ km2 1
+
+end parameters
+
+begin molecule types
+  R(r,r)
+  L(l,l)
+end molecule types
+
+begin species
+  R(r,r) R0
+  L(l,l) L0
+end species
+
+begin reaction rules
+# Ligand addition
+R(r) + L(l,l) <-> R(r!1).L(l!1,l) kp1,km1
+
+# Chain elongation
+R(r) + L(l,l!+) <-> R(r!1).L(l!1,l!+) kp2,km2
+end reaction rules
+
+begin observables
+Species   Ligfree   	L(l,l)
+Species   Ligbnd1   	L(l!+,l)
+Species   Ligbnd2   	L(l!+,l!+)
+Species   Size1    	R()=1
+Species   Size2    	R()=2
+Species   Size3    	R()=3
+Species   Size4    	R()=4
+Species   Size5    	R()=5
+Species   Size6    	R()=6
+Species   Size7    	R()=7
+Species   Size8    	R()=8
+Species   Size9    	R()=9
+Species   Size10    	R()=10
+Species   SizeGT10    	R()>10
+end observables
+
+simulate_rm({t_end=>10,n_steps=>100});
+

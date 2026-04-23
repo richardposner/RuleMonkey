@@ -1,0 +1,61 @@
+# Aggregation of LAT mediated by Grb-Sos-Grb.
+# In this particlular model, there are 2 equivalent Grb binding sites on LAT and
+# the two Grb binding sites on Sos are also assumed to be equivalent.
+
+begin parameters
+Lat_tot 	2000
+Grb_tot 	75000
+Sos_tot 	37500
+kglp 		4.86568e-05
+kglm 		0.31 
+kxglp 		1.08975e-03
+kxglm 		kglm 
+kgsp 		4.37911e-06
+kgsm 		0.034412
+sigma 		0.5
+kxgsp 		sigma*kgsp
+kxgsm 		kgsm
+kxgspsr 	sigma*kgsp*kxglp/kglp
+kxgsmsr 	kgsm
+
+end parameters
+
+begin species
+1 Lat(p,p,p)	Lat_tot
+2 Grb(SH2,SH3)	Grb_tot
+3 Sos(g,g)	Sos_tot
+end species
+
+begin reaction_rules
+
+1 Grb(SH2,SH3) + Sos(g,g) <-> Grb(SH2,SH3!1).Sos(g!1,g)   kgsp, kgsm
+
+2 Grb(SH2,SH3) + Sos(g,g!1).Grb(SH2,SH3!1) <-> Grb(SH2,SH3!2).Sos(g!2,g!1).Grb(SH2,SH3!1)   kxgsp, kxgsm
+
+3 Grb(SH2,SH3) + Sos(g,g!1).Grb(SH2!+,SH3!1) <-> Grb(SH2,SH3!2).Sos(g!2,g!1).Grb(SH2!+,SH3!1)   kxgsp,kxgsm
+
+4 Grb(SH2!+,SH3) + Sos(g,g) <-> Grb(SH2!+,SH3!1).Sos(g!1,g)   kgsp, kgsm
+
+5 Grb(SH2!+,SH3) + Sos(g,g!1).Grb(SH2,SH3!1) <-> Grb(SH2!+,SH3!2).Sos(g!2,g!1).Grb(SH2,SH3!1)   kxgsp, kxgsm
+
+6 Grb(SH2!+,SH3) + Sos(g,g!1).Grb(SH2!+,SH3!1) <-> Grb(SH2!+,SH3!2).Sos(g!2,g!1).Grb(SH2!+,SH3!1)   kxgspsr, kxgsmsr
+
+7 Lat(p) + Grb(SH2,SH3) <-> Lat(p!1).Grb(SH2!1,SH3)  kglp, kglm
+
+8 Lat(p) + Grb(SH2,SH3!1).Sos(g!1,g) <-> Lat(p!2).Grb(SH2!2,SH3!1).Sos(g!1,g)  kglp, kglm
+
+9 Lat(p) + Grb(SH2,SH3!1).Sos(g!1,g!2).Grb(SH2,SH3!2) <-> Lat(p!3).Grb(SH2!3,SH3!1).Sos(g!1,g!2).Grb(SH2,SH3!2)  kglp, kglm
+
+10 Lat(p) + Grb(SH2,SH3!1).Sos(g!1,g!2).Grb(SH2!3,SH3!2).Lat(p!3) <->
+Lat(p!4).Grb(SH2!4,SH3!1).Sos(g!1,g!2).Grb(SH2!3,SH3!2).Lat(p!3) kxglp, kxglm
+
+end reaction_rules
+
+begin observables
+Species  Latfree	Lat(p,p,p)
+Species  Grbfree	Grb(SH2,SH3)
+Species  Sosfree  	Sos(g,g)
+end observables
+
+
+simulate_rm({t_end=>10,n_steps=>100});

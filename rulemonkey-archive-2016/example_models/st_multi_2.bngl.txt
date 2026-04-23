@@ -1,0 +1,34 @@
+# State change reaction: multiple events at the same reaction step
+
+begin parameters
+t_end		10
+n_steps         100
+kf1		0.1
+kb1		0.5
+kf2		0.4
+kb2		0.6
+A_tot		10000
+end parameters
+
+begin molecule types
+A(a~U,b~U,c~U)
+end molecule types
+
+begin species
+A(a~U,b~U,c~U)		A_tot
+end species
+
+begin reaction rules
+A(a~U,b~U) <-> A(a~P,b~P) kf1,kb1
+A(c~U) <-> A(c~P) kf2,kb2
+end reaction rules
+
+begin observables
+Species  UUP  A(a~U,b~U,c~P)
+Species  PPU  A(a~P,b~P,c~U)
+Species  UUU  A(a~U,b~U,c~U)
+Species  PPP  A(a~P,b~P,c~P)
+end observables
+
+simulate_rm({t_end=>t_end,n_steps=>n_steps});
+

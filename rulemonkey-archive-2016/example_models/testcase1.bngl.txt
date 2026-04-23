@@ -1,0 +1,103 @@
+# Abstract model of tyrosine phosphorylation and 
+# adaptor protein binding.
+# For compartment volume V=1.4*10^-15 L: 1000 tyrosines (1.2*10^-6 M) and
+# 100 adaptor proteins (1.2*10^-7 M)
+# Binding rate constants per this volume:
+# kp1'=kp2'=0.009 molecules^-1 s^-1
+# kp3'=kp4'=0.002 molecules^-1 s^-1
+# kp5'=kp6'=0.008 molecules^-1 s^-1
+# These values correspond to
+# kp1=kp2=7.6*10^6 M^-1 s^-1
+# kp3=kp4=1.7*10^6 M^-1 s^-1
+# kp5=kp6=6.7*10^6 M^-1 s^-1
+# (kpi=kpi'*V*N_A)
+
+begin parameters
+tend	1000
+nsteps      1000
+
+kp11 0.009
+kp12 0.009
+kp21 0.002
+kp22 0.002
+kp31 0.008
+kp32 0.008
+
+km   0.3
+
+p11  0.01
+p12  0.01
+p21  0.1
+p22  0.1
+p31  0.8
+p32  0.8
+
+kd   0.01
+
+D_0  1000
+A_0  100
+end parameters
+
+begin molecule types
+D(Y11~U~P,Y12~U~P,Y21~U~P,Y22~U~P,Y31~U~P,Y32~U~P)
+A(SH2)
+end molecule types
+
+begin species
+D(Y11~U,Y12~U,Y21~U,Y22~U,Y31~U,Y32~U)	D_0
+A(SH2)	 					A_0
+end species
+
+
+begin reaction rules
+
+# Phosphorylation
+D(Y11~U) -> D(Y11~P)  p11
+D(Y12~U) -> D(Y12~P)  p12
+D(Y21~U) -> D(Y21~P)  p21
+D(Y22~U) -> D(Y22~P)  p22
+D(Y31~U) -> D(Y31~P)  p31
+D(Y32~U) -> D(Y32~P)  p32
+
+# Dephosphorylation
+D(Y11~P) -> D(Y11~U)  kd
+D(Y12~P) -> D(Y12~U)  kd
+D(Y21~P) -> D(Y21~U)  kd
+D(Y22~P) -> D(Y22~U)  kd
+D(Y31~P) -> D(Y31~U)  kd
+D(Y32~P) -> D(Y32~U)  kd
+
+# Grb2 binding to pY / dissociation
+D(Y11~P) + A(SH2)   <-> D(Y11~P!1).A(SH2!1)   kp11,km
+D(Y12~P) + A(SH2)   <-> D(Y12~P!1).A(SH2!1)   kp12,km
+D(Y21~P) + A(SH2)   <-> D(Y21~P!1).A(SH2!1)   kp21,km
+D(Y22~P) + A(SH2)   <-> D(Y22~P!1).A(SH2!1)   kp22,km
+D(Y31~P) + A(SH2)   <-> D(Y31~P!1).A(SH2!1)   kp31,km
+D(Y32~P) + A(SH2)   <-> D(Y32~P!1).A(SH2!1)   kp32,km
+
+end reaction rules
+
+begin observables
+Species  Y11    D(Y11~U)
+Species  Y12    D(Y12~U)
+Species  Y21    D(Y21~U)
+Species  Y22    D(Y22~U)
+Species  Y31    D(Y31~U)
+Species  Y32    D(Y32~U)
+#Species  pY11   D(Y11~P)
+#Species  pY12   D(Y12~P)
+#Species  pY21   D(Y21~P)
+#Species  pY22   D(Y22~P)
+#Species  pY31   D(Y31~P)
+#Species  pY32   D(Y32~P)
+#Species  GpY11  D(Y11~P!1).A(SH2!1)
+#Species  GpY12  D(Y12~P!1).A(SH2!1)
+#Species  GpY21  D(Y21~P!1).A(SH2!1)
+#Species  GpY22  D(Y22~P!1).A(SH2!1)
+#Species  GpY31  D(Y31~P!1).A(SH2!1)
+#Species  GpY32  D(Y32~P!1).A(SH2!1)
+Species  A_free	A(SH2)
+end observables
+
+simulate_rs({t_end=>tend,n_steps=>nsteps});
+

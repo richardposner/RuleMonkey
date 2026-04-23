@@ -1,0 +1,348 @@
+# Trivalent ligand - bivalent receptor
+# Ring closure reaction is included. All possible cyclic
+# combinations may form.
+
+begin parameters
+t_end		1000
+n_steps     100
+
+Lig_tot		4200
+Rec_tot		300
+
+kp1		3.0e-07
+km1		0.01
+kp2		3.0e-04
+km2		0.01
+kp3		3.0e-04
+km3		0.01
+end parameters
+
+begin molecule types
+L(r,r,r)
+R(l,l)
+end molecule types
+
+begin species
+L(r,r,r)	Lig_tot
+R(l,l)		Rec_tot
+end species
+
+begin reaction rules
+L(r,r,r) + R(l) <-> L(r!1,r,r).R(l!1) kp1,km1
+L(r,r,r!+) + R(l) <-> L(r!1,r,r!+).R(l!1) kp2,km2
+L(r,r!+,r!+) + R(l) <-> L(r!1,r!+,r!+).R(l!1) kp3,km3
+L(r).R(l) <-> L(r!1).R(l!1) kp3,km3
+end reaction rules
+
+begin observables
+Species Ligfree   L(r,r,r)
+Species Ligbnd1   L(r!+,r,r)
+Species Ligbnd2   L(r!+,r!+,r)
+Species Ligbnd3   L(r!+,r!+,r!+)
+
+Species Size   R()=1
+Species Size   R()=2
+Species Size   R()=3
+Species Size   R()=4
+Species Size   R()=5
+Species Size   R()=6
+Species Size   R()=7
+Species Size   R()=8
+Species Size   R()=9
+Species Size   R()=10
+Species Size   R()=11
+Species Size   R()=12
+Species Size   R()=13
+Species Size   R()=14
+Species Size   R()=15
+Species Size   R()=16
+Species Size   R()=17
+Species Size   R()=18
+Species Size   R()=19
+Species Size   R()=20
+Species Size   R()=21
+Species Size   R()=22
+Species Size   R()=23
+Species Size   R()=24
+Species Size   R()=25
+Species Size   R()=26
+Species Size   R()=27
+Species Size   R()=28
+Species Size   R()=29
+Species Size   R()=30
+Species Size   R()=31
+Species Size   R()=32
+Species Size   R()=33
+Species Size   R()=34
+Species Size   R()=35
+Species Size   R()=36
+Species Size   R()=37
+Species Size   R()=38
+Species Size   R()=39
+Species Size   R()=40
+Species Size   R()=41
+Species Size   R()=42
+Species Size   R()=43
+Species Size   R()=44
+Species Size   R()=45
+Species Size   R()=46
+Species Size   R()=47
+Species Size   R()=48
+Species Size   R()=49
+Species Size   R()=50
+Species Size   R()=51
+Species Size   R()=52
+Species Size   R()=53
+Species Size   R()=54
+Species Size   R()=55
+Species Size   R()=56
+Species Size   R()=57
+Species Size   R()=58
+Species Size   R()=59
+Species Size   R()=60
+Species Size   R()=61
+Species Size   R()=62
+Species Size   R()=63
+Species Size   R()=64
+Species Size   R()=65
+Species Size   R()=66
+Species Size   R()=67
+Species Size   R()=68
+Species Size   R()=69
+Species Size   R()=70
+Species Size   R()=71
+Species Size   R()=72
+Species Size   R()=73
+Species Size   R()=74
+Species Size   R()=75
+Species Size   R()=76
+Species Size   R()=77
+Species Size   R()=78
+Species Size   R()=79
+Species Size   R()=80
+Species Size   R()=81
+Species Size   R()=82
+Species Size   R()=83
+Species Size   R()=84
+Species Size   R()=85
+Species Size   R()=86
+Species Size   R()=87
+Species Size   R()=88
+Species Size   R()=89
+Species Size   R()=90
+Species Size   R()=91
+Species Size   R()=92
+Species Size   R()=93
+Species Size   R()=94
+Species Size   R()=95
+Species Size   R()=96
+Species Size   R()=97
+Species Size   R()=98
+Species Size   R()=99
+Species Size   R()=100
+
+Species Size   R()=101
+Species Size   R()=102
+Species Size   R()=103
+Species Size   R()=104
+Species Size   R()=105
+Species Size   R()=106
+Species Size   R()=107
+Species Size   R()=108
+Species Size   R()=109
+Species Size   R()=110
+Species Size   R()=111
+Species Size   R()=112
+Species Size   R()=113
+Species Size   R()=114
+Species Size   R()=115
+Species Size   R()=116
+Species Size   R()=117
+Species Size   R()=118
+Species Size   R()=119
+Species Size   R()=120
+Species Size   R()=121
+Species Size   R()=122
+Species Size   R()=123
+Species Size   R()=124
+Species Size   R()=125
+Species Size   R()=126
+Species Size   R()=127
+Species Size   R()=128
+Species Size   R()=129
+Species Size   R()=130
+Species Size   R()=131
+Species Size   R()=132
+Species Size   R()=133
+Species Size   R()=134
+Species Size   R()=135
+Species Size   R()=136
+Species Size   R()=137
+Species Size   R()=138
+Species Size   R()=139
+Species Size   R()=140
+Species Size   R()=141
+Species Size   R()=142
+Species Size   R()=143
+Species Size   R()=144
+Species Size   R()=145
+Species Size   R()=146
+Species Size   R()=147
+Species Size   R()=148
+Species Size   R()=149
+Species Size   R()=150
+Species Size   R()=151
+Species Size   R()=152
+Species Size   R()=153
+Species Size   R()=154
+Species Size   R()=155
+Species Size   R()=156
+Species Size   R()=157
+Species Size   R()=158
+Species Size   R()=159
+Species Size   R()=160
+Species Size   R()=161
+Species Size   R()=162
+Species Size   R()=163
+Species Size   R()=164
+Species Size   R()=165
+Species Size   R()=166
+Species Size   R()=167
+Species Size   R()=168
+Species Size   R()=169
+Species Size   R()=170
+Species Size   R()=171
+Species Size   R()=172
+Species Size   R()=173
+Species Size   R()=174
+Species Size   R()=175
+Species Size   R()=176
+Species Size   R()=177
+Species Size   R()=178
+Species Size   R()=179
+Species Size   R()=180
+Species Size   R()=181
+Species Size   R()=182
+Species Size   R()=183
+Species Size   R()=184
+Species Size   R()=185
+Species Size   R()=186
+Species Size   R()=187
+Species Size   R()=188
+Species Size   R()=189
+Species Size   R()=190
+Species Size   R()=191
+Species Size   R()=192
+Species Size   R()=193
+Species Size   R()=194
+Species Size   R()=195
+Species Size   R()=196
+Species Size   R()=197
+Species Size   R()=198
+Species Size   R()=199
+Species Size   R()=200
+
+Species Size   R()=201
+Species Size   R()=202
+Species Size   R()=203
+Species Size   R()=204
+Species Size   R()=205
+Species Size   R()=206
+Species Size   R()=207
+Species Size   R()=208
+Species Size   R()=209
+Species Size   R()=210
+Species Size   R()=211
+Species Size   R()=212
+Species Size   R()=213
+Species Size   R()=214
+Species Size   R()=215
+Species Size   R()=216
+Species Size   R()=217
+Species Size   R()=218
+Species Size   R()=219
+Species Size   R()=220
+Species Size   R()=221
+Species Size   R()=222
+Species Size   R()=223
+Species Size   R()=224
+Species Size   R()=225
+Species Size   R()=226
+Species Size   R()=227
+Species Size   R()=228
+Species Size   R()=229
+Species Size   R()=230
+Species Size   R()=231
+Species Size   R()=232
+Species Size   R()=233
+Species Size   R()=234
+Species Size   R()=235
+Species Size   R()=236
+Species Size   R()=237
+Species Size   R()=238
+Species Size   R()=239
+Species Size   R()=240
+Species Size   R()=241
+Species Size   R()=242
+Species Size   R()=243
+Species Size   R()=244
+Species Size   R()=245
+Species Size   R()=246
+Species Size   R()=247
+Species Size   R()=248
+Species Size   R()=249
+Species Size   R()=250
+Species Size   R()=251
+Species Size   R()=252
+Species Size   R()=253
+Species Size   R()=254
+Species Size   R()=255
+Species Size   R()=256
+Species Size   R()=257
+Species Size   R()=258
+Species Size   R()=259
+Species Size   R()=260
+Species Size   R()=261
+Species Size   R()=262
+Species Size   R()=263
+Species Size   R()=264
+Species Size   R()=265
+Species Size   R()=266
+Species Size   R()=267
+Species Size   R()=268
+Species Size   R()=269
+Species Size   R()=270
+Species Size   R()=271
+Species Size   R()=272
+Species Size   R()=273
+Species Size   R()=274
+Species Size   R()=275
+Species Size   R()=276
+Species Size   R()=277
+Species Size   R()=278
+Species Size   R()=279
+Species Size   R()=280
+Species Size   R()=281
+Species Size   R()=282
+Species Size   R()=283
+Species Size   R()=284
+Species Size   R()=285
+Species Size   R()=286
+Species Size   R()=287
+Species Size   R()=288
+Species Size   R()=289
+Species Size   R()=290
+Species Size   R()=291
+Species Size   R()=292
+Species Size   R()=293
+Species Size   R()=294
+Species Size   R()=295
+Species Size   R()=296
+Species Size   R()=297
+Species Size   R()=298
+Species Size   R()=299
+Species Size   R()=300
+end observables
+
+simulate_rm({t_end=>t_end,n_steps=>n_steps});
+

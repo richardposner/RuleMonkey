@@ -1,0 +1,34 @@
+begin parameters
+t_end		10
+n_steps     100
+
+A_tot		100000
+B_tot		100000
+f			100.0
+
+kp1		1.0
+kp2		f*kp1
+end parameters
+
+begin molecule types
+A(a~U~P)
+B(b~U~P)
+end molecule types
+
+begin species
+A(a~U)		A_tot
+B(b~U)		B_tot
+end species
+
+begin reaction rules
+A(a~U) -> A(a~P) kp1
+B(b~U) -> B(b~P) kp2
+end reaction rules
+
+begin observables
+Species AU  A(a~U)
+Species BU	B(b~U)
+end observables
+
+simulate_rm({t_end=>t_end,n_steps=>n_steps});
+
