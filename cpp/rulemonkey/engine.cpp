@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstring>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <limits>
 #include <numeric>
