@@ -53,6 +53,8 @@ RM_DRIVER = os.environ.get(
     "RM_DRIVER",
     os.path.join(REPO_ROOT, "build", "release", "rm_driver"),
 )
+# Reference data root. Default = corpus suite; --ref-dir overrides at runtime.
+# Other ref-derived paths are recomputed by set_ref_dir() when --ref-dir is given.
 REF_DIR = os.path.join(REPO_ROOT, "tests", "reference", "nfsim")
 XML_DIR = os.path.join(REF_DIR, "xml")
 PARAMS = os.path.join(REF_DIR, "sim_params.tsv")
@@ -60,6 +62,22 @@ ENS_DIR = os.path.join(REF_DIR, "ensemble")
 SUMMARY = os.path.join(REF_DIR, "summary.tsv")
 NOISE_FLOOR_FILE = os.path.join(REF_DIR, "noise_floor.tsv")
 TIMEOUT_FILE = os.path.join(REPO_ROOT, "harness", "model_timeouts.tsv")
+
+
+def set_ref_dir(new_ref_dir: str) -> None:
+    """Re-point all reference-relative paths at a different corpus root.
+
+    Used by basicmodels.py (and any future per-corpus harness) to share
+    benchmark_full's verdict logic without code duplication.
+    """
+    global REF_DIR, XML_DIR, PARAMS, ENS_DIR, SUMMARY, NOISE_FLOOR_FILE
+    REF_DIR = os.path.abspath(new_ref_dir)
+    XML_DIR = os.path.join(REF_DIR, "xml")
+    PARAMS = os.path.join(REF_DIR, "sim_params.tsv")
+    ENS_DIR = os.path.join(REF_DIR, "ensemble")
+    SUMMARY = os.path.join(REF_DIR, "summary.tsv")
+    NOISE_FLOOR_FILE = os.path.join(REF_DIR, "noise_floor.tsv")
+
 
 DEFAULT_REPS = 10
 ADAPTIVE_MAX_REPS = 100  # cap for adaptive per-model reps
@@ -762,6 +780,15 @@ def main():
     # Parse args
     args = sys.argv[1:]
     output_path = os.path.join(REPO_ROOT, "build", "benchmark_report.md")
+
+    # --ref-dir DIR re-points all reference paths at a different corpus root.
+    # Honored before any other arg parsing so downstream logic sees the new
+    # constants. Used by basicmodels.py (and would be used by any future
+    # per-corpus driver) to share verdict logic.
+    if "--ref-dir" in args:
+        idx = args.index("--ref-dir")
+        set_ref_dir(args[idx + 1])
+        args = args[:idx] + args[idx + 2 :]
 
     tier = None
     if "--tier" in args:

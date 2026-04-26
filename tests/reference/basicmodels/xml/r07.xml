@@ -1,0 +1,3917 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created by BioNetGen 2.9.3  -->
+<sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
+  <model id="v07">
+    <ListOfParameters>
+      <Parameter id="_rateLaw1" type="Constant" value="1" expr="1"/>
+      <Parameter id="_rateLaw2" type="Constant" value="1" expr="1"/>
+      <Parameter id="_rateLaw3" type="Constant" value="1" expr="1"/>
+      <Parameter id="_rateLaw4" type="Constant" value="1" expr="1"/>
+      <Parameter id="_rateLaw5" type="Constant" value="5" expr="5"/>
+      <Parameter id="_rateLaw6" type="Constant" value="100" expr="100"/>
+      <Parameter id="_rateLaw7" type="Constant" value="2" expr="2"/>
+      <Parameter id="_rateLaw8" type="Constant" value="2" expr="2"/>
+    </ListOfParameters>
+    <ListOfMoleculeTypes>
+      <MoleculeType id="B">
+        <ListOfComponentTypes>
+          <ComponentType id="c"/>
+          <ComponentType id="p">
+            <ListOfAllowedStates>
+              <AllowedState id="U"/>
+              <AllowedState id="P"/>
+              <AllowedState id="PP"/>
+            </ListOfAllowedStates>
+          </ComponentType>
+        </ListOfComponentTypes>
+      </MoleculeType>
+      <MoleculeType id="anti">
+        <ListOfComponentTypes>
+          <ComponentType id="r"/>
+          <ComponentType id="r"/>
+        </ListOfComponentTypes>
+      </MoleculeType>
+      <MoleculeType id="rec">
+        <ListOfComponentTypes>
+          <ComponentType id="a"/>
+          <ComponentType id="b"/>
+          <ComponentType id="b"/>
+        </ListOfComponentTypes>
+      </MoleculeType>
+    </ListOfMoleculeTypes>
+    <ListOfCompartments>
+    </ListOfCompartments>
+    <ListOfSpecies>
+      <Species id="S1"  concentration="500" name="anti(r,r)">
+        <ListOfMolecules>
+          <Molecule id="S1_M1" name="anti">
+            <ListOfComponents>
+              <Component id="S1_M1_C1" name="r" numberOfBonds="0"/>
+              <Component id="S1_M1_C2" name="r" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+      </Species>
+      <Species id="S2"  concentration="1000" name="rec(a,b,b)">
+        <ListOfMolecules>
+          <Molecule id="S2_M1" name="rec">
+            <ListOfComponents>
+              <Component id="S2_M1_C1" name="a" numberOfBonds="0"/>
+              <Component id="S2_M1_C2" name="b" numberOfBonds="0"/>
+              <Component id="S2_M1_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+      </Species>
+      <Species id="S3"  concentration="2000" name="B(c,p~U)">
+        <ListOfMolecules>
+          <Molecule id="S3_M1" name="B">
+            <ListOfComponents>
+              <Component id="S3_M1_C1" name="c" numberOfBonds="0"/>
+              <Component id="S3_M1_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+      </Species>
+      <Species id="S4"  concentration="0" name="B(c!1,p~U).rec(a,b!1,b)">
+        <ListOfMolecules>
+          <Molecule id="S4_M1" name="B">
+            <ListOfComponents>
+              <Component id="S4_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S4_M1_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S4_M2" name="rec">
+            <ListOfComponents>
+              <Component id="S4_M2_C1" name="a" numberOfBonds="0"/>
+              <Component id="S4_M2_C2" name="b" numberOfBonds="1"/>
+              <Component id="S4_M2_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S4_B1" site1="S4_M1_C1" site2="S4_M2_C2"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S5"  concentration="0" name="anti(r!1,r).rec(a!1,b,b)">
+        <ListOfMolecules>
+          <Molecule id="S5_M1" name="anti">
+            <ListOfComponents>
+              <Component id="S5_M1_C1" name="r" numberOfBonds="1"/>
+              <Component id="S5_M1_C2" name="r" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S5_M2" name="rec">
+            <ListOfComponents>
+              <Component id="S5_M2_C1" name="a" numberOfBonds="1"/>
+              <Component id="S5_M2_C2" name="b" numberOfBonds="0"/>
+              <Component id="S5_M2_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S5_B1" site1="S5_M1_C1" site2="S5_M2_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S6"  concentration="0" name="B(c,p~P)">
+        <ListOfMolecules>
+          <Molecule id="S6_M1" name="B">
+            <ListOfComponents>
+              <Component id="S6_M1_C1" name="c" numberOfBonds="0"/>
+              <Component id="S6_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+      </Species>
+      <Species id="S7"  concentration="0" name="B(c!1,p~P).rec(a,b!1,b)">
+        <ListOfMolecules>
+          <Molecule id="S7_M1" name="B">
+            <ListOfComponents>
+              <Component id="S7_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S7_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S7_M2" name="rec">
+            <ListOfComponents>
+              <Component id="S7_M2_C1" name="a" numberOfBonds="0"/>
+              <Component id="S7_M2_C2" name="b" numberOfBonds="1"/>
+              <Component id="S7_M2_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S7_B1" site1="S7_M1_C1" site2="S7_M2_C2"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S8"  concentration="0" name="B(c!1,p~U).B(c!2,p~U).rec(a,b!1,b!2)">
+        <ListOfMolecules>
+          <Molecule id="S8_M1" name="B">
+            <ListOfComponents>
+              <Component id="S8_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S8_M1_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S8_M2" name="B">
+            <ListOfComponents>
+              <Component id="S8_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S8_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S8_M3" name="rec">
+            <ListOfComponents>
+              <Component id="S8_M3_C1" name="a" numberOfBonds="0"/>
+              <Component id="S8_M3_C2" name="b" numberOfBonds="1"/>
+              <Component id="S8_M3_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S8_B1" site1="S8_M1_C1" site2="S8_M3_C2"/>
+          <Bond id="S8_B2" site1="S8_M2_C1" site2="S8_M3_C3"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S9"  concentration="0" name="B(c!1,p~P).B(c!2,p~U).rec(a,b!2,b!1)">
+        <ListOfMolecules>
+          <Molecule id="S9_M1" name="B">
+            <ListOfComponents>
+              <Component id="S9_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S9_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S9_M2" name="B">
+            <ListOfComponents>
+              <Component id="S9_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S9_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S9_M3" name="rec">
+            <ListOfComponents>
+              <Component id="S9_M3_C1" name="a" numberOfBonds="0"/>
+              <Component id="S9_M3_C2" name="b" numberOfBonds="1"/>
+              <Component id="S9_M3_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S9_B1" site1="S9_M1_C1" site2="S9_M3_C3"/>
+          <Bond id="S9_B2" site1="S9_M2_C1" site2="S9_M3_C2"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S10"  concentration="0" name="B(c!1,p~U).anti(r!2,r).rec(a!2,b!1,b)">
+        <ListOfMolecules>
+          <Molecule id="S10_M1" name="B">
+            <ListOfComponents>
+              <Component id="S10_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S10_M1_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S10_M2" name="anti">
+            <ListOfComponents>
+              <Component id="S10_M2_C1" name="r" numberOfBonds="1"/>
+              <Component id="S10_M2_C2" name="r" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S10_M3" name="rec">
+            <ListOfComponents>
+              <Component id="S10_M3_C1" name="a" numberOfBonds="1"/>
+              <Component id="S10_M3_C2" name="b" numberOfBonds="1"/>
+              <Component id="S10_M3_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S10_B1" site1="S10_M1_C1" site2="S10_M3_C2"/>
+          <Bond id="S10_B2" site1="S10_M2_C1" site2="S10_M3_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S11"  concentration="0" name="B(c!1,p~P).anti(r!2,r).rec(a!2,b!1,b)">
+        <ListOfMolecules>
+          <Molecule id="S11_M1" name="B">
+            <ListOfComponents>
+              <Component id="S11_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S11_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S11_M2" name="anti">
+            <ListOfComponents>
+              <Component id="S11_M2_C1" name="r" numberOfBonds="1"/>
+              <Component id="S11_M2_C2" name="r" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S11_M3" name="rec">
+            <ListOfComponents>
+              <Component id="S11_M3_C1" name="a" numberOfBonds="1"/>
+              <Component id="S11_M3_C2" name="b" numberOfBonds="1"/>
+              <Component id="S11_M3_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S11_B1" site1="S11_M1_C1" site2="S11_M3_C2"/>
+          <Bond id="S11_B2" site1="S11_M2_C1" site2="S11_M3_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S12"  concentration="0" name="anti(r!1,r!2).rec(a!2,b,b).rec(a!1,b,b)">
+        <ListOfMolecules>
+          <Molecule id="S12_M1" name="anti">
+            <ListOfComponents>
+              <Component id="S12_M1_C1" name="r" numberOfBonds="1"/>
+              <Component id="S12_M1_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S12_M2" name="rec">
+            <ListOfComponents>
+              <Component id="S12_M2_C1" name="a" numberOfBonds="1"/>
+              <Component id="S12_M2_C2" name="b" numberOfBonds="0"/>
+              <Component id="S12_M2_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S12_M3" name="rec">
+            <ListOfComponents>
+              <Component id="S12_M3_C1" name="a" numberOfBonds="1"/>
+              <Component id="S12_M3_C2" name="b" numberOfBonds="0"/>
+              <Component id="S12_M3_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S12_B1" site1="S12_M1_C1" site2="S12_M3_C1"/>
+          <Bond id="S12_B2" site1="S12_M1_C2" site2="S12_M2_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S13"  concentration="0" name="B(c!1,p~U).anti(r!2,r!3).rec(a!3,b!1,b).rec(a!2,b,b)">
+        <ListOfMolecules>
+          <Molecule id="S13_M1" name="B">
+            <ListOfComponents>
+              <Component id="S13_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S13_M1_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S13_M2" name="anti">
+            <ListOfComponents>
+              <Component id="S13_M2_C1" name="r" numberOfBonds="1"/>
+              <Component id="S13_M2_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S13_M3" name="rec">
+            <ListOfComponents>
+              <Component id="S13_M3_C1" name="a" numberOfBonds="1"/>
+              <Component id="S13_M3_C2" name="b" numberOfBonds="1"/>
+              <Component id="S13_M3_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S13_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S13_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S13_M4_C2" name="b" numberOfBonds="0"/>
+              <Component id="S13_M4_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S13_B1" site1="S13_M1_C1" site2="S13_M3_C2"/>
+          <Bond id="S13_B2" site1="S13_M2_C1" site2="S13_M4_C1"/>
+          <Bond id="S13_B3" site1="S13_M2_C2" site2="S13_M3_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S14"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).rec(a,b!1,b!2)">
+        <ListOfMolecules>
+          <Molecule id="S14_M1" name="B">
+            <ListOfComponents>
+              <Component id="S14_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S14_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S14_M2" name="B">
+            <ListOfComponents>
+              <Component id="S14_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S14_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S14_M3" name="rec">
+            <ListOfComponents>
+              <Component id="S14_M3_C1" name="a" numberOfBonds="0"/>
+              <Component id="S14_M3_C2" name="b" numberOfBonds="1"/>
+              <Component id="S14_M3_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S14_B1" site1="S14_M1_C1" site2="S14_M3_C2"/>
+          <Bond id="S14_B2" site1="S14_M2_C1" site2="S14_M3_C3"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S15"  concentration="0" name="B(c!1,p~U).B(c!2,p~U).anti(r!3,r).rec(a!3,b!1,b!2)">
+        <ListOfMolecules>
+          <Molecule id="S15_M1" name="B">
+            <ListOfComponents>
+              <Component id="S15_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S15_M1_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S15_M2" name="B">
+            <ListOfComponents>
+              <Component id="S15_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S15_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S15_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S15_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S15_M3_C2" name="r" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S15_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S15_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S15_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S15_M4_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S15_B1" site1="S15_M1_C1" site2="S15_M4_C2"/>
+          <Bond id="S15_B2" site1="S15_M2_C1" site2="S15_M4_C3"/>
+          <Bond id="S15_B3" site1="S15_M3_C1" site2="S15_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S16"  concentration="0" name="B(c!1,p~P).B(c!2,p~U).anti(r!3,r).rec(a!3,b!2,b!1)">
+        <ListOfMolecules>
+          <Molecule id="S16_M1" name="B">
+            <ListOfComponents>
+              <Component id="S16_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S16_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S16_M2" name="B">
+            <ListOfComponents>
+              <Component id="S16_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S16_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S16_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S16_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S16_M3_C2" name="r" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S16_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S16_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S16_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S16_M4_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S16_B1" site1="S16_M1_C1" site2="S16_M4_C3"/>
+          <Bond id="S16_B2" site1="S16_M2_C1" site2="S16_M4_C2"/>
+          <Bond id="S16_B3" site1="S16_M3_C1" site2="S16_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S17"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).anti(r!3,r).rec(a!3,b!1,b!2)">
+        <ListOfMolecules>
+          <Molecule id="S17_M1" name="B">
+            <ListOfComponents>
+              <Component id="S17_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S17_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S17_M2" name="B">
+            <ListOfComponents>
+              <Component id="S17_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S17_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S17_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S17_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S17_M3_C2" name="r" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S17_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S17_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S17_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S17_M4_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S17_B1" site1="S17_M1_C1" site2="S17_M4_C2"/>
+          <Bond id="S17_B2" site1="S17_M2_C1" site2="S17_M4_C3"/>
+          <Bond id="S17_B3" site1="S17_M3_C1" site2="S17_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S18"  concentration="0" name="B(c!1,p~P).anti(r!2,r!3).rec(a!3,b!1,b).rec(a!2,b,b)">
+        <ListOfMolecules>
+          <Molecule id="S18_M1" name="B">
+            <ListOfComponents>
+              <Component id="S18_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S18_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S18_M2" name="anti">
+            <ListOfComponents>
+              <Component id="S18_M2_C1" name="r" numberOfBonds="1"/>
+              <Component id="S18_M2_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S18_M3" name="rec">
+            <ListOfComponents>
+              <Component id="S18_M3_C1" name="a" numberOfBonds="1"/>
+              <Component id="S18_M3_C2" name="b" numberOfBonds="1"/>
+              <Component id="S18_M3_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S18_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S18_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S18_M4_C2" name="b" numberOfBonds="0"/>
+              <Component id="S18_M4_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S18_B1" site1="S18_M1_C1" site2="S18_M3_C2"/>
+          <Bond id="S18_B2" site1="S18_M2_C1" site2="S18_M4_C1"/>
+          <Bond id="S18_B3" site1="S18_M2_C2" site2="S18_M3_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S19"  concentration="0" name="B(c!1,p~U).B(c!2,p~U).anti(r!3,r!4).rec(a!4,b!1,b!2).rec(a!3,b,b)">
+        <ListOfMolecules>
+          <Molecule id="S19_M1" name="B">
+            <ListOfComponents>
+              <Component id="S19_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S19_M1_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S19_M2" name="B">
+            <ListOfComponents>
+              <Component id="S19_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S19_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S19_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S19_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S19_M3_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S19_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S19_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S19_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S19_M4_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S19_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S19_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S19_M5_C2" name="b" numberOfBonds="0"/>
+              <Component id="S19_M5_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S19_B1" site1="S19_M1_C1" site2="S19_M4_C2"/>
+          <Bond id="S19_B2" site1="S19_M2_C1" site2="S19_M4_C3"/>
+          <Bond id="S19_B3" site1="S19_M3_C1" site2="S19_M5_C1"/>
+          <Bond id="S19_B4" site1="S19_M3_C2" site2="S19_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S20"  concentration="0" name="B(c!1,p~P).B(c!2,p~U).anti(r!3,r!4).rec(a!4,b!2,b!1).rec(a!3,b,b)">
+        <ListOfMolecules>
+          <Molecule id="S20_M1" name="B">
+            <ListOfComponents>
+              <Component id="S20_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S20_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S20_M2" name="B">
+            <ListOfComponents>
+              <Component id="S20_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S20_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S20_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S20_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S20_M3_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S20_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S20_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S20_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S20_M4_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S20_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S20_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S20_M5_C2" name="b" numberOfBonds="0"/>
+              <Component id="S20_M5_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S20_B1" site1="S20_M1_C1" site2="S20_M4_C3"/>
+          <Bond id="S20_B2" site1="S20_M2_C1" site2="S20_M4_C2"/>
+          <Bond id="S20_B3" site1="S20_M3_C1" site2="S20_M5_C1"/>
+          <Bond id="S20_B4" site1="S20_M3_C2" site2="S20_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S21"  concentration="0" name="B(c!1,p~U).B(c!2,p~U).anti(r!3,r!4).rec(a!4,b!1,b).rec(a!3,b!2,b)">
+        <ListOfMolecules>
+          <Molecule id="S21_M1" name="B">
+            <ListOfComponents>
+              <Component id="S21_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S21_M1_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S21_M2" name="B">
+            <ListOfComponents>
+              <Component id="S21_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S21_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S21_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S21_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S21_M3_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S21_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S21_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S21_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S21_M4_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S21_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S21_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S21_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S21_M5_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S21_B1" site1="S21_M1_C1" site2="S21_M4_C2"/>
+          <Bond id="S21_B2" site1="S21_M2_C1" site2="S21_M5_C2"/>
+          <Bond id="S21_B3" site1="S21_M3_C1" site2="S21_M5_C1"/>
+          <Bond id="S21_B4" site1="S21_M3_C2" site2="S21_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S22"  concentration="0" name="B(c!1,p~P).B(c!2,p~U).anti(r!3,r!4).rec(a!4,b!2,b).rec(a!3,b!1,b)">
+        <ListOfMolecules>
+          <Molecule id="S22_M1" name="B">
+            <ListOfComponents>
+              <Component id="S22_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S22_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S22_M2" name="B">
+            <ListOfComponents>
+              <Component id="S22_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S22_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S22_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S22_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S22_M3_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S22_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S22_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S22_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S22_M4_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S22_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S22_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S22_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S22_M5_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S22_B1" site1="S22_M1_C1" site2="S22_M5_C2"/>
+          <Bond id="S22_B2" site1="S22_M2_C1" site2="S22_M4_C2"/>
+          <Bond id="S22_B3" site1="S22_M3_C1" site2="S22_M5_C1"/>
+          <Bond id="S22_B4" site1="S22_M3_C2" site2="S22_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S23"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).anti(r!3,r!4).rec(a!4,b!1,b).rec(a!3,b!2,b)">
+        <ListOfMolecules>
+          <Molecule id="S23_M1" name="B">
+            <ListOfComponents>
+              <Component id="S23_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S23_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S23_M2" name="B">
+            <ListOfComponents>
+              <Component id="S23_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S23_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S23_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S23_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S23_M3_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S23_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S23_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S23_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S23_M4_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S23_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S23_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S23_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S23_M5_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S23_B1" site1="S23_M1_C1" site2="S23_M4_C2"/>
+          <Bond id="S23_B2" site1="S23_M2_C1" site2="S23_M5_C2"/>
+          <Bond id="S23_B3" site1="S23_M3_C1" site2="S23_M5_C1"/>
+          <Bond id="S23_B4" site1="S23_M3_C2" site2="S23_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S24"  concentration="0" name="B(c!1,p~U).B(c!2,p~U).B(c!3,p~U).anti(r!4,r!5).rec(a!5,b!1,b!2).rec(a!4,b!3,b)">
+        <ListOfMolecules>
+          <Molecule id="S24_M1" name="B">
+            <ListOfComponents>
+              <Component id="S24_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S24_M1_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S24_M2" name="B">
+            <ListOfComponents>
+              <Component id="S24_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S24_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S24_M3" name="B">
+            <ListOfComponents>
+              <Component id="S24_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S24_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S24_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S24_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S24_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S24_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S24_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S24_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S24_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S24_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S24_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S24_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S24_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S24_B1" site1="S24_M1_C1" site2="S24_M5_C2"/>
+          <Bond id="S24_B2" site1="S24_M2_C1" site2="S24_M5_C3"/>
+          <Bond id="S24_B3" site1="S24_M3_C1" site2="S24_M6_C2"/>
+          <Bond id="S24_B4" site1="S24_M4_C1" site2="S24_M6_C1"/>
+          <Bond id="S24_B5" site1="S24_M4_C2" site2="S24_M5_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S25"  concentration="0" name="B(c!1,p~P).B(c!2,p~U).B(c!3,p~U).anti(r!4,r!5).rec(a!5,b!2,b!3).rec(a!4,b!1,b)">
+        <ListOfMolecules>
+          <Molecule id="S25_M1" name="B">
+            <ListOfComponents>
+              <Component id="S25_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S25_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S25_M2" name="B">
+            <ListOfComponents>
+              <Component id="S25_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S25_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S25_M3" name="B">
+            <ListOfComponents>
+              <Component id="S25_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S25_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S25_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S25_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S25_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S25_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S25_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S25_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S25_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S25_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S25_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S25_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S25_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S25_B1" site1="S25_M1_C1" site2="S25_M6_C2"/>
+          <Bond id="S25_B2" site1="S25_M2_C1" site2="S25_M5_C2"/>
+          <Bond id="S25_B3" site1="S25_M3_C1" site2="S25_M5_C3"/>
+          <Bond id="S25_B4" site1="S25_M4_C1" site2="S25_M6_C1"/>
+          <Bond id="S25_B5" site1="S25_M4_C2" site2="S25_M5_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S26"  concentration="0" name="B(c!1,p~P).B(c!2,p~U).B(c!3,p~U).anti(r!4,r!5).rec(a!5,b!2,b!1).rec(a!4,b!3,b)">
+        <ListOfMolecules>
+          <Molecule id="S26_M1" name="B">
+            <ListOfComponents>
+              <Component id="S26_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S26_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S26_M2" name="B">
+            <ListOfComponents>
+              <Component id="S26_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S26_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S26_M3" name="B">
+            <ListOfComponents>
+              <Component id="S26_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S26_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S26_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S26_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S26_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S26_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S26_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S26_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S26_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S26_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S26_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S26_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S26_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S26_B1" site1="S26_M1_C1" site2="S26_M5_C3"/>
+          <Bond id="S26_B2" site1="S26_M2_C1" site2="S26_M5_C2"/>
+          <Bond id="S26_B3" site1="S26_M3_C1" site2="S26_M6_C2"/>
+          <Bond id="S26_B4" site1="S26_M4_C1" site2="S26_M6_C1"/>
+          <Bond id="S26_B5" site1="S26_M4_C2" site2="S26_M5_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S27"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).B(c!3,p~U).anti(r!4,r!5).rec(a!5,b!3,b!1).rec(a!4,b!2,b)">
+        <ListOfMolecules>
+          <Molecule id="S27_M1" name="B">
+            <ListOfComponents>
+              <Component id="S27_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S27_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S27_M2" name="B">
+            <ListOfComponents>
+              <Component id="S27_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S27_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S27_M3" name="B">
+            <ListOfComponents>
+              <Component id="S27_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S27_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S27_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S27_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S27_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S27_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S27_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S27_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S27_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S27_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S27_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S27_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S27_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S27_B1" site1="S27_M1_C1" site2="S27_M5_C3"/>
+          <Bond id="S27_B2" site1="S27_M2_C1" site2="S27_M6_C2"/>
+          <Bond id="S27_B3" site1="S27_M3_C1" site2="S27_M5_C2"/>
+          <Bond id="S27_B4" site1="S27_M4_C1" site2="S27_M6_C1"/>
+          <Bond id="S27_B5" site1="S27_M4_C2" site2="S27_M5_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S28"  concentration="0" name="B(c!1,p~PP).B(c!2,p~PP).rec(a,b!2,b!1)">
+        <ListOfMolecules>
+          <Molecule id="S28_M1" name="B">
+            <ListOfComponents>
+              <Component id="S28_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S28_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S28_M2" name="B">
+            <ListOfComponents>
+              <Component id="S28_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S28_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S28_M3" name="rec">
+            <ListOfComponents>
+              <Component id="S28_M3_C1" name="a" numberOfBonds="0"/>
+              <Component id="S28_M3_C2" name="b" numberOfBonds="1"/>
+              <Component id="S28_M3_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S28_B1" site1="S28_M1_C1" site2="S28_M3_C3"/>
+          <Bond id="S28_B2" site1="S28_M2_C1" site2="S28_M3_C2"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S29"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).anti(r!3,r!4).rec(a!4,b!1,b!2).rec(a!3,b,b)">
+        <ListOfMolecules>
+          <Molecule id="S29_M1" name="B">
+            <ListOfComponents>
+              <Component id="S29_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S29_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S29_M2" name="B">
+            <ListOfComponents>
+              <Component id="S29_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S29_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S29_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S29_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S29_M3_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S29_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S29_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S29_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S29_M4_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S29_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S29_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S29_M5_C2" name="b" numberOfBonds="0"/>
+              <Component id="S29_M5_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S29_B1" site1="S29_M1_C1" site2="S29_M4_C2"/>
+          <Bond id="S29_B2" site1="S29_M2_C1" site2="S29_M4_C3"/>
+          <Bond id="S29_B3" site1="S29_M3_C1" site2="S29_M5_C1"/>
+          <Bond id="S29_B4" site1="S29_M3_C2" site2="S29_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S30"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).B(c!3,p~U).anti(r!4,r!5).rec(a!4,b!1,b!2).rec(a!5,b!3,b)">
+        <ListOfMolecules>
+          <Molecule id="S30_M1" name="B">
+            <ListOfComponents>
+              <Component id="S30_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S30_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S30_M2" name="B">
+            <ListOfComponents>
+              <Component id="S30_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S30_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S30_M3" name="B">
+            <ListOfComponents>
+              <Component id="S30_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S30_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S30_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S30_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S30_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S30_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S30_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S30_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S30_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S30_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S30_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S30_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S30_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S30_B1" site1="S30_M1_C1" site2="S30_M5_C2"/>
+          <Bond id="S30_B2" site1="S30_M2_C1" site2="S30_M5_C3"/>
+          <Bond id="S30_B3" site1="S30_M3_C1" site2="S30_M6_C2"/>
+          <Bond id="S30_B4" site1="S30_M4_C1" site2="S30_M5_C1"/>
+          <Bond id="S30_B5" site1="S30_M4_C2" site2="S30_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S31"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).B(c!3,p~P).anti(r!4,r!5).rec(a!5,b!1,b!3).rec(a!4,b!2,b)">
+        <ListOfMolecules>
+          <Molecule id="S31_M1" name="B">
+            <ListOfComponents>
+              <Component id="S31_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S31_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S31_M2" name="B">
+            <ListOfComponents>
+              <Component id="S31_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S31_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S31_M3" name="B">
+            <ListOfComponents>
+              <Component id="S31_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S31_M3_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S31_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S31_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S31_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S31_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S31_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S31_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S31_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S31_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S31_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S31_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S31_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S31_B1" site1="S31_M1_C1" site2="S31_M5_C2"/>
+          <Bond id="S31_B2" site1="S31_M2_C1" site2="S31_M6_C2"/>
+          <Bond id="S31_B3" site1="S31_M3_C1" site2="S31_M5_C3"/>
+          <Bond id="S31_B4" site1="S31_M4_C1" site2="S31_M6_C1"/>
+          <Bond id="S31_B5" site1="S31_M4_C2" site2="S31_M5_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S32"  concentration="0" name="B(c!1,p~U).B(c!2,p~U).B(c!3,p~U).B(c!4,p~U).anti(r!5,r!6).rec(a!6,b!1,b!2).rec(a!5,b!3,b!4)">
+        <ListOfMolecules>
+          <Molecule id="S32_M1" name="B">
+            <ListOfComponents>
+              <Component id="S32_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S32_M1_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S32_M2" name="B">
+            <ListOfComponents>
+              <Component id="S32_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S32_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S32_M3" name="B">
+            <ListOfComponents>
+              <Component id="S32_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S32_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S32_M4" name="B">
+            <ListOfComponents>
+              <Component id="S32_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S32_M4_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S32_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S32_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S32_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S32_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S32_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S32_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S32_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S32_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S32_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S32_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S32_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S32_B1" site1="S32_M1_C1" site2="S32_M6_C2"/>
+          <Bond id="S32_B2" site1="S32_M2_C1" site2="S32_M6_C3"/>
+          <Bond id="S32_B3" site1="S32_M3_C1" site2="S32_M7_C2"/>
+          <Bond id="S32_B4" site1="S32_M4_C1" site2="S32_M7_C3"/>
+          <Bond id="S32_B5" site1="S32_M5_C1" site2="S32_M7_C1"/>
+          <Bond id="S32_B6" site1="S32_M5_C2" site2="S32_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S33"  concentration="0" name="B(c!1,p~P).B(c!2,p~U).B(c!3,p~U).B(c!4,p~U).anti(r!5,r!6).rec(a!6,b!2,b!3).rec(a!5,b!4,b!1)">
+        <ListOfMolecules>
+          <Molecule id="S33_M1" name="B">
+            <ListOfComponents>
+              <Component id="S33_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S33_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S33_M2" name="B">
+            <ListOfComponents>
+              <Component id="S33_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S33_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S33_M3" name="B">
+            <ListOfComponents>
+              <Component id="S33_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S33_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S33_M4" name="B">
+            <ListOfComponents>
+              <Component id="S33_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S33_M4_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S33_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S33_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S33_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S33_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S33_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S33_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S33_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S33_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S33_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S33_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S33_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S33_B1" site1="S33_M1_C1" site2="S33_M7_C3"/>
+          <Bond id="S33_B2" site1="S33_M2_C1" site2="S33_M6_C2"/>
+          <Bond id="S33_B3" site1="S33_M3_C1" site2="S33_M6_C3"/>
+          <Bond id="S33_B4" site1="S33_M4_C1" site2="S33_M7_C2"/>
+          <Bond id="S33_B5" site1="S33_M5_C1" site2="S33_M7_C1"/>
+          <Bond id="S33_B6" site1="S33_M5_C2" site2="S33_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S34"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).B(c!3,p~U).B(c!4,p~U).anti(r!5,r!6).rec(a!6,b!3,b!4).rec(a!5,b!1,b!2)">
+        <ListOfMolecules>
+          <Molecule id="S34_M1" name="B">
+            <ListOfComponents>
+              <Component id="S34_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S34_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S34_M2" name="B">
+            <ListOfComponents>
+              <Component id="S34_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S34_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S34_M3" name="B">
+            <ListOfComponents>
+              <Component id="S34_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S34_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S34_M4" name="B">
+            <ListOfComponents>
+              <Component id="S34_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S34_M4_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S34_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S34_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S34_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S34_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S34_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S34_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S34_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S34_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S34_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S34_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S34_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S34_B1" site1="S34_M1_C1" site2="S34_M7_C2"/>
+          <Bond id="S34_B2" site1="S34_M2_C1" site2="S34_M7_C3"/>
+          <Bond id="S34_B3" site1="S34_M3_C1" site2="S34_M6_C2"/>
+          <Bond id="S34_B4" site1="S34_M4_C1" site2="S34_M6_C3"/>
+          <Bond id="S34_B5" site1="S34_M5_C1" site2="S34_M7_C1"/>
+          <Bond id="S34_B6" site1="S34_M5_C2" site2="S34_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S35"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).B(c!3,p~U).B(c!4,p~U).anti(r!5,r!6).rec(a!6,b!3,b!1).rec(a!5,b!4,b!2)">
+        <ListOfMolecules>
+          <Molecule id="S35_M1" name="B">
+            <ListOfComponents>
+              <Component id="S35_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S35_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S35_M2" name="B">
+            <ListOfComponents>
+              <Component id="S35_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S35_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S35_M3" name="B">
+            <ListOfComponents>
+              <Component id="S35_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S35_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S35_M4" name="B">
+            <ListOfComponents>
+              <Component id="S35_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S35_M4_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S35_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S35_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S35_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S35_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S35_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S35_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S35_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S35_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S35_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S35_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S35_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S35_B1" site1="S35_M1_C1" site2="S35_M6_C3"/>
+          <Bond id="S35_B2" site1="S35_M2_C1" site2="S35_M7_C3"/>
+          <Bond id="S35_B3" site1="S35_M3_C1" site2="S35_M6_C2"/>
+          <Bond id="S35_B4" site1="S35_M4_C1" site2="S35_M7_C2"/>
+          <Bond id="S35_B5" site1="S35_M5_C1" site2="S35_M7_C1"/>
+          <Bond id="S35_B6" site1="S35_M5_C2" site2="S35_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S36"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).B(c!3,p~P).B(c!4,p~U).anti(r!5,r!6).rec(a!6,b!4,b!1).rec(a!5,b!2,b!3)">
+        <ListOfMolecules>
+          <Molecule id="S36_M1" name="B">
+            <ListOfComponents>
+              <Component id="S36_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S36_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S36_M2" name="B">
+            <ListOfComponents>
+              <Component id="S36_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S36_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S36_M3" name="B">
+            <ListOfComponents>
+              <Component id="S36_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S36_M3_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S36_M4" name="B">
+            <ListOfComponents>
+              <Component id="S36_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S36_M4_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S36_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S36_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S36_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S36_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S36_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S36_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S36_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S36_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S36_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S36_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S36_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S36_B1" site1="S36_M1_C1" site2="S36_M6_C3"/>
+          <Bond id="S36_B2" site1="S36_M2_C1" site2="S36_M7_C2"/>
+          <Bond id="S36_B3" site1="S36_M3_C1" site2="S36_M7_C3"/>
+          <Bond id="S36_B4" site1="S36_M4_C1" site2="S36_M6_C2"/>
+          <Bond id="S36_B5" site1="S36_M5_C1" site2="S36_M7_C1"/>
+          <Bond id="S36_B6" site1="S36_M5_C2" site2="S36_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S37"  concentration="0" name="B(c!1,p~PP).rec(a,b!1,b)">
+        <ListOfMolecules>
+          <Molecule id="S37_M1" name="B">
+            <ListOfComponents>
+              <Component id="S37_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S37_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S37_M2" name="rec">
+            <ListOfComponents>
+              <Component id="S37_M2_C1" name="a" numberOfBonds="0"/>
+              <Component id="S37_M2_C2" name="b" numberOfBonds="1"/>
+              <Component id="S37_M2_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S37_B1" site1="S37_M1_C1" site2="S37_M2_C2"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S38"  concentration="0" name="B(c,p~PP)">
+        <ListOfMolecules>
+          <Molecule id="S38_M1" name="B">
+            <ListOfComponents>
+              <Component id="S38_M1_C1" name="c" numberOfBonds="0"/>
+              <Component id="S38_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+      </Species>
+      <Species id="S39"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).B(c!3,p~P).B(c!4,p~P).anti(r!5,r!6).rec(a!6,b!1,b!2).rec(a!5,b!3,b!4)">
+        <ListOfMolecules>
+          <Molecule id="S39_M1" name="B">
+            <ListOfComponents>
+              <Component id="S39_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S39_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S39_M2" name="B">
+            <ListOfComponents>
+              <Component id="S39_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S39_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S39_M3" name="B">
+            <ListOfComponents>
+              <Component id="S39_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S39_M3_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S39_M4" name="B">
+            <ListOfComponents>
+              <Component id="S39_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S39_M4_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S39_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S39_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S39_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S39_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S39_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S39_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S39_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S39_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S39_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S39_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S39_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S39_B1" site1="S39_M1_C1" site2="S39_M6_C2"/>
+          <Bond id="S39_B2" site1="S39_M2_C1" site2="S39_M6_C3"/>
+          <Bond id="S39_B3" site1="S39_M3_C1" site2="S39_M7_C2"/>
+          <Bond id="S39_B4" site1="S39_M4_C1" site2="S39_M7_C3"/>
+          <Bond id="S39_B5" site1="S39_M5_C1" site2="S39_M7_C1"/>
+          <Bond id="S39_B6" site1="S39_M5_C2" site2="S39_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S40"  concentration="0" name="B(c!1,p~PP).B(c!2,p~PP).anti(r!3,r).rec(a!3,b!2,b!1)">
+        <ListOfMolecules>
+          <Molecule id="S40_M1" name="B">
+            <ListOfComponents>
+              <Component id="S40_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S40_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S40_M2" name="B">
+            <ListOfComponents>
+              <Component id="S40_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S40_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S40_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S40_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S40_M3_C2" name="r" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S40_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S40_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S40_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S40_M4_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S40_B1" site1="S40_M1_C1" site2="S40_M4_C3"/>
+          <Bond id="S40_B2" site1="S40_M2_C1" site2="S40_M4_C2"/>
+          <Bond id="S40_B3" site1="S40_M3_C1" site2="S40_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S41"  concentration="0" name="B(c!1,p~PP).B(c!2,p~PP).anti(r!3,r!4).rec(a!4,b!2,b!1).rec(a!3,b,b)">
+        <ListOfMolecules>
+          <Molecule id="S41_M1" name="B">
+            <ListOfComponents>
+              <Component id="S41_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S41_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S41_M2" name="B">
+            <ListOfComponents>
+              <Component id="S41_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S41_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S41_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S41_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S41_M3_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S41_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S41_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S41_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S41_M4_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S41_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S41_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S41_M5_C2" name="b" numberOfBonds="0"/>
+              <Component id="S41_M5_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S41_B1" site1="S41_M1_C1" site2="S41_M4_C3"/>
+          <Bond id="S41_B2" site1="S41_M2_C1" site2="S41_M4_C2"/>
+          <Bond id="S41_B3" site1="S41_M3_C1" site2="S41_M5_C1"/>
+          <Bond id="S41_B4" site1="S41_M3_C2" site2="S41_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S42"  concentration="0" name="B(c!1,p~PP).B(c!2,p~PP).B(c!3,p~U).anti(r!4,r!5).rec(a!5,b!2,b!1).rec(a!4,b!3,b)">
+        <ListOfMolecules>
+          <Molecule id="S42_M1" name="B">
+            <ListOfComponents>
+              <Component id="S42_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S42_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S42_M2" name="B">
+            <ListOfComponents>
+              <Component id="S42_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S42_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S42_M3" name="B">
+            <ListOfComponents>
+              <Component id="S42_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S42_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S42_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S42_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S42_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S42_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S42_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S42_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S42_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S42_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S42_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S42_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S42_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S42_B1" site1="S42_M1_C1" site2="S42_M5_C3"/>
+          <Bond id="S42_B2" site1="S42_M2_C1" site2="S42_M5_C2"/>
+          <Bond id="S42_B3" site1="S42_M3_C1" site2="S42_M6_C2"/>
+          <Bond id="S42_B4" site1="S42_M4_C1" site2="S42_M6_C1"/>
+          <Bond id="S42_B5" site1="S42_M4_C2" site2="S42_M5_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S43"  concentration="0" name="B(c!1,p~P).B(c!2,p~PP).B(c!3,p~PP).anti(r!4,r!5).rec(a!5,b!3,b!2).rec(a!4,b!1,b)">
+        <ListOfMolecules>
+          <Molecule id="S43_M1" name="B">
+            <ListOfComponents>
+              <Component id="S43_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S43_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S43_M2" name="B">
+            <ListOfComponents>
+              <Component id="S43_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S43_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S43_M3" name="B">
+            <ListOfComponents>
+              <Component id="S43_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S43_M3_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S43_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S43_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S43_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S43_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S43_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S43_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S43_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S43_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S43_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S43_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S43_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S43_B1" site1="S43_M1_C1" site2="S43_M6_C2"/>
+          <Bond id="S43_B2" site1="S43_M2_C1" site2="S43_M5_C3"/>
+          <Bond id="S43_B3" site1="S43_M3_C1" site2="S43_M5_C2"/>
+          <Bond id="S43_B4" site1="S43_M4_C1" site2="S43_M6_C1"/>
+          <Bond id="S43_B5" site1="S43_M4_C2" site2="S43_M5_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S44"  concentration="0" name="B(c!1,p~PP).B(c!2,p~PP).B(c!3,p~U).B(c!4,p~U).anti(r!5,r!6).rec(a!6,b!2,b!1).rec(a!5,b!3,b!4)">
+        <ListOfMolecules>
+          <Molecule id="S44_M1" name="B">
+            <ListOfComponents>
+              <Component id="S44_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S44_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S44_M2" name="B">
+            <ListOfComponents>
+              <Component id="S44_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S44_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S44_M3" name="B">
+            <ListOfComponents>
+              <Component id="S44_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S44_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S44_M4" name="B">
+            <ListOfComponents>
+              <Component id="S44_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S44_M4_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S44_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S44_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S44_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S44_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S44_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S44_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S44_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S44_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S44_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S44_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S44_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S44_B1" site1="S44_M1_C1" site2="S44_M6_C3"/>
+          <Bond id="S44_B2" site1="S44_M2_C1" site2="S44_M6_C2"/>
+          <Bond id="S44_B3" site1="S44_M3_C1" site2="S44_M7_C2"/>
+          <Bond id="S44_B4" site1="S44_M4_C1" site2="S44_M7_C3"/>
+          <Bond id="S44_B5" site1="S44_M5_C1" site2="S44_M7_C1"/>
+          <Bond id="S44_B6" site1="S44_M5_C2" site2="S44_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S45"  concentration="0" name="B(c!1,p~P).B(c!2,p~PP).B(c!3,p~PP).B(c!4,p~U).anti(r!5,r!6).rec(a!6,b!3,b!2).rec(a!5,b!4,b!1)">
+        <ListOfMolecules>
+          <Molecule id="S45_M1" name="B">
+            <ListOfComponents>
+              <Component id="S45_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S45_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S45_M2" name="B">
+            <ListOfComponents>
+              <Component id="S45_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S45_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S45_M3" name="B">
+            <ListOfComponents>
+              <Component id="S45_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S45_M3_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S45_M4" name="B">
+            <ListOfComponents>
+              <Component id="S45_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S45_M4_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S45_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S45_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S45_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S45_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S45_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S45_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S45_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S45_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S45_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S45_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S45_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S45_B1" site1="S45_M1_C1" site2="S45_M7_C3"/>
+          <Bond id="S45_B2" site1="S45_M2_C1" site2="S45_M6_C3"/>
+          <Bond id="S45_B3" site1="S45_M3_C1" site2="S45_M6_C2"/>
+          <Bond id="S45_B4" site1="S45_M4_C1" site2="S45_M7_C2"/>
+          <Bond id="S45_B5" site1="S45_M5_C1" site2="S45_M7_C1"/>
+          <Bond id="S45_B6" site1="S45_M5_C2" site2="S45_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S46"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).B(c!3,p~PP).B(c!4,p~PP).anti(r!5,r!6).rec(a!6,b!4,b!3).rec(a!5,b!1,b!2)">
+        <ListOfMolecules>
+          <Molecule id="S46_M1" name="B">
+            <ListOfComponents>
+              <Component id="S46_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S46_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S46_M2" name="B">
+            <ListOfComponents>
+              <Component id="S46_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S46_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S46_M3" name="B">
+            <ListOfComponents>
+              <Component id="S46_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S46_M3_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S46_M4" name="B">
+            <ListOfComponents>
+              <Component id="S46_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S46_M4_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S46_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S46_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S46_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S46_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S46_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S46_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S46_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S46_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S46_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S46_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S46_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S46_B1" site1="S46_M1_C1" site2="S46_M7_C2"/>
+          <Bond id="S46_B2" site1="S46_M2_C1" site2="S46_M7_C3"/>
+          <Bond id="S46_B3" site1="S46_M3_C1" site2="S46_M6_C3"/>
+          <Bond id="S46_B4" site1="S46_M4_C1" site2="S46_M6_C2"/>
+          <Bond id="S46_B5" site1="S46_M5_C1" site2="S46_M7_C1"/>
+          <Bond id="S46_B6" site1="S46_M5_C2" site2="S46_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S47"  concentration="0" name="B(c!1,p~P).B(c!2,p~PP).rec(a,b!2,b!1)">
+        <ListOfMolecules>
+          <Molecule id="S47_M1" name="B">
+            <ListOfComponents>
+              <Component id="S47_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S47_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S47_M2" name="B">
+            <ListOfComponents>
+              <Component id="S47_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S47_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S47_M3" name="rec">
+            <ListOfComponents>
+              <Component id="S47_M3_C1" name="a" numberOfBonds="0"/>
+              <Component id="S47_M3_C2" name="b" numberOfBonds="1"/>
+              <Component id="S47_M3_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S47_B1" site1="S47_M1_C1" site2="S47_M3_C3"/>
+          <Bond id="S47_B2" site1="S47_M2_C1" site2="S47_M3_C2"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S48"  concentration="0" name="B(c!1,p~PP).B(c!2,p~U).rec(a,b!2,b!1)">
+        <ListOfMolecules>
+          <Molecule id="S48_M1" name="B">
+            <ListOfComponents>
+              <Component id="S48_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S48_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S48_M2" name="B">
+            <ListOfComponents>
+              <Component id="S48_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S48_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S48_M3" name="rec">
+            <ListOfComponents>
+              <Component id="S48_M3_C1" name="a" numberOfBonds="0"/>
+              <Component id="S48_M3_C2" name="b" numberOfBonds="1"/>
+              <Component id="S48_M3_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S48_B1" site1="S48_M1_C1" site2="S48_M3_C3"/>
+          <Bond id="S48_B2" site1="S48_M2_C1" site2="S48_M3_C2"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S49"  concentration="0" name="B(c!1,p~PP).anti(r!2,r).rec(a!2,b!1,b)">
+        <ListOfMolecules>
+          <Molecule id="S49_M1" name="B">
+            <ListOfComponents>
+              <Component id="S49_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S49_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S49_M2" name="anti">
+            <ListOfComponents>
+              <Component id="S49_M2_C1" name="r" numberOfBonds="1"/>
+              <Component id="S49_M2_C2" name="r" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S49_M3" name="rec">
+            <ListOfComponents>
+              <Component id="S49_M3_C1" name="a" numberOfBonds="1"/>
+              <Component id="S49_M3_C2" name="b" numberOfBonds="1"/>
+              <Component id="S49_M3_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S49_B1" site1="S49_M1_C1" site2="S49_M3_C2"/>
+          <Bond id="S49_B2" site1="S49_M2_C1" site2="S49_M3_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S50"  concentration="0" name="B(c!1,p~PP).B(c!2,p~U).anti(r!3,r).rec(a!3,b!2,b!1)">
+        <ListOfMolecules>
+          <Molecule id="S50_M1" name="B">
+            <ListOfComponents>
+              <Component id="S50_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S50_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S50_M2" name="B">
+            <ListOfComponents>
+              <Component id="S50_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S50_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S50_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S50_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S50_M3_C2" name="r" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S50_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S50_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S50_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S50_M4_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S50_B1" site1="S50_M1_C1" site2="S50_M4_C3"/>
+          <Bond id="S50_B2" site1="S50_M2_C1" site2="S50_M4_C2"/>
+          <Bond id="S50_B3" site1="S50_M3_C1" site2="S50_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S51"  concentration="0" name="B(c!1,p~P).B(c!2,p~PP).anti(r!3,r).rec(a!3,b!1,b!2)">
+        <ListOfMolecules>
+          <Molecule id="S51_M1" name="B">
+            <ListOfComponents>
+              <Component id="S51_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S51_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S51_M2" name="B">
+            <ListOfComponents>
+              <Component id="S51_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S51_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S51_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S51_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S51_M3_C2" name="r" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S51_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S51_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S51_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S51_M4_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S51_B1" site1="S51_M1_C1" site2="S51_M4_C2"/>
+          <Bond id="S51_B2" site1="S51_M2_C1" site2="S51_M4_C3"/>
+          <Bond id="S51_B3" site1="S51_M3_C1" site2="S51_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S52"  concentration="0" name="B(c!1,p~PP).anti(r!2,r!3).rec(a!3,b!1,b).rec(a!2,b,b)">
+        <ListOfMolecules>
+          <Molecule id="S52_M1" name="B">
+            <ListOfComponents>
+              <Component id="S52_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S52_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S52_M2" name="anti">
+            <ListOfComponents>
+              <Component id="S52_M2_C1" name="r" numberOfBonds="1"/>
+              <Component id="S52_M2_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S52_M3" name="rec">
+            <ListOfComponents>
+              <Component id="S52_M3_C1" name="a" numberOfBonds="1"/>
+              <Component id="S52_M3_C2" name="b" numberOfBonds="1"/>
+              <Component id="S52_M3_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S52_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S52_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S52_M4_C2" name="b" numberOfBonds="0"/>
+              <Component id="S52_M4_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S52_B1" site1="S52_M1_C1" site2="S52_M3_C2"/>
+          <Bond id="S52_B2" site1="S52_M2_C1" site2="S52_M4_C1"/>
+          <Bond id="S52_B3" site1="S52_M2_C2" site2="S52_M3_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S53"  concentration="0" name="B(c!1,p~PP).B(c!2,p~U).anti(r!3,r!4).rec(a!4,b!2,b!1).rec(a!3,b,b)">
+        <ListOfMolecules>
+          <Molecule id="S53_M1" name="B">
+            <ListOfComponents>
+              <Component id="S53_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S53_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S53_M2" name="B">
+            <ListOfComponents>
+              <Component id="S53_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S53_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S53_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S53_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S53_M3_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S53_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S53_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S53_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S53_M4_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S53_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S53_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S53_M5_C2" name="b" numberOfBonds="0"/>
+              <Component id="S53_M5_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S53_B1" site1="S53_M1_C1" site2="S53_M4_C3"/>
+          <Bond id="S53_B2" site1="S53_M2_C1" site2="S53_M4_C2"/>
+          <Bond id="S53_B3" site1="S53_M3_C1" site2="S53_M5_C1"/>
+          <Bond id="S53_B4" site1="S53_M3_C2" site2="S53_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S54"  concentration="0" name="B(c!1,p~PP).B(c!2,p~U).anti(r!3,r!4).rec(a!4,b!2,b).rec(a!3,b!1,b)">
+        <ListOfMolecules>
+          <Molecule id="S54_M1" name="B">
+            <ListOfComponents>
+              <Component id="S54_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S54_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S54_M2" name="B">
+            <ListOfComponents>
+              <Component id="S54_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S54_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S54_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S54_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S54_M3_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S54_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S54_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S54_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S54_M4_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S54_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S54_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S54_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S54_M5_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S54_B1" site1="S54_M1_C1" site2="S54_M5_C2"/>
+          <Bond id="S54_B2" site1="S54_M2_C1" site2="S54_M4_C2"/>
+          <Bond id="S54_B3" site1="S54_M3_C1" site2="S54_M5_C1"/>
+          <Bond id="S54_B4" site1="S54_M3_C2" site2="S54_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S55"  concentration="0" name="B(c!1,p~P).B(c!2,p~PP).anti(r!3,r!4).rec(a!4,b!1,b!2).rec(a!3,b,b)">
+        <ListOfMolecules>
+          <Molecule id="S55_M1" name="B">
+            <ListOfComponents>
+              <Component id="S55_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S55_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S55_M2" name="B">
+            <ListOfComponents>
+              <Component id="S55_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S55_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S55_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S55_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S55_M3_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S55_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S55_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S55_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S55_M4_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S55_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S55_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S55_M5_C2" name="b" numberOfBonds="0"/>
+              <Component id="S55_M5_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S55_B1" site1="S55_M1_C1" site2="S55_M4_C2"/>
+          <Bond id="S55_B2" site1="S55_M2_C1" site2="S55_M4_C3"/>
+          <Bond id="S55_B3" site1="S55_M3_C1" site2="S55_M5_C1"/>
+          <Bond id="S55_B4" site1="S55_M3_C2" site2="S55_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S56"  concentration="0" name="B(c!1,p~P).B(c!2,p~PP).anti(r!3,r!4).rec(a!4,b!1,b).rec(a!3,b!2,b)">
+        <ListOfMolecules>
+          <Molecule id="S56_M1" name="B">
+            <ListOfComponents>
+              <Component id="S56_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S56_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S56_M2" name="B">
+            <ListOfComponents>
+              <Component id="S56_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S56_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S56_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S56_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S56_M3_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S56_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S56_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S56_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S56_M4_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S56_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S56_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S56_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S56_M5_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S56_B1" site1="S56_M1_C1" site2="S56_M4_C2"/>
+          <Bond id="S56_B2" site1="S56_M2_C1" site2="S56_M5_C2"/>
+          <Bond id="S56_B3" site1="S56_M3_C1" site2="S56_M5_C1"/>
+          <Bond id="S56_B4" site1="S56_M3_C2" site2="S56_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S57"  concentration="0" name="B(c!1,p~PP).B(c!2,p~U).B(c!3,p~U).anti(r!4,r!5).rec(a!5,b!2,b!3).rec(a!4,b!1,b)">
+        <ListOfMolecules>
+          <Molecule id="S57_M1" name="B">
+            <ListOfComponents>
+              <Component id="S57_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S57_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S57_M2" name="B">
+            <ListOfComponents>
+              <Component id="S57_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S57_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S57_M3" name="B">
+            <ListOfComponents>
+              <Component id="S57_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S57_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S57_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S57_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S57_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S57_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S57_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S57_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S57_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S57_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S57_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S57_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S57_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S57_B1" site1="S57_M1_C1" site2="S57_M6_C2"/>
+          <Bond id="S57_B2" site1="S57_M2_C1" site2="S57_M5_C2"/>
+          <Bond id="S57_B3" site1="S57_M3_C1" site2="S57_M5_C3"/>
+          <Bond id="S57_B4" site1="S57_M4_C1" site2="S57_M6_C1"/>
+          <Bond id="S57_B5" site1="S57_M4_C2" site2="S57_M5_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S58"  concentration="0" name="B(c!1,p~P).B(c!2,p~PP).B(c!3,p~U).anti(r!4,r!5).rec(a!5,b!3,b!1).rec(a!4,b!2,b)">
+        <ListOfMolecules>
+          <Molecule id="S58_M1" name="B">
+            <ListOfComponents>
+              <Component id="S58_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S58_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S58_M2" name="B">
+            <ListOfComponents>
+              <Component id="S58_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S58_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S58_M3" name="B">
+            <ListOfComponents>
+              <Component id="S58_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S58_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S58_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S58_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S58_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S58_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S58_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S58_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S58_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S58_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S58_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S58_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S58_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S58_B1" site1="S58_M1_C1" site2="S58_M5_C3"/>
+          <Bond id="S58_B2" site1="S58_M2_C1" site2="S58_M6_C2"/>
+          <Bond id="S58_B3" site1="S58_M3_C1" site2="S58_M5_C2"/>
+          <Bond id="S58_B4" site1="S58_M4_C1" site2="S58_M6_C1"/>
+          <Bond id="S58_B5" site1="S58_M4_C2" site2="S58_M5_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S59"  concentration="0" name="B(c!1,p~PP).B(c!2,p~U).B(c!3,p~U).anti(r!4,r!5).rec(a!5,b!2,b!1).rec(a!4,b!3,b)">
+        <ListOfMolecules>
+          <Molecule id="S59_M1" name="B">
+            <ListOfComponents>
+              <Component id="S59_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S59_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S59_M2" name="B">
+            <ListOfComponents>
+              <Component id="S59_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S59_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S59_M3" name="B">
+            <ListOfComponents>
+              <Component id="S59_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S59_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S59_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S59_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S59_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S59_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S59_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S59_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S59_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S59_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S59_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S59_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S59_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S59_B1" site1="S59_M1_C1" site2="S59_M5_C3"/>
+          <Bond id="S59_B2" site1="S59_M2_C1" site2="S59_M5_C2"/>
+          <Bond id="S59_B3" site1="S59_M3_C1" site2="S59_M6_C2"/>
+          <Bond id="S59_B4" site1="S59_M4_C1" site2="S59_M6_C1"/>
+          <Bond id="S59_B5" site1="S59_M4_C2" site2="S59_M5_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S60"  concentration="0" name="B(c!1,p~P).B(c!2,p~PP).B(c!3,p~U).anti(r!4,r!5).rec(a!5,b!3,b!2).rec(a!4,b!1,b)">
+        <ListOfMolecules>
+          <Molecule id="S60_M1" name="B">
+            <ListOfComponents>
+              <Component id="S60_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S60_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S60_M2" name="B">
+            <ListOfComponents>
+              <Component id="S60_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S60_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S60_M3" name="B">
+            <ListOfComponents>
+              <Component id="S60_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S60_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S60_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S60_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S60_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S60_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S60_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S60_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S60_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S60_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S60_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S60_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S60_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S60_B1" site1="S60_M1_C1" site2="S60_M6_C2"/>
+          <Bond id="S60_B2" site1="S60_M2_C1" site2="S60_M5_C3"/>
+          <Bond id="S60_B3" site1="S60_M3_C1" site2="S60_M5_C2"/>
+          <Bond id="S60_B4" site1="S60_M4_C1" site2="S60_M6_C1"/>
+          <Bond id="S60_B5" site1="S60_M4_C2" site2="S60_M5_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S61"  concentration="0" name="B(c!1,p~P).B(c!2,p~PP).B(c!3,p~U).anti(r!4,r!5).rec(a!4,b!1,b!2).rec(a!5,b!3,b)">
+        <ListOfMolecules>
+          <Molecule id="S61_M1" name="B">
+            <ListOfComponents>
+              <Component id="S61_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S61_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S61_M2" name="B">
+            <ListOfComponents>
+              <Component id="S61_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S61_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S61_M3" name="B">
+            <ListOfComponents>
+              <Component id="S61_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S61_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S61_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S61_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S61_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S61_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S61_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S61_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S61_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S61_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S61_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S61_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S61_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S61_B1" site1="S61_M1_C1" site2="S61_M5_C2"/>
+          <Bond id="S61_B2" site1="S61_M2_C1" site2="S61_M5_C3"/>
+          <Bond id="S61_B3" site1="S61_M3_C1" site2="S61_M6_C2"/>
+          <Bond id="S61_B4" site1="S61_M4_C1" site2="S61_M5_C1"/>
+          <Bond id="S61_B5" site1="S61_M4_C2" site2="S61_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S62"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).B(c!3,p~PP).anti(r!4,r!5).rec(a!5,b!1,b!3).rec(a!4,b!2,b)">
+        <ListOfMolecules>
+          <Molecule id="S62_M1" name="B">
+            <ListOfComponents>
+              <Component id="S62_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S62_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S62_M2" name="B">
+            <ListOfComponents>
+              <Component id="S62_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S62_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S62_M3" name="B">
+            <ListOfComponents>
+              <Component id="S62_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S62_M3_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S62_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S62_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S62_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S62_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S62_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S62_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S62_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S62_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S62_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S62_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S62_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S62_B1" site1="S62_M1_C1" site2="S62_M5_C2"/>
+          <Bond id="S62_B2" site1="S62_M2_C1" site2="S62_M6_C2"/>
+          <Bond id="S62_B3" site1="S62_M3_C1" site2="S62_M5_C3"/>
+          <Bond id="S62_B4" site1="S62_M4_C1" site2="S62_M6_C1"/>
+          <Bond id="S62_B5" site1="S62_M4_C2" site2="S62_M5_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S63"  concentration="0" name="B(c!1,p~PP).B(c!2,p~U).B(c!3,p~U).B(c!4,p~U).anti(r!5,r!6).rec(a!6,b!2,b!3).rec(a!5,b!4,b!1)">
+        <ListOfMolecules>
+          <Molecule id="S63_M1" name="B">
+            <ListOfComponents>
+              <Component id="S63_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S63_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S63_M2" name="B">
+            <ListOfComponents>
+              <Component id="S63_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S63_M2_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S63_M3" name="B">
+            <ListOfComponents>
+              <Component id="S63_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S63_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S63_M4" name="B">
+            <ListOfComponents>
+              <Component id="S63_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S63_M4_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S63_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S63_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S63_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S63_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S63_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S63_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S63_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S63_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S63_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S63_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S63_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S63_B1" site1="S63_M1_C1" site2="S63_M7_C3"/>
+          <Bond id="S63_B2" site1="S63_M2_C1" site2="S63_M6_C2"/>
+          <Bond id="S63_B3" site1="S63_M3_C1" site2="S63_M6_C3"/>
+          <Bond id="S63_B4" site1="S63_M4_C1" site2="S63_M7_C2"/>
+          <Bond id="S63_B5" site1="S63_M5_C1" site2="S63_M7_C1"/>
+          <Bond id="S63_B6" site1="S63_M5_C2" site2="S63_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S64"  concentration="0" name="B(c!1,p~P).B(c!2,p~PP).B(c!3,p~U).B(c!4,p~U).anti(r!5,r!6).rec(a!6,b!3,b!4).rec(a!5,b!1,b!2)">
+        <ListOfMolecules>
+          <Molecule id="S64_M1" name="B">
+            <ListOfComponents>
+              <Component id="S64_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S64_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S64_M2" name="B">
+            <ListOfComponents>
+              <Component id="S64_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S64_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S64_M3" name="B">
+            <ListOfComponents>
+              <Component id="S64_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S64_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S64_M4" name="B">
+            <ListOfComponents>
+              <Component id="S64_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S64_M4_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S64_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S64_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S64_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S64_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S64_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S64_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S64_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S64_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S64_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S64_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S64_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S64_B1" site1="S64_M1_C1" site2="S64_M7_C2"/>
+          <Bond id="S64_B2" site1="S64_M2_C1" site2="S64_M7_C3"/>
+          <Bond id="S64_B3" site1="S64_M3_C1" site2="S64_M6_C2"/>
+          <Bond id="S64_B4" site1="S64_M4_C1" site2="S64_M6_C3"/>
+          <Bond id="S64_B5" site1="S64_M5_C1" site2="S64_M7_C1"/>
+          <Bond id="S64_B6" site1="S64_M5_C2" site2="S64_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S65"  concentration="0" name="B(c!1,p~P).B(c!2,p~PP).B(c!3,p~U).B(c!4,p~U).anti(r!5,r!6).rec(a!6,b!3,b!1).rec(a!5,b!4,b!2)">
+        <ListOfMolecules>
+          <Molecule id="S65_M1" name="B">
+            <ListOfComponents>
+              <Component id="S65_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S65_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S65_M2" name="B">
+            <ListOfComponents>
+              <Component id="S65_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S65_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S65_M3" name="B">
+            <ListOfComponents>
+              <Component id="S65_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S65_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S65_M4" name="B">
+            <ListOfComponents>
+              <Component id="S65_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S65_M4_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S65_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S65_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S65_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S65_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S65_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S65_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S65_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S65_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S65_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S65_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S65_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S65_B1" site1="S65_M1_C1" site2="S65_M6_C3"/>
+          <Bond id="S65_B2" site1="S65_M2_C1" site2="S65_M7_C3"/>
+          <Bond id="S65_B3" site1="S65_M3_C1" site2="S65_M6_C2"/>
+          <Bond id="S65_B4" site1="S65_M4_C1" site2="S65_M7_C2"/>
+          <Bond id="S65_B5" site1="S65_M5_C1" site2="S65_M7_C1"/>
+          <Bond id="S65_B6" site1="S65_M5_C2" site2="S65_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S66"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).B(c!3,p~PP).B(c!4,p~U).anti(r!5,r!6).rec(a!6,b!4,b!1).rec(a!5,b!2,b!3)">
+        <ListOfMolecules>
+          <Molecule id="S66_M1" name="B">
+            <ListOfComponents>
+              <Component id="S66_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S66_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S66_M2" name="B">
+            <ListOfComponents>
+              <Component id="S66_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S66_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S66_M3" name="B">
+            <ListOfComponents>
+              <Component id="S66_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S66_M3_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S66_M4" name="B">
+            <ListOfComponents>
+              <Component id="S66_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S66_M4_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S66_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S66_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S66_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S66_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S66_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S66_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S66_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S66_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S66_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S66_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S66_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S66_B1" site1="S66_M1_C1" site2="S66_M6_C3"/>
+          <Bond id="S66_B2" site1="S66_M2_C1" site2="S66_M7_C2"/>
+          <Bond id="S66_B3" site1="S66_M3_C1" site2="S66_M7_C3"/>
+          <Bond id="S66_B4" site1="S66_M4_C1" site2="S66_M6_C2"/>
+          <Bond id="S66_B5" site1="S66_M5_C1" site2="S66_M7_C1"/>
+          <Bond id="S66_B6" site1="S66_M5_C2" site2="S66_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S67"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).B(c!3,p~PP).anti(r!4,r!5).rec(a!5,b!1,b!2).rec(a!4,b!3,b)">
+        <ListOfMolecules>
+          <Molecule id="S67_M1" name="B">
+            <ListOfComponents>
+              <Component id="S67_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S67_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S67_M2" name="B">
+            <ListOfComponents>
+              <Component id="S67_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S67_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S67_M3" name="B">
+            <ListOfComponents>
+              <Component id="S67_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S67_M3_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S67_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S67_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S67_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S67_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S67_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S67_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S67_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S67_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S67_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S67_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S67_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S67_B1" site1="S67_M1_C1" site2="S67_M5_C2"/>
+          <Bond id="S67_B2" site1="S67_M2_C1" site2="S67_M5_C3"/>
+          <Bond id="S67_B3" site1="S67_M3_C1" site2="S67_M6_C2"/>
+          <Bond id="S67_B4" site1="S67_M4_C1" site2="S67_M6_C1"/>
+          <Bond id="S67_B5" site1="S67_M4_C2" site2="S67_M5_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S68"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).B(c!3,p~PP).B(c!4,p~U).anti(r!5,r!6).rec(a!5,b!1,b!2).rec(a!6,b!4,b!3)">
+        <ListOfMolecules>
+          <Molecule id="S68_M1" name="B">
+            <ListOfComponents>
+              <Component id="S68_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S68_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S68_M2" name="B">
+            <ListOfComponents>
+              <Component id="S68_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S68_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S68_M3" name="B">
+            <ListOfComponents>
+              <Component id="S68_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S68_M3_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S68_M4" name="B">
+            <ListOfComponents>
+              <Component id="S68_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S68_M4_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S68_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S68_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S68_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S68_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S68_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S68_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S68_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S68_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S68_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S68_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S68_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S68_B1" site1="S68_M1_C1" site2="S68_M6_C2"/>
+          <Bond id="S68_B2" site1="S68_M2_C1" site2="S68_M6_C3"/>
+          <Bond id="S68_B3" site1="S68_M3_C1" site2="S68_M7_C3"/>
+          <Bond id="S68_B4" site1="S68_M4_C1" site2="S68_M7_C2"/>
+          <Bond id="S68_B5" site1="S68_M5_C1" site2="S68_M6_C1"/>
+          <Bond id="S68_B6" site1="S68_M5_C2" site2="S68_M7_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S69"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).B(c!3,p~P).B(c!4,p~PP).anti(r!5,r!6).rec(a!6,b!1,b!3).rec(a!5,b!2,b!4)">
+        <ListOfMolecules>
+          <Molecule id="S69_M1" name="B">
+            <ListOfComponents>
+              <Component id="S69_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S69_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S69_M2" name="B">
+            <ListOfComponents>
+              <Component id="S69_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S69_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S69_M3" name="B">
+            <ListOfComponents>
+              <Component id="S69_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S69_M3_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S69_M4" name="B">
+            <ListOfComponents>
+              <Component id="S69_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S69_M4_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S69_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S69_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S69_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S69_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S69_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S69_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S69_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S69_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S69_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S69_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S69_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S69_B1" site1="S69_M1_C1" site2="S69_M6_C2"/>
+          <Bond id="S69_B2" site1="S69_M2_C1" site2="S69_M7_C2"/>
+          <Bond id="S69_B3" site1="S69_M3_C1" site2="S69_M6_C3"/>
+          <Bond id="S69_B4" site1="S69_M4_C1" site2="S69_M7_C3"/>
+          <Bond id="S69_B5" site1="S69_M5_C1" site2="S69_M7_C1"/>
+          <Bond id="S69_B6" site1="S69_M5_C2" site2="S69_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S70"  concentration="0" name="B(c!1,p~PP).B(c!2,p~PP).B(c!3,p~PP).anti(r!4,r!5).rec(a!5,b!2,b!1).rec(a!4,b!3,b)">
+        <ListOfMolecules>
+          <Molecule id="S70_M1" name="B">
+            <ListOfComponents>
+              <Component id="S70_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S70_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S70_M2" name="B">
+            <ListOfComponents>
+              <Component id="S70_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S70_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S70_M3" name="B">
+            <ListOfComponents>
+              <Component id="S70_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S70_M3_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S70_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S70_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S70_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S70_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S70_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S70_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S70_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S70_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S70_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S70_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S70_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S70_B1" site1="S70_M1_C1" site2="S70_M5_C3"/>
+          <Bond id="S70_B2" site1="S70_M2_C1" site2="S70_M5_C2"/>
+          <Bond id="S70_B3" site1="S70_M3_C1" site2="S70_M6_C2"/>
+          <Bond id="S70_B4" site1="S70_M4_C1" site2="S70_M6_C1"/>
+          <Bond id="S70_B5" site1="S70_M4_C2" site2="S70_M5_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S71"  concentration="0" name="B(c!1,p~PP).B(c!2,p~PP).B(c!3,p~PP).B(c!4,p~U).anti(r!5,r!6).rec(a!6,b!2,b!1).rec(a!5,b!4,b!3)">
+        <ListOfMolecules>
+          <Molecule id="S71_M1" name="B">
+            <ListOfComponents>
+              <Component id="S71_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S71_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S71_M2" name="B">
+            <ListOfComponents>
+              <Component id="S71_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S71_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S71_M3" name="B">
+            <ListOfComponents>
+              <Component id="S71_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S71_M3_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S71_M4" name="B">
+            <ListOfComponents>
+              <Component id="S71_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S71_M4_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S71_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S71_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S71_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S71_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S71_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S71_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S71_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S71_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S71_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S71_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S71_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S71_B1" site1="S71_M1_C1" site2="S71_M6_C3"/>
+          <Bond id="S71_B2" site1="S71_M2_C1" site2="S71_M6_C2"/>
+          <Bond id="S71_B3" site1="S71_M3_C1" site2="S71_M7_C3"/>
+          <Bond id="S71_B4" site1="S71_M4_C1" site2="S71_M7_C2"/>
+          <Bond id="S71_B5" site1="S71_M5_C1" site2="S71_M7_C1"/>
+          <Bond id="S71_B6" site1="S71_M5_C2" site2="S71_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S72"  concentration="0" name="B(c!1,p~P).B(c!2,p~PP).B(c!3,p~PP).B(c!4,p~PP).anti(r!5,r!6).rec(a!6,b!3,b!2).rec(a!5,b!1,b!4)">
+        <ListOfMolecules>
+          <Molecule id="S72_M1" name="B">
+            <ListOfComponents>
+              <Component id="S72_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S72_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S72_M2" name="B">
+            <ListOfComponents>
+              <Component id="S72_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S72_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S72_M3" name="B">
+            <ListOfComponents>
+              <Component id="S72_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S72_M3_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S72_M4" name="B">
+            <ListOfComponents>
+              <Component id="S72_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S72_M4_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S72_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S72_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S72_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S72_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S72_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S72_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S72_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S72_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S72_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S72_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S72_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S72_B1" site1="S72_M1_C1" site2="S72_M7_C2"/>
+          <Bond id="S72_B2" site1="S72_M2_C1" site2="S72_M6_C3"/>
+          <Bond id="S72_B3" site1="S72_M3_C1" site2="S72_M6_C2"/>
+          <Bond id="S72_B4" site1="S72_M4_C1" site2="S72_M7_C3"/>
+          <Bond id="S72_B5" site1="S72_M5_C1" site2="S72_M7_C1"/>
+          <Bond id="S72_B6" site1="S72_M5_C2" site2="S72_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S73"  concentration="0" name="B(c!1,p~PP).B(c!2,p~PP).B(c!3,p~PP).B(c!4,p~PP).anti(r!5,r!6).rec(a!6,b!2,b!1).rec(a!5,b!4,b!3)">
+        <ListOfMolecules>
+          <Molecule id="S73_M1" name="B">
+            <ListOfComponents>
+              <Component id="S73_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S73_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S73_M2" name="B">
+            <ListOfComponents>
+              <Component id="S73_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S73_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S73_M3" name="B">
+            <ListOfComponents>
+              <Component id="S73_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S73_M3_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S73_M4" name="B">
+            <ListOfComponents>
+              <Component id="S73_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S73_M4_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S73_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S73_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S73_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S73_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S73_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S73_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S73_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S73_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S73_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S73_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S73_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S73_B1" site1="S73_M1_C1" site2="S73_M6_C3"/>
+          <Bond id="S73_B2" site1="S73_M2_C1" site2="S73_M6_C2"/>
+          <Bond id="S73_B3" site1="S73_M3_C1" site2="S73_M7_C3"/>
+          <Bond id="S73_B4" site1="S73_M4_C1" site2="S73_M7_C2"/>
+          <Bond id="S73_B5" site1="S73_M5_C1" site2="S73_M7_C1"/>
+          <Bond id="S73_B6" site1="S73_M5_C2" site2="S73_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S74"  concentration="0" name="B(c!1,p~PP).B(c!2,p~PP).anti(r!3,r!4).rec(a!4,b!1,b).rec(a!3,b!2,b)">
+        <ListOfMolecules>
+          <Molecule id="S74_M1" name="B">
+            <ListOfComponents>
+              <Component id="S74_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S74_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S74_M2" name="B">
+            <ListOfComponents>
+              <Component id="S74_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S74_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S74_M3" name="anti">
+            <ListOfComponents>
+              <Component id="S74_M3_C1" name="r" numberOfBonds="1"/>
+              <Component id="S74_M3_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S74_M4" name="rec">
+            <ListOfComponents>
+              <Component id="S74_M4_C1" name="a" numberOfBonds="1"/>
+              <Component id="S74_M4_C2" name="b" numberOfBonds="1"/>
+              <Component id="S74_M4_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S74_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S74_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S74_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S74_M5_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S74_B1" site1="S74_M1_C1" site2="S74_M4_C2"/>
+          <Bond id="S74_B2" site1="S74_M2_C1" site2="S74_M5_C2"/>
+          <Bond id="S74_B3" site1="S74_M3_C1" site2="S74_M5_C1"/>
+          <Bond id="S74_B4" site1="S74_M3_C2" site2="S74_M4_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S75"  concentration="0" name="B(c!1,p~PP).B(c!2,p~PP).B(c!3,p~U).anti(r!4,r!5).rec(a!5,b!3,b!1).rec(a!4,b!2,b)">
+        <ListOfMolecules>
+          <Molecule id="S75_M1" name="B">
+            <ListOfComponents>
+              <Component id="S75_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S75_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S75_M2" name="B">
+            <ListOfComponents>
+              <Component id="S75_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S75_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S75_M3" name="B">
+            <ListOfComponents>
+              <Component id="S75_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S75_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S75_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S75_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S75_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S75_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S75_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S75_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S75_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S75_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S75_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S75_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S75_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S75_B1" site1="S75_M1_C1" site2="S75_M5_C3"/>
+          <Bond id="S75_B2" site1="S75_M2_C1" site2="S75_M6_C2"/>
+          <Bond id="S75_B3" site1="S75_M3_C1" site2="S75_M5_C2"/>
+          <Bond id="S75_B4" site1="S75_M4_C1" site2="S75_M6_C1"/>
+          <Bond id="S75_B5" site1="S75_M4_C2" site2="S75_M5_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S76"  concentration="0" name="B(c!1,p~P).B(c!2,p~PP).B(c!3,p~PP).anti(r!4,r!5).rec(a!5,b!1,b!2).rec(a!4,b!3,b)">
+        <ListOfMolecules>
+          <Molecule id="S76_M1" name="B">
+            <ListOfComponents>
+              <Component id="S76_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S76_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S76_M2" name="B">
+            <ListOfComponents>
+              <Component id="S76_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S76_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S76_M3" name="B">
+            <ListOfComponents>
+              <Component id="S76_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S76_M3_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S76_M4" name="anti">
+            <ListOfComponents>
+              <Component id="S76_M4_C1" name="r" numberOfBonds="1"/>
+              <Component id="S76_M4_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S76_M5" name="rec">
+            <ListOfComponents>
+              <Component id="S76_M5_C1" name="a" numberOfBonds="1"/>
+              <Component id="S76_M5_C2" name="b" numberOfBonds="1"/>
+              <Component id="S76_M5_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S76_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S76_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S76_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S76_M6_C3" name="b" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S76_B1" site1="S76_M1_C1" site2="S76_M5_C2"/>
+          <Bond id="S76_B2" site1="S76_M2_C1" site2="S76_M5_C3"/>
+          <Bond id="S76_B3" site1="S76_M3_C1" site2="S76_M6_C2"/>
+          <Bond id="S76_B4" site1="S76_M4_C1" site2="S76_M6_C1"/>
+          <Bond id="S76_B5" site1="S76_M4_C2" site2="S76_M5_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S77"  concentration="0" name="B(c!1,p~PP).B(c!2,p~PP).B(c!3,p~U).B(c!4,p~U).anti(r!5,r!6).rec(a!6,b!3,b!1).rec(a!5,b!4,b!2)">
+        <ListOfMolecules>
+          <Molecule id="S77_M1" name="B">
+            <ListOfComponents>
+              <Component id="S77_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S77_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S77_M2" name="B">
+            <ListOfComponents>
+              <Component id="S77_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S77_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S77_M3" name="B">
+            <ListOfComponents>
+              <Component id="S77_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S77_M3_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S77_M4" name="B">
+            <ListOfComponents>
+              <Component id="S77_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S77_M4_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S77_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S77_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S77_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S77_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S77_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S77_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S77_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S77_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S77_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S77_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S77_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S77_B1" site1="S77_M1_C1" site2="S77_M6_C3"/>
+          <Bond id="S77_B2" site1="S77_M2_C1" site2="S77_M7_C3"/>
+          <Bond id="S77_B3" site1="S77_M3_C1" site2="S77_M6_C2"/>
+          <Bond id="S77_B4" site1="S77_M4_C1" site2="S77_M7_C2"/>
+          <Bond id="S77_B5" site1="S77_M5_C1" site2="S77_M7_C1"/>
+          <Bond id="S77_B6" site1="S77_M5_C2" site2="S77_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S78"  concentration="0" name="B(c!1,p~P).B(c!2,p~PP).B(c!3,p~PP).B(c!4,p~U).anti(r!5,r!6).rec(a!6,b!4,b!2).rec(a!5,b!1,b!3)">
+        <ListOfMolecules>
+          <Molecule id="S78_M1" name="B">
+            <ListOfComponents>
+              <Component id="S78_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S78_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S78_M2" name="B">
+            <ListOfComponents>
+              <Component id="S78_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S78_M2_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S78_M3" name="B">
+            <ListOfComponents>
+              <Component id="S78_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S78_M3_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S78_M4" name="B">
+            <ListOfComponents>
+              <Component id="S78_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S78_M4_C2" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S78_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S78_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S78_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S78_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S78_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S78_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S78_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S78_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S78_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S78_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S78_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S78_B1" site1="S78_M1_C1" site2="S78_M7_C2"/>
+          <Bond id="S78_B2" site1="S78_M2_C1" site2="S78_M6_C3"/>
+          <Bond id="S78_B3" site1="S78_M3_C1" site2="S78_M7_C3"/>
+          <Bond id="S78_B4" site1="S78_M4_C1" site2="S78_M6_C2"/>
+          <Bond id="S78_B5" site1="S78_M5_C1" site2="S78_M7_C1"/>
+          <Bond id="S78_B6" site1="S78_M5_C2" site2="S78_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S79"  concentration="0" name="B(c!1,p~P).B(c!2,p~P).B(c!3,p~PP).B(c!4,p~PP).anti(r!5,r!6).rec(a!6,b!1,b!3).rec(a!5,b!2,b!4)">
+        <ListOfMolecules>
+          <Molecule id="S79_M1" name="B">
+            <ListOfComponents>
+              <Component id="S79_M1_C1" name="c" numberOfBonds="1"/>
+              <Component id="S79_M1_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S79_M2" name="B">
+            <ListOfComponents>
+              <Component id="S79_M2_C1" name="c" numberOfBonds="1"/>
+              <Component id="S79_M2_C2" name="p" state="P" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S79_M3" name="B">
+            <ListOfComponents>
+              <Component id="S79_M3_C1" name="c" numberOfBonds="1"/>
+              <Component id="S79_M3_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S79_M4" name="B">
+            <ListOfComponents>
+              <Component id="S79_M4_C1" name="c" numberOfBonds="1"/>
+              <Component id="S79_M4_C2" name="p" state="PP" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S79_M5" name="anti">
+            <ListOfComponents>
+              <Component id="S79_M5_C1" name="r" numberOfBonds="1"/>
+              <Component id="S79_M5_C2" name="r" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S79_M6" name="rec">
+            <ListOfComponents>
+              <Component id="S79_M6_C1" name="a" numberOfBonds="1"/>
+              <Component id="S79_M6_C2" name="b" numberOfBonds="1"/>
+              <Component id="S79_M6_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S79_M7" name="rec">
+            <ListOfComponents>
+              <Component id="S79_M7_C1" name="a" numberOfBonds="1"/>
+              <Component id="S79_M7_C2" name="b" numberOfBonds="1"/>
+              <Component id="S79_M7_C3" name="b" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S79_B1" site1="S79_M1_C1" site2="S79_M6_C2"/>
+          <Bond id="S79_B2" site1="S79_M2_C1" site2="S79_M7_C2"/>
+          <Bond id="S79_B3" site1="S79_M3_C1" site2="S79_M6_C3"/>
+          <Bond id="S79_B4" site1="S79_M4_C1" site2="S79_M7_C3"/>
+          <Bond id="S79_B5" site1="S79_M5_C1" site2="S79_M7_C1"/>
+          <Bond id="S79_B6" site1="S79_M5_C2" site2="S79_M6_C1"/>
+        </ListOfBonds>
+      </Species>
+    </ListOfSpecies>
+    <ListOfReactionRules>
+      <ReactionRule id="RR1" name="_R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR1_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP1_M1" name="rec">
+                <ListOfComponents>
+                  <Component id="RR1_RP1_M1_C1" name="b" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+          <ReactantPattern id="RR1_RP2">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP2_M1" name="B">
+                <ListOfComponents>
+                  <Component id="RR1_RP2_M1_C1" name="c" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR1_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP1_M1" name="rec">
+                <ListOfComponents>
+                  <Component id="RR1_PP1_M1_C1" name="b" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR1_PP1_M2" name="B">
+                <ListOfComponents>
+                  <Component id="RR1_PP1_M2_C1" name="c" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR1_PP1_B1" site1="RR1_PP1_M1_C1" site2="RR1_PP1_M2_C1"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR1_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="_rateLaw1"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR1_RP1_M1" targetID="RR1_PP1_M1"/>
+          <MapItem sourceID="RR1_RP1_M1_C1" targetID="RR1_PP1_M1_C1"/>
+          <MapItem sourceID="RR1_RP2_M1" targetID="RR1_PP1_M2"/>
+          <MapItem sourceID="RR1_RP2_M1_C1" targetID="RR1_PP1_M2_C1"/>
+        </Map>
+        <ListOfOperations>
+          <AddBond site1="RR1_RP1_M1_C1" site2="RR1_RP2_M1_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR2" name="_reverse__R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR2_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_RP1_M1" name="rec">
+                <ListOfComponents>
+                  <Component id="RR2_RP1_M1_C1" name="b" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR2_RP1_M2" name="B">
+                <ListOfComponents>
+                  <Component id="RR2_RP1_M2_C1" name="c" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR2_RP1_B1" site1="RR2_RP1_M1_C1" site2="RR2_RP1_M2_C1"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR2_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_PP1_M1" name="rec">
+                <ListOfComponents>
+                  <Component id="RR2_PP1_M1_C1" name="b" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+          <ProductPattern id="RR2_PP2">
+            <ListOfMolecules>
+              <Molecule id="RR2_PP2_M1" name="B">
+                <ListOfComponents>
+                  <Component id="RR2_PP2_M1_C1" name="c" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR2_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="_rateLaw2"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR2_RP1_M1" targetID="RR2_PP1_M1"/>
+          <MapItem sourceID="RR2_RP1_M1_C1" targetID="RR2_PP1_M1_C1"/>
+          <MapItem sourceID="RR2_RP1_M2" targetID="RR2_PP2_M1"/>
+          <MapItem sourceID="RR2_RP1_M2_C1" targetID="RR2_PP2_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <DeleteBond site1="RR2_RP1_M1_C1" site2="RR2_RP1_M2_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR3" name="_R2" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR3_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR3_RP1_M1" name="rec">
+                <ListOfComponents>
+                  <Component id="RR3_RP1_M1_C1" name="a" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+          <ReactantPattern id="RR3_RP2">
+            <ListOfMolecules>
+              <Molecule id="RR3_RP2_M1" name="anti">
+                <ListOfComponents>
+                  <Component id="RR3_RP2_M1_C1" name="r" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR3_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR3_PP1_M1" name="rec">
+                <ListOfComponents>
+                  <Component id="RR3_PP1_M1_C1" name="a" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR3_PP1_M2" name="anti">
+                <ListOfComponents>
+                  <Component id="RR3_PP1_M2_C1" name="r" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR3_PP1_B1" site1="RR3_PP1_M1_C1" site2="RR3_PP1_M2_C1"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR3_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="_rateLaw3"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR3_RP1_M1" targetID="RR3_PP1_M1"/>
+          <MapItem sourceID="RR3_RP1_M1_C1" targetID="RR3_PP1_M1_C1"/>
+          <MapItem sourceID="RR3_RP2_M1" targetID="RR3_PP1_M2"/>
+          <MapItem sourceID="RR3_RP2_M1_C1" targetID="RR3_PP1_M2_C1"/>
+        </Map>
+        <ListOfOperations>
+          <AddBond site1="RR3_RP1_M1_C1" site2="RR3_RP2_M1_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR4" name="_reverse__R2" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR4_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR4_RP1_M1" name="rec">
+                <ListOfComponents>
+                  <Component id="RR4_RP1_M1_C1" name="a" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR4_RP1_M2" name="anti">
+                <ListOfComponents>
+                  <Component id="RR4_RP1_M2_C1" name="r" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR4_RP1_B1" site1="RR4_RP1_M1_C1" site2="RR4_RP1_M2_C1"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR4_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR4_PP1_M1" name="rec">
+                <ListOfComponents>
+                  <Component id="RR4_PP1_M1_C1" name="a" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+          <ProductPattern id="RR4_PP2">
+            <ListOfMolecules>
+              <Molecule id="RR4_PP2_M1" name="anti">
+                <ListOfComponents>
+                  <Component id="RR4_PP2_M1_C1" name="r" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR4_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="_rateLaw4"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR4_RP1_M1" targetID="RR4_PP1_M1"/>
+          <MapItem sourceID="RR4_RP1_M1_C1" targetID="RR4_PP1_M1_C1"/>
+          <MapItem sourceID="RR4_RP1_M2" targetID="RR4_PP2_M1"/>
+          <MapItem sourceID="RR4_RP1_M2_C1" targetID="RR4_PP2_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <DeleteBond site1="RR4_RP1_M1_C1" site2="RR4_RP1_M2_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR5" name="_R3" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR5_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR5_RP1_M1" name="B">
+                <ListOfComponents>
+                  <Component id="RR5_RP1_M1_C1" name="c" numberOfBonds="1"/>
+                  <Component id="RR5_RP1_M1_C2" name="p" state="U" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR5_RP1_M2" name="rec">
+                <ListOfComponents>
+                  <Component id="RR5_RP1_M2_C1" name="b" numberOfBonds="1"/>
+                  <Component id="RR5_RP1_M2_C2" name="a" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR5_RP1_M3" name="anti">
+                <ListOfComponents>
+                  <Component id="RR5_RP1_M3_C1" name="r" numberOfBonds="1"/>
+                  <Component id="RR5_RP1_M3_C2" name="r" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR5_RP1_M4" name="rec">
+                <ListOfComponents>
+                  <Component id="RR5_RP1_M4_C1" name="b" numberOfBonds="1"/>
+                  <Component id="RR5_RP1_M4_C2" name="a" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR5_RP1_M5" name="B">
+                <ListOfComponents>
+                  <Component id="RR5_RP1_M5_C1" name="c" numberOfBonds="1"/>
+                  <Component id="RR5_RP1_M5_C2" name="p" state="U" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR5_RP1_B1" site1="RR5_RP1_M1_C1" site2="RR5_RP1_M2_C1"/>
+              <Bond id="RR5_RP1_B2" site1="RR5_RP1_M2_C2" site2="RR5_RP1_M3_C1"/>
+              <Bond id="RR5_RP1_B3" site1="RR5_RP1_M3_C2" site2="RR5_RP1_M4_C2"/>
+              <Bond id="RR5_RP1_B4" site1="RR5_RP1_M4_C1" site2="RR5_RP1_M5_C1"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR5_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR5_PP1_M1" name="B">
+                <ListOfComponents>
+                  <Component id="RR5_PP1_M1_C1" name="c" numberOfBonds="1"/>
+                  <Component id="RR5_PP1_M1_C2" name="p" state="U" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR5_PP1_M2" name="rec">
+                <ListOfComponents>
+                  <Component id="RR5_PP1_M2_C1" name="b" numberOfBonds="1"/>
+                  <Component id="RR5_PP1_M2_C2" name="a" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR5_PP1_M3" name="anti">
+                <ListOfComponents>
+                  <Component id="RR5_PP1_M3_C1" name="r" numberOfBonds="1"/>
+                  <Component id="RR5_PP1_M3_C2" name="r" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR5_PP1_M4" name="rec">
+                <ListOfComponents>
+                  <Component id="RR5_PP1_M4_C1" name="b" numberOfBonds="1"/>
+                  <Component id="RR5_PP1_M4_C2" name="a" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR5_PP1_M5" name="B">
+                <ListOfComponents>
+                  <Component id="RR5_PP1_M5_C1" name="c" numberOfBonds="1"/>
+                  <Component id="RR5_PP1_M5_C2" name="p" state="P" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR5_PP1_B1" site1="RR5_PP1_M1_C1" site2="RR5_PP1_M2_C1"/>
+              <Bond id="RR5_PP1_B2" site1="RR5_PP1_M2_C2" site2="RR5_PP1_M3_C1"/>
+              <Bond id="RR5_PP1_B3" site1="RR5_PP1_M3_C2" site2="RR5_PP1_M4_C2"/>
+              <Bond id="RR5_PP1_B4" site1="RR5_PP1_M4_C1" site2="RR5_PP1_M5_C1"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR5_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="_rateLaw5"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR5_RP1_M1" targetID="RR5_PP1_M1"/>
+          <MapItem sourceID="RR5_RP1_M1_C1" targetID="RR5_PP1_M1_C1"/>
+          <MapItem sourceID="RR5_RP1_M1_C2" targetID="RR5_PP1_M1_C2"/>
+          <MapItem sourceID="RR5_RP1_M2" targetID="RR5_PP1_M2"/>
+          <MapItem sourceID="RR5_RP1_M2_C1" targetID="RR5_PP1_M2_C1"/>
+          <MapItem sourceID="RR5_RP1_M2_C2" targetID="RR5_PP1_M2_C2"/>
+          <MapItem sourceID="RR5_RP1_M3" targetID="RR5_PP1_M3"/>
+          <MapItem sourceID="RR5_RP1_M3_C1" targetID="RR5_PP1_M3_C1"/>
+          <MapItem sourceID="RR5_RP1_M3_C2" targetID="RR5_PP1_M3_C2"/>
+          <MapItem sourceID="RR5_RP1_M4" targetID="RR5_PP1_M4"/>
+          <MapItem sourceID="RR5_RP1_M4_C1" targetID="RR5_PP1_M4_C1"/>
+          <MapItem sourceID="RR5_RP1_M4_C2" targetID="RR5_PP1_M4_C2"/>
+          <MapItem sourceID="RR5_RP1_M5" targetID="RR5_PP1_M5"/>
+          <MapItem sourceID="RR5_RP1_M5_C1" targetID="RR5_PP1_M5_C1"/>
+          <MapItem sourceID="RR5_RP1_M5_C2" targetID="RR5_PP1_M5_C2"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR5_RP1_M5_C2" finalState="P"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR6" name="_R4" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR6_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR6_RP1_M1" name="B">
+                <ListOfComponents>
+                  <Component id="RR6_RP1_M1_C1" name="c" numberOfBonds="1"/>
+                  <Component id="RR6_RP1_M1_C2" name="p" state="U" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR6_RP1_M2" name="rec">
+                <ListOfComponents>
+                  <Component id="RR6_RP1_M2_C1" name="b" numberOfBonds="1"/>
+                  <Component id="RR6_RP1_M2_C2" name="b" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR6_RP1_M3" name="B">
+                <ListOfComponents>
+                  <Component id="RR6_RP1_M3_C1" name="c" numberOfBonds="1"/>
+                  <Component id="RR6_RP1_M3_C2" name="p" state="P" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR6_RP1_B1" site1="RR6_RP1_M1_C1" site2="RR6_RP1_M2_C1"/>
+              <Bond id="RR6_RP1_B2" site1="RR6_RP1_M2_C2" site2="RR6_RP1_M3_C1"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR6_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR6_PP1_M1" name="B">
+                <ListOfComponents>
+                  <Component id="RR6_PP1_M1_C1" name="c" numberOfBonds="1"/>
+                  <Component id="RR6_PP1_M1_C2" name="p" state="PP" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR6_PP1_M2" name="rec">
+                <ListOfComponents>
+                  <Component id="RR6_PP1_M2_C1" name="b" numberOfBonds="1"/>
+                  <Component id="RR6_PP1_M2_C2" name="b" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR6_PP1_M3" name="B">
+                <ListOfComponents>
+                  <Component id="RR6_PP1_M3_C1" name="c" numberOfBonds="1"/>
+                  <Component id="RR6_PP1_M3_C2" name="p" state="PP" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR6_PP1_B1" site1="RR6_PP1_M1_C1" site2="RR6_PP1_M2_C1"/>
+              <Bond id="RR6_PP1_B2" site1="RR6_PP1_M2_C2" site2="RR6_PP1_M3_C1"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR6_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="_rateLaw6"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR6_RP1_M1" targetID="RR6_PP1_M1"/>
+          <MapItem sourceID="RR6_RP1_M1_C1" targetID="RR6_PP1_M1_C1"/>
+          <MapItem sourceID="RR6_RP1_M1_C2" targetID="RR6_PP1_M1_C2"/>
+          <MapItem sourceID="RR6_RP1_M2" targetID="RR6_PP1_M2"/>
+          <MapItem sourceID="RR6_RP1_M2_C1" targetID="RR6_PP1_M2_C1"/>
+          <MapItem sourceID="RR6_RP1_M2_C2" targetID="RR6_PP1_M2_C2"/>
+          <MapItem sourceID="RR6_RP1_M3" targetID="RR6_PP1_M3"/>
+          <MapItem sourceID="RR6_RP1_M3_C1" targetID="RR6_PP1_M3_C1"/>
+          <MapItem sourceID="RR6_RP1_M3_C2" targetID="RR6_PP1_M3_C2"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR6_RP1_M1_C2" finalState="PP"/>
+          <StateChange site="RR6_RP1_M3_C2" finalState="PP"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR7" name="_R5" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR7_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR7_RP1_M1" name="B">
+                <ListOfComponents>
+                  <Component id="RR7_RP1_M1_C1" name="p" state="U" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR7_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR7_PP1_M1" name="B">
+                <ListOfComponents>
+                  <Component id="RR7_PP1_M1_C1" name="p" state="P" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR7_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="_rateLaw7"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR7_RP1_M1" targetID="RR7_PP1_M1"/>
+          <MapItem sourceID="RR7_RP1_M1_C1" targetID="RR7_PP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR7_RP1_M1_C1" finalState="P"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR8" name="_R6" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR8_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR8_RP1_M1" name="B">
+                <ListOfComponents>
+                  <Component id="RR8_RP1_M1_C1" name="p" state="PP" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR8_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR8_PP1_M1" name="B">
+                <ListOfComponents>
+                  <Component id="RR8_PP1_M1_C1" name="p" state="P" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR8_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="_rateLaw8"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR8_RP1_M1" targetID="RR8_PP1_M1"/>
+          <MapItem sourceID="RR8_RP1_M1_C1" targetID="RR8_PP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR8_RP1_M1_C1" finalState="P"/>
+        </ListOfOperations>
+      </ReactionRule>
+    </ListOfReactionRules>
+    <ListOfObservables>
+      <Observable id="O1" name="Bphos" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O1_P1">
+            <ListOfMolecules>
+              <Molecule id="O1_P1_M1" name="B">
+                <ListOfComponents>
+                  <Component id="O1_P1_M1_C1" name="p" state="P" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O2" name="BphosP" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O2_P1">
+            <ListOfMolecules>
+              <Molecule id="O2_P1_M1" name="B">
+                <ListOfComponents>
+                  <Component id="O2_P1_M1_C1" name="p" state="PP" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O3" name="B_rec" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O3_P1">
+            <ListOfMolecules>
+              <Molecule id="O3_P1_M1" name="rec">
+                <ListOfComponents>
+                  <Component id="O3_P1_M1_C1" name="b" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O3_P1_M2" name="B">
+                <ListOfComponents>
+                  <Component id="O3_P1_M2_C1" name="c" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="O3_P1_B1" site1="O3_P1_M1_C1" site2="O3_P1_M2_C1"/>
+            </ListOfBonds>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O4" name="anti_rec" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O4_P1">
+            <ListOfMolecules>
+              <Molecule id="O4_P1_M1" name="rec">
+                <ListOfComponents>
+                  <Component id="O4_P1_M1_C1" name="a" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O4_P1_M2" name="anti">
+                <ListOfComponents>
+                  <Component id="O4_P1_M2_C1" name="r" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="O4_P1_B1" site1="O4_P1_M1_C1" site2="O4_P1_M2_C1"/>
+            </ListOfBonds>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O5" name="full" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O5_P1">
+            <ListOfMolecules>
+              <Molecule id="O5_P1_M1" name="B">
+                <ListOfComponents>
+                  <Component id="O5_P1_M1_C1" name="c" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O5_P1_M2" name="rec">
+                <ListOfComponents>
+                  <Component id="O5_P1_M2_C1" name="b" numberOfBonds="1"/>
+                  <Component id="O5_P1_M2_C2" name="a" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O5_P1_M3" name="anti">
+                <ListOfComponents>
+                  <Component id="O5_P1_M3_C1" name="r" numberOfBonds="1"/>
+                  <Component id="O5_P1_M3_C2" name="r" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O5_P1_M4" name="rec">
+                <ListOfComponents>
+                  <Component id="O5_P1_M4_C1" name="b" numberOfBonds="1"/>
+                  <Component id="O5_P1_M4_C2" name="a" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O5_P1_M5" name="B">
+                <ListOfComponents>
+                  <Component id="O5_P1_M5_C1" name="c" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="O5_P1_B1" site1="O5_P1_M1_C1" site2="O5_P1_M2_C1"/>
+              <Bond id="O5_P1_B2" site1="O5_P1_M2_C2" site2="O5_P1_M3_C1"/>
+              <Bond id="O5_P1_B3" site1="O5_P1_M3_C2" site2="O5_P1_M4_C2"/>
+              <Bond id="O5_P1_B4" site1="O5_P1_M4_C1" site2="O5_P1_M5_C1"/>
+            </ListOfBonds>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+    </ListOfObservables>
+    <ListOfFunctions>
+    </ListOfFunctions>
+  </model>
+</sbml>

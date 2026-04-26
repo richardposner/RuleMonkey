@@ -11,6 +11,7 @@ repos:
       - id: trailing-whitespace
       - id: check-merge-conflict
       - id: check-added-large-files
+        args: ['--maxkb=3000']  # accommodates basicmodels XMLs (r21 is 2.6MB)
       - id: mixed-line-ending
       - id: debug-statements
       - id: detect-private-key

@@ -1,0 +1,5 @@
+obs	I_mean	I_std	n_reps
+free_L2	8394.55	172.393	100
+singly_bound_L2	25227.9	270.433	100
+doubly_bound_L2	34693.8	260.41	100
+triply_bound_L2	31683.7	255.64	100
