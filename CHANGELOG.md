@@ -26,8 +26,12 @@ CLI-compatible with RuleMonkey 2.0.25.
     correctness benchmarking.
   - `nfsim_basicmodels/` — 72 models from the NFsim parity suite.
 - 100-replicate ensemble reference trajectories under
-  `tests/reference/nfsim/` from a gold-standard NFsim build (regenerated
-  2026-04-10; see `tests/reference/nfsim/PROVENANCE.md`).
+  `tests/reference/nfsim/` (regenerated 2026-04-10) — 69 of 71 models
+  from a gold-standard NFsim build, with `toy_jim` and `rm_tlbr_rings`
+  replaced by hand-rolled Gillespie SSA where NFsim was confirmed to
+  produce incorrect output. SSA scripts under `harness/ssa/`. See
+  `tests/reference/nfsim/PROVENANCE.md` for the full provenance and
+  per-model exceptions table.
 - Python harness scripts under `harness/` for end-to-end benchmarking
   and validation.
 - CMake (≥3.25) build with Ninja generator and configurable presets;

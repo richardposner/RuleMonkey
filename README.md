@@ -61,8 +61,11 @@ harness/             Python benchmarking + validation drivers
 | `tests/models/nfsim_basicmodels/` | 72 | NFsim-parity regression suite (Sneddon et al.) |
 
 Reference trajectories under `tests/reference/nfsim/` are 100-replicate ensemble
-means and standard deviations regenerated 2026-04-10 from a known NFsim build;
-see `tests/reference/nfsim/PROVENANCE.md`.
+means and standard deviations regenerated 2026-04-10 from a known NFsim build,
+**with two exceptions** (`toy_jim`, `rm_tlbr_rings`) where NFsim was found to
+produce incorrect output and the reference was regenerated from a hand-rolled
+Gillespie SSA. See [`tests/reference/nfsim/PROVENANCE.md`](tests/reference/nfsim/PROVENANCE.md)
+for details and the regeneration scripts under `harness/ssa/`.
 
 ## Public API
 

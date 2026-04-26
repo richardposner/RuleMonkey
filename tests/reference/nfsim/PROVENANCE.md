@@ -1,11 +1,39 @@
-# NFsim Reference Data — Provenance
+# Reference Data — Provenance
+
+The reference trajectories under `tests/reference/nfsim/` are **mostly** the
+output of a gold-standard NFsim build, with a documented set of per-model
+exceptions where NFsim was found to produce incorrect output and the
+reference was replaced with hand-rolled Gillespie SSA data. See the
+"Per-model exceptions" section below.
+
+The directory keeps the `nfsim/` name for historical continuity; consumers
+should treat its contents as the canonical correctness reference for the
+RuleMonkey benchmark, not as pure NFsim output.
 
 **Last full regeneration:** 2026-04-10
-**Generator binary:** `build/NFsim` (local build)
-**RM repo commit at regen:** `2de71bf` (`Revert "Fixes to issues #48 and #49"`)
+**Generator binary:** `build/NFsim` (local build, in the `nfsim-rm`
+development repository — not in this repo)
+**Source-repo commit at regen:** `2de71bf` (`Revert "Fixes to issues #48 and #49"`)
 **Reps per model:** 100
 **Models:** all 71 in `sim_params.tsv`
 **Total regen wall time:** ~4.5 h (6 parallel workers, LPT-scheduled)
+
+## Per-model exceptions: SSA-generated reference
+
+The following models were found to produce incorrect output under NFsim,
+and their reference data was regenerated with hand-rolled Gillespie SSA
+implementations (100 reps each, same `t_end` / `n_steps` as the NFsim
+reference). For these models, the ensemble files in `ensemble/` are the
+SSA output, **not** NFsim output.
+
+| Model | Replaced | Commit | NFsim error | SSA script |
+|---|---|---|---|---|
+| `toy_jim` | 2026-04-13 | `9cfe36f` | NFsim over-counts `K(Y~P)` by ~12% on the disjoint transphosphorylation / multi-molecule dephosphorylation patterns. SSA confirmed RM is correct. | [`harness/ssa/toy_jim_ssa.py`](../../../harness/ssa/toy_jim_ssa.py) |
+| `rm_tlbr_rings` | 2026-04-12 | `05a9a12` | NFsim under-counts on disjoint + symmetric ring-closure patterns. SSA confirmed RM is correct. | [`harness/ssa/rm_tlbr_rings_ssa.py`](../../../harness/ssa/rm_tlbr_rings_ssa.py) |
+
+The SSA scripts in `harness/ssa/` are sufficient to regenerate these two
+models' references from scratch and should be re-run if the corresponding
+model definitions in `tests/models/corpus/` change.
 
 ## Flag policy
 
@@ -102,12 +130,19 @@ and a one-line note on why the regen was needed.
 
 ## Regen tooling
 
-- Script: `dev/regenerate_nfsim_reference.py`. At the end of a run it
-  automatically invokes `dev/compute_noise_floor.py` on any models it
-  regenerated, so `noise_floor.tsv` and the per-model `ensemble/*.tint.tsv`
-  stats stay in lock-step with the replicate data. Pass `--skip-noise-floor`
-  to bypass the refresh (e.g. if you want to regenerate multiple subsets
+- **NFsim reference (69 of 71 models):** regeneration is performed in the
+  `nfsim-rm` development repository, which retains the NFsim build
+  infrastructure that the cleanroom RuleMonkey repo intentionally does
+  not vendor. The driver script is `dev/regenerate_nfsim_reference.py`
+  in that repo. At the end of a run it automatically invokes
+  `dev/compute_noise_floor.py` on any models it regenerated, so
+  `noise_floor.tsv` and the per-model `ensemble/*.tint.tsv` stats stay
+  in lock-step with the replicate data. Pass `--skip-noise-floor` to
+  bypass the refresh (e.g. if you want to regenerate multiple subsets
   and calibrate once at the end).
+- **SSA reference (`toy_jim`, `rm_tlbr_rings`):** regeneration is
+  self-contained in this repo; run the corresponding script in
+  `harness/ssa/`.
 - Parallelization: use LPT partitioning with 6 workers; the slow models
   (`pltr`, `mlnr`, `testcase2a`, `rm_tlbr`) should each get their own
   worker to avoid head-of-line blocking.
@@ -129,3 +164,5 @@ and a one-line note on why the regen was needed.
 | Date | Commit | Scope | Notes |
 |---|---|---|---|
 | 2026-04-10 | `2de71bf` | All 71 models | First full regen with `-bscb` + locally-reverted upstream #61 bug |
+| 2026-04-12 | `05a9a12` | `rm_tlbr_rings` | NFsim reference replaced with hand-rolled SSA (NFsim under-counts on disjoint+symmetric ring patterns) |
+| 2026-04-13 | `9cfe36f` | `toy_jim` | NFsim reference replaced with hand-rolled SSA (NFsim over-counts `K(Y~P)` by ~12%) |
