@@ -3,7 +3,7 @@ begin model
 # TLBR model
 
 # References:
-# 1. Monine MI et al. (2010) Biophys J 98: 48-56. 
+# 1. Monine MI et al. (2010) Biophys J 98: 48-56.
 # 2. Posner RG et al. (2007) Org Lett 9: 3551-3554.
 
 # NB: simulations in the sol-gel coexistence regime are expensive.
@@ -33,13 +33,13 @@ L_conc 0.7 # [=] nM
 NL=L_conc*1e-9*(NA*V) # [=] copies per cell, cf. value given in Table 1 in Ref 1
 
 # equilibrium association constant
-K1nM .270297360 
+K1nM .270297360
 
 # equilibrium crosslinking constant
-K2nM  51.8690464 
+K2nM  51.8690464
 
-K1=K1nM*10^9 
-K2=K2nM*10^9  
+K1=K1nM*10^9
+K2=K2nM*10^9
 
 # dissociation rate constant
 koff 0.01 # [=] /s, see Table 1 in Ref 1 and reference cited therein

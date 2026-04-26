@@ -8,35 +8,25 @@
 
 namespace rulemonkey {
 
-TableFunction::TableFunction(std::string name, std::vector<double> xs,
-                             std::vector<double> ys, std::string counter_name,
-                             TfunMethod method)
-    : name_(std::move(name)),
-      counter_name_(std::move(counter_name)),
-      xs_(std::move(xs)),
-      ys_(std::move(ys)),
-      method_(method) {
+TableFunction::TableFunction(std::string name, std::vector<double> xs, std::vector<double> ys,
+                             std::string counter_name, TfunMethod method)
+    : name_(std::move(name)), counter_name_(std::move(counter_name)), xs_(std::move(xs)),
+      ys_(std::move(ys)), method_(method) {
   if (xs_.size() < 2)
-    throw std::runtime_error("tfun '" + name_ +
-                             "': requires at least 2 data points");
+    throw std::runtime_error("tfun '" + name_ + "': requires at least 2 data points");
   if (xs_.size() != ys_.size())
-    throw std::runtime_error("tfun '" + name_ +
-                             "': x and y arrays must have equal length");
+    throw std::runtime_error("tfun '" + name_ + "': x and y arrays must have equal length");
   for (size_t i = 1; i < xs_.size(); ++i) {
     if (xs_[i] <= xs_[i - 1])
-      throw std::runtime_error("tfun '" + name_ +
-                               "': x values must be strictly increasing");
+      throw std::runtime_error("tfun '" + name_ + "': x values must be strictly increasing");
   }
 }
 
-TableFunction TableFunction::from_file(const std::string& name,
-                                       const std::string& filepath,
-                                       const std::string& counter_name,
-                                       TfunMethod method) {
+TableFunction TableFunction::from_file(const std::string& name, const std::string& filepath,
+                                       const std::string& counter_name, TfunMethod method) {
   std::ifstream in(filepath);
   if (!in.is_open())
-    throw std::runtime_error("tfun '" + name + "': cannot open file '" +
-                             filepath + "'");
+    throw std::runtime_error("tfun '" + name + "': cannot open file '" + filepath + "'");
 
   std::vector<double> xs, ys;
   std::string line;
@@ -45,7 +35,8 @@ TableFunction TableFunction::from_file(const std::string& name,
   while (std::getline(in, line)) {
     // Trim leading whitespace
     auto start = line.find_first_not_of(" \t");
-    if (start == std::string::npos) continue;
+    if (start == std::string::npos)
+      continue;
     line = line.substr(start);
 
     if (line[0] == '#') {
@@ -59,20 +50,20 @@ TableFunction TableFunction::from_file(const std::string& name,
     std::istringstream iss(line);
     double x, y;
     if (!(iss >> x >> y))
-      throw std::runtime_error("tfun '" + name +
-                               "': malformed data line: " + line);
+      throw std::runtime_error("tfun '" + name + "': malformed data line: " + line);
     xs.push_back(x);
     ys.push_back(y);
   }
 
-  return TableFunction(name, std::move(xs), std::move(ys), counter_name,
-                       method);
+  return TableFunction(name, std::move(xs), std::move(ys), counter_name, method);
 }
 
 double TableFunction::evaluate(double x) const {
   // Clamp at boundaries
-  if (x <= xs_.front()) return ys_.front();
-  if (x >= xs_.back()) return ys_.back();
+  if (x <= xs_.front())
+    return ys_.front();
+  if (x >= xs_.back())
+    return ys_.back();
 
   // Binary search for interval
   auto it = std::upper_bound(xs_.begin(), xs_.end(), x);
@@ -90,4 +81,4 @@ double TableFunction::evaluate(double x) const {
   return y0 + t * (y1 - y0);
 }
 
-}  // namespace rulemonkey
+} // namespace rulemonkey

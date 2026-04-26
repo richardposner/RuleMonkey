@@ -11,8 +11,8 @@ begin parameters
     # CheR/CheB rates for binding and unbinding the tether.  In the original
     # AN model, binding rates are in units of per second (because CheR/CheB are
     # treated as states of the receptor).  These rates are not valid here, so
-    # instead we use the binding rate from AgentCell for CheR. The original 
-    # AN model used the same binding rate for CheR and CheB, so we do the 
+    # instead we use the binding rate from AgentCell for CheR. The original
+    # AN model used the same binding rate for CheR and CheB, so we do the
     # same thing here.  The unbinding rate is unchanged from the original model.
     #         Original study, konR=konB=0.01/s
     #         AgentCell (Emonet, et. al, Bioinfo.2005 21(11):2714-2721;)
@@ -22,12 +22,12 @@ begin parameters
  	konB 2.8e6/(Na*Vol)
 	koffR 0.1 #s^-1
 	koffB 0.1 #s^-1
-	
+
 	# Methylation and demethylation catalytic rates, taken directly from
     # the original Assistance Neighborhood model
 	kr 0.1
 	kb 0.2
-	
+
 
 	# Free energy of dimers for different methylation levels, also defined in
 	# in original study.
@@ -40,26 +40,26 @@ begin parameters
 	e6 -1.1
 	e7 -2.0
 	e8 -3.0
-	
-	
+
+
 	#Binding constants of TAR and TSR to attractant Aspartate, as
     #defined in the original model.
 	#Asp_Koff_TAR  0.02 #mM
 	#Asp_Kon_TAR   0.5  #mM
 	#Asp_Koff_TSR  100  #mM
 	#Asp_Kon_TSR   10^6 #mM
-	
+
 	#Tar and Tsr per cluster
 	TAR_COUNT 6
 	TSR_COUNT 12
-	
+
 	#Initial aspartate concentration
 	AspConc 0 #mM
 
-	# Number of molecules we want to simulate.  Assuming a cell has ~14,000 
-    # chemoreceptors, that gives us ~7000 receptors dimers, and 370 clusters 
-    # of 19 receptor dimers.  The numbers of CheR and CheB are high, but are 
-    # set to give a timescale of adaptation similar to the original model.  In 
+	# Number of molecules we want to simulate.  Assuming a cell has ~14,000
+    # chemoreceptors, that gives us ~7000 receptors dimers, and 370 clusters
+    # of 19 receptor dimers.  The numbers of CheR and CheB are high, but are
+    # set to give a timescale of adaptation similar to the original model.  In
     # a real cell, CheR and CheB will be less (on the order of ~200), but
 	# the catalytic rate of methylation/demethylation will likely be faster.
     # see Li Hazelbauer, J. of Bact.(2004),Vol.186, No.12, p.3687-3694 for
@@ -118,16 +118,16 @@ end species
 
 
 begin reaction rules
-	
+
 	##  R/B binding and unbinding to a receptor tether, only one R or B is
 	##  allowed to bind per dimer, the active site must also be free
 	RD(RB) + CheR(tether,active) -> CheR(tether!1,active).RD(RB!1) konR
 	RD(RB) + CheB(tether,active) -> CheB(tether!1,active).RD(RB!1) konB
-	
+
 	## Unbinding from the tether, does not depend on active site
 	CheR(tether!1).RD(RB!1) -> CheR(tether) + RD(RB) koffR
 	CheB(tether!1).RD(RB!1) -> CheB(tether) + RD(RB) koffB
-	
+
 
     # everything below this line is not in the actual simulation!
 
@@ -135,36 +135,36 @@ begin reaction rules
 	## methylating or demethylating, which fits with the original model
 	#CheR(tether,active!1).RD(a!1) -> CheR(tether,active) + RD(a)  1000
 	#CheB(tether,active!1).RD(a!1) -> CheB(tether,active) + RD(a)  1000
-	
-	
-	## R/B binding to active site.  Assuming saturated kinetics means 
-    ## that this happens very fast, but it will still depend on the number 
+
+
+	## R/B binding to active site.  Assuming saturated kinetics means
+    ## that this happens very fast, but it will still depend on the number
     ## of sites available so that the methylation distribution is correct.
-	## Binding does not depend on activity (according to the original study), 
+	## Binding does not depend on activity (according to the original study),
     ## only the rate limiting catalytic step does.
     #RD(RB!1,a).CheR(tether!1,active) <-> RD(RB!1,a!2).CheR(tether!1,active!2) 1,1
     #RD(RB!1,a).CheB(tether!1,active) <-> RD(RB!1,a!2).CheB(tether!1,active!2) 1,1
-	
+
 	#RD%y(RB!1,a).CheR(tether!1,active) -> RD%y(RB!1,a!2).CheR(tether!1,active!2) 1000*(8-MethLevel(y))
 	#RD%y(RB!1,a).CheB(tether!1,active) -> RD%y(RB!1,a!2).CheB(tether!1,active!2) 1000*(MethLevel(y))
-	
+
 	## Neighborhood reactions for CheR
     #RD%r(tri2!1,m~?,a).RD(RB!2,tri1!1).CheR(tether!2,active) -> RD%r(tri2!1,m~?,a!3).RD(RB!2,tri1!1).CheR(tether!2,active!3) 1000*(8-MethLevel(r))
 	#RD%r(tri1!1,m~?,a).RD(RB!2,tri2!1).CheR(tether!2,active) -> RD%r(tri1!1,m~?,a!3).RD(RB!2,tri2!1).CheR(tether!2,active!3) 1000*(8-MethLevel(r))
 	#RD%r(hex!1,m~?,a).RD(RB!2,hex!1).CheR(tether!2,active)   -> RD%r(hex!1,m~?,a!3).RD(RB!2,hex!1).CheR(tether!2,active!3)   1000*(8-MethLevel(r))
-	
+
 	# Neighborhood reactions for CheB
     #RD%r(tri2!1,m~?,a).RD(RB!2,tri1!1).CheB(tether!2,active) -> RD%r(tri2!1,m~?,a!3).RD(RB!2,tri1!1).CheB(tether!2,active!3) 1000*(MethLevel(r))
 	#RD%r(tri1!1,m~?,a).RD(RB!2,tri2!1).CheB(tether!2,active) -> RD%r(tri1!1,m~?,a!3).RD(RB!2,tri2!1).CheB(tether!2,active!3) 1000*(MethLevel(r))
 	#RD%r(hex!1,m~?,a).RD(RB!2,hex!1).CheB(tether!2,active)   -> RD%r(hex!1,m~?,a!3).RD(RB!2,hex!1).CheB(tether!2,active!3)   1000*(MethLevel(r))
-	
-	
+
+
 	## Methylation and demethylation is activity dependent, and requires an
     ## R/B bound to the catalytic active site of the receptor dimer.
 	#%x::RD(m~?,a!1).CheR(active!1) -> %x::RD(m~PLUS,a) + CheR(active) kr*(1-pOn(x))
 	#%x::RD(m~?,a!1).CheB(active!1) -> %x::RD(m~MINUS,a) + CheB(active) kb*(pOn(x))
-	
-	
+
+
 end reaction rules
 
 

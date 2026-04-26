@@ -12,7 +12,7 @@
 namespace rulemonkey {
 
 class Engine {
- public:
+public:
   Engine(const Model& model, uint64_t seed, int molecule_limit = -1);
   ~Engine();
 
@@ -31,9 +31,9 @@ class Engine {
   void save_state(const std::string& path) const;
   void load_state(const std::string& path);
 
- private:
+private:
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace rulemonkey
+} // namespace rulemonkey

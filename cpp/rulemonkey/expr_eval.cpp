@@ -18,7 +18,8 @@ std::unique_ptr<AstNode> AstNode::clone() const {
   c->literal = literal;
   c->name = name;
   c->op = op;
-  for (auto& ch : children) c->children.push_back(ch->clone());
+  for (auto& ch : children)
+    c->children.push_back(ch->clone());
   return c;
 }
 
@@ -35,21 +36,31 @@ struct Token {
 };
 
 class Tokenizer {
- public:
+public:
   explicit Tokenizer(std::string_view src) : src_(src), pos_(0) {}
 
   Token next() {
     skip_ws();
-    if (pos_ >= src_.size()) return {TokType::End, "", 0};
+    if (pos_ >= src_.size())
+      return {TokType::End, "", 0};
 
     char ch = src_[pos_];
 
-    if (ch == '(') { ++pos_; return {TokType::LParen, "(", 0}; }
-    if (ch == ')') { ++pos_; return {TokType::RParen, ")", 0}; }
-    if (ch == ',') { ++pos_; return {TokType::Comma, ",", 0}; }
+    if (ch == '(') {
+      ++pos_;
+      return {TokType::LParen, "(", 0};
+    }
+    if (ch == ')') {
+      ++pos_;
+      return {TokType::RParen, ")", 0};
+    }
+    if (ch == ',') {
+      ++pos_;
+      return {TokType::Comma, ",", 0};
+    }
 
-    if (ch == '+' || ch == '-' || ch == '*' || ch == '/' || ch == '^' ||
-        ch == '<' || ch == '>' || ch == '=' || ch == '!') {
+    if (ch == '+' || ch == '-' || ch == '*' || ch == '/' || ch == '^' || ch == '<' || ch == '>' ||
+        ch == '=' || ch == '!') {
       std::string op(1, ch);
       ++pos_;
       // Two-char operators: <=, >=, ==, !=, &&, ||
@@ -72,11 +83,12 @@ class Tokenizer {
       return {TokType::Op, "||", 0};
     }
 
-    if (std::isdigit(ch) || ch == '.') return read_number();
-    if (std::isalpha(ch) || ch == '_') return read_ident();
+    if (std::isdigit(ch) || ch == '.')
+      return read_number();
+    if (std::isalpha(ch) || ch == '_')
+      return read_ident();
 
-    throw std::runtime_error(std::string("expr_eval: unexpected character '") +
-                             ch + "'");
+    throw std::runtime_error(std::string("expr_eval: unexpected character '") + ch + "'");
   }
 
   Token peek() {
@@ -86,9 +98,10 @@ class Tokenizer {
     return tok;
   }
 
- private:
+private:
   void skip_ws() {
-    while (pos_ < src_.size() && std::isspace(src_[pos_])) ++pos_;
+    while (pos_ < src_.size() && std::isspace(src_[pos_]))
+      ++pos_;
   }
 
   Token read_number() {
@@ -100,7 +113,8 @@ class Tokenizer {
       ++pos_;
       if (pos_ < src_.size() && (src_[pos_] == '+' || src_[pos_] == '-'))
         ++pos_;
-      while (pos_ < src_.size() && std::isdigit(src_[pos_])) ++pos_;
+      while (pos_ < src_.size() && std::isdigit(src_[pos_]))
+        ++pos_;
     }
     std::string s(src_.substr(start, pos_ - start));
     double val = std::stod(s);
@@ -109,8 +123,7 @@ class Tokenizer {
 
   Token read_ident() {
     auto start = pos_;
-    while (pos_ < src_.size() &&
-           (std::isalnum(src_[pos_]) || src_[pos_] == '_'))
+    while (pos_ < src_.size() && (std::isalnum(src_[pos_]) || src_[pos_] == '_'))
       ++pos_;
     std::string s(src_.substr(start, pos_ - start));
     return {TokType::Ident, s, 0};
@@ -125,18 +138,17 @@ class Tokenizer {
 // ---------------------------------------------------------------------------
 
 class Parser {
- public:
+public:
   explicit Parser(std::string_view src) : tok_(src) { advance(); }
 
   std::unique_ptr<AstNode> parse_expression() {
     auto node = parse_or();
     if (cur_.type != TokType::End)
-      throw std::runtime_error("expr_eval: unexpected token '" + cur_.text +
-                               "' after expression");
+      throw std::runtime_error("expr_eval: unexpected token '" + cur_.text + "' after expression");
     return node;
   }
 
- private:
+private:
   void advance() { cur_ = tok_.next(); }
 
   // or: and (|| and)*
@@ -174,16 +186,21 @@ class Parser {
   // comparison: add_sub ((<|>|<=|>=|==|!=) add_sub)?
   std::unique_ptr<AstNode> parse_comparison() {
     auto left = parse_add_sub();
-    if (cur_.type == TokType::Op &&
-        (cur_.text == "<" || cur_.text == ">" || cur_.text == "<=" ||
-         cur_.text == ">=" || cur_.text == "==" || cur_.text == "!=")) {
+    if (cur_.type == TokType::Op && (cur_.text == "<" || cur_.text == ">" || cur_.text == "<=" ||
+                                     cur_.text == ">=" || cur_.text == "==" || cur_.text == "!=")) {
       char op;
-      if (cur_.text == "<") op = '<';
-      else if (cur_.text == ">") op = '>';
-      else if (cur_.text == "<=") op = 'l';  // l for less-equal
-      else if (cur_.text == ">=") op = 'g';  // g for greater-equal
-      else if (cur_.text == "==") op = '=';
-      else op = '!';  // !=
+      if (cur_.text == "<")
+        op = '<';
+      else if (cur_.text == ">")
+        op = '>';
+      else if (cur_.text == "<=")
+        op = 'l'; // l for less-equal
+      else if (cur_.text == ">=")
+        op = 'g'; // g for greater-equal
+      else if (cur_.text == "==")
+        op = '=';
+      else
+        op = '!'; // !=
       advance();
       auto right = parse_add_sub();
       auto node = std::make_unique<AstNode>();
@@ -199,8 +216,7 @@ class Parser {
   // add_sub: mul_div ((+|-) mul_div)*
   std::unique_ptr<AstNode> parse_add_sub() {
     auto left = parse_mul_div();
-    while (cur_.type == TokType::Op &&
-           (cur_.text == "+" || cur_.text == "-")) {
+    while (cur_.type == TokType::Op && (cur_.text == "+" || cur_.text == "-")) {
       char op = cur_.text[0];
       advance();
       auto right = parse_mul_div();
@@ -217,8 +233,7 @@ class Parser {
   // mul_div: power ((*|/) power)*
   std::unique_ptr<AstNode> parse_mul_div() {
     auto left = parse_power();
-    while (cur_.type == TokType::Op &&
-           (cur_.text == "*" || cur_.text == "/")) {
+    while (cur_.type == TokType::Op && (cur_.text == "*" || cur_.text == "/")) {
       char op = cur_.text[0];
       advance();
       auto right = parse_power();
@@ -237,7 +252,7 @@ class Parser {
     auto left = parse_unary();
     if (cur_.type == TokType::Op && cur_.text == "^") {
       advance();
-      auto right = parse_power();  // right-recursive for right-assoc
+      auto right = parse_power(); // right-recursive for right-assoc
       auto node = std::make_unique<AstNode>();
       node->type = NodeType::BinaryOp;
       node->op = '^';
@@ -281,7 +296,7 @@ class Parser {
 
       // Check for function call: ident(...)
       if (cur_.type == TokType::LParen) {
-        advance();  // consume '('
+        advance(); // consume '('
         auto node = std::make_unique<AstNode>();
         node->type = NodeType::FunctionCall;
         node->name = name;
@@ -294,8 +309,7 @@ class Parser {
           }
         }
         if (cur_.type != TokType::RParen)
-          throw std::runtime_error(
-              "expr_eval: expected ')' after function arguments");
+          throw std::runtime_error("expr_eval: expected ')' after function arguments");
         advance();
         return node;
       }
@@ -360,114 +374,144 @@ static double eval_builtin(const std::string& name,
   // 1-arg functions
   if (n == 1) {
     double a = evaluate(*args[0], vars);
-    if (name == "log" || name == "ln") return std::log(a);
-    if (name == "log10") return std::log10(a);
-    if (name == "log2") return std::log2(a);
-    if (name == "exp") return std::exp(a);
-    if (name == "sqrt") return std::sqrt(a);
-    if (name == "abs") return std::fabs(a);
-    if (name == "floor") return std::floor(a);
-    if (name == "ceil") return std::ceil(a);
-    if (name == "round") return std::round(a);
-    if (name == "sin") return std::sin(a);
-    if (name == "cos") return std::cos(a);
-    if (name == "tan") return std::tan(a);
-    if (name == "asin") return std::asin(a);
-    if (name == "acos") return std::acos(a);
-    if (name == "atan") return std::atan(a);
-    if (name == "sinh") return std::sinh(a);
-    if (name == "cosh") return std::cosh(a);
-    if (name == "tanh") return std::tanh(a);
+    if (name == "log" || name == "ln")
+      return std::log(a);
+    if (name == "log10")
+      return std::log10(a);
+    if (name == "log2")
+      return std::log2(a);
+    if (name == "exp")
+      return std::exp(a);
+    if (name == "sqrt")
+      return std::sqrt(a);
+    if (name == "abs")
+      return std::fabs(a);
+    if (name == "floor")
+      return std::floor(a);
+    if (name == "ceil")
+      return std::ceil(a);
+    if (name == "round")
+      return std::round(a);
+    if (name == "sin")
+      return std::sin(a);
+    if (name == "cos")
+      return std::cos(a);
+    if (name == "tan")
+      return std::tan(a);
+    if (name == "asin")
+      return std::asin(a);
+    if (name == "acos")
+      return std::acos(a);
+    if (name == "atan")
+      return std::atan(a);
+    if (name == "sinh")
+      return std::sinh(a);
+    if (name == "cosh")
+      return std::cosh(a);
+    if (name == "tanh")
+      return std::tanh(a);
   }
 
   // 2-arg functions
   if (n == 2) {
     double a = evaluate(*args[0], vars);
     double b = evaluate(*args[1], vars);
-    if (name == "min") return std::fmin(a, b);
-    if (name == "max") return std::fmax(a, b);
-    if (name == "pow") return std::pow(a, b);
-    if (name == "atan2") return std::atan2(a, b);
+    if (name == "min")
+      return std::fmin(a, b);
+    if (name == "max")
+      return std::fmax(a, b);
+    if (name == "pow")
+      return std::pow(a, b);
+    if (name == "atan2")
+      return std::atan2(a, b);
   }
 
   // if(cond, then, else) — lazy evaluation
   if (name == "if" && n == 3) {
     double cond = evaluate(*args[0], vars);
-    return (cond != 0.0) ? evaluate(*args[1], vars)
-                         : evaluate(*args[2], vars);
+    return (cond != 0.0) ? evaluate(*args[1], vars) : evaluate(*args[2], vars);
   }
 
-  return std::numeric_limits<double>::quiet_NaN();  // sentinel: not a builtin
+  return std::numeric_limits<double>::quiet_NaN(); // sentinel: not a builtin
 }
 
 static bool is_builtin(const std::string& name) {
-  static const std::vector<std::string> names = {
-      "log",  "ln",   "log10", "log2", "exp",  "sqrt", "abs",
-      "floor", "ceil", "round", "sin",  "cos",  "tan",  "asin",
-      "acos", "atan", "sinh",  "cosh", "tanh", "min",  "max",
-      "pow",  "atan2", "if"};
+  static const std::vector<std::string> names = {"log",  "ln",    "log10", "log2",  "exp",   "sqrt",
+                                                 "abs",  "floor", "ceil",  "round", "sin",   "cos",
+                                                 "tan",  "asin",  "acos",  "atan",  "sinh",  "cosh",
+                                                 "tanh", "min",   "max",   "pow",   "atan2", "if"};
   return std::find(names.begin(), names.end(), name) != names.end();
 }
 
 double evaluate(const AstNode& node, const VariableMap& vars) {
   switch (node.type) {
-    case NodeType::Literal:
-      return node.literal;
+  case NodeType::Literal:
+    return node.literal;
 
-    case NodeType::Variable: {
-      auto it = vars.find(node.name);
-      if (it == vars.end())
-        throw std::runtime_error("expr_eval: unresolved variable '" +
-                                 node.name + "'");
+  case NodeType::Variable: {
+    auto it = vars.find(node.name);
+    if (it == vars.end())
+      throw std::runtime_error("expr_eval: unresolved variable '" + node.name + "'");
+    return it->second;
+  }
+
+  case NodeType::UnaryNeg:
+    return -evaluate(*node.children[0], vars);
+
+  case NodeType::BinaryOp: {
+    double l = evaluate(*node.children[0], vars);
+    double r = evaluate(*node.children[1], vars);
+    switch (node.op) {
+    case '+':
+      return l + r;
+    case '-':
+      return l - r;
+    case '*':
+      return l * r;
+    case '/':
+      return l / r;
+    case '^':
+      return std::pow(l, r);
+    case '<':
+      return (l < r) ? 1.0 : 0.0;
+    case '>':
+      return (l > r) ? 1.0 : 0.0;
+    case 'l':
+      return (l <= r) ? 1.0 : 0.0; // <=
+    case 'g':
+      return (l >= r) ? 1.0 : 0.0; // >=
+    case '=':
+      return (l == r) ? 1.0 : 0.0; // ==
+    case '!':
+      return (l != r) ? 1.0 : 0.0; // !=
+    case '&':
+      return (l != 0.0 && r != 0.0) ? 1.0 : 0.0; // &&
+    case '|':
+      return (l != 0.0 || r != 0.0) ? 1.0 : 0.0; // ||
+    default:
+      throw std::runtime_error(std::string("expr_eval: unknown binary op '") + node.op + "'");
+    }
+  }
+
+  case NodeType::FunctionCall: {
+    // Try builtin first
+    if (is_builtin(node.name)) {
+      double result = eval_builtin(node.name, node.children, vars);
+      if (!std::isnan(result) || node.name == "log" || node.name == "ln" || node.name == "sqrt") {
+        // NaN is a valid result from log(-1) etc.
+        return result;
+      }
+    }
+
+    // Fall through to variable-as-function: treat f() as variable "f"
+    // This supports BNG global functions referenced in expressions
+    auto it = vars.find(node.name);
+    if (it != vars.end())
       return it->second;
-    }
 
-    case NodeType::UnaryNeg:
-      return -evaluate(*node.children[0], vars);
-
-    case NodeType::BinaryOp: {
-      double l = evaluate(*node.children[0], vars);
-      double r = evaluate(*node.children[1], vars);
-      switch (node.op) {
-        case '+': return l + r;
-        case '-': return l - r;
-        case '*': return l * r;
-        case '/': return l / r;
-        case '^': return std::pow(l, r);
-        case '<': return (l < r) ? 1.0 : 0.0;
-        case '>': return (l > r) ? 1.0 : 0.0;
-        case 'l': return (l <= r) ? 1.0 : 0.0;  // <=
-        case 'g': return (l >= r) ? 1.0 : 0.0;  // >=
-        case '=': return (l == r) ? 1.0 : 0.0;  // ==
-        case '!': return (l != r) ? 1.0 : 0.0;  // !=
-        case '&': return (l != 0.0 && r != 0.0) ? 1.0 : 0.0;  // &&
-        case '|': return (l != 0.0 || r != 0.0) ? 1.0 : 0.0;  // ||
-        default:
-          throw std::runtime_error(
-              std::string("expr_eval: unknown binary op '") + node.op + "'");
-      }
-    }
-
-    case NodeType::FunctionCall: {
-      // Try builtin first
-      if (is_builtin(node.name)) {
-        double result = eval_builtin(node.name, node.children, vars);
-        if (!std::isnan(result) || node.name == "log" || node.name == "ln" ||
-            node.name == "sqrt") {
-          // NaN is a valid result from log(-1) etc.
-          return result;
-        }
-      }
-
-      // Fall through to variable-as-function: treat f() as variable "f"
-      // This supports BNG global functions referenced in expressions
-      auto it = vars.find(node.name);
-      if (it != vars.end()) return it->second;
-
-      throw std::runtime_error("expr_eval: unknown function '" + node.name +
-                               "' with " + std::to_string(node.children.size()) +
-                               " arguments");
-    }
+    throw std::runtime_error("expr_eval: unknown function '" + node.name + "' with " +
+                             std::to_string(node.children.size()) + " arguments");
+  }
   }
   throw std::runtime_error("expr_eval: unknown node type");
 }
@@ -487,7 +531,8 @@ void collect_variables(const AstNode& node, std::vector<std::string>& out) {
     if (std::find(out.begin(), out.end(), node.name) == out.end())
       out.push_back(node.name);
   }
-  for (auto& ch : node.children) collect_variables(*ch, out);
+  for (auto& ch : node.children)
+    collect_variables(*ch, out);
 }
 
-}  // namespace rulemonkey::expr
+} // namespace rulemonkey::expr

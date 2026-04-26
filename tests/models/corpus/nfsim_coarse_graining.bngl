@@ -30,19 +30,19 @@ begin reaction rules
     # Fusion Rules (Coarse Graining)
     # 1+1 -> 2
     Droplet(size~1) + Droplet(size~1) -> Droplet(size~2) k_fuse
-    
+
     # 2+2 -> 4
     Droplet(size~2) + Droplet(size~2) -> Droplet(size~4) k_fuse
-    
+
     # 4+4 -> 8
     Droplet(size~4) + Droplet(size~4) -> Droplet(size~8) k_fuse
-    
+
     # 8+8 -> 16
     Droplet(size~8) + Droplet(size~8) -> Droplet(size~16) k_fuse
-    
+
     # 16+16 -> 32
     Droplet(size~16) + Droplet(size~16) -> Droplet(size~32) k_fuse
-    
+
     # Fission (Splitting)
     Droplet(size~32) -> Droplet(size~16) + Droplet(size~16) k_fission
 end reaction rules

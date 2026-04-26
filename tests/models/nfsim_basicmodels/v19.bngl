@@ -59,4 +59,3 @@ writeXML()
 
 #simulate({method=>"nf",gml=>2000000,complex=>1,get_final_state=>0,print_functions=>1,\
           t_start=>0,t_end=>30,n_steps=>300})
-          

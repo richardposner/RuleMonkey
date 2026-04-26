@@ -27,11 +27,11 @@ end observables
 begin reaction rules
   test_del:    ribosome(asite) -> 0 k_del
   test_del_2:  ribosome(asite!1).mrna(p0~blocked!1,p1,p2,p3) -> 0 k_del
-  initiate:    ribosome(asite) + mrna(p0~free) -> ribosome(asite!1).mrna(p0~blocked!1)    k_init TotalRate 
-  elongate_1:  ribosome(asite!1).mrna(p0~blocked!1,p1) -> ribosome(asite!1).mrna(p0~free,p1!1)    k_elong 
-  elongate_2:  ribosome(asite!1).mrna(p1!1,p2) -> ribosome(asite!1).mrna(p1,p2!1)    k_elong 
-  elongate_3:  ribosome(asite!1).mrna(p2!1,p3) -> ribosome(asite!1).mrna(p2,p3!1)    k_elong 
-  terminate:   ribosome(asite!1).mrna(p3!1) -> ribosome(asite) + mrna(p3)    k_term 
+  initiate:    ribosome(asite) + mrna(p0~free) -> ribosome(asite!1).mrna(p0~blocked!1)    k_init TotalRate
+  elongate_1:  ribosome(asite!1).mrna(p0~blocked!1,p1) -> ribosome(asite!1).mrna(p0~free,p1!1)    k_elong
+  elongate_2:  ribosome(asite!1).mrna(p1!1,p2) -> ribosome(asite!1).mrna(p1,p2!1)    k_elong
+  elongate_3:  ribosome(asite!1).mrna(p2!1,p3) -> ribosome(asite!1).mrna(p2,p3!1)    k_elong
+  terminate:   ribosome(asite!1).mrna(p3!1) -> ribosome(asite) + mrna(p3)    k_term
 end reaction rules
 
 end model

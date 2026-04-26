@@ -9,7 +9,7 @@
 # runs will be slower, especially when large aggregates form.
 
 begin parameters
-	
+
 
 
 	## Ramping Trajectory
@@ -18,22 +18,22 @@ begin parameters
 	#cTot     0.11
 	#beta     16.8
 	#koff     0.01
-	
+
 	## Sol-gel Phase
 	#Lig_tot  4200
 	#Rec_tot  300
 	#cTot     0.84
 	#beta     50
 	#koff     0.01
-	
-	
+
+
 	## Peaking Trajectory
 	Lig_tot  50000
 	Rec_tot  3000
 	cTot  2.7
 	beta  16.8
 	koff  0.01
-	
+
 	kp1 (cTot*koff)/(3.0*Lig_tot) #FREE BINDING RATE
 	kp2 (beta*koff)/Rec_tot #CROSSLINKING RATE
 

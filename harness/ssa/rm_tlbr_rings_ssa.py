@@ -33,34 +33,51 @@ Usage:
   python3 rm_tlbr_rings_ssa.py --gdat               # single rep, print gdat to stdout
 """
 
-import sys, os, math, random, argparse, time as timepkg
+import argparse
+import math
+import os
+import random
+import sys
+import time as timepkg
 from collections import defaultdict
 
 # ── Model parameters ──────────────────────────────────────────────────────────
 
 LIG_TOT = 4200
 REC_TOT = 300
-KP1 = 3.0e-7   # first capture (L with 0 bonds + R, inter-complex)
-KP2 = 3.0e-4   # crosslink    (L with 1+ bonds + R, inter-complex)
-KP3 = 3.0e-4   # ring closure (L + R, intra-complex)  [== KP2]
-KM  = 0.01     # all unbinding (km1 == km2 == km3)
+KP1 = 3.0e-7  # first capture (L with 0 bonds + R, inter-complex)
+KP2 = 3.0e-4  # crosslink    (L with 1+ bonds + R, inter-complex)
+KP3 = 3.0e-4  # ring closure (L + R, intra-complex)  [== KP2]
+KM = 0.01  # all unbinding (km1 == km2 == km3)
 T_END = 1000.0
 N_STEPS = 100
 N_MOLS = LIG_TOT + REC_TOT
 
-OBS_NAMES = (
-    ["Ligfree_1", "Ligbnd1_1", "Ligbnd2_1", "Ligbnd3_1"]
-    + [f"Size_{n}" for n in range(1, REC_TOT + 1)]
-)
+OBS_NAMES = ["Ligfree_1", "Ligbnd1_1", "Ligbnd2_1", "Ligbnd3_1"] + [
+    f"Size_{n}" for n in range(1, REC_TOT + 1)
+]
 
 # ── Simulator ─────────────────────────────────────────────────────────────────
 
+
 class Simulator:
     __slots__ = (
-        "mol_type", "nsites", "bp", "nbonds", "cx_of", "cx_mols",
-        "cx_freeL", "cx_freeR", "bond_list", "total_bonds",
-        "n_freeL_L0", "n_freeL_L1", "n_freeR", "intra_pairs",
-        "next_cx", "t",
+        "mol_type",
+        "nsites",
+        "bp",
+        "nbonds",
+        "cx_of",
+        "cx_mols",
+        "cx_freeL",
+        "cx_freeR",
+        "bond_list",
+        "total_bonds",
+        "n_freeL_L0",
+        "n_freeL_L1",
+        "n_freeR",
+        "intra_pairs",
+        "next_cx",
+        "t",
     )
 
     def __init__(self, seed=None):
@@ -68,19 +85,16 @@ class Simulator:
             random.seed(seed)
 
         # mol 0..LIG_TOT-1 = L (3 sites), LIG_TOT..N_MOLS-1 = R (2 sites)
-        self.mol_type = [0] * LIG_TOT + [1] * REC_TOT   # 0=L, 1=R
-        self.nsites   = [3] * LIG_TOT + [2] * REC_TOT
+        self.mol_type = [0] * LIG_TOT + [1] * REC_TOT  # 0=L, 1=R
+        self.nsites = [3] * LIG_TOT + [2] * REC_TOT
         # bond partner: bp[mol][site] = (other_mol, other_site) or None
-        self.bp = [
-            [None, None, None] if i < LIG_TOT else [None, None]
-            for i in range(N_MOLS)
-        ]
-        self.nbonds = [0] * N_MOLS            # bonds on each molecule
+        self.bp = [[None, None, None] if i < LIG_TOT else [None, None] for i in range(N_MOLS)]
+        self.nbonds = [0] * N_MOLS  # bonds on each molecule
 
         # complexes  (initially every molecule is its own complex)
-        self.cx_of   = list(range(N_MOLS))     # mol -> cx_id
+        self.cx_of = list(range(N_MOLS))  # mol -> cx_id
         self.cx_mols = {i: {i} for i in range(N_MOLS)}
-        self.cx_freeL = defaultdict(int)        # cx -> free L r-sites in cx
+        self.cx_freeL = defaultdict(int)  # cx -> free L r-sites in cx
         self.cx_freeR = defaultdict(int)
         for i in range(LIG_TOT):
             self.cx_freeL[i] = 3
@@ -89,14 +103,14 @@ class Simulator:
         self.next_cx = N_MOLS
 
         # bond list for uniform sampling on unbinding
-        self.bond_list = []   # [(molL, siteL, molR, siteR), ...]
+        self.bond_list = []  # [(molL, siteL, molR, siteR), ...]
         self.total_bonds = 0
 
         # aggregate counts
-        self.n_freeL_L0 = 3 * LIG_TOT   # free r-sites on L with 0 bonds
-        self.n_freeL_L1 = 0              # free r-sites on L with 1+ bonds
-        self.n_freeR    = 2 * REC_TOT
-        self.intra_pairs = 0             # Σ_cx (freeL_cx × freeR_cx)
+        self.n_freeL_L0 = 3 * LIG_TOT  # free r-sites on L with 0 bonds
+        self.n_freeL_L1 = 0  # free r-sites on L with 1+ bonds
+        self.n_freeR = 2 * REC_TOT
+        self.intra_pairs = 0  # Σ_cx (freeL_cx × freeR_cx)
 
         self.t = 0.0
 
@@ -105,7 +119,7 @@ class Simulator:
     def _add_bond(self, mL, sL, mR, sR):
         cxL = self.cx_of[mL]
         cxR = self.cx_of[mR]
-        same = (cxL == cxR)
+        same = cxL == cxR
 
         # remove old intra contribution
         old_i = self.cx_freeL[cxL] * self.cx_freeR[cxL]
@@ -118,9 +132,9 @@ class Simulator:
         self.nbonds[mR] += 1
 
         # update aggregate free-site counts
-        free_after = (3 - self.nbonds[mL])   # free r-sites on mL after
+        free_after = 3 - self.nbonds[mL]  # free r-sites on mL after
         if ob == 0:
-            self.n_freeL_L0 -= (free_after + 1)  # was free_after+1 in L0
+            self.n_freeL_L0 -= free_after + 1  # was free_after+1 in L0
             self.n_freeL_L1 += free_after
         else:
             self.n_freeL_L1 -= 1
@@ -172,7 +186,7 @@ class Simulator:
 
         free_after = 3 - self.nbonds[mL]
         if ob == 1:
-            self.n_freeL_L1 -= (free_after - 1)
+            self.n_freeL_L1 -= free_after - 1
             self.n_freeL_L0 += free_after
         else:
             self.n_freeL_L1 += 1
@@ -202,8 +216,7 @@ class Simulator:
             self.cx_freeR[cx] -= fR
             self.cx_freeL[ncx] = fL
             self.cx_freeR[ncx] = fR
-            ni = (self.cx_freeL[cx] * self.cx_freeR[cx]
-                  + self.cx_freeL[ncx] * self.cx_freeR[ncx])
+            ni = self.cx_freeL[cx] * self.cx_freeR[cx] + self.cx_freeL[ncx] * self.cx_freeR[ncx]
         else:
             ni = self.cx_freeL[cx] * self.cx_freeR[cx]
 
@@ -244,10 +257,10 @@ class Simulator:
 
     def _propensities(self):
         # L0 molecules are unbound singletons → never in same cx as R
-        p_cap   = KP1 * self.n_freeL_L0 * self.n_freeR
-        inter1  = self.n_freeL_L1 * self.n_freeR - self.intra_pairs
+        p_cap = KP1 * self.n_freeL_L0 * self.n_freeR
+        inter1 = self.n_freeL_L1 * self.n_freeR - self.intra_pairs
         p_xlink = KP2 * max(inter1, 0)
-        p_ring  = KP3 * self.intra_pairs
+        p_ring = KP3 * self.intra_pairs
         p_unbind = KM * self.total_bonds
         return p_cap, p_xlink, p_ring, p_unbind
 
@@ -340,7 +353,7 @@ class Simulator:
 
         # Ligand observables are Species type: count complexes containing
         # at least one L with the given bond count (not molecules).
-        lig_cx = [set(), set(), set(), set()]   # bond_count -> set of cx_ids
+        lig_cx = [set(), set(), set(), set()]  # bond_count -> set of cx_ids
         for m in range(LIG_TOT):
             lig_cx[self.nbonds[m]].add(self.cx_of[m])
         row.extend(len(s) for s in lig_cx)
@@ -358,7 +371,7 @@ class Simulator:
 
     def run(self):
         dt = T_END / N_STEPS
-        results = [self.observe()]   # t=0
+        results = [self.observe()]  # t=0
 
         next_out = dt
         out_idx = 1
@@ -393,6 +406,7 @@ class Simulator:
 
 # ── Ensemble generation ──────────────────────────────────────────────────────
 
+
 def run_ensemble(n_reps, base_seed=None):
     """Run n_reps simulations, return per-time-point arrays."""
     import numpy as np
@@ -406,9 +420,11 @@ def run_ensemble(n_reps, base_seed=None):
         sim = Simulator(seed=seed)
         rows = sim.run()
         elapsed = timepkg.time() - t0
-        print(f"  rep {rep+1}/{n_reps}  events≈{sim.total_bonds}  "
-              f"bonds_final={sim.total_bonds}  {elapsed:.1f}s",
-              file=sys.stderr)
+        print(
+            f"  rep {rep + 1}/{n_reps}  events≈{sim.total_bonds}  "
+            f"bonds_final={sim.total_bonds}  {elapsed:.1f}s",
+            file=sys.stderr,
+        )
         for ti, row in enumerate(rows):
             all_data[rep, ti, :] = row
 
@@ -418,6 +434,7 @@ def run_ensemble(n_reps, base_seed=None):
 def write_ensemble(all_data, out_dir):
     """Write mean.tsv, std.tsv, tint.tsv in the same format as NFsim ensemble."""
     import numpy as np
+
     os.makedirs(out_dir, exist_ok=True)
 
     n_reps = all_data.shape[0]
@@ -425,7 +442,7 @@ def write_ensemble(all_data, out_dir):
     times = [dt * i for i in range(N_STEPS + 1)]
 
     mean = np.mean(all_data, axis=0)
-    std  = np.std(all_data, axis=0, ddof=1)
+    std = np.std(all_data, axis=0, ddof=1)
 
     # mean.tsv
     with open(os.path.join(out_dir, "rm_tlbr_rings.mean.tsv"), "w") as f:
@@ -449,13 +466,13 @@ def write_ensemble(all_data, out_dir):
             integrals = np.zeros(n_reps)
             for r in range(n_reps):
                 for ti in range(N_STEPS):
-                    integrals[r] += 0.5 * (all_data[r, ti, oi] + all_data[r, ti+1, oi]) * dt
-            f.write(f"{name}\t{np.mean(integrals):.6g}\t{np.std(integrals, ddof=1):.6g}"
-                    f"\t{n_reps}\n")
+                    integrals[r] += 0.5 * (all_data[r, ti, oi] + all_data[r, ti + 1, oi]) * dt
+            f.write(
+                f"{name}\t{np.mean(integrals):.6g}\t{np.std(integrals, ddof=1):.6g}\t{n_reps}\n"
+            )
 
     # Per-rep gdat files (needed by compute_noise_floor.py)
-    rep_dir = os.path.join(
-        os.path.dirname(out_dir), "replicates", "rm_tlbr_rings")
+    rep_dir = os.path.join(os.path.dirname(out_dir), "replicates", "rm_tlbr_rings")
     os.makedirs(rep_dir, exist_ok=True)
     for r in range(n_reps):
         tag = f"rep_{r:03d}"
@@ -465,7 +482,8 @@ def write_ensemble(all_data, out_dir):
             f.write(hdr + "\n")
             for ti in range(N_STEPS + 1):
                 vals = [f"{times[ti]:.8e}"] + [
-                    f"{all_data[r, ti, oi]:.8e}" for oi in range(len(OBS_NAMES))]
+                    f"{all_data[r, ti, oi]:.8e}" for oi in range(len(OBS_NAMES))
+                ]
                 f.write("\t".join(vals) + "\n")
         # touch .done sentinel
         open(os.path.join(rep_dir, f"{tag}.done"), "w").close()
@@ -487,14 +505,13 @@ def print_gdat(rows):
 
 # ── CLI ───────────────────────────────────────────────────────────────────────
 
+
 def main():
     ap = argparse.ArgumentParser(description="rm_tlbr_rings Gillespie SSA")
     ap.add_argument("--reps", type=int, default=100)
     ap.add_argument("--seed", type=int, default=12345)
-    ap.add_argument("--output", type=str, default=None,
-                    help="Output directory for ensemble files")
-    ap.add_argument("--gdat", action="store_true",
-                    help="Single rep, print gdat to stdout")
+    ap.add_argument("--output", type=str, default=None, help="Output directory for ensemble files")
+    ap.add_argument("--gdat", action="store_true", help="Single rep, print gdat to stdout")
     args = ap.parse_args()
 
     if args.gdat:
@@ -504,13 +521,14 @@ def main():
         return
 
     out_dir = args.output or os.path.join(
-        os.path.dirname(__file__), "..", "models", "nfsim_reference", "ensemble")
+        os.path.dirname(__file__), "..", "models", "nfsim_reference", "ensemble"
+    )
 
     print(f"Running {args.reps} reps with seed={args.seed}", file=sys.stderr)
     t0 = timepkg.time()
     all_data = run_ensemble(args.reps, base_seed=args.seed)
     elapsed = timepkg.time() - t0
-    print(f"Total: {elapsed:.1f}s ({elapsed/args.reps:.1f}s/rep)", file=sys.stderr)
+    print(f"Total: {elapsed:.1f}s ({elapsed / args.reps:.1f}s/rep)", file=sys.stderr)
 
     write_ensemble(all_data, out_dir)
 

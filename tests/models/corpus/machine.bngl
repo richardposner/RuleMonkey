@@ -2,7 +2,7 @@
 
 begin parameters
     pheromone_conc 0
-    
+
     # Manually copied best-fit parameters from sorted_params.txt
     ka_octamerp_ste7__FREE	8.15444353004313E-06
     ka_octameru_ste7__FREE	0.004817008256212
@@ -132,20 +132,20 @@ begin observables
 end observables
 
 begin functions
-	# Func0()=Gpa1_free / bound_G_protein 
+	# Func0()=Gpa1_free / bound_G_protein
 	# Func1()=dodec / 2
 	# Func2()=decamer / 2
 	# Func3()=active_decamer / 2
 	# Func4()=octomer / 2
 	# Func5()=hexamer / 2
 	Func6()=0.3 * ( Gpa1_free ^4 / ( Gpa1_free ^4 + 12000^4))
-	#Func7() = export rate # Ryan confirmed bug, actual rate is Func6. 
+	#Func7() = export rate # Ryan confirmed bug, actual rate is Func6.
 end functions
 
 begin reaction rules
 	# Pheromone(ste2) + Ste2(pheromone) -> Pheromone(ste2!1).Ste2(pheromone!1) + Pheromone(ste2) 3e-05 #EDM changed to reaction below
 	Ste2(pheromone~0) -> Ste2(pheromone~1) 3e-05*pheromone_conc
-	Ste2(pheromone~1) -> Ste2(pheromone~0) 0.015 
+	Ste2(pheromone~1) -> Ste2(pheromone~0) 0.015
 	Ste2(gpa1) + Gpa1(ste2) -> Ste2(gpa1!1).Gpa1(ste2!1) 0.001725
 	# Ste2(gpa1!1).Gpa1(ste2!1) -> Ste2(gpa1) + Gpa1(ste2) 0
 	Ste2(gpa1!1).Gpa1(ste2!1,ste4) -> Ste2(gpa1) + Gpa1(ste2,ste4) 0.15
@@ -187,8 +187,8 @@ begin reaction rules
 	Ste12(dna!1).Ste2_gene(promoter!1) -> Ste12(dna) + Ste2_gene(promoter) 0.03
 	0 -> Ste2(gpa1,pheromone~0,sst2) 2.865
 	Ste12(dig1,dig2,mapk,dna!1).Ste2_gene(promoter!1) -> Ste12(dig1,dig2,mapk,dna!1).Ste2_gene(promoter!1) + Ste2(gpa1,pheromone~0,sst2) 12
-	Gpa1(ste4) -> 0 kdeg_gp__FREE DeleteMolecules # 4.95e-05 
-	Ste4(gpa1,ste5,ste20) -> 0 kdeg_gp__FREE DeleteMolecules # 4.95e-05 
+	Gpa1(ste4) -> 0 kdeg_gp__FREE DeleteMolecules # 4.95e-05
+	Ste4(gpa1,ste5,ste20) -> 0 kdeg_gp__FREE DeleteMolecules # 4.95e-05
 	Ste4(gpa1!1).Gpa1(ste4!1) -> 0 kdeg_gp2__FREE DeleteMolecules # 3.3e-5
 	Ste12(dna) + Gpa1_gene(promoter) -> Ste12(dna!1).Gpa1_gene(promoter!1) ka_ste12_gpa1g__FREE # 2.145e-03
 	Ste12(dna!1).Gpa1_gene(promoter!1) -> Ste12(dna) + Gpa1_gene(promoter) 0.03

@@ -3,7 +3,7 @@
 #   Written by James R. Faeder
 #	       Theoretical Biology and Biophysics Group
 #	       Los Alamos National Laboratory
-#	       faeder@lanl.gov	       
+#	       faeder@lanl.gov
 #   10/28/2005
 
 begin parameters
@@ -38,7 +38,7 @@ end observables
 begin reaction rules
 L(r) + R(l,d) <-> L(r!1).R(l!1,d) kp1, km1
 R(l!+,d) + R(l!+,d) <-> R(l!+,d!2).R(l!+,d!2) kp2, km2
-R(d!+,Y~U) -> R(d!+,Y~P) p1 
+R(d!+,Y~U) -> R(d!+,Y~P) p1
 R(Y~P) -> R(Y~U) d1
 R(Y~P) + A(SH2) <-> R(Y~P!1).A(SH2!1) kpA, kmA
 A(Y~U).A() -> A(Y~P).A() p2

@@ -164,7 +164,7 @@ kfDok2Ptp	kfPagPtp					# Assumed to be the same as kfPagPtp
 krDok2Ptp	krPagPtp 					# Assumed to be the same as krPagPtp
 
 kdpDok2		kdpLck394					# Assumed to be the same as kdpLck394
-	
+
 kfTcrFyn	kfTcrFyn__FREE__/(NA*simCellvol) 	# The free parameter will be bound by 0.01 - 100x Lily's best fit
 krTcrFyn	krTcrFyn__FREE__					# The free parameter will be bound by 0.01 - 100x Lily's best fit
 
@@ -219,16 +219,16 @@ krZapLcp	krZapLcp__FREE__					# The free parameter will be bound by 0.01 - 100x 
 
 kpPlcg		kpLckPag					# Phosphorylation when ITK and PLCG1 are colocalized on LCP2. The ITK SH2 domain helps maintain ITK activity (PMID: 17425330). Rate constant assumed to be same as kpLckPag.
 
-kp1 	    5.00E-03      				
-kp2 	    0.01						
-kp3	    	0.05						
-kp4	    	2.00E-03					
+kp1 	    5.00E-03
+kp2 	    0.01
+kp3	    	0.05
+kp4	    	2.00E-03
 
-kdp1	    10  						
+kdp1	    10
 kdp2	    1							# PMID: 22711887
-kdp3	    0.01						
-kdp4	    2							
-kdp5 		3.00E-02 					
+kdp3	    0.01
+kdp4	    2
+kdp5 		3.00E-02
 
 kfl			kfl__FREE__/(NA*simECFvol)  # In range of forward rate constants for antibody-hapten interactions given in Pecht & Lancet (PMID: 333271)
 krl	       	krl__FREE__					# In range of reverse rate constants for antibody-hapten interactions given in Pecht & Lancet (PMID: 333271)
@@ -614,14 +614,14 @@ LCK(Y192~P) -> LCK(Y192~0) kdp3
 LCK(Y424~0) -> LCK(Y424~P) kp2
 LCK(Y424~P) -> LCK(Y424~0) kdp2
 
-LCK(Y505~0) -> LCK(Y505~P) kp2 
+LCK(Y505~0) -> LCK(Y505~P) kp2
 LCK(Y505~P) -> LCK(Y505~0) kdp5
 
 PTPN6(Y566~0) -> PTPN6(Y566~P) kp2
 PTPN6(Y566~P) -> PTPN6(Y566~0) kdp4
 
 ZAP70(Y493~0) -> ZAP70(Y493~P) kp1
-ZAP70(Y493~P) -> ZAP70(Y493~0) kdp2 
+ZAP70(Y493~P) -> ZAP70(Y493~0) kdp2
 
 LAT(Y132~0) -> LAT(Y132~P) kp2
 LAT(Y132~P) -> LAT(Y132~0) kdp2

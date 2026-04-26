@@ -31,9 +31,11 @@ namespace {
 
 std::string trim(const std::string& s) {
   size_t a = 0;
-  while (a < s.size() && std::isspace(static_cast<unsigned char>(s[a]))) ++a;
+  while (a < s.size() && std::isspace(static_cast<unsigned char>(s[a])))
+    ++a;
   size_t b = s.size();
-  while (b > a && std::isspace(static_cast<unsigned char>(s[b - 1]))) --b;
+  while (b > a && std::isspace(static_cast<unsigned char>(s[b - 1])))
+    --b;
   return s.substr(a, b - a);
 }
 
@@ -52,17 +54,27 @@ std::string decode_xml_entities(std::string_view input) {
   out.reserve(input.size());
   size_t i = 0;
   while (i < input.size()) {
-    if (input[i] != '&') { out.push_back(input[i]); ++i; continue; }
+    if (input[i] != '&') {
+      out.push_back(input[i]);
+      ++i;
+      continue;
+    }
     auto sc = input.find(';', i + 1);
     if (sc == std::string_view::npos)
       throw std::runtime_error("XML: unterminated entity");
     auto ent = input.substr(i + 1, sc - i - 1);
-    if (ent == "amp") out.push_back('&');
-    else if (ent == "lt") out.push_back('<');
-    else if (ent == "gt") out.push_back('>');
-    else if (ent == "apos") out.push_back('\'');
-    else if (ent == "quot") out.push_back('"');
-    else throw std::runtime_error("XML: unsupported entity '&" + std::string(ent) + ";'");
+    if (ent == "amp")
+      out.push_back('&');
+    else if (ent == "lt")
+      out.push_back('<');
+    else if (ent == "gt")
+      out.push_back('>');
+    else if (ent == "apos")
+      out.push_back('\'');
+    else if (ent == "quot")
+      out.push_back('"');
+    else
+      throw std::runtime_error("XML: unsupported entity '&" + std::string(ent) + ";'");
     i = sc + 1;
   }
   return out;
@@ -76,52 +88,65 @@ struct XmlNode {
 };
 
 class XmlParser {
- public:
+public:
   explicit XmlParser(std::string src) : src_(std::move(src)) {}
 
   XmlNode parse_document() {
     skip_prolog();
-    if (done()) fail("empty document");
+    if (done())
+      fail("empty document");
     auto root = parse_element();
     skip_prolog();
-    if (!done()) fail("trailing content");
+    if (!done())
+      fail("trailing content");
     return root;
   }
 
- private:
+private:
   bool done() const { return pos_ >= src_.size(); }
   bool starts_with(std::string_view sv) const {
-    return pos_ + sv.size() <= src_.size() &&
-           std::string_view(src_).substr(pos_, sv.size()) == sv;
+    return pos_ + sv.size() <= src_.size() && std::string_view(src_).substr(pos_, sv.size()) == sv;
   }
   [[noreturn]] void fail(const std::string& msg) const {
-    throw std::runtime_error("XML parse error: " + msg + " (offset " +
-                             std::to_string(pos_) + ")");
+    throw std::runtime_error("XML parse error: " + msg + " (offset " + std::to_string(pos_) + ")");
   }
   void skip_ws() {
-    while (!done() && std::isspace(static_cast<unsigned char>(src_[pos_]))) ++pos_;
+    while (!done() && std::isspace(static_cast<unsigned char>(src_[pos_])))
+      ++pos_;
   }
   void skip_pi() {
     auto e = src_.find("?>", pos_ + 2);
-    if (e == std::string::npos) fail("unterminated PI");
+    if (e == std::string::npos)
+      fail("unterminated PI");
     pos_ = e + 2;
   }
   void skip_comment() {
     auto e = src_.find("-->", pos_ + 4);
-    if (e == std::string::npos) fail("unterminated comment");
+    if (e == std::string::npos)
+      fail("unterminated comment");
     pos_ = e + 3;
   }
   void skip_doctype() {
     auto e = src_.find('>', pos_ + 2);
-    if (e == std::string::npos) fail("unterminated DOCTYPE");
+    if (e == std::string::npos)
+      fail("unterminated DOCTYPE");
     pos_ = e + 1;
   }
   void skip_prolog() {
     for (;;) {
       skip_ws();
-      if (starts_with("<?")) { skip_pi(); continue; }
-      if (starts_with("<!--")) { skip_comment(); continue; }
-      if (starts_with("<!DOCTYPE")) { skip_doctype(); continue; }
+      if (starts_with("<?")) {
+        skip_pi();
+        continue;
+      }
+      if (starts_with("<!--")) {
+        skip_comment();
+        continue;
+      }
+      if (starts_with("<!DOCTYPE")) {
+        skip_doctype();
+        continue;
+      }
       break;
     }
   }
@@ -129,74 +154,105 @@ class XmlParser {
     return std::isalpha(static_cast<unsigned char>(c)) || c == '_' || c == ':';
   }
   static bool is_name_char(char c) {
-    return is_name_start(c) || std::isdigit(static_cast<unsigned char>(c)) ||
-           c == '-' || c == '.';
+    return is_name_start(c) || std::isdigit(static_cast<unsigned char>(c)) || c == '-' || c == '.';
   }
   std::string parse_name() {
-    if (done() || !is_name_start(src_[pos_])) fail("expected name");
+    if (done() || !is_name_start(src_[pos_]))
+      fail("expected name");
     auto s = pos_++;
-    while (!done() && is_name_char(src_[pos_])) ++pos_;
+    while (!done() && is_name_char(src_[pos_]))
+      ++pos_;
     return src_.substr(s, pos_ - s);
   }
   std::string parse_attr_val() {
-    if (done()) fail("expected attribute value");
+    if (done())
+      fail("expected attribute value");
     char q = src_[pos_];
-    if (q != '"' && q != '\'') fail("attribute value must be quoted");
+    if (q != '"' && q != '\'')
+      fail("attribute value must be quoted");
     ++pos_;
     auto s = pos_;
-    while (!done() && src_[pos_] != q) ++pos_;
-    if (done()) fail("unterminated attribute value");
+    while (!done() && src_[pos_] != q)
+      ++pos_;
+    if (done())
+      fail("unterminated attribute value");
     auto raw = src_.substr(s, pos_ - s);
     ++pos_;
     return decode_xml_entities(raw);
   }
   std::string parse_text() {
     auto s = pos_;
-    while (!done() && src_[pos_] != '<') ++pos_;
+    while (!done() && src_[pos_] != '<')
+      ++pos_;
     return decode_xml_entities(std::string_view(src_).substr(s, pos_ - s));
   }
   std::string parse_cdata() {
-    pos_ += 9;  // skip <![CDATA[
+    pos_ += 9; // skip <![CDATA[
     auto e = src_.find("]]>", pos_);
-    if (e == std::string::npos) fail("unterminated CDATA");
+    if (e == std::string::npos)
+      fail("unterminated CDATA");
     auto val = src_.substr(pos_, e - pos_);
     pos_ = e + 3;
     return val;
   }
 
   XmlNode parse_element() {
-    if (done() || src_[pos_] != '<') fail("expected '<'");
+    if (done() || src_[pos_] != '<')
+      fail("expected '<'");
     ++pos_;
     XmlNode nd;
     nd.name = parse_name();
     for (;;) {
       skip_ws();
-      if (done()) fail("unterminated tag '" + nd.name + "'");
-      if (starts_with("/>")) { pos_ += 2; return nd; }
-      if (src_[pos_] == '>') { ++pos_; break; }
+      if (done())
+        fail("unterminated tag '" + nd.name + "'");
+      if (starts_with("/>")) {
+        pos_ += 2;
+        return nd;
+      }
+      if (src_[pos_] == '>') {
+        ++pos_;
+        break;
+      }
       auto an = parse_name();
       skip_ws();
-      if (done() || src_[pos_] != '=') fail("expected '=' after attr");
-      ++pos_; skip_ws();
+      if (done() || src_[pos_] != '=')
+        fail("expected '=' after attr");
+      ++pos_;
+      skip_ws();
       nd.attributes[an] = parse_attr_val();
     }
     for (;;) {
-      if (done()) fail("unterminated element '" + nd.name + "'");
+      if (done())
+        fail("unterminated element '" + nd.name + "'");
       if (starts_with("</")) {
         pos_ += 2;
         auto en = parse_name();
         skip_ws();
-        if (done() || src_[pos_] != '>') fail("expected '>'");
+        if (done() || src_[pos_] != '>')
+          fail("expected '>'");
         ++pos_;
         if (en != nd.name)
           fail("mismatched tag: expected </" + nd.name + "> got </" + en + ">");
         nd.text = trim(nd.text);
         return nd;
       }
-      if (starts_with("<!--")) { skip_comment(); continue; }
-      if (starts_with("<?")) { skip_pi(); continue; }
-      if (starts_with("<![CDATA[")) { nd.text += parse_cdata(); continue; }
-      if (src_[pos_] == '<') { nd.children.push_back(parse_element()); continue; }
+      if (starts_with("<!--")) {
+        skip_comment();
+        continue;
+      }
+      if (starts_with("<?")) {
+        skip_pi();
+        continue;
+      }
+      if (starts_with("<![CDATA[")) {
+        nd.text += parse_cdata();
+        continue;
+      }
+      if (src_[pos_] == '<') {
+        nd.children.push_back(parse_element());
+        continue;
+      }
       nd.text += parse_text();
     }
   }
@@ -207,12 +263,15 @@ class XmlParser {
 
 // XML helpers
 const XmlNode* find_child(const XmlNode& p, const std::string& name) {
-  for (auto& c : p.children) if (c.name == name) return &c;
+  for (auto& c : p.children)
+    if (c.name == name)
+      return &c;
   return nullptr;
 }
 const XmlNode& need_child(const XmlNode& p, const std::string& name) {
   auto* c = find_child(p, name);
-  if (!c) throw std::runtime_error("XML: missing <" + name + "> in <" + p.name + ">");
+  if (!c)
+    throw std::runtime_error("XML: missing <" + name + "> in <" + p.name + ">");
   return *c;
 }
 std::string need_attr(const XmlNode& n, const std::string& a) {
@@ -234,31 +293,37 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node);
 // ===========================================================================
 
 // Try to resolve a string as a double, else look up in parameters.
-double resolve_value(const std::string& s,
-                     const std::unordered_map<std::string, double>& params) {
-  if (s.empty()) return 0.0;
-  try { return std::stod(s); } catch (...) {}
+double resolve_value(const std::string& s, const std::unordered_map<std::string, double>& params) {
+  if (s.empty())
+    return 0.0;
+  try {
+    return std::stod(s);
+  } catch (...) {
+  }
   auto it = params.find(s);
-  if (it != params.end()) return it->second;
+  if (it != params.end())
+    return it->second;
   // Try expression evaluation with params as variables
   try {
     auto ast = expr::parse(s);
     expr::VariableMap vm(params.begin(), params.end());
     return expr::evaluate(*ast, vm);
-  } catch (...) {}
+  } catch (...) {
+  }
   throw std::runtime_error("Cannot resolve value '" + s + "'");
 }
 
 // Parse a pattern (reactant, product, or observable) from XML.
 Pattern parse_pattern(const XmlNode& pat_node, const Model& model,
-                      std::unordered_map<std::string, std::pair<int,int>>* id_to_flat = nullptr) {
+                      std::unordered_map<std::string, std::pair<int, int>>* id_to_flat = nullptr) {
   Pattern pat;
 
   // Molecules
   auto* mol_list = find_child(pat_node, "ListOfMolecules");
   if (mol_list) {
     for (auto& mn : mol_list->children) {
-      if (mn.name != "Molecule") continue;
+      if (mn.name != "Molecule")
+        continue;
       PatternMolecule pm;
       pm.xml_id = need_attr(mn, "id");
       pm.type_name = need_attr(mn, "name");
@@ -270,7 +335,8 @@ Pattern parse_pattern(const XmlNode& pat_node, const Model& model,
       auto* comp_list = find_child(mn, "ListOfComponents");
       if (comp_list) {
         for (auto& cn : comp_list->children) {
-          if (cn.name != "Component") continue;
+          if (cn.name != "Component")
+            continue;
           PatternComponent pc;
           pc.name = need_attr(cn, "name");
           // Find comp type index — handle symmetric components (e.g., r1, r2)
@@ -288,8 +354,7 @@ Pattern parse_pattern(const XmlNode& pat_node, const Model& model,
           if (!state.empty()) {
             pc.required_state = state;
             if (pc.comp_type_index >= 0)
-              pc.required_state_index =
-                  mtype.state_index(pc.comp_type_index, state);
+              pc.required_state_index = mtype.state_index(pc.comp_type_index, state);
           }
 
           // Bond constraint
@@ -297,8 +362,7 @@ Pattern parse_pattern(const XmlNode& pat_node, const Model& model,
           if (bonds == "0") {
             pc.bond_constraint = BondConstraint::Free;
           } else if (bonds == "+" || bonds == "?") {
-            pc.bond_constraint = (bonds == "+") ? BondConstraint::Bound
-                                                : BondConstraint::Wildcard;
+            pc.bond_constraint = (bonds == "+") ? BondConstraint::Bound : BondConstraint::Wildcard;
           } else if (!bonds.empty()) {
             // Specific bond count — treat as Bound
             pc.bond_constraint = BondConstraint::Bound;
@@ -330,7 +394,8 @@ Pattern parse_pattern(const XmlNode& pat_node, const Model& model,
   auto* bond_list = find_child(pat_node, "ListOfBonds");
   if (bond_list) {
     for (auto& bn : bond_list->children) {
-      if (bn.name != "Bond") continue;
+      if (bn.name != "Bond")
+        continue;
       auto s1 = need_attr(bn, "site1");
       auto s2 = need_attr(bn, "site2");
       if (id_to_flat) {
@@ -343,10 +408,8 @@ Pattern parse_pattern(const XmlNode& pat_node, const Model& model,
           pat.bonds.push_back(pb);
 
           // Mark components as BoundTo
-          auto& c1 = pat.molecules[it1->second.first]
-                          .components[it1->second.second];
-          auto& c2 = pat.molecules[it2->second.first]
-                          .components[it2->second.second];
+          auto& c1 = pat.molecules[it1->second.first].components[it1->second.second];
+          auto& c2 = pat.molecules[it2->second.first].components[it2->second.second];
           int label = static_cast<int>(pat.bonds.size()) - 1;
           c1.bond_constraint = BondConstraint::BoundTo;
           c1.bond_label = label;
@@ -361,14 +424,14 @@ Pattern parse_pattern(const XmlNode& pat_node, const Model& model,
 }
 
 // Parse TFUN CSV values
-std::vector<double> parse_csv_doubles(const std::string& s,
-                                      const std::string& ctx) {
+std::vector<double> parse_csv_doubles(const std::string& s, const std::string& ctx) {
   std::vector<double> vals;
   std::istringstream iss(s);
   std::string tok;
   while (std::getline(iss, tok, ',')) {
     tok = trim(tok);
-    if (tok.empty()) throw std::runtime_error(ctx + ": empty value in CSV");
+    if (tok.empty())
+      throw std::runtime_error(ctx + ": empty value in CSV");
     vals.push_back(std::stod(tok));
   }
   return vals;
@@ -376,23 +439,26 @@ std::vector<double> parse_csv_doubles(const std::string& s,
 
 TfunMethod parse_tfun_method(const std::string& s) {
   auto lo = to_lower(trim(s.empty() ? "linear" : s));
-  if (lo == "linear") return TfunMethod::Linear;
-  if (lo == "step") return TfunMethod::Step;
+  if (lo == "linear")
+    return TfunMethod::Linear;
+  if (lo == "step")
+    return TfunMethod::Step;
   throw std::runtime_error("Unknown TFUN method '" + s + "'");
 }
 
 // Resolve TFUN counter source
-TfunCounterSource resolve_tfun_counter(
-    const std::string& ctr_name,
-    const std::unordered_map<std::string, double>& params,
-    const std::unordered_set<std::string>& obs_names,
-    const std::unordered_map<std::string, int>& func_index) {
-  if (ctr_name == "time" || ctr_name == "t" ||
-      ctr_name == "time()" || ctr_name == "t()")
+TfunCounterSource resolve_tfun_counter(const std::string& ctr_name,
+                                       const std::unordered_map<std::string, double>& params,
+                                       const std::unordered_set<std::string>& obs_names,
+                                       const std::unordered_map<std::string, int>& func_index) {
+  if (ctr_name == "time" || ctr_name == "t" || ctr_name == "time()" || ctr_name == "t()")
     return TfunCounterSource::Time;
-  if (params.count(ctr_name)) return TfunCounterSource::Parameter;
-  if (obs_names.count(ctr_name)) return TfunCounterSource::Observable;
-  if (func_index.count(ctr_name)) return TfunCounterSource::Function;
+  if (params.count(ctr_name))
+    return TfunCounterSource::Parameter;
+  if (obs_names.count(ctr_name))
+    return TfunCounterSource::Observable;
+  if (func_index.count(ctr_name))
+    return TfunCounterSource::Function;
   throw std::runtime_error("TFUN counter '" + ctr_name +
                            "' does not resolve to time, parameter, observable, or function");
 }
@@ -404,8 +470,7 @@ Model load_model(const std::string& xml_path,
   std::ifstream in(xml_path);
   if (!in.is_open())
     throw std::runtime_error("Cannot open XML file '" + xml_path + "'");
-  std::string xml_text((std::istreambuf_iterator<char>(in)),
-                       std::istreambuf_iterator<char>());
+  std::string xml_text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
   in.close();
 
   XmlParser parser(std::move(xml_text));
@@ -430,14 +495,15 @@ Model load_model(const std::string& xml_path,
   auto* param_list = find_child(*model_node, "ListOfParameters");
   if (param_list) {
     for (auto& pn : param_list->children) {
-      if (pn.name != "Parameter") continue;
+      if (pn.name != "Parameter")
+        continue;
       auto id = need_attr(pn, "id");
       auto val_str = need_attr(pn, "value");
       double val;
       try {
         val = resolve_value(val_str, model.parameters);
       } catch (...) {
-        val = 0.0;  // forward reference — will be resolved later
+        val = 0.0; // forward reference — will be resolved later
       }
       model.parameters[id] = val;
       model.parameter_names_ordered.push_back(id);
@@ -464,7 +530,8 @@ Model load_model(const std::string& xml_path,
   auto* mt_list = find_child(*model_node, "ListOfMoleculeTypes");
   if (mt_list) {
     for (auto& mtn : mt_list->children) {
-      if (mtn.name != "MoleculeType") continue;
+      if (mtn.name != "MoleculeType")
+        continue;
       MoleculeType mt;
       mt.id = need_attr(mtn, "id");
       mt.name = mt.id;
@@ -472,16 +539,19 @@ Model load_model(const std::string& xml_path,
       auto* ct_list = find_child(mtn, "ListOfComponentTypes");
       if (ct_list) {
         for (auto& ctn : ct_list->children) {
-          if (ctn.name != "ComponentType") continue;
+          if (ctn.name != "ComponentType")
+            continue;
           MoleculeTypeComponent comp;
           comp.name = need_attr(ctn, "id");
           auto* states = find_child(ctn, "ListOfAllowedStates");
           if (states) {
             for (auto& sn : states->children) {
-              if (sn.name != "AllowedState") continue;
+              if (sn.name != "AllowedState")
+                continue;
               auto sid = need_attr(sn, "id");
               // PLUS/MINUS are pseudo-states for increment/decrement operations
-              if (sid == "PLUS" || sid == "MINUS") continue;
+              if (sid == "PLUS" || sid == "MINUS")
+                continue;
               comp.allowed_states.push_back(sid);
             }
             // Sort states so that index-based increment/decrement follows the
@@ -495,9 +565,12 @@ Model load_model(const std::string& xml_path,
                         long vb = std::strtol(b.c_str(), &eb, 10);
                         bool a_num = (ea != a.c_str() && *ea == '\0');
                         bool b_num = (eb != b.c_str() && *eb == '\0');
-                        if (a_num && b_num) return va < vb;
-                        if (a_num) return true;   // numbers before non-numbers
-                        if (b_num) return false;
+                        if (a_num && b_num)
+                          return va < vb;
+                        if (a_num)
+                          return true; // numbers before non-numbers
+                        if (b_num)
+                          return false;
                         return a < b;
                       });
           }
@@ -505,8 +578,7 @@ Model load_model(const std::string& xml_path,
         }
       }
 
-      model.molecule_type_index[mt.name] =
-          static_cast<int>(model.molecule_types.size());
+      model.molecule_type_index[mt.name] = static_cast<int>(model.molecule_types.size());
       model.molecule_types.push_back(std::move(mt));
     }
   }
@@ -515,21 +587,24 @@ Model load_model(const std::string& xml_path,
   auto* sp_list = find_child(*model_node, "ListOfSpecies");
   if (sp_list) {
     for (auto& spn : sp_list->children) {
-      if (spn.name != "Species") continue;
+      if (spn.name != "Species")
+        continue;
       SpeciesInit si;
       si.id = need_attr(spn, "id");
       si.name = opt_attr(spn, "name");
       auto conc_str = opt_attr(spn, "concentration");
-      if (conc_str.empty()) conc_str = opt_attr(spn, "count");
+      if (conc_str.empty())
+        conc_str = opt_attr(spn, "count");
       si.concentration = resolve_value(conc_str, model.parameters);
 
       // Map XML IDs to (mol_idx, comp_idx) within this species
-      std::unordered_map<std::string, std::pair<int,int>> id_map;
+      std::unordered_map<std::string, std::pair<int, int>> id_map;
 
       auto* mol_list = find_child(spn, "ListOfMolecules");
       if (mol_list) {
         for (auto& mn : mol_list->children) {
-          if (mn.name != "Molecule") continue;
+          if (mn.name != "Molecule")
+            continue;
           SpeciesInitMol sim;
           sim.type_name = need_attr(mn, "name");
           sim.type_index = model.mol_type_index(sim.type_name);
@@ -541,7 +616,8 @@ Model load_model(const std::string& xml_path,
           auto* cl = find_child(mn, "ListOfComponents");
           if (cl) {
             for (auto& cn : cl->children) {
-              if (cn.name != "Component") continue;
+              if (cn.name != "Component")
+                continue;
               auto cname = need_attr(cn, "name");
               auto cstate = opt_attr(cn, "state");
               auto comp_xml_id = opt_attr(cn, "id");
@@ -559,10 +635,12 @@ Model load_model(const std::string& xml_path,
 
       // Bonds in species
       auto* bl = find_child(spn, "ListOfBonds");
-      if (!bl) bl = find_child(*mol_list, "ListOfBonds");  // sometimes nested
+      if (!bl)
+        bl = find_child(*mol_list, "ListOfBonds"); // sometimes nested
       if (bl) {
         for (auto& bn : bl->children) {
-          if (bn.name != "Bond") continue;
+          if (bn.name != "Bond")
+            continue;
           auto s1 = need_attr(bn, "site1");
           auto s2 = need_attr(bn, "site2");
           auto it1 = id_map.find(s1);
@@ -612,7 +690,8 @@ Model load_model(const std::string& xml_path,
             for (size_t i = 0; i < si.molecules[0].comp_states.size(); ++i) {
               const auto& cname = si.molecules[0].comp_states[i].first;
               for (int j = 0; j < static_cast<int>(mtype.components.size()); ++j) {
-                if (used[j]) continue;
+                if (used[j])
+                  continue;
                 if (mtype.components[j].name == cname) {
                   mapping[i] = j;
                   used[j] = true;
@@ -625,7 +704,8 @@ Model load_model(const std::string& xml_path,
           for (size_t i = 0; i < si.molecules[0].comp_states.size(); ++i) {
             const auto& [cname, cstate] = si.molecules[0].comp_states[i];
             int actual_ci = cmap_fs[i];
-            if (actual_ci < 0 || cstate.empty()) continue;
+            if (actual_ci < 0 || cstate.empty())
+              continue;
             int sidx = mtype.state_index(actual_ci, cstate);
             if (sidx >= 0)
               fs.required_comp_state[actual_ci] = sidx;
@@ -643,7 +723,8 @@ Model load_model(const std::string& xml_path,
   auto* obs_list = find_child(*model_node, "ListOfObservables");
   if (obs_list) {
     for (auto& on : obs_list->children) {
-      if (on.name != "Observable") continue;
+      if (on.name != "Observable")
+        continue;
       Observable obs;
       obs.id = need_attr(on, "id");
       obs.name = need_attr(on, "name");
@@ -652,15 +733,18 @@ Model load_model(const std::string& xml_path,
       auto* pat_list = find_child(on, "ListOfPatterns");
       if (pat_list) {
         for (auto& pn : pat_list->children) {
-          if (pn.name != "Pattern") continue;
-          std::unordered_map<std::string, std::pair<int,int>> id_flat;
+          if (pn.name != "Pattern")
+            continue;
+          std::unordered_map<std::string, std::pair<int, int>> id_flat;
           auto pat = parse_pattern(pn, model, &id_flat);
 
           // Species observable quantifier
           auto rel = opt_attr(pn, "relation");
           auto qty = opt_attr(pn, "quantity");
-          if (!rel.empty()) pat.relation = rel;
-          if (!qty.empty()) pat.quantity = std::stoi(qty);
+          if (!rel.empty())
+            pat.relation = rel;
+          if (!qty.empty())
+            pat.quantity = std::stoi(qty);
 
           obs.patterns.push_back(std::move(pat));
         }
@@ -668,8 +752,7 @@ Model load_model(const std::string& xml_path,
 
       obs_name_set.insert(obs.name);
       model.observable_names_ordered.push_back(obs.name);
-      model.observable_index[obs.name] =
-          static_cast<int>(model.observables.size());
+      model.observable_index[obs.name] = static_cast<int>(model.observables.size());
       model.observables.push_back(std::move(obs));
     }
   }
@@ -678,7 +761,8 @@ Model load_model(const std::string& xml_path,
   auto* func_list = find_child(*model_node, "ListOfFunctions");
   if (func_list) {
     for (auto& fn : func_list->children) {
-      if (fn.name != "Function") continue;
+      if (fn.name != "Function")
+        continue;
       GlobalFunction gf;
       gf.name = need_attr(fn, "id");
 
@@ -688,7 +772,8 @@ Model load_model(const std::string& xml_path,
       auto* arg_list_fn = find_child(fn, "ListOfArguments");
       if (arg_list_fn) {
         for (auto& an : arg_list_fn->children) {
-          if (an.name != "Argument") continue;
+          if (an.name != "Argument")
+            continue;
           gf.argument_names.push_back(need_attr(an, "id"));
         }
       }
@@ -697,7 +782,8 @@ Model load_model(const std::string& xml_path,
       auto* ref_list = find_child(fn, "ListOfReferences");
       if (ref_list) {
         for (auto& rn : ref_list->children) {
-          if (rn.name != "Reference") continue;
+          if (rn.name != "Reference")
+            continue;
           auto rtype = opt_attr(rn, "type");
           if (rtype == "Observable") {
             gf.local_observable_names.push_back(need_attr(rn, "name"));
@@ -719,14 +805,12 @@ Model load_model(const std::string& xml_path,
         if (!file_attr.empty()) {
           auto tfun_path = (xml_dir / file_attr).lexically_normal().string();
           gf.tfun = std::make_shared<TableFunction>(
-              TableFunction::from_file(gf.name, tfun_path,
-                                       gf.tfun_counter_name, method));
+              TableFunction::from_file(gf.name, tfun_path, gf.tfun_counter_name, method));
         } else {
           auto xs = parse_csv_doubles(x_attr, gf.name);
           auto ys = parse_csv_doubles(y_attr, gf.name);
-          gf.tfun = std::make_shared<TableFunction>(
-              gf.name, std::move(xs), std::move(ys),
-              gf.tfun_counter_name, method);
+          gf.tfun = std::make_shared<TableFunction>(gf.name, std::move(xs), std::move(ys),
+                                                    gf.tfun_counter_name, method);
         }
 
         // Parse the expression (may contain __TFUN_VAL__)
@@ -759,46 +843,48 @@ Model load_model(const std::string& xml_path,
         }
       }
 
-      model.function_index[gf.name] =
-          static_cast<int>(model.functions.size());
+      model.function_index[gf.name] = static_cast<int>(model.functions.size());
       model.functions.push_back(std::move(gf));
     }
   }
 
   // Resolve TFUN counter sources
   for (auto& gf : model.functions) {
-    if (!gf.is_tfun) continue;
-    gf.tfun_counter_source = resolve_tfun_counter(
-        gf.tfun_counter_name, model.parameters, obs_name_set,
-        model.function_index);
+    if (!gf.is_tfun)
+      continue;
+    gf.tfun_counter_source = resolve_tfun_counter(gf.tfun_counter_name, model.parameters,
+                                                  obs_name_set, model.function_index);
   }
 
   // ---- 6. ReactionRules ----
   auto* rr_list = find_child(*model_node, "ListOfReactionRules");
   if (rr_list) {
     for (auto& rrn : rr_list->children) {
-      if (rrn.name != "ReactionRule") continue;
+      if (rrn.name != "ReactionRule")
+        continue;
       Rule rule;
       rule.id = need_attr(rrn, "id");
       rule.name = opt_attr(rrn, "name");
-      if (rule.name.empty()) rule.name = rule.id;
+      if (rule.name.empty())
+        rule.name = rule.id;
 
       auto sym = opt_attr(rrn, "symmetry_factor");
-      if (!sym.empty()) rule.symmetry_factor = std::stod(sym);
+      if (!sym.empty())
+        rule.symmetry_factor = std::stod(sym);
 
       // ID map for component resolution across patterns
-      std::unordered_map<std::string, std::pair<int,int>> reactant_id_map;
-      std::unordered_set<std::string> reactant_pattern_ids;  // IDs that are ReactantPattern-level
-      std::vector<std::string> rp_id_list;  // ReactantPattern IDs in order (for constraint matching)
+      std::unordered_map<std::string, std::pair<int, int>> reactant_id_map;
+      std::unordered_set<std::string> reactant_pattern_ids; // IDs that are ReactantPattern-level
+      std::vector<std::string> rp_id_list; // ReactantPattern IDs in order (for constraint matching)
 
       // Reactant patterns
       auto* rp_list = find_child(rrn, "ListOfReactantPatterns");
       int rp_count = 0;
       if (rp_list) {
         for (auto& rpn : rp_list->children) {
-          if (rpn.name != "ReactantPattern") continue;
-          int mol_offset =
-              static_cast<int>(rule.reactant_pattern.molecules.size());
+          if (rpn.name != "ReactantPattern")
+            continue;
+          int mol_offset = static_cast<int>(rule.reactant_pattern.molecules.size());
           rule.reactant_pattern_starts.push_back(mol_offset);
 
           // Register ReactantPattern ID → first molecule in this pattern
@@ -810,7 +896,7 @@ Model load_model(const std::string& xml_path,
           }
 
           // Parse sub-pattern; its mol indices start from 0
-          std::unordered_map<std::string, std::pair<int,int>> sub_id_map;
+          std::unordered_map<std::string, std::pair<int, int>> sub_id_map;
           auto sub = parse_pattern(rpn, model, &sub_id_map);
 
           // Merge sub_id_map into reactant_id_map with offset
@@ -833,20 +919,21 @@ Model load_model(const std::string& xml_path,
       rule.molecularity = rp_count;
 
       // Product patterns
-      std::unordered_map<std::string, std::pair<int,int>> product_id_map;
-      std::vector<std::string> pp_id_list;  // ProductPattern IDs in order
+      std::unordered_map<std::string, std::pair<int, int>> product_id_map;
+      std::vector<std::string> pp_id_list; // ProductPattern IDs in order
       auto* pp_list = find_child(rrn, "ListOfProductPatterns");
       rule.n_product_patterns = 0;
       if (pp_list) {
         for (auto& ppn : pp_list->children) {
-          if (ppn.name != "ProductPattern") continue;
+          if (ppn.name != "ProductPattern")
+            continue;
           auto pp_id = opt_attr(ppn, "id");
-          if (!pp_id.empty()) pp_id_list.push_back(pp_id);
+          if (!pp_id.empty())
+            pp_id_list.push_back(pp_id);
           ++rule.n_product_patterns;
-          int mol_offset =
-              static_cast<int>(rule.product_pattern.molecules.size());
+          int mol_offset = static_cast<int>(rule.product_pattern.molecules.size());
           rule.product_pattern_starts.push_back(mol_offset);
-          std::unordered_map<std::string, std::pair<int,int>> sub_id_map;
+          std::unordered_map<std::string, std::pair<int, int>> sub_id_map;
           auto sub = parse_pattern(ppn, model, &sub_id_map);
           for (auto& [id, pos] : sub_id_map)
             product_id_map[id] = {pos.first + mol_offset, pos.second};
@@ -867,18 +954,19 @@ Model load_model(const std::string& xml_path,
       rule.reactant_to_product_map.assign(n_rcomp, -1);
       if (map_node) {
         for (auto& mi : map_node->children) {
-          if (mi.name != "MapItem") continue;
+          if (mi.name != "MapItem")
+            continue;
           auto src = need_attr(mi, "sourceID");
           auto tgt = opt_attr(mi, "targetID");
-          if (tgt.empty()) continue;  // unmapped (deleted) component
+          if (tgt.empty())
+            continue; // unmapped (deleted) component
           auto sit = reactant_id_map.find(src);
           auto tit = product_id_map.find(tgt);
           if (sit != reactant_id_map.end() && tit != product_id_map.end()) {
             if (sit->second.second >= 0 && tit->second.second >= 0) {
-              int src_flat = rule.reactant_pattern.flat_index(
-                  sit->second.first, sit->second.second);
-              int tgt_flat = rule.product_pattern.flat_index(
-                  tit->second.first, tit->second.second);
+              int src_flat =
+                  rule.reactant_pattern.flat_index(sit->second.first, sit->second.second);
+              int tgt_flat = rule.product_pattern.flat_index(tit->second.first, tit->second.second);
               if (src_flat >= 0 && src_flat < n_rcomp)
                 rule.reactant_to_product_map[src_flat] = tgt_flat;
             }
@@ -897,20 +985,24 @@ Model load_model(const std::string& xml_path,
             auto site = need_attr(opn, "site");
             auto sit = reactant_id_map.find(site);
             if (sit != reactant_id_map.end() && sit->second.second >= 0) {
-              op.comp_flat = rule.reactant_pattern.flat_index(
-                  sit->second.first, sit->second.second);
+              op.comp_flat =
+                  rule.reactant_pattern.flat_index(sit->second.first, sit->second.second);
             }
             op.new_state = need_attr(opn, "finalState");
-            if (op.new_state == "PLUS") { op.is_increment = true; op.new_state = ""; }
-            else if (op.new_state == "MINUS") { op.is_decrement = true; op.new_state = ""; }
-            else {
+            if (op.new_state == "PLUS") {
+              op.is_increment = true;
+              op.new_state = "";
+            } else if (op.new_state == "MINUS") {
+              op.is_decrement = true;
+              op.new_state = "";
+            } else {
               // Resolve state index
               if (sit != reactant_id_map.end()) {
                 auto& pm = rule.reactant_pattern.molecules[sit->second.first];
                 auto& pc = pm.components[sit->second.second];
                 if (pm.type_index >= 0 && pc.comp_type_index >= 0)
-                  op.new_state_index = model.molecule_types[pm.type_index]
-                                           .state_index(pc.comp_type_index, op.new_state);
+                  op.new_state_index = model.molecule_types[pm.type_index].state_index(
+                      pc.comp_type_index, op.new_state);
               }
             }
             rule.operations.push_back(std::move(op));
@@ -923,11 +1015,11 @@ Model load_model(const std::string& xml_path,
             auto rit1 = reactant_id_map.find(s1);
             auto rit2 = reactant_id_map.find(s2);
             if (rit1 != reactant_id_map.end() && rit1->second.second >= 0)
-              op.comp_flat_a = rule.reactant_pattern.flat_index(
-                  rit1->second.first, rit1->second.second);
+              op.comp_flat_a =
+                  rule.reactant_pattern.flat_index(rit1->second.first, rit1->second.second);
             if (rit2 != reactant_id_map.end() && rit2->second.second >= 0)
-              op.comp_flat_b = rule.reactant_pattern.flat_index(
-                  rit2->second.first, rit2->second.second);
+              op.comp_flat_b =
+                  rule.reactant_pattern.flat_index(rit2->second.first, rit2->second.second);
             // If a site is on a product-pattern molecule (newly added),
             // store the product mol index and the molecule-TYPE component
             // index (not the pattern-local index) for fire-time resolution.
@@ -959,11 +1051,11 @@ Model load_model(const std::string& xml_path,
             auto it1 = reactant_id_map.find(s1);
             auto it2 = reactant_id_map.find(s2);
             if (it1 != reactant_id_map.end() && it1->second.second >= 0)
-              op.comp_flat_a = rule.reactant_pattern.flat_index(
-                  it1->second.first, it1->second.second);
+              op.comp_flat_a =
+                  rule.reactant_pattern.flat_index(it1->second.first, it1->second.second);
             if (it2 != reactant_id_map.end() && it2->second.second >= 0)
-              op.comp_flat_b = rule.reactant_pattern.flat_index(
-                  it2->second.first, it2->second.second);
+              op.comp_flat_b =
+                  rule.reactant_pattern.flat_index(it2->second.first, it2->second.second);
             // Parse ensureConnected: when "1", the bond break must leave
             // both molecules in the same complex (ring-bond-only unbinding).
             auto ec = opn.attributes.find("ensureConnected");
@@ -983,8 +1075,7 @@ Model load_model(const std::string& xml_path,
               for (int ci = 0; ci < static_cast<int>(prod_mol.components.size()); ++ci) {
                 auto& pc = prod_mol.components[ci];
                 if (!pc.required_state.empty() && pc.required_state_index >= 0)
-                  op.add_spec.comp_states.emplace_back(pc.comp_type_index,
-                                                       pc.required_state_index);
+                  op.add_spec.comp_states.emplace_back(pc.comp_type_index, pc.required_state_index);
               }
             }
             rule.operations.push_back(std::move(op));
@@ -1014,30 +1105,36 @@ Model load_model(const std::string& xml_path,
           const std::vector<std::string>* id_list;
         };
         ConstraintListDef cdefs[] = {
-          {"ListOfExcludeReactants", true,  false, &rp_id_list},
-          {"ListOfIncludeReactants", false, false, &rp_id_list},
-          {"ListOfExcludeProducts",  true,  true,  &pp_id_list},
-          {"ListOfIncludeProducts",  false, true,  &pp_id_list},
+            {"ListOfExcludeReactants", true, false, &rp_id_list},
+            {"ListOfIncludeReactants", false, false, &rp_id_list},
+            {"ListOfExcludeProducts", true, true, &pp_id_list},
+            {"ListOfIncludeProducts", false, true, &pp_id_list},
         };
         for (auto& cd : cdefs) {
           for (auto& child : rrn.children) {
-            if (child.name != cd.element) continue;
+            if (child.name != cd.element)
+              continue;
             // The id attribute matches a ReactantPattern/ProductPattern id
             auto list_id = opt_attr(child, "id");
             int pat_idx = -1;
             for (int i = 0; i < static_cast<int>(cd.id_list->size()); ++i) {
-              if ((*cd.id_list)[i] == list_id) { pat_idx = i; break; }
+              if ((*cd.id_list)[i] == list_id) {
+                pat_idx = i;
+                break;
+              }
             }
             if (pat_idx < 0) {
-              std::fprintf(stderr, "Warning: %s id='%s' in rule '%s' does not "
-                  "match any %s\n", cd.element, list_id.c_str(),
-                  rule.name.c_str(),
-                  cd.is_product ? "ProductPattern" : "ReactantPattern");
+              std::fprintf(stderr,
+                           "Warning: %s id='%s' in rule '%s' does not "
+                           "match any %s\n",
+                           cd.element, list_id.c_str(), rule.name.c_str(),
+                           cd.is_product ? "ProductPattern" : "ReactantPattern");
               continue;
             }
             // Parse each Pattern child
             for (auto& pn : child.children) {
-              if (pn.name != "Pattern") continue;
+              if (pn.name != "Pattern")
+                continue;
               auto cpat = parse_pattern(pn, model);
               Rule::Constraint c;
               c.pattern_idx = pat_idx;
@@ -1062,7 +1159,8 @@ Model load_model(const std::string& xml_path,
           auto* rc_list = find_child(*rl_node, "ListOfRateConstants");
           if (rc_list) {
             for (auto& rcn : rc_list->children) {
-              if (rcn.name != "RateConstant") continue;
+              if (rcn.name != "RateConstant")
+                continue;
               auto val = need_attr(rcn, "value");
               rule.rate_law.rate_value = resolve_value(val, model.parameters);
               rule.rate_law.rate_expr = val;
@@ -1091,9 +1189,11 @@ Model load_model(const std::string& xml_path,
                     reactant_pattern_ids.find(argval) == reactant_pattern_ids.end()) {
                   rule.rate_law.local_arg_is_molecule = true;
                 } else if (rit == reactant_id_map.end()) {
-                  std::fprintf(stderr, "Warning: local function arg '%s' in "
-                      "rule '%s' not found in reactant_id_map; defaulting to "
-                      "complex-wide scope\n", argval.c_str(), rule.name.c_str());
+                  std::fprintf(stderr,
+                               "Warning: local function arg '%s' in "
+                               "rule '%s' not found in reactant_id_map; defaulting to "
+                               "complex-wide scope\n",
+                               argval.c_str(), rule.name.c_str());
                 }
               }
             }
@@ -1104,11 +1204,14 @@ Model load_model(const std::string& xml_path,
           if (rc_list) {
             int idx = 0;
             for (auto& rcn : rc_list->children) {
-              if (rcn.name != "RateConstant") continue;
+              if (rcn.name != "RateConstant")
+                continue;
               auto val = need_attr(rcn, "value");
               double v = resolve_value(val, model.parameters);
-              if (idx == 0) rule.rate_law.mm_kcat = v;
-              else if (idx == 1) rule.rate_law.mm_Km = v;
+              if (idx == 0)
+                rule.rate_law.mm_kcat = v;
+              else if (idx == 1)
+                rule.rate_law.mm_Km = v;
               ++idx;
             }
           }
@@ -1133,10 +1236,12 @@ Model load_model(const std::string& xml_path,
             for (int mi = 0; mi < static_cast<int>(rule.reactant_pattern.molecules.size()); ++mi) {
               int nc = static_cast<int>(rule.reactant_pattern.molecules[mi].components.size());
               if (flat_a >= running && flat_a < running + nc) {
-                mol_a = mi; local_a = flat_a - running;
+                mol_a = mi;
+                local_a = flat_a - running;
               }
               if (flat_b >= running && flat_b < running + nc) {
-                mol_b = mi; local_b = flat_b - running;
+                mol_b = mi;
+                local_b = flat_b - running;
               }
               running += nc;
             }
@@ -1151,7 +1256,7 @@ Model load_model(const std::string& xml_path,
                   rule.same_components = true;
               }
             }
-            break;  // only check first AddBond
+            break; // only check first AddBond
           }
         }
       }
@@ -1195,7 +1300,8 @@ Model load_model(const std::string& xml_path,
       if (rule.rate_law.rate_ast) {
         std::vector<std::string> vars;
         expr::collect_variables(*rule.rate_law.rate_ast, vars);
-        for (auto& v : vars) seeds.insert(v);
+        for (auto& v : vars)
+          seeds.insert(v);
       }
       if (rule.rate_law.uses_tfun &&
           rule.rate_law.tfun_counter_source == TfunCounterSource::Observable)
@@ -1216,7 +1322,8 @@ Model load_model(const std::string& xml_path,
     while (!worklist.empty()) {
       std::string name = std::move(worklist.back());
       worklist.pop_back();
-      if (!rate_vars.insert(name).second) continue;  // already visited
+      if (!rate_vars.insert(name).second)
+        continue; // already visited
       auto it = func_deps.find(name);
       if (it != func_deps.end()) {
         // Check if this is a local function — if so, skip its
@@ -1232,7 +1339,7 @@ Model load_model(const std::string& xml_path,
         }
         for (auto& dep : it->second) {
           if (!local_obs_set.empty() && local_obs_set.count(dep))
-            continue;  // locally evaluated — skip
+            continue; // locally evaluated — skip
           worklist.push_back(dep);
         }
       }
@@ -1267,7 +1374,8 @@ bool has_attr(const XmlNode& node, const std::string& attr) {
 // Recursively check if any ReactionRule has the named child element.
 bool any_rule_has_child(const XmlNode& model_node, const std::string& child_name) {
   auto* rr_list = find_child(model_node, "ListOfReactionRules");
-  if (!rr_list) return false;
+  if (!rr_list)
+    return false;
   for (auto& rr : rr_list->children) {
     if (rr.name == "ReactionRule" && find_child(rr, child_name))
       return true;
@@ -1278,9 +1386,11 @@ bool any_rule_has_child(const XmlNode& model_node, const std::string& child_name
 // Check if any ReactionRule has a non-empty attribute.
 bool any_rule_has_attr(const XmlNode& model_node, const std::string& attr_name) {
   auto* rr_list = find_child(model_node, "ListOfReactionRules");
-  if (!rr_list) return false;
+  if (!rr_list)
+    return false;
   for (auto& rr : rr_list->children) {
-    if (rr.name != "ReactionRule") continue;
+    if (rr.name != "ReactionRule")
+      continue;
     auto it = rr.attributes.find(attr_name);
     if (it != rr.attributes.end() && !it->second.empty() && it->second != "0")
       return true;
@@ -1294,7 +1404,8 @@ bool any_has_move_connected(const XmlNode& node) {
   if (it != node.attributes.end() && it->second == "1")
     return true;
   for (auto& child : node.children) {
-    if (any_has_move_connected(child)) return true;
+    if (any_has_move_connected(child))
+      return true;
   }
   return false;
 }
@@ -1305,11 +1416,14 @@ bool any_has_move_connected(const XmlNode& node) {
 // (RM does support Ele, Function, and MM rate law types natively.)
 bool any_rule_has_arrhenius_ratelaw(const XmlNode& model_node) {
   auto* rr_list = find_child(model_node, "ListOfReactionRules");
-  if (!rr_list) return false;
+  if (!rr_list)
+    return false;
   for (auto& rr : rr_list->children) {
-    if (rr.name != "ReactionRule") continue;
+    if (rr.name != "ReactionRule")
+      continue;
     auto* rl = find_child(rr, "RateLaw");
-    if (!rl) continue;
+    if (!rl)
+      continue;
     auto it = rl->attributes.find("type");
     if (it != rl->attributes.end() && it->second == "Arrhenius")
       return true;
@@ -1330,7 +1444,10 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
     bool has_compartments = false;
     if (comp_list) {
       for (auto& c : comp_list->children) {
-        if (c.name == "Compartment") { has_compartments = true; break; }
+        if (c.name == "Compartment") {
+          has_compartments = true;
+          break;
+        }
       }
     }
     if (has_compartments)
@@ -1375,9 +1492,11 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
   if (auto* sp_list = find_child(model_node, "ListOfSpecies")) {
     std::unordered_map<std::string, int> fixed_type_counts;
     for (auto& spn : sp_list->children) {
-      if (spn.name != "Species") continue;
+      if (spn.name != "Species")
+        continue;
       auto it = spn.attributes.find("Fixed");
-      if (it == spn.attributes.end() || it->second != "1") continue;
+      if (it == spn.attributes.end() || it->second != "1")
+        continue;
       auto sp_name = opt_attr(spn, "name");
 
       // Count molecules and bonds inside this fixed species.
@@ -1385,51 +1504,57 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
       std::string mol_type_name;
       if (auto* ml = find_child(spn, "ListOfMolecules")) {
         for (auto& mn : ml->children) {
-          if (mn.name != "Molecule") continue;
+          if (mn.name != "Molecule")
+            continue;
           ++n_mol;
-          if (n_mol == 1) mol_type_name = opt_attr(mn, "name");
+          if (n_mol == 1)
+            mol_type_name = opt_attr(mn, "name");
         }
       }
       if (auto* bl = find_child(spn, "ListOfBonds")) {
         for (auto& bn : bl->children) {
-          if (bn.name == "Bond") ++n_bond;
+          if (bn.name == "Bond")
+            ++n_bond;
         }
       }
 
       if (n_mol != 1 || n_bond != 0) {
         std::string msg = "Fixed species '" + sp_name +
-            "' is multi-molecule or bonded (mols=" + std::to_string(n_mol) +
-            ", bonds=" + std::to_string(n_bond) + ") — RM v1 only "
-            "supports single-molecule Fixed species with no bonds. Pass "
-            "--ignore-unsupported to run with Fixed enforcement DISABLED "
-            "(this species would behave as if the `$` were absent, which "
-            "silently diverges from BNG2 ODE semantics).";
+                          "' is multi-molecule or bonded (mols=" + std::to_string(n_mol) +
+                          ", bonds=" + std::to_string(n_bond) +
+                          ") — RM v1 only "
+                          "supports single-molecule Fixed species with no bonds. Pass "
+                          "--ignore-unsupported to run with Fixed enforcement DISABLED "
+                          "(this species would behave as if the `$` were absent, which "
+                          "silently diverges from BNG2 ODE semantics).";
         warnings.push_back({Severity::Error, "Species@Fixed", msg});
         continue;
       }
       if (++fixed_type_counts[mol_type_name] > 1) {
         std::string msg = "Multiple Fixed species declared for "
-            "MoleculeType '" + mol_type_name + "' — RM v1 allows at "
-            "most one Fixed species per MoleculeType to avoid "
-            "matching overlap. Pass --ignore-unsupported to run with "
-            "Fixed enforcement DISABLED for the duplicate declarations.";
+                          "MoleculeType '" +
+                          mol_type_name +
+                          "' — RM v1 allows at "
+                          "most one Fixed species per MoleculeType to avoid "
+                          "matching overlap. Pass --ignore-unsupported to run with "
+                          "Fixed enforcement DISABLED for the duplicate declarations.";
         warnings.push_back({Severity::Error, "Species@Fixed", msg});
       }
     }
   }
 
   if (any_has_move_connected(model_node))
-    warnings.push_back({Severity::Warn, "MoveConnected",
-                        "MoveConnected keyword — requires compartments"});
+    warnings.push_back(
+        {Severity::Warn, "MoveConnected", "MoveConnected keyword — requires compartments"});
 
   if (any_rule_has_attr(model_node, "priority"))
-    warnings.push_back({Severity::Warn, "priority",
-                        "Rule priority modifier — execution order ignored"});
+    warnings.push_back(
+        {Severity::Warn, "priority", "Rule priority modifier — execution order ignored"});
 
   return warnings;
 }
 
-}  // anonymous namespace
+} // anonymous namespace
 
 // ===========================================================================
 // RuleMonkeySimulator pImpl
@@ -1462,8 +1587,7 @@ struct RuleMonkeySimulator::Impl {
 // Constructor / Destructor
 // ---------------------------------------------------------------------------
 
-RuleMonkeySimulator::RuleMonkeySimulator(const std::string& xml_path,
-                                         Method method) {
+RuleMonkeySimulator::RuleMonkeySimulator(const std::string& xml_path, Method method) {
   if (xml_path.empty())
     throw std::runtime_error("XML path must not be empty");
   impl_ = std::make_unique<Impl>();
@@ -1481,21 +1605,13 @@ RuleMonkeySimulator::~RuleMonkeySimulator() = default;
 // Metadata
 // ---------------------------------------------------------------------------
 
-std::vector<std::string> RuleMonkeySimulator::observable_names() const {
-  return impl_->obs_names;
-}
+std::vector<std::string> RuleMonkeySimulator::observable_names() const { return impl_->obs_names; }
 
-std::vector<std::string> RuleMonkeySimulator::parameter_names() const {
-  return impl_->param_names;
-}
+std::vector<std::string> RuleMonkeySimulator::parameter_names() const { return impl_->param_names; }
 
-const std::string& RuleMonkeySimulator::xml_path() const {
-  return impl_->xml_path_str;
-}
+const std::string& RuleMonkeySimulator::xml_path() const { return impl_->xml_path_str; }
 
-Method RuleMonkeySimulator::method() const {
-  return impl_->method;
-}
+Method RuleMonkeySimulator::method() const { return impl_->method; }
 
 const std::vector<UnsupportedFeature>& RuleMonkeySimulator::unsupported_warnings() const {
   return impl_->unsupported_warnings;
@@ -1543,8 +1659,7 @@ Result RuleMonkeySimulator::run(const TimeSpec& ts, std::uint64_t seed) {
 
 void RuleMonkeySimulator::initialize(std::uint64_t seed) {
   impl_->apply_overrides();
-  impl_->session = std::make_unique<Engine>(impl_->model, seed,
-                                            impl_->molecule_limit);
+  impl_->session = std::make_unique<Engine>(impl_->model, seed, impl_->molecule_limit);
   impl_->session->initialize();
 }
 
@@ -1578,18 +1693,13 @@ void RuleMonkeySimulator::save_state(const std::string& path) const {
 void RuleMonkeySimulator::load_state(const std::string& path) {
   impl_->apply_overrides();
   // Create engine with seed=0 (will be overwritten by loaded RNG state)
-  impl_->session = std::make_unique<Engine>(impl_->model, 0,
-                                            impl_->molecule_limit);
+  impl_->session = std::make_unique<Engine>(impl_->model, 0, impl_->molecule_limit);
   impl_->session->load_state(path);
 }
 
-bool RuleMonkeySimulator::has_session() const {
-  return impl_->session != nullptr;
-}
+bool RuleMonkeySimulator::has_session() const { return impl_->session != nullptr; }
 
-void RuleMonkeySimulator::destroy_session() {
-  impl_->session.reset();
-}
+void RuleMonkeySimulator::destroy_session() { impl_->session.reset(); }
 
 // ---------------------------------------------------------------------------
 // Session queries
@@ -1620,4 +1730,4 @@ void RuleMonkeySimulator::add_molecules(const std::string& type_name, int count)
   impl_->session->add_molecules(type_name, count);
 }
 
-}  // namespace rulemonkey
+} // namespace rulemonkey

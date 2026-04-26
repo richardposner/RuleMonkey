@@ -2,12 +2,12 @@
 # Blinov et al. 2006. Biosystems, 83:136
 
 begin parameters
-egf_tot      1.2e4   
-egfr_tot     1.8e3   
-Grb2_tot     1.0e3   
-Shc_tot      2.7e3 
-Sos_tot      1.3e2 
-Grb2_Sos_tot  4.9e2  
+egf_tot      1.2e4
+egfr_tot     1.8e3
+Grb2_tot     1.0e3
+Shc_tot      2.7e3
+Sos_tot      1.3e2
+Grb2_Sos_tot  4.9e2
 
 kp1      1.667e-04 # ligand-monomer binding  (scaled)
 km1           0.06 # ligand-monomer dissociation
@@ -15,13 +15,13 @@ km1           0.06 # ligand-monomer dissociation
 kp2      5.556e-04 # aggregation of bound monomers (scaled)
 km2            0.1 # dissociation of bound monomers
 
-kp3            0.5 # dimer transphosphorylation   
-km3          4.505 # dimer dephosphorylation        
+kp3            0.5 # dimer transphosphorylation
+km3          4.505 # dimer dephosphorylation
 
-kp14             3 # Shc transphosphorylation  
-km14          0.03 # Shc dephosphorylation      
+kp14             3 # Shc transphosphorylation
+km14          0.03 # Shc dephosphorylation
 
-km16         0.005 # Shc cytosolic dephosphorylation     
+km16         0.005 # Shc cytosolic dephosphorylation
 
 kp9      8.333e-05 # binding of Grb2 to receptor     (scaled)
 km9           0.05 # dissociation of Grb2 from receptor
@@ -39,13 +39,13 @@ kp15       2.5e-05 # binding of ShcP to  receptor     (scaled)
 km15           0.3 # diss. of ShcP from  receptor
 
 kp17     1.667e-04 # binding of Grb2 to RP-ShcP  (scaled)
-km17           0.1 # diss. of Grb2 from RP-ShcP  
+km17           0.1 # diss. of Grb2 from RP-ShcP
 
 kp18       2.5e-05 # binding of ShcP-Grb2 to receptor    (scaled)
 km18           0.3 # diss. of ShcP-Grb2 from  receptor
 
 kp19     5.556e-04 # binding of Sos to RP-ShcP-Grb2  (scaled)
-km19        0.0214 # diss. of Sos from RP-ShcP-Grb2 
+km19        0.0214 # diss. of Sos from RP-ShcP-Grb2
 
 kp20     6.667e-06 # binding of ShcP-Grb2-Sos to receptor    (scaled)
 km20          0.12 # diss. of ShcP-Grb2-Sos from receptor
@@ -85,11 +85,11 @@ end species
 
 begin reaction rules
 
-# Ligand-receptor binding      
+# Ligand-receptor binding
 egfr(l,r)   + egf(r) <-> egfr(l!1,r).egf(r!1)   kp1, km1   #ligand-monomer
 
 # Note changed multiplicity
-# Receptor-aggregation 
+# Receptor-aggregation
 egfr(l!+,r) + egfr(l!+,r) <-> egfr(l!+,r!3).egfr(l!+,r!3) kp2,km2
 
 # Transphosphorylation of egfr by RTK
@@ -129,7 +129,7 @@ egfr(l!+,r) + egfr(l!+,r) <-> egfr(l!+,r!3).egfr(l!+,r!3) kp2,km2
  Shc(PTB!+,Y317~pY!2).Grb2(SH2!2,SH3) + Sos(dom)   <-> \
         Shc(PTB!+,Y317~pY!2).Grb2(SH2!2,SH3!3).Sos(dom!3)  kp19,km19
 
-# Cytosolic 
+# Cytosolic
 
  Shc(PTB,Y317~pY) + Grb2(SH2,SH3)   <-> Shc(PTB,Y317~pY!1).Grb2(SH2!1,SH3)    kp21,km21
  Shc(PTB,Y317~pY) + Grb2(SH2,SH3!+) <-> Shc(PTB,Y317~pY!1).Grb2(SH2!1,SH3!+)  kp23,km23

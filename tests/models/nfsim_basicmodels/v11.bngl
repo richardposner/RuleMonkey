@@ -22,4 +22,3 @@ resetConcentrations()
 simulate_ssa({suffix=>"ssa",t_end=>1,n_steps=>100})
 resetConcentrations()
 writeXML()
-

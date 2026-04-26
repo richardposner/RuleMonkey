@@ -9,7 +9,7 @@ begin model
 begin parameters
     k_elong 1.0 # Bimolecular
     k_cyc   0.5 # Unimolecular (End-to-End)
-    
+
     A_tot 100
 end parameters
 
@@ -31,15 +31,15 @@ begin reaction rules
     # Elongation (Linear growth)
     # Free x binds Free y
     A(x) + A(y) <-> A(x!1).A(y!1) k_elong, 0.01
-    
+
     # Cyclization (Ring Closure)
     # Monomer cyclization (A-loop).
     A(x,y) -> A(x!1,y!1) k_cyc
-    
+
     # Dimer Cyclization:
     # A(x,y!1).A(x!1,y) -> A(x!2,y!1).A(x!1,y!2)
     A(x,y!1).A(x!1,y) -> A(x!2,y!1).A(x!1,y!2) k_cyc
-    
+
 end reaction rules
 
 end model

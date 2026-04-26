@@ -1,2 +1,2 @@
 simple degredation and synthesis reactions
--sim 20 -oSteps 100 
+-sim 20 -oSteps 100

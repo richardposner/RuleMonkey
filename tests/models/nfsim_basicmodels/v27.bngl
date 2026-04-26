@@ -28,10 +28,10 @@ begin parameters
   k_lump  10000
 end parameters
 begin molecule types
-  A(r,b~0~P)      
-  B(r,c)          
-  C(b)            
-  L(r)            
+  A(r,b~0~P)
+  B(r,c)
+  C(b)
+  L(r)
   P1()              population
   P2()              population
   P3()              population

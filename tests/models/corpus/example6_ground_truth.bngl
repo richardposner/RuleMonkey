@@ -6,7 +6,7 @@ begin parameters
 	# simulation parameters
 	# fraction of a single cell to be considered in a stochastic simulation
 	f 0.01 # [=] dimensionless, 0<f<=1
-	
+
 	# physical constants
 	# Avogadro constant
 	NA  6.02214e23 # [=] number of molecules per mol
@@ -25,7 +25,7 @@ begin parameters
 	# ligand concentration
 	EGF_conc_nM  1.0 # [=] nM
 	# number of ligands per cell (derived)
-	
+
 	# Convert from nM to Molar
 	EGF_conc = EGF_conc_nM * 1e-9 # M
 
@@ -40,10 +40,10 @@ begin parameters
 
 	# equilibrium dissociation constant
 	KD1 5.0 # [=] nM
-	
+
 	# reverse rate constant (derived)
 	km1 0.1 # [=] /s
-	
+
 	# forward rate constant (derived)
 	kp1_nMs=(km1/KD1) # [=] /nM/s
 	kp1_Ms=kp1_nMs*1e9 # convert /nM/s to /M/s
@@ -55,13 +55,13 @@ begin parameters
 	#   a value of 0.1 => weak crosslinking
 	#   a value of 1.0 => moderate crosslinking
 	#   a value of 10.0 => strong crosslinking
-	
+
 	# reverse rate constant (derived)
 	km2 0.01 # [=] /s
-	
+
 	# forward rate constant (derived)
 	kp2=K2RT*km2/EGFR_copy_number # [=] /nM/s
-	
+
 	kp3=kp2*0.2
 
 	# phosphorylation rate constant
@@ -75,10 +75,10 @@ end parameters
 
 begin molecule types
 	# ligand
-	L(r) 
+	L(r)
 
 	# receptor
-	R(l,r,Y~0~P) 
+	R(l,r,Y~0~P)
 end molecule types
 
 
@@ -93,25 +93,25 @@ begin observables
 	Molecules Ltot L()
 
 	# number of free ligands
-	Species freeL L(r) 
-	
+	Species freeL L(r)
+
 	# total number of receptors
 	Molecules Rtot R()
 
 	# number of bound ligands = Ltot - freeL
 
 	# number of free receptors
-	#Species freeR R(l,r) 
+	#Species freeR R(l,r)
 
 	# number of monomeric (unclustered) receptors
-	#Species Rmon R==1 
+	#Species Rmon R==1
 
 	# number of receptor dimers
 	Species Rdim R==2
 
 	# number of ligand-induced receptor aggregates
 	#   = number of receptor clusters
-	#   = number of complexes containing more than 1 receptor 
+	#   = number of complexes containing more than 1 receptor
 	#Species n_agg_gt1 R>1
 
 	# number of ligand-receptor bonds
@@ -121,7 +121,7 @@ begin observables
 
 	# number of receptors in clusters = Rtot - R1
 
-	# average size of a receptor cluster (of size >1) 
+	# average size of a receptor cluster (of size >1)
 	#   = (# of receptors in clusters)/n_agg_gt1
 	#   = (Rtot - R1)/n_agg_gt1
 
@@ -142,7 +142,7 @@ begin reaction rules
 
 	# receptor-receptor bond dissociation
 	R(r!1).R(r!1)->R(r)+R(r) km2
-	
+
 	# receptor dimerization (no ligand)
 	R(l,r) + R(l,r) -> R(l,r!1).R(l,r!1) kp3
 

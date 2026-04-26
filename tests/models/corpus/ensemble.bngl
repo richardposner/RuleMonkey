@@ -119,7 +119,7 @@ begin observables
 end observables
 
 begin functions
-	# Func0()=Gpa1_free / bound_G_protein 
+	# Func0()=Gpa1_free / bound_G_protein
 	Func1()=0.3 * ( Gpa1_free / ( Gpa1_free + 2500))
 end functions
 
@@ -168,7 +168,7 @@ begin reaction rules
 	Ste12(dna!1).Ste2_gene(promoter!1) -> Ste12(dna) + Ste2_gene(promoter) 0.03
 	0 -> Ste2(gpa1,pheromone~0,sst2) 2.865
 	Ste12(dig1,dig2,mapk,dna!1).Ste2_gene(promoter!1) -> Ste12(dig1,dig2,mapk,dna!1).Ste2_gene(promoter!1) + Ste2(gpa1,pheromone~0,sst2) 12
-	Gpa1(ste4) -> 0 kdeg_gp__FREE DeleteMolecules # 4.95e-05 
+	Gpa1(ste4) -> 0 kdeg_gp__FREE DeleteMolecules # 4.95e-05
 	Ste4(gpa1) -> 0 kdeg_gp__FREE DeleteMolecules # 4.95e-05
 	Ste4(gpa1!1).Gpa1(ste4!1) -> 0 kdeg_gp2__FREE DeleteMolecules # 3.3e-5
 	Ste12(dna) + Gpa1_gene(promoter) -> Ste12(dna!1).Gpa1_gene(promoter!1) ka_ste12_gpa1g__FREE # 2.145e-03

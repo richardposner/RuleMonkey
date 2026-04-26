@@ -24,7 +24,12 @@ Usage:
   python3 toy_jim_ssa.py --gdat                   # single rep, print gdat to stdout
 """
 
-import sys, os, math, random, argparse, time as timepkg
+import argparse
+import math
+import os
+import random
+import sys
+import time as timepkg
 from collections import defaultdict
 
 # ── Model parameters ──────────────────────────────────────────────────────────
@@ -37,29 +42,29 @@ N_MOLS = N_L + N_R + N_A + N_K  # 4000
 
 kpL = 0.0001
 kmL = 0.1
-kpD = 0.001    # already /2 from toy.in for BNG symmetry
+kpD = 0.001  # already /2 from toy.in for BNG symmetry
 kmD = 0.1
 kpA = 0.0001
 kmA = 0.1
 kpK = 0.0001
 kmK = 0.1
-pK  = 1.0
+pK = 1.0
 pKs = 0.01
-dM  = 1.0
-dC  = 10.0
+dM = 1.0
+dC = 10.0
 
-T_END   = 100.0
+T_END = 100.0
 N_STEPS = 100
 
 # Molecule index ranges
 L_START = 0
-L_END   = N_L
+L_END = N_L
 R_START = N_L
-R_END   = N_L + N_R
+R_END = N_L + N_R
 A_START = N_L + N_R
-A_END   = N_L + N_R + N_A
+A_END = N_L + N_R + N_A
 K_START = N_L + N_R + N_A
-K_END   = N_MOLS
+K_END = N_MOLS
 
 # Sites per molecule type
 # L: site 0 = r
@@ -67,39 +72,48 @@ K_END   = N_MOLS
 # A: site 0 = r, site 1 = k
 # K: site 0 = a  (Y is internal state, not a bond site)
 
-OBS_NAMES = ["RecDim_1", "Rec_A_1", "Rec_K_1", "Rec_Kp_1", "RecDim_Kp_1",
-             "L_tot_1", "A_tot_1", "K_tot_1", "R_tot_1"]
+OBS_NAMES = [
+    "RecDim_1",
+    "Rec_A_1",
+    "Rec_K_1",
+    "Rec_Kp_1",
+    "RecDim_Kp_1",
+    "L_tot_1",
+    "A_tot_1",
+    "K_tot_1",
+    "R_tot_1",
+]
 
 
 class Simulator:
     __slots__ = (
-        "bp",          # bond partners: bp[mol][site] = (other_mol, other_site) or None
-        "k_phos",      # k_phos[k_mol_idx] = True if phosphorylated
-        "cx_of",       # mol -> complex_id
-        "cx_mols",     # cx_id -> set of mol_ids
+        "bp",  # bond partners: bp[mol][site] = (other_mol, other_site) or None
+        "k_phos",  # k_phos[k_mol_idx] = True if phosphorylated
+        "cx_of",  # mol -> complex_id
+        "cx_mols",  # cx_id -> set of mol_ids
         "next_cx",
         "t",
         # Aggregate counts maintained incrementally
-        "n_free_L",       # L with r free (= free L molecules, since monovalent)
-        "n_R_lr_free",    # R with both l and r free
-        "n_LR_mono",      # L-R bonds where R.r is free (eligible for dimerization)
-        "n_RR_bonds",     # number of R-R dimer bonds
-        "n_free_Ar",      # A with r free
-        "n_free_Ra",      # R with a free
-        "n_free_Ak",      # A with k free
-        "n_free_Ka",      # K with a free
-        "n_free_Ka_YP",   # K with a free and Y~P
-        "n_RAK_YP",       # R-A-K(Y~P) chains (count of such chains)
+        "n_free_L",  # L with r free (= free L molecules, since monovalent)
+        "n_R_lr_free",  # R with both l and r free
+        "n_LR_mono",  # L-R bonds where R.r is free (eligible for dimerization)
+        "n_RR_bonds",  # number of R-R dimer bonds
+        "n_free_Ar",  # A with r free
+        "n_free_Ra",  # R with a free
+        "n_free_Ak",  # A with k free
+        "n_free_Ka",  # K with a free
+        "n_free_Ka_YP",  # K with a free and Y~P
+        "n_RAK_YP",  # R-A-K(Y~P) chains (count of such chains)
         # Per-complex K state tracking for transphosphorylation
-        "cx_nKU",         # cx_id -> count of K(Y~U) in complex
-        "cx_nKP",         # cx_id -> count of K(Y~P) in complex
-        "sum_KU_pairs",   # Σ_cx n_KU*(n_KU-1)/2  (rule 5 propensity factor)
-        "sum_KP_KU",      # Σ_cx n_KP*n_KU          (rule 6 propensity factor)
+        "cx_nKU",  # cx_id -> count of K(Y~U) in complex
+        "cx_nKP",  # cx_id -> count of K(Y~P) in complex
+        "sum_KU_pairs",  # Σ_cx n_KU*(n_KU-1)/2  (rule 5 propensity factor)
+        "sum_KP_KU",  # Σ_cx n_KP*n_KU          (rule 6 propensity factor)
         # Bond lists for uniform selection
-        "lr_bonds",       # list of (L_mol, R_mol) where L.r-R.l bond exists and R.r free
-        "rr_bonds",       # list of (R1_mol, R2_mol) where R1.r-R2.r bond exists
-        "ar_bonds",       # list of (A_mol, R_mol) where A.r-R.a bond exists
-        "ak_bonds",       # list of (A_mol, K_mol) where A.k-K.a bond exists
+        "lr_bonds",  # list of (L_mol, R_mol) where L.r-R.l bond exists and R.r free
+        "rr_bonds",  # list of (R1_mol, R2_mol) where R1.r-R2.r bond exists
+        "ar_bonds",  # list of (A_mol, R_mol) where A.r-R.a bond exists
+        "ak_bonds",  # list of (A_mol, K_mol) where A.k-K.a bond exists
     )
 
     def __init__(self, seed=None):
@@ -110,13 +124,13 @@ class Simulator:
         self.bp = []
         for i in range(N_MOLS):
             if i < L_END:
-                self.bp.append([None])          # L: 1 site
+                self.bp.append([None])  # L: 1 site
             elif i < R_END:
                 self.bp.append([None, None, None])  # R: 3 sites
             elif i < A_END:
-                self.bp.append([None, None])    # A: 2 sites
+                self.bp.append([None, None])  # A: 2 sites
             else:
-                self.bp.append([None])          # K: 1 site (a)
+                self.bp.append([None])  # K: 1 site (a)
 
         self.k_phos = [False] * N_K  # index within K range: k_phos[k - K_START]
 
@@ -132,7 +146,7 @@ class Simulator:
 
         # Aggregate counts
         self.n_free_L = N_L
-        self.n_R_lr_free = N_R    # all R start with l, r, a free
+        self.n_R_lr_free = N_R  # all R start with l, r, a free
         self.n_LR_mono = 0
         self.n_RR_bonds = 0
         self.n_free_Ar = N_A
@@ -155,10 +169,13 @@ class Simulator:
     # ── helpers ───────────────────────────────────────────────────────────
 
     def _mol_type(self, m):
-        if m < L_END: return 'L'
-        if m < R_END: return 'R'
-        if m < A_END: return 'A'
-        return 'K'
+        if m < L_END:
+            return "L"
+        if m < R_END:
+            return "R"
+        if m < A_END:
+            return "A"
+        return "K"
 
     def _is_K_phos(self, k):
         return self.k_phos[k - K_START]
@@ -347,8 +364,9 @@ class Simulator:
 
     def _pick_R_lr_free(self):
         """Pick a random R with both l and r free."""
-        candidates = [m for m in range(R_START, R_END)
-                      if self.bp[m][0] is None and self.bp[m][1] is None]
+        candidates = [
+            m for m in range(R_START, R_END) if self.bp[m][0] is None and self.bp[m][1] is None
+        ]
         return random.choice(candidates)
 
     def _fire_R1_fwd(self):
@@ -632,8 +650,9 @@ class Simulator:
     def _fire_R8(self):
         """K(a,Y~P) -> K(a,Y~U) — cytosol dephosphorylation."""
         # K with a free and Y~P
-        candidates = [m for m in range(K_START, K_END)
-                      if self.bp[m][0] is None and self._is_K_phos(m)]
+        candidates = [
+            m for m in range(K_START, K_END) if self.bp[m][0] is None and self._is_K_phos(m)
+        ]
         K = random.choice(candidates)
         self._dephosphorylate(K)
 
@@ -665,10 +684,9 @@ class Simulator:
                 if self._is_K_phos(K):
                     cx = self.cx_of[R]
                     n_R_in_cx = sum(1 for m in self.cx_mols[cx] if R_START <= m < R_END)
-                    rec_dim_kp += (n_R_in_cx - 1)
+                    rec_dim_kp += n_R_in_cx - 1
 
-        return [rec_dim, rec_a, rec_k, rec_kp, rec_dim_kp,
-                N_L, N_A, N_K, N_R]
+        return [rec_dim, rec_a, rec_k, rec_kp, rec_dim_kp, N_L, N_A, N_K, N_R]
 
     # ── main loop ────────────────────────────────────────────────────────
 
@@ -721,8 +739,10 @@ class Simulator:
 
 # ── Ensemble generation ──────────────────────────────────────────────────────
 
+
 def run_ensemble(n_reps, base_seed=None):
     import numpy as np
+
     n_obs = len(OBS_NAMES)
     all_data = np.zeros((n_reps, N_STEPS + 1, n_obs))
 
@@ -732,8 +752,7 @@ def run_ensemble(n_reps, base_seed=None):
         sim = Simulator(seed=seed)
         rows, events = sim.run()
         elapsed = timepkg.time() - t0
-        print(f"  rep {rep+1}/{n_reps}  events={events}  {elapsed:.1f}s",
-              file=sys.stderr)
+        print(f"  rep {rep + 1}/{n_reps}  events={events}  {elapsed:.1f}s", file=sys.stderr)
         for ti, row in enumerate(rows):
             all_data[rep, ti, :] = row
 
@@ -742,6 +761,7 @@ def run_ensemble(n_reps, base_seed=None):
 
 def write_ensemble(all_data, out_dir):
     import numpy as np
+
     os.makedirs(out_dir, exist_ok=True)
 
     n_reps = all_data.shape[0]
@@ -769,12 +789,12 @@ def write_ensemble(all_data, out_dir):
             integrals = np.zeros(n_reps)
             for r in range(n_reps):
                 for ti in range(N_STEPS):
-                    integrals[r] += 0.5 * (all_data[r, ti, oi] + all_data[r, ti+1, oi]) * dt
-            f.write(f"{name}\t{np.mean(integrals):.6g}\t{np.std(integrals, ddof=1):.6g}"
-                    f"\t{n_reps}\n")
+                    integrals[r] += 0.5 * (all_data[r, ti, oi] + all_data[r, ti + 1, oi]) * dt
+            f.write(
+                f"{name}\t{np.mean(integrals):.6g}\t{np.std(integrals, ddof=1):.6g}\t{n_reps}\n"
+            )
 
-    rep_dir = os.path.join(
-        os.path.dirname(out_dir), "replicates", "toy_jim")
+    rep_dir = os.path.join(os.path.dirname(out_dir), "replicates", "toy_jim")
     os.makedirs(rep_dir, exist_ok=True)
     for r in range(n_reps):
         tag = f"rep_{r:03d}"
@@ -784,7 +804,8 @@ def write_ensemble(all_data, out_dir):
             f.write(hdr + "\n")
             for ti in range(N_STEPS + 1):
                 vals = [f"{times[ti]:.8e}"] + [
-                    f"{all_data[r, ti, oi]:.8e}" for oi in range(len(OBS_NAMES))]
+                    f"{all_data[r, ti, oi]:.8e}" for oi in range(len(OBS_NAMES))
+                ]
                 f.write("\t".join(vals) + "\n")
         open(os.path.join(rep_dir, f"{tag}.done"), "w").close()
 
@@ -806,10 +827,8 @@ def main():
     ap = argparse.ArgumentParser(description="toy_jim Gillespie SSA")
     ap.add_argument("--reps", type=int, default=100)
     ap.add_argument("--seed", type=int, default=12345)
-    ap.add_argument("--output", type=str, default=None,
-                    help="Output directory for ensemble files")
-    ap.add_argument("--gdat", action="store_true",
-                    help="Single rep, print gdat to stdout")
+    ap.add_argument("--output", type=str, default=None, help="Output directory for ensemble files")
+    ap.add_argument("--gdat", action="store_true", help="Single rep, print gdat to stdout")
     args = ap.parse_args()
 
     if args.gdat:
@@ -820,13 +839,14 @@ def main():
         return
 
     out_dir = args.output or os.path.join(
-        os.path.dirname(__file__), "..", "models", "nfsim_reference", "ensemble")
+        os.path.dirname(__file__), "..", "models", "nfsim_reference", "ensemble"
+    )
 
     print(f"Running {args.reps} reps with seed={args.seed}", file=sys.stderr)
     t0 = timepkg.time()
     all_data = run_ensemble(args.reps, base_seed=args.seed)
     elapsed = timepkg.time() - t0
-    print(f"Total: {elapsed:.1f}s ({elapsed/args.reps:.1f}s/rep)", file=sys.stderr)
+    print(f"Total: {elapsed:.1f}s ({elapsed / args.reps:.1f}s/rep)", file=sys.stderr)
 
     write_ensemble(all_data, out_dir)
 

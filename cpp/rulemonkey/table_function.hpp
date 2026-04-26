@@ -8,14 +8,12 @@ namespace rulemonkey {
 enum class TfunMethod { Linear, Step };
 
 class TableFunction {
- public:
-  TableFunction(std::string name, std::vector<double> xs,
-                std::vector<double> ys, std::string counter_name,
-                TfunMethod method = TfunMethod::Linear);
+public:
+  TableFunction(std::string name, std::vector<double> xs, std::vector<double> ys,
+                std::string counter_name, TfunMethod method = TfunMethod::Linear);
 
   // Load from a .tfun file. Validates header against name and counter_name.
-  static TableFunction from_file(const std::string& name,
-                                 const std::string& filepath,
+  static TableFunction from_file(const std::string& name, const std::string& filepath,
                                  const std::string& counter_name,
                                  TfunMethod method = TfunMethod::Linear);
 
@@ -26,7 +24,7 @@ class TableFunction {
   TfunMethod method() const { return method_; }
   size_t size() const { return xs_.size(); }
 
- private:
+private:
   std::string name_;
   std::string counter_name_;
   std::vector<double> xs_;
@@ -34,4 +32,4 @@ class TableFunction {
   TfunMethod method_;
 };
 
-}  // namespace rulemonkey
+} // namespace rulemonkey

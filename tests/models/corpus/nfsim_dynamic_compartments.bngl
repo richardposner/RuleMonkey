@@ -29,13 +29,13 @@ begin reaction rules
     Cell(vol~1) -> Cell(vol~2) k_grow
     Cell(vol~2) -> Cell(vol~4) k_grow
     Cell(vol~4) -> Cell(vol~8) k_grow
-    
+
     # Division (Splitting)
     # Large cell splits into two small ones
     Cell(vol~8) -> Cell(vol~4) + Cell(vol~4) k_div
     # Or asymmetric
     # Cell(vol~8) -> Cell(vol~1) + Cell(vol~1) ?
-    
+
 end reaction rules
 
 end model

@@ -1,11 +1,11 @@
-# The model consists of a monovalent extracellular ligand, 
-# a monovalent cell-surface receptor, a bivalent cytosolic adapter protein, 
-# and a cytosolic kinase.  The receptor dimerizes through a 
-# receptor-receptor interaction that depends on ligand binding.  
-# The adapter binds the receptor and the kinase.  
-# When two kinases are juxtaposed through binding to 
-# receptor-associated adapter proteins, one of the kinases can 
-# transphosphorylate the second kinase. 
+# The model consists of a monovalent extracellular ligand,
+# a monovalent cell-surface receptor, a bivalent cytosolic adapter protein,
+# and a cytosolic kinase.  The receptor dimerizes through a
+# receptor-receptor interaction that depends on ligand binding.
+# The adapter binds the receptor and the kinase.
+# When two kinases are juxtaposed through binding to
+# receptor-associated adapter proteins, one of the kinases can
+# transphosphorylate the second kinase.
 
 begin parameters
 L_tot 	1000
@@ -31,11 +31,11 @@ end parameters
 
 
 begin species
-# Set to zero for equilibration	
-L(r)	         L_tot 
+# Set to zero for equilibration
+L(r)	         L_tot
 # r binds to l of R
 
-R(l,r,a)         R_tot 
+R(l,r,a)         R_tot
 # l binds to r of L
 # r binds to r of R
 
@@ -43,7 +43,7 @@ A(r,k)	         A_tot
 # r binds to a of R
 # k binds to a of K
 
-K(a,Y~U)         K_tot	
+K(a,Y~U)         K_tot
 # a binds to k of A
 # Y is phosphorylation site that is either unphosphorylated (U) or
 #   phosphorylated (P)
@@ -53,7 +53,7 @@ end species
 
 begin reaction rules
 # Ligand binding (L+R)
-# Note: specifying r in R here means that the r component must not 
+# Note: specifying r in R here means that the r component must not
 #       be bound.  This prevents dissociation of ligand from R
 #       when R is in a dimer.
 L(r) + R(l,r) <-> L(r!1).R(l!1,r) kpL, kmL
@@ -63,11 +63,11 @@ L(r) + R(l,r) <-> L(r!1).R(l!1,r) kpL, kmL
 L(r!1).R(l!1,r) + L(r!1).R(l!1,r) <-> L(r!1).R(l!1,r!3).L(r!2).R(l!2,r!3) kpD,kmD
 
 # Receptor binding to adaptor (R+A)
-# Note: A and R can bind independent of whether A is bound to K or 
+# Note: A and R can bind independent of whether A is bound to K or
 #       whether R is in a dimer.
 A(r) + R(a) <-> A(r!1).R(a!1) kpA,kmA
 
-# Adaptor binding kinase 
+# Adaptor binding kinase
 # Note: Doesn't depend on phosphorylation state of K or whether A is bound to
 #       receptor, i.e. binding rate is same whether A is on membrane (bound to
 #        R) or in cytosol.

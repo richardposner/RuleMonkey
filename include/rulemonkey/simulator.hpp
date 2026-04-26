@@ -22,13 +22,12 @@ enum class Method {
 // its parsed model, parameter overrides, and molecule-limit configuration; no
 // prior run state is reused across `run()` calls.
 class RuleMonkeySimulator {
- public:
+public:
   // Parses and validates `xml_path` immediately.
   //
   // Throws std::runtime_error if the path is empty or missing, the method is
   // unsupported, or the XML cannot be imported by the active runtime.
-  explicit RuleMonkeySimulator(const std::string& xml_path,
-                               Method method = Method::NfExact);
+  explicit RuleMonkeySimulator(const std::string& xml_path, Method method = Method::NfExact);
   ~RuleMonkeySimulator();
 
   RuleMonkeySimulator(const RuleMonkeySimulator&) = delete;
@@ -119,9 +118,9 @@ class RuleMonkeySimulator {
   // Returns warnings about unsupported BNGL features detected in the XML.
   const std::vector<UnsupportedFeature>& unsupported_warnings() const;
 
- private:
+private:
   struct Impl;
   std::unique_ptr<Impl> impl_;
 };
 
-}  // namespace rulemonkey
+} // namespace rulemonkey

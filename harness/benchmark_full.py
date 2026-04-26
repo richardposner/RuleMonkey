@@ -38,7 +38,13 @@ Usage:
 Tier membership is defined in docs/FAILING_MODELS.md; keep the two in sync.
 """
 
-import subprocess, sys, os, time, re, math, statistics
+import math
+import os
+import re
+import statistics
+import subprocess
+import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -74,7 +80,7 @@ SCREEN_Z_THRESHOLD = 5.0
 # per-model noise floor derived from self-split of the NFsim replicates.
 # T_model = max(VERDICT_TZ_FLOOR, VERDICT_TZ_MARGIN * tz_p99) where p99 comes
 # from tests/reference/nfsim/noise_floor.tsv.
-VERDICT_TZ_FLOOR  = 5.0
+VERDICT_TZ_FLOOR = 5.0
 VERDICT_TZ_MARGIN = 1.2
 VERDICT_TZ_DEFAULT = 5.0  # fallback when no calibration row is present
 
@@ -90,23 +96,33 @@ TINT_TOL_REL = 1e-6
 # Smoke tier: fastest diverse coverage. Every major code path touched by at
 # least one model. Used for tight-loop iteration while developing a fix.
 SMOKE_MODELS = [
-    "Tutorial_Example",          # multi-mol observables (UTL)
-    "A_plus_A",                  # simplest bimolecular
-    "BLBR",                      # cooperativity + rings
-    "isingspin_localfcn",        # local functions
-    "e1",                        # enzyme kinetics scaling baseline
-    "ANx_noActivity",            # ANx without function rate laws (baseline)
-    "fceri_ji",                  # multi-mol Species + -bscb
-    "nfsim_ring_closure_polymer",# ring closure
+    "Tutorial_Example",  # multi-mol observables (UTL)
+    "A_plus_A",  # simplest bimolecular
+    "BLBR",  # cooperativity + rings
+    "isingspin_localfcn",  # local functions
+    "e1",  # enzyme kinetics scaling baseline
+    "ANx_noActivity",  # ANx without function rate laws (baseline)
+    "fceri_ji",  # multi-mol Species + -bscb
+    "nfsim_ring_closure_polymer",  # ring closure
 ]
 
 # Regression guard tier: the models that historically catch regressions.
 # Any fix must keep all of these green. Run this tier before every commit.
 GUARD_MODELS = [
     # Function rate laws
-    "AN", "ANx", "ANx_noActivity",
+    "AN",
+    "ANx",
+    "ANx_noActivity",
     # Enzyme kinetics scaling
-    "e1", "e2", "e3", "e4", "e5", "e6", "e7", "e8", "e9",
+    "e1",
+    "e2",
+    "e3",
+    "e4",
+    "e5",
+    "e6",
+    "e7",
+    "e8",
+    "e9",
     # Multi-mol observables / UTL
     "Tutorial_Example",
     # Multi-mol Species + -bscb
@@ -118,13 +134,19 @@ GUARD_MODELS = [
     # Local functions
     "isingspin_localfcn",
     # Ring closure
-    "nfsim_ring_closure_polymer", "A_plus_B_rings", "rm_tlbr_rings",
+    "nfsim_ring_closure_polymer",
+    "A_plus_B_rings",
+    "rm_tlbr_rings",
     # Large rule sets
-    "tcr", "tcr_gen20ind9",
+    "tcr",
+    "tcr_gen20ind9",
     # Large complexes
-    "egfr_net", "egfr_nf_iter5p12h10",
+    "egfr_net",
+    "egfr_nf_iter5p12h10",
     # High event count stress
-    "t3", "machine", "ensemble",
+    "t3",
+    "machine",
+    "ensemble",
     # Disjoint transphosphorylation (SSA-validated reference)
     "toy_jim",
 ]
@@ -146,19 +168,20 @@ TIER_MODELS = {
 # Data loading
 # ---------------------------------------------------------------------------
 
+
 def load_sim_params():
     params = {}
     with open(PARAMS) as f:
         for line in f:
-            parts = line.strip().split('\t')
-            if parts[0].startswith('#') or parts[0] == 'model':
+            parts = line.strip().split("\t")
+            if parts[0].startswith("#") or parts[0] == "model":
                 continue
             if len(parts) >= 4:
                 flags = parts[5].strip() if len(parts) >= 6 else ""
                 # Extract RM-relevant flags from NFsim flags
                 rm_flags = []
-                if '-bscb' in flags:
-                    rm_flags.append('-bscb')
+                if "-bscb" in flags:
+                    rm_flags.append("-bscb")
                 params[parts[0]] = (parts[2], parts[3], rm_flags)
     return params
 
@@ -170,8 +193,8 @@ def load_nfsim_wall_times():
         return times
     with open(SUMMARY) as f:
         for line in f:
-            parts = line.strip().split('\t')
-            if parts[0].startswith('#') or parts[0] == 'model':
+            parts = line.strip().split("\t")
+            if parts[0].startswith("#") or parts[0] == "model":
                 continue
             if len(parts) >= 8:
                 times[parts[0]] = float(parts[6])  # wall_mean_s
@@ -185,9 +208,9 @@ def load_timeouts():
     with open(TIMEOUT_FILE) as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith('#') or line.startswith('model'):
+            if not line or line.startswith("#") or line.startswith("model"):
                 continue
-            parts = line.split('\t')
+            parts = line.split("\t")
             if len(parts) >= 2:
                 timeouts[parts[0]] = int(parts[1])
     return timeouts
@@ -196,10 +219,10 @@ def load_timeouts():
 def read_tsv(path):
     with open(path) as f:
         lines = [l.strip() for l in f if l.strip()]
-    headers = lines[0].split('\t')
+    headers = lines[0].split("\t")
     rows = []
     for line in lines[1:]:
-        rows.append([float(v) for v in line.split('\t')])
+        rows.append([float(v) for v in line.split("\t")])
     return headers, rows
 
 
@@ -221,16 +244,16 @@ def load_noise_floor():
     with open(NOISE_FLOOR_FILE) as f:
         header = None
         for line in f:
-            line = line.rstrip('\n')
-            if not line or line.startswith('#'):
+            line = line.rstrip("\n")
+            if not line or line.startswith("#"):
                 continue
-            parts = line.split('\t')
+            parts = line.split("\t")
             if header is None:
                 header = parts
                 continue
-            row = dict(zip(header, parts))
-            if 'model' in row:
-                nf[row['model']] = row
+            row = dict(zip(header, parts, strict=False))
+            if "model" in row:
+                nf[row["model"]] = row
     return nf
 
 
@@ -268,10 +291,10 @@ def load_tint(model):
     with open(path) as f:
         header = None
         for line in f:
-            line = line.rstrip('\n')
-            if not line or line.startswith('#'):
+            line = line.rstrip("\n")
+            if not line or line.startswith("#"):
                 continue
-            parts = line.split('\t')
+            parts = line.split("\t")
             if header is None:
                 header = parts
                 continue
@@ -293,7 +316,7 @@ def t_model(nf_row, n_reps):
     """
     if nf_row is None:
         return VERDICT_TZ_DEFAULT
-    p99 = nf_stat(nf_row, 'tz_p99', n_reps)
+    p99 = nf_stat(nf_row, "tz_p99", n_reps)
     if p99 is None:
         return VERDICT_TZ_DEFAULT
     return max(VERDICT_TZ_FLOOR, VERDICT_TZ_MARGIN * p99)
@@ -308,52 +331,66 @@ def adaptive_reps(nf_row, base_reps):
     """
     if nf_row is None:
         return base_reps
-    p99_n10 = nf_stat(nf_row, 'tz_p99', 10)
+    p99_n10 = nf_stat(nf_row, "tz_p99", 10)
     if p99_n10 is None:
         return base_reps
     target = VERDICT_TZ_FLOOR / VERDICT_TZ_MARGIN  # tz_p99 must be <= this
     if p99_n10 <= target:
         return base_reps
     import math
+
     n = math.ceil(10 * (p99_n10 / target) ** 2)
     return max(base_reps, min(n, ADAPTIVE_MAX_REPS))
 
 
 def parse_gdat(text):
-    lines = [l.strip() for l in text.strip().split('\n') if l.strip()]
-    headers = lines[0].lstrip('#').strip().split('\t')
+    lines = [l.strip() for l in text.strip().split("\n") if l.strip()]
+    headers = lines[0].lstrip("#").strip().split("\t")
     rows = []
     for line in lines[1:]:
-        rows.append([float(v) for v in line.split('\t')])
+        rows.append([float(v) for v in line.split("\t")])
     return headers, rows
 
 
 def parse_timing(stderr_text):
     """Extract timing info from RM stderr output."""
     info = {
-        'events': 0, 'null': 0, 'total_s': 0,
-        'select_pct': 0, 'fire_pct': 0, 'obs_pct': 0, 'update_pct': 0,
+        "events": 0,
+        "null": 0,
+        "total_s": 0,
+        "select_pct": 0,
+        "fire_pct": 0,
+        "obs_pct": 0,
+        "update_pct": 0,
     }
-    m = re.search(r'events=(\d+)', stderr_text)
-    if m: info['events'] = int(m.group(1))
-    m = re.search(r'null=(\d+)', stderr_text)
-    if m: info['null'] = int(m.group(1))
-    m = re.search(r'total=([\d.]+)s', stderr_text)
-    if m: info['total_s'] = float(m.group(1))
-    m = re.search(r'select_reactants:\s*[\d.]+s\s*\(([\d.]+)%\)', stderr_text)
-    if m: info['select_pct'] = float(m.group(1))
-    m = re.search(r'fire_rule:\s*[\d.]+s\s*\(([\d.]+)%\)', stderr_text)
-    if m: info['fire_pct'] = float(m.group(1))
-    m = re.search(r'observables:\s*[\d.]+s\s*\(([\d.]+)%\)', stderr_text)
-    if m: info['obs_pct'] = float(m.group(1))
-    m = re.search(r'incr_update:\s*[\d.]+s\s*\(([\d.]+)%\)', stderr_text)
-    if m: info['update_pct'] = float(m.group(1))
+    m = re.search(r"events=(\d+)", stderr_text)
+    if m:
+        info["events"] = int(m.group(1))
+    m = re.search(r"null=(\d+)", stderr_text)
+    if m:
+        info["null"] = int(m.group(1))
+    m = re.search(r"total=([\d.]+)s", stderr_text)
+    if m:
+        info["total_s"] = float(m.group(1))
+    m = re.search(r"select_reactants:\s*[\d.]+s\s*\(([\d.]+)%\)", stderr_text)
+    if m:
+        info["select_pct"] = float(m.group(1))
+    m = re.search(r"fire_rule:\s*[\d.]+s\s*\(([\d.]+)%\)", stderr_text)
+    if m:
+        info["fire_pct"] = float(m.group(1))
+    m = re.search(r"observables:\s*[\d.]+s\s*\(([\d.]+)%\)", stderr_text)
+    if m:
+        info["obs_pct"] = float(m.group(1))
+    m = re.search(r"incr_update:\s*[\d.]+s\s*\(([\d.]+)%\)", stderr_text)
+    if m:
+        info["update_pct"] = float(m.group(1))
     return info
 
 
 # ---------------------------------------------------------------------------
 # Run model
 # ---------------------------------------------------------------------------
+
 
 def run_one_rep(xml, t_end, n_steps, seed, timeout=None, rm_flags=None):
     """Run a single RM rep. Returns (headers, rows, stderr_text, wall_s) or None.
@@ -368,27 +405,30 @@ def run_one_rep(xml, t_end, n_steps, seed, timeout=None, rm_flags=None):
         cmd = [RM_DRIVER, xml, t_end, n_steps, str(seed)]
         if rm_flags:
             cmd.extend(rm_flags)
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         wall_s = time.monotonic() - t0
         if result.returncode != 0 or not result.stdout.strip():
-            print(f"  [run_one_rep] {os.path.basename(xml)} seed={seed} rc={result.returncode}",
-                  file=sys.stderr)
+            print(
+                f"  [run_one_rep] {os.path.basename(xml)} seed={seed} rc={result.returncode}",
+                file=sys.stderr,
+            )
             return None
         headers, rows = parse_gdat(result.stdout)
         return (headers, rows, result.stderr, wall_s)
     except subprocess.TimeoutExpired:
         return None
     except (FileNotFoundError, ValueError) as e:
-        print(f"  [run_one_rep] {os.path.basename(xml)} seed={seed} {type(e).__name__}: {e}",
-              file=sys.stderr)
+        print(
+            f"  [run_one_rep] {os.path.basename(xml)} seed={seed} {type(e).__name__}: {e}",
+            file=sys.stderr,
+        )
         return None
 
 
 # ---------------------------------------------------------------------------
 # Correctness analysis
 # ---------------------------------------------------------------------------
+
 
 def analyze_correctness(model, all_reps, n_reps, nf_row=None):
     """Compare RM ensemble (n_reps trajectories) against NFsim reference.
@@ -410,7 +450,7 @@ def analyze_correctness(model, all_reps, n_reps, nf_row=None):
     std_path = os.path.join(ENS_DIR, f"{model}.std.tsv")
 
     if not os.path.exists(mean_path) or not os.path.exists(std_path):
-        return {'verdict': 'NO_REF'}
+        return {"verdict": "NO_REF"}
 
     nf_headers, nf_mean = read_tsv(mean_path)
     _, nf_std = read_tsv(std_path)
@@ -509,7 +549,7 @@ def analyze_correctness(model, all_reps, n_reps, nf_row=None):
                     worst_obs_var = f"{obs_name} ({ratio:.2f})"
 
     if n_compared == 0:
-        return {'verdict': 'NO_MATCH'}
+        return {"verdict": "NO_MATCH"}
 
     # -------- Secondary metric: time-integrated z (tz_max) ------------------
     # Compute each RM rep's trapezoidal integral per observable, then z-score
@@ -579,19 +619,21 @@ def analyze_correctness(model, all_reps, n_reps, nf_row=None):
                     # trapezoidal integral
                     I = 0.0
                     for i in range(len(tp_sorted) - 1):
-                        dt = tp_sorted[i+1] - tp_sorted[i]
-                        I += 0.5 * (vals[i] + vals[i+1]) * dt
+                        dt = tp_sorted[i + 1] - tp_sorted[i]
+                        I += 0.5 * (vals[i] + vals[i + 1]) * dt
                     per_rep_I[obs_name].append(I)
 
             # Warn if any observable lost reps.
             any_drops = {o: n for o, n in dropped_per_obs.items() if n > 0}
             if any_drops:
-                summary = ", ".join(f"{o}:{n}" for o, n in sorted(
-                    any_drops.items(), key=lambda kv: -kv[1])[:5])
-                print(f"  [drop] {len(any_drops)} obs lost reps (time-grid mismatch): {summary}",
-                      file=sys.stderr)
+                summary = ", ".join(
+                    f"{o}:{n}" for o, n in sorted(any_drops.items(), key=lambda kv: -kv[1])[:5]
+                )
+                print(
+                    f"  [drop] {len(any_drops)} obs lost reps (time-grid mismatch): {summary}",
+                    file=sys.stderr,
+                )
 
-            n_rm = n_reps
             for obs_name, I_list in per_rep_I.items():
                 if len(I_list) < 1:
                     continue
@@ -609,10 +651,10 @@ def analyze_correctness(model, all_reps, n_reps, nf_row=None):
                 # Degenerate cases (both stds zero)
                 if nf_std_I < ZERO_EPS and rm_std_I < ZERO_EPS:
                     if dm < tol:
-                        continue                  # trivially equal
+                        continue  # trivially equal
                     # Sustained mismatch between two zero-variance series:
                     # conservation violation or degenerate observable. Always fail.
-                    tz_max = float('inf')
+                    tz_max = float("inf")
                     worst_tz_obs = obs_name + "*"
                     break
                 if nf_std_I < ZERO_EPS:
@@ -638,25 +680,27 @@ def analyze_correctness(model, all_reps, n_reps, nf_row=None):
         # threshold.
         verdict = "FAIL" if screen_fail else "PASS"
         weak = True
-        print(f"  [weak-verdict] {model}: no tint overlap ({tz_reason}); "
-              f"falling back to screen-only (screen={max_z_mean:.2f})",
-              file=sys.stderr)
+        print(
+            f"  [weak-verdict] {model}: no tint overlap ({tz_reason}); "
+            f"falling back to screen-only (screen={max_z_mean:.2f})",
+            file=sys.stderr,
+        )
     elif math.isinf(tz_max):
         verdict = "FAIL"
     else:
         verdict = "FAIL" if tz_max >= T else "PASS"
 
     return {
-        'screen_z':       max_z_mean,
-        'worst_screen':   worst_obs_mean,
-        'tz_max':         tz_max,
-        'worst_tz':       worst_tz_obs,
-        'T_model':        T,
-        'std_ratio':      1.0 + max_std_ratio,
-        'worst_obs_var':  worst_obs_var,
-        'verdict':        verdict,
-        'weak':           weak,
-        'n_compared':     n_compared,
+        "screen_z": max_z_mean,
+        "worst_screen": worst_obs_mean,
+        "tz_max": tz_max,
+        "worst_tz": worst_tz_obs,
+        "T_model": T,
+        "std_ratio": 1.0 + max_std_ratio,
+        "worst_obs_var": worst_obs_var,
+        "verdict": verdict,
+        "weak": weak,
+        "n_compared": n_compared,
     }
 
 
@@ -695,8 +739,12 @@ MD_HEADER = """\
 
 MD_ROW = "| {model} | {nfsim_s} | {rm_s} | {events} | {evs} | {sel} | {fire} | {obs} | {upd} | {screen} | {tz_max} | {T} | {std_ratio} | {worst_obs} | {verdict} |\n"
 
-MD_TIMEOUT_ROW = "| {model} | {nfsim_s} | TIMEOUT | — | — | — | — | — | — | — | — | — | — | — | TIMEOUT |\n"
-MD_ERROR_ROW = "| {model} | {nfsim_s} | ERROR | — | — | — | — | — | — | — | — | — | — | — | ERROR |\n"
+MD_TIMEOUT_ROW = (
+    "| {model} | {nfsim_s} | TIMEOUT | — | — | — | — | — | — | — | — | — | — | — | TIMEOUT |\n"
+)
+MD_ERROR_ROW = (
+    "| {model} | {nfsim_s} | ERROR | — | — | — | — | — | — | — | — | — | — | — | ERROR |\n"
+)
 
 
 def fmt(val, fmt_str=".1f"):
@@ -709,44 +757,47 @@ def fmt(val, fmt_str=".1f"):
 # Main
 # ---------------------------------------------------------------------------
 
+
 def main():
     # Parse args
     args = sys.argv[1:]
     output_path = os.path.join(REPO_ROOT, "build", "benchmark_report.md")
 
     tier = None
-    if '--tier' in args:
-        idx = args.index('--tier')
+    if "--tier" in args:
+        idx = args.index("--tier")
         tier = args[idx + 1]
         if tier not in TIER_MODELS:
-            print(f"ERROR: --tier must be one of {list(TIER_MODELS.keys())}",
-                  file=sys.stderr)
+            print(f"ERROR: --tier must be one of {list(TIER_MODELS.keys())}", file=sys.stderr)
             sys.exit(2)
-        args = args[:idx] + args[idx + 2:]
+        args = args[:idx] + args[idx + 2 :]
 
     # Reps: explicit --reps overrides tier default; tier default overrides
     # global default.
     n_reps = TIER_DEFAULT_REPS.get(tier, DEFAULT_REPS) if tier else DEFAULT_REPS
-    if '--reps' in args:
-        idx = args.index('--reps')
+    if "--reps" in args:
+        idx = args.index("--reps")
         n_reps = int(args[idx + 1])
-        args = args[:idx] + args[idx + 2:]
-    use_adaptive = '--adaptive' in args
+        args = args[:idx] + args[idx + 2 :]
+    use_adaptive = "--adaptive" in args
     if use_adaptive:
-        args.remove('--adaptive')
-    if '--output' in args:
-        idx = args.index('--output')
+        args.remove("--adaptive")
+    if "--output" in args:
+        idx = args.index("--output")
         output_path = args[idx + 1]
-        args = args[:idx] + args[idx + 2:]
+        args = args[:idx] + args[idx + 2 :]
 
     sim_params = load_sim_params()
     nfsim_times = load_nfsim_wall_times()
     model_timeouts = load_timeouts()
     noise_floor = load_noise_floor()
     if not noise_floor:
-        print("WARN: no noise_floor.tsv found — verdict column will fall back "
-              "to a flat T=5 threshold. Run dev/compute_noise_floor.py to "
-              "regenerate per-model thresholds.", file=sys.stderr)
+        print(
+            "WARN: no noise_floor.tsv found — verdict column will fall back "
+            "to a flat T=5 threshold. Run dev/compute_noise_floor.py to "
+            "regenerate per-model thresholds.",
+            file=sys.stderr,
+        )
 
     # Model list precedence: positional args > tier > all.
     if args:
@@ -755,8 +806,10 @@ def main():
         models = [m for m in TIER_MODELS[tier] if m in sim_params]
         missing = [m for m in TIER_MODELS[tier] if m not in sim_params]
         if missing:
-            print(f"WARN: tier '{tier}' lists models not in sim_params.tsv: "
-                  f"{missing}", file=sys.stderr)
+            print(
+                f"WARN: tier '{tier}' lists models not in sim_params.tsv: {missing}",
+                file=sys.stderr,
+            )
     else:
         models = sorted(sim_params.keys())
 
@@ -774,8 +827,7 @@ def main():
     # Get git commit
     try:
         commit = subprocess.check_output(
-            ['git', 'log', '--oneline', '-1'], cwd=REPO_ROOT,
-            text=True, stderr=subprocess.DEVNULL
+            ["git", "log", "--oneline", "-1"], cwd=REPO_ROOT, text=True, stderr=subprocess.DEVNULL
         ).strip()
     except Exception:
         commit = "unknown"
@@ -787,6 +839,7 @@ def main():
 
     # Write markdown header
     from datetime import date
+
     header = MD_HEADER.format(
         date=date.today().isoformat(),
         commit=commit,
@@ -795,12 +848,14 @@ def main():
         tz_floor=VERDICT_TZ_FLOOR,
         tz_margin=VERDICT_TZ_MARGIN,
     )
-    with open(output_path, 'w') as f:
+    with open(output_path, "w") as f:
         f.write(header)
 
     # Console header
-    print(f"{'model':<45s} {'nfsim':>7s} {'rm':>7s} {'ev/s':>8s} "
-          f"{'screen':>7s} {'tz':>6s} {'T':>5s} {'verdict':<8s}")
+    print(
+        f"{'model':<45s} {'nfsim':>7s} {'rm':>7s} {'ev/s':>8s} "
+        f"{'screen':>7s} {'tz':>6s} {'T':>5s} {'verdict':<8s}"
+    )
     print("-" * 105)
 
     n_pass = n_fail = n_skip = n_timeout = 0
@@ -842,8 +897,9 @@ def main():
         timed_out = False
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {
-                pool.submit(run_one_rep, xml, t_end, n_steps, 42 + i,
-                            timeout=timeout, rm_flags=rm_flags): i
+                pool.submit(
+                    run_one_rep, xml, t_end, n_steps, 42 + i, timeout=timeout, rm_flags=rm_flags
+                ): i
                 for i in range(model_reps)
             }
             for fut in as_completed(futures):
@@ -861,31 +917,32 @@ def main():
         if timed_out or len(all_reps) == 0:
             n_timeout += 1
             nf_str = fmt(nfsim_s)
-            with open(output_path, 'a') as f:
+            with open(output_path, "a") as f:
                 f.write(MD_TIMEOUT_ROW.format(model=model, nfsim_s=nf_str))
-            print(f"{model:<45s} {fmt(nfsim_s):>7s} {'T/O':>7s} {'':>8s} {'':>7s} {'':>6s} {'TIMEOUT':<8s}")
+            print(
+                f"{model:<45s} {fmt(nfsim_s):>7s} {'T/O':>7s} {'':>8s} {'':>7s} {'':>6s} {'TIMEOUT':<8s}"
+            )
             continue
 
         # Compute results
         rm_s = statistics.mean(wall_times)
-        events = timing_info['events']
+        events = timing_info["events"]
         evs = int(events / rm_s) if rm_s > 0 else 0
 
         # Correctness
-        corr = analyze_correctness(model, all_reps, model_reps,
-                                   nf_row=noise_floor.get(model))
+        corr = analyze_correctness(model, all_reps, model_reps, nf_row=noise_floor.get(model))
 
-        verdict   = corr.get('verdict', 'ERROR')
-        weak      = corr.get('weak', False)
-        screen_z  = corr.get('screen_z', None)
-        tz_val    = corr.get('tz_max', None)
-        T_val     = corr.get('T_model', None)
-        std_ratio = corr.get('std_ratio', None)
-        worst_tz  = corr.get('worst_tz') or corr.get('worst_screen') or ''
+        verdict = corr.get("verdict", "ERROR")
+        weak = corr.get("weak", False)
+        screen_z = corr.get("screen_z", None)
+        tz_val = corr.get("tz_max", None)
+        T_val = corr.get("T_model", None)
+        std_ratio = corr.get("std_ratio", None)
+        worst_tz = corr.get("worst_tz") or corr.get("worst_screen") or ""
 
-        if verdict == 'PASS':
+        if verdict == "PASS":
             n_pass += 1
-        elif verdict == 'FAIL':
+        elif verdict == "FAIL":
             n_fail += 1
         else:
             n_skip += 1
@@ -908,10 +965,10 @@ def main():
             rm_s=fmt(rm_s),
             events=f"{events:,}" if events else "—",
             evs=f"{evs:,}" if evs else "—",
-            sel=fmt(timing_info['select_pct']),
-            fire=fmt(timing_info['fire_pct']),
-            obs=fmt(timing_info['obs_pct']),
-            upd=fmt(timing_info['update_pct']),
+            sel=fmt(timing_info["select_pct"]),
+            fire=fmt(timing_info["fire_pct"]),
+            obs=fmt(timing_info["obs_pct"]),
+            upd=fmt(timing_info["update_pct"]),
             screen=fmt(screen_z, ".2f") if screen_z is not None else "—",
             tz_max=fmt_tz(tz_val),
             T=fmt(T_val, ".2f") if T_val is not None else "—",
@@ -919,14 +976,16 @@ def main():
             worst_obs=worst_tz[:20] if worst_tz else "—",
             verdict=verdict_display,
         )
-        with open(output_path, 'a') as f:
+        with open(output_path, "a") as f:
             f.write(row)
 
         # Console output
         reps_str = f"{model_reps}r" if model_reps != n_reps else ""
-        print(f"{model:<45s} {fmt(nfsim_s):>7s} {fmt(rm_s):>7s} "
-              f"{evs:>8,d} {fmt(screen_z, '.2f'):>7s} "
-              f"{fmt_tz(tz_val):>6s} {fmt(T_val, '.2f'):>5s} {verdict_display:<8s} {reps_str}")
+        print(
+            f"{model:<45s} {fmt(nfsim_s):>7s} {fmt(rm_s):>7s} "
+            f"{evs:>8,d} {fmt(screen_z, '.2f'):>7s} "
+            f"{fmt_tz(tz_val):>6s} {fmt(T_val, '.2f'):>5s} {verdict_display:<8s} {reps_str}"
+        )
         sys.stdout.flush()
 
     # Write summary footer
@@ -941,7 +1000,7 @@ def main():
 | SKIP | {n_skip} |
 | **Total** | **{n_pass + n_fail + n_timeout + n_skip}** |
 """
-    with open(output_path, 'a') as f:
+    with open(output_path, "a") as f:
         f.write(footer)
 
     print("-" * 105)

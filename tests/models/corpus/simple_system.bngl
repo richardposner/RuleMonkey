@@ -83,7 +83,7 @@ begin reaction rules
    X(y,p~0) + Y(x) -> X(y!1,p~0).Y(x!1)   kon
    X(y!1,p~0).Y(x!1) -> X(y,p~0) + Y(x)   koff
    X(y!1,p~0).Y(x!1) -> X(y,p~1) + Y(x)   kcat
-   
+
    X(p~1) -> X(p~0)                       dephos
 
 end reaction rules
@@ -100,7 +100,7 @@ end reaction rules
 # multiple times here, and distinguish between all the runs with different "suffix"s.
 # Note that this step will also automatically create an NFsim readable XML model
 # specification file.
- 
+
 #simulate_nf({suffix=>"nf",t_end=>100,n_steps=>50});
 
 
@@ -142,7 +142,7 @@ end reaction rules
 # the suffix parameter is used to name the output of the simulations.  Note also that
 # between BioNetGen ODE and SSA simulation commands, we have to reset the molecule concentrations.
 # this is needed because BioNetGen allows you to restart a simulation from the end of
-# a previous simulation.  While this does not apply to NFsim, you can still change parameters 
+# a previous simulation.  While this does not apply to NFsim, you can still change parameters
 # mid-simulation by using an RNF script (see example.rnf file in the same directory as this
 # model).
 #

@@ -7,9 +7,9 @@ Lat_tot 	2000
 Grb_tot 	75000
 Sos_tot 	37500
 kglp 		4.86568e-05
-kglm 		0.31 
+kglm 		0.31
 kxglp 		1.08975e-03
-kxglm 		kglm 
+kxglm 		kglm
 kgsp 		4.37911e-06
 kgsm 		0.034412
 sigma 		0.5

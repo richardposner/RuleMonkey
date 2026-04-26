@@ -31,22 +31,22 @@ begin reaction rules
     # Movement 0 -> 1 (Uphill)
     # P(x!1).F(x!1,next!2,val~0).F(x!2,val~1) -> P(x!2).F(...)
     # Rate enhanced by Bias?
-    
+
     # Generic Rule is hard without wildcards for neighbors.
     # Specific transitions:
-    
+
     # 0 -> 1
     Particle(f!1).Field(f!1,val~0,next!2).Field(prev!2,val~1,f) -> \
     Particle(f!3).Field(f,val~0,next!2).Field(prev!2,val~1,f!3) k_diff * (1+Bias)
-    
+
     # 1 -> 0 (Downhill)
     Particle(f!1).Field(f!1,val~1,prev!2).Field(next!2,val~0,f) -> \
     Particle(f!3).Field(f,val~1,prev!2).Field(next!2,val~0,f!3) k_diff * (1-Bias)
-    
+
     # 1 -> 2 (Uphill)
     Particle(f!1).Field(f!1,val~1,next!2).Field(prev!2,val~2,f) -> \
     Particle(f!3).Field(f,val~1,next!2).Field(prev!2,val~2,f!3) k_diff * (1+Bias)
-    
+
 end reaction rules
 
 end model

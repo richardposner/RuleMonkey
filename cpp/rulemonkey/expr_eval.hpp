@@ -33,4 +33,4 @@ double evaluate(const AstNode& node, const VariableMap& vars);
 // Collect all variable names referenced in the AST.
 void collect_variables(const AstNode& node, std::vector<std::string>& out);
 
-}  // namespace rulemonkey::expr
+} // namespace rulemonkey::expr

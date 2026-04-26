@@ -29,7 +29,7 @@ begin seed species
 end seed species
 
 begin reaction rules
-  
+
    ###  SITE 1 ###
    E(s) + S(p1~U) <-> E(s!1).S(p1~U!1) kOnE, kOffE
    E(s!1).S(p1~U!1) -> E(s) + S(p1~P) kCatE

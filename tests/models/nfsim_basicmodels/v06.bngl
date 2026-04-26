@@ -8,7 +8,7 @@ begin species
 end species
 begin reaction rules
 	B(c) + Cross(b)  <->  B(c!1).Cross(b!1)    5, 5
-	
+
 	B(p~U,c!1).Cross(b!1,b!2).B(p~U,c!2)  ->  B(p~U,c!1).Cross(b!1,b!2).B(p~P,c!2)    10
 	B(p~P,c!1).Cross(b!1,b!2).B(p~U,c!2)  ->  B(p~P,c!1).Cross(b!1,b!2).B(p~P,c!2)    1
 
@@ -28,4 +28,3 @@ resetConcentrations()
 simulate_ssa({suffix=>"ssa",t_end=>20,n_steps=>100})
 resetConcentrations()
 writeXML()
-

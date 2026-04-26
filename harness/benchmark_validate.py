@@ -16,7 +16,10 @@ Usage:
   python3 harness/benchmark_validate.py --reps 10 tcr    # 10 reps, subset
 """
 
-import subprocess, sys, os, concurrent.futures
+import concurrent.futures
+import os
+import subprocess
+import sys
 
 DEFAULT_TIMEOUT = 45
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -42,9 +45,9 @@ def load_timeouts():
     with open(TIMEOUT_FILE) as f:
         for line in f:
             line = line.strip()
-            if not line or line.startswith('#') or line.startswith('model'):
+            if not line or line.startswith("#") or line.startswith("model"):
                 continue
-            parts = line.split('\t')
+            parts = line.split("\t")
             if len(parts) >= 2:
                 timeouts[parts[0]] = int(parts[1])
     return timeouts
@@ -54,20 +57,20 @@ def read_tsv(path):
     """Read a TSV file, return (headers, rows) where rows are list of floats."""
     with open(path) as f:
         lines = [l.strip() for l in f if l.strip()]
-    headers = lines[0].split('\t')
+    headers = lines[0].split("\t")
     rows = []
     for line in lines[1:]:
-        rows.append([float(v) for v in line.split('\t')])
+        rows.append([float(v) for v in line.split("\t")])
     return headers, rows
 
 
 def parse_gdat(text):
     """Parse RM .gdat output (# header line, tab-separated)."""
-    lines = [l.strip() for l in text.strip().split('\n') if l.strip()]
-    headers = lines[0].lstrip('#').strip().split('\t')
+    lines = [l.strip() for l in text.strip().split("\n") if l.strip()]
+    headers = lines[0].lstrip("#").strip().split("\t")
     rows = []
     for line in lines[1:]:
-        rows.append([float(v) for v in line.split('\t')])
+        rows.append([float(v) for v in line.split("\t")])
     return headers, rows
 
 
@@ -75,8 +78,8 @@ def load_sim_params():
     params = {}
     with open(PARAMS) as f:
         for line in f:
-            parts = line.strip().split('\t')
-            if parts[0] == 'model':
+            parts = line.strip().split("\t")
+            if parts[0] == "model":
                 continue
             params[parts[0]] = (parts[2], parts[3])  # t_end, n_steps
     return params
@@ -87,7 +90,9 @@ def run_one_rep(xml, t_end, n_steps, seed, timeout=DEFAULT_TIMEOUT):
     try:
         result = subprocess.run(
             [RM_DRIVER, xml, t_end, n_steps, str(seed)],
-            capture_output=True, text=True, timeout=timeout
+            capture_output=True,
+            text=True,
+            timeout=timeout,
         )
         if result.returncode != 0 or not result.stdout.strip():
             return None
@@ -125,6 +130,7 @@ def validate_model(model, t_end, n_steps, n_reps=1, timeout=DEFAULT_TIMEOUT):
         # Parallelize only if the model is fast enough that contention
         # won't push reps past the timeout (heuristic: < 5s solo)
         import time
+
         t0 = time.monotonic()
         probe = run_one_rep(xml, t_end, n_steps, seeds[1], timeout)
         solo_time = time.monotonic() - t0
@@ -137,9 +143,12 @@ def validate_model(model, t_end, n_steps, n_reps=1, timeout=DEFAULT_TIMEOUT):
             use_parallel = solo_time < timeout / 4
             if use_parallel:
                 with concurrent.futures.ThreadPoolExecutor(
-                        max_workers=min(len(remaining), 8)) as ex:
-                    futures = {ex.submit(run_one_rep, xml, t_end, n_steps, s, timeout): s
-                               for s in remaining}
+                    max_workers=min(len(remaining), 8)
+                ) as ex:
+                    futures = {
+                        ex.submit(run_one_rep, xml, t_end, n_steps, s, timeout): s
+                        for s in remaining
+                    }
                     for fut in concurrent.futures.as_completed(futures):
                         parsed = fut.result()
                         if parsed is None:
@@ -221,16 +230,18 @@ def main():
     # Parse --reps N
     args = sys.argv[1:]
     n_reps = 1
-    if '--reps' in args:
-        idx = args.index('--reps')
+    if "--reps" in args:
+        idx = args.index("--reps")
         n_reps = int(args[idx + 1])
-        args = args[:idx] + args[idx + 2:]
+        args = args[:idx] + args[idx + 2 :]
 
     models = args if args else sorted(sim_params.keys())
     model_timeouts = load_timeouts()
 
     reps_label = f" ({n_reps} reps)" if n_reps > 1 else ""
-    print(f"{'model':<50s} {'max_z':>8s} {'worst_obs':<25s} {'verdict':<8s} {'n_obs':>5s}{reps_label}")
+    print(
+        f"{'model':<50s} {'max_z':>8s} {'worst_obs':<25s} {'verdict':<8s} {'n_obs':>5s}{reps_label}"
+    )
     print("-" * 100)
 
     n_pass = n_fail = n_skip = 0

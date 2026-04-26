@@ -33,7 +33,7 @@ begin reaction rules
     # Sites a, b, c are equivalent? Let's assume they are.
     # To reduce rules, we could use symmetric sites if BNGL supported M(s~1~2~3).
     # But explicit sites a,b,c is standard.
-    
+
     # Bind a-a
     M(a) + M(a) <-> M(a!1).M(a!1) k_bind, k_break
     # Bind a-b
@@ -46,7 +46,7 @@ begin reaction rules
     M(b) + M(c) <-> M(b!1).M(c!1) k_bind, k_break
     # Bind c-c
     M(c) + M(c) <-> M(c!1).M(c!1) k_bind, k_break
-    
+
     # Only intermolecular binding?
     # Intramolecular (cyclization) is also possible with these rules unless restricted.
 end reaction rules

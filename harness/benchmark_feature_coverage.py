@@ -26,8 +26,17 @@ Usage:
   python3 dev/skills/benchmark_feature_coverage.py ft_bond_wildcards combo_strict_product_plus
 """
 
-import subprocess, sys, os, time, re, math, statistics, argparse, shutil, glob
+import argparse
+import glob
+import math
+import os
+import re
+import shutil
+import statistics
+import subprocess
+import sys
 import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -57,6 +66,7 @@ ZERO_EPS = 1e-9
 # ---------------------------------------------------------------------------
 # Model discovery and metadata
 # ---------------------------------------------------------------------------
+
 
 def discover_models():
     """Find all .bngl files in the feature_coverage directory."""
@@ -130,27 +140,27 @@ def parse_invariants(bngl_path):
       # invariant: conserved X_total = 100         (matches explicit value)
       # invariant: balance R_bound = L_bound       (two observables stay equal)
     """
-    inv = {'nonneg': True, 'conserved': [], 'balance': []}
+    inv = {"nonneg": True, "conserved": [], "balance": []}
     with open(bngl_path) as f:
         for line in f:
-            m = re.match(r'#\s*invariant\s*:\s*(.+?)\s*$', line.strip())
+            m = re.match(r"#\s*invariant\s*:\s*(.+?)\s*$", line.strip())
             if not m:
                 continue
             spec = m.group(1).strip()
-            if spec == 'nonneg':
-                inv['nonneg'] = True
-            elif spec.startswith('conserved '):
-                rest = spec[len('conserved '):].strip()
-                if '=' in rest:
-                    name, val = rest.split('=', 1)
-                    inv['conserved'].append((name.strip(), float(val.strip())))
+            if spec == "nonneg":
+                inv["nonneg"] = True
+            elif spec.startswith("conserved "):
+                rest = spec[len("conserved ") :].strip()
+                if "=" in rest:
+                    name, val = rest.split("=", 1)
+                    inv["conserved"].append((name.strip(), float(val.strip())))
                 else:
-                    inv['conserved'].append((rest, None))
-            elif spec.startswith('balance '):
-                rest = spec[len('balance '):].strip()
-                if '=' in rest:
-                    a, b = rest.split('=', 1)
-                    inv['balance'].append((a.strip(), b.strip()))
+                    inv["conserved"].append((rest, None))
+            elif spec.startswith("balance "):
+                rest = spec[len("balance ") :].strip()
+                if "=" in rest:
+                    a, b = rest.split("=", 1)
+                    inv["balance"].append((a.strip(), b.strip()))
     return inv
 
 
@@ -166,19 +176,20 @@ def check_invariants(rm_reps, inv):
         if not rows:
             continue
 
-        if inv.get('nonneg'):
+        if inv.get("nonneg"):
             done = False
             for row in rows:
                 for ci in range(1, len(row)):
                     if row[ci] < -ZERO_EPS:
                         violations.append(
-                            f"rep{rep_idx}: {headers[ci]}={row[ci]:.3g} < 0 at t={row[0]:.3g}")
+                            f"rep{rep_idx}: {headers[ci]}={row[ci]:.3g} < 0 at t={row[0]:.3g}"
+                        )
                         done = True
                         break
                 if done:
                     break
 
-        for name, expected in inv.get('conserved', []):
+        for name, expected in inv.get("conserved", []):
             if name not in col_idx:
                 violations.append(f"conserved obs '{name}' not found in RM output")
                 continue
@@ -189,10 +200,11 @@ def check_invariants(rm_reps, inv):
                 if abs(row[ci] - init) > tol:
                     violations.append(
                         f"rep{rep_idx}: {name}={row[ci]:.3g} != expected {init:.3g} "
-                        f"(tol {tol:.3g}) at t={row[0]:.3g}")
+                        f"(tol {tol:.3g}) at t={row[0]:.3g}"
+                    )
                     break
 
-        for a, b in inv.get('balance', []):
+        for a, b in inv.get("balance", []):
             if a not in col_idx or b not in col_idx:
                 violations.append(f"balance obs '{a}' or '{b}' not found in RM output")
                 continue
@@ -203,7 +215,8 @@ def check_invariants(rm_reps, inv):
                 if abs(va - vb) > tol:
                     violations.append(
                         f"rep{rep_idx}: {a}={va:.3g} != {b}={vb:.3g} "
-                        f"(tol {tol:.3g}) at t={row[0]:.3g}")
+                        f"(tol {tol:.3g}) at t={row[0]:.3g}"
+                    )
                     break
 
     return violations
@@ -215,13 +228,13 @@ def parse_model_features(bngl_path):
     with open(bngl_path) as f:
         for line in f:
             line = line.strip()
-            if not line.startswith('#'):
+            if not line.startswith("#"):
                 break
-            if line.startswith('# Feature'):
+            if line.startswith("# Feature"):
                 features.append(line[2:].strip())
-            elif line.startswith('# Tests:'):
+            elif line.startswith("# Tests:"):
                 features.append(line[2:].strip())
-            elif line.startswith('# Bug pattern:'):
+            elif line.startswith("# Bug pattern:"):
                 features.append(line[2:].strip())
     return features
 
@@ -235,10 +248,10 @@ def extract_sim_params(bngl_path):
     nfsim_flags = []
 
     # Find simulate_nf or simulate with method=>"nf"
-    for m in re.finditer(r'simulate\w*\s*\(\s*\{([^}]+)\}', text, re.DOTALL):
+    for m in re.finditer(r"simulate\w*\s*\(\s*\{([^}]+)\}", text, re.DOTALL):
         args = m.group(1)
-        t_match = re.search(r't_end\s*=>\s*([0-9.eE+\-]+)', args)
-        n_match = re.search(r'n_steps\s*=>\s*([0-9]+)', args)
+        t_match = re.search(r"t_end\s*=>\s*([0-9.eE+\-]+)", args)
+        n_match = re.search(r"n_steps\s*=>\s*([0-9]+)", args)
         if t_match:
             t_end = t_match.group(1)
         if n_match:
@@ -247,11 +260,11 @@ def extract_sim_params(bngl_path):
         p_match = re.search(r'param\s*=>\s*"([^"]*)"', args)
         if p_match:
             flags_str = p_match.group(1)
-            if '-bscb' in flags_str:
-                nfsim_flags.append('-bscb')
-            utl_match = re.search(r'-utl\s+(\d+)', flags_str)
+            if "-bscb" in flags_str:
+                nfsim_flags.append("-bscb")
+            utl_match = re.search(r"-utl\s+(\d+)", flags_str)
             if utl_match:
-                nfsim_flags.extend(['-utl', utl_match.group(1)])
+                nfsim_flags.extend(["-utl", utl_match.group(1)])
 
     return t_end or "100", n_steps or "100", nfsim_flags
 
@@ -259,6 +272,7 @@ def extract_sim_params(bngl_path):
 # ---------------------------------------------------------------------------
 # XML generation
 # ---------------------------------------------------------------------------
+
 
 def generate_xml(model):
     """Generate XML from BNGL via BNG2.pl."""
@@ -271,8 +285,7 @@ def generate_xml(model):
     with tempfile.TemporaryDirectory() as tmpdir:
         shutil.copy(bngl_path, tmpdir)
         result = subprocess.run(
-            ["perl", BNG2, f"{model}.bngl"],
-            cwd=tmpdir, capture_output=True, text=True, timeout=30
+            ["perl", BNG2, f"{model}.bngl"], cwd=tmpdir, capture_output=True, text=True, timeout=30
         )
         # Find generated XML
         xml_files = glob.glob(os.path.join(tmpdir, "*.xml"))
@@ -289,6 +302,7 @@ def generate_xml(model):
 # Reference generation
 # ---------------------------------------------------------------------------
 
+
 def generate_ode_reference(model, t_end, n_steps):
     """Generate ODE reference via BNG2.pl generate_network + simulate_ode."""
     os.makedirs(ODE_DIR, exist_ok=True)
@@ -302,22 +316,26 @@ def generate_ode_reference(model, t_end, n_steps):
 
     # Replace actions block
     text = re.sub(
-        r'begin\s+actions.*?end\s+actions',
-        f'begin actions\n'
-        f'generate_network({{overwrite=>1}})\n'
+        r"begin\s+actions.*?end\s+actions",
+        f"begin actions\n"
+        f"generate_network({{overwrite=>1}})\n"
         f'simulate({{method=>"ode",t_end=>{t_end},n_steps=>{n_steps}}})\n'
-        f'end actions',
-        text, flags=re.DOTALL
+        f"end actions",
+        text,
+        flags=re.DOTALL,
     )
 
     try:
         with tempfile.TemporaryDirectory() as tmpdir:
             tmp_bngl = os.path.join(tmpdir, f"{model}.bngl")
-            with open(tmp_bngl, 'w') as f:
+            with open(tmp_bngl, "w") as f:
                 f.write(text)
             result = subprocess.run(
                 ["perl", BNG2, f"{model}.bngl"],
-                cwd=tmpdir, capture_output=True, text=True, timeout=60
+                cwd=tmpdir,
+                capture_output=True,
+                text=True,
+                timeout=60,
             )
             # Find .gdat file
             gdat_files = glob.glob(os.path.join(tmpdir, "*.gdat"))
@@ -350,22 +368,26 @@ def generate_ssa_reference(model, t_end, n_steps, n_reps=DEFAULT_SSA_REPS):
         seed = rep + 1
         # Replace actions block with SSA
         rep_text = re.sub(
-            r'begin\s+actions.*?end\s+actions',
-            f'begin actions\n'
-            f'generate_network({{overwrite=>1}})\n'
+            r"begin\s+actions.*?end\s+actions",
+            f"begin actions\n"
+            f"generate_network({{overwrite=>1}})\n"
             f'simulate({{method=>"ssa",t_end=>{t_end},n_steps=>{n_steps},seed=>{seed}}})\n'
-            f'end actions',
-            text, flags=re.DOTALL
+            f"end actions",
+            text,
+            flags=re.DOTALL,
         )
 
         try:
             with tempfile.TemporaryDirectory() as tmpdir:
                 tmp_bngl = os.path.join(tmpdir, f"{model}.bngl")
-                with open(tmp_bngl, 'w') as f:
+                with open(tmp_bngl, "w") as f:
                     f.write(rep_text)
                 result = subprocess.run(
                     ["perl", BNG2, f"{model}.bngl"],
-                    cwd=tmpdir, capture_output=True, text=True, timeout=60
+                    cwd=tmpdir,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
                 )
                 gdat_files = glob.glob(os.path.join(tmpdir, "*.gdat"))
                 if not gdat_files:
@@ -391,8 +413,7 @@ def generate_ssa_reference(model, t_end, n_steps, n_reps=DEFAULT_SSA_REPS):
         mean_row = []
         std_row = []
         for ci in range(n_cols):
-            vals = [all_data[ri][ti][ci] for ri in range(len(all_data))
-                    if ti < len(all_data[ri])]
+            vals = [all_data[ri][ti][ci] for ri in range(len(all_data)) if ti < len(all_data[ri])]
             m = statistics.mean(vals) if vals else 0
             s = statistics.stdev(vals) if len(vals) > 1 else 0
             mean_row.append(m)
@@ -409,10 +430,20 @@ def _run_one_nfsim_rep(model, xml_path, t_end, n_steps, nfsim_flags, seed, timeo
     """Run a single NFsim rep. Returns (headers, rows) or None."""
     with tempfile.TemporaryDirectory() as tmpdir:
         out_gdat = os.path.join(tmpdir, f"{model}_rep{seed}.gdat")
-        cmd = [NFSIM, "-xml", xml_path, "-sim", str(t_end), "-oSteps", str(n_steps),
-               "-seed", str(seed), "-bscb"]
+        cmd = [
+            NFSIM,
+            "-xml",
+            xml_path,
+            "-sim",
+            str(t_end),
+            "-oSteps",
+            str(n_steps),
+            "-seed",
+            str(seed),
+            "-bscb",
+        ]
         for flag in nfsim_flags:
-            if flag == '-bscb':
+            if flag == "-bscb":
                 continue
             cmd.append(flag)
         cmd.extend(["-o", out_gdat])
@@ -442,9 +473,12 @@ def generate_nfsim_reference(model, t_end, n_steps, nfsim_flags, n_reps=DEFAULT_
 
     nf_timeout = tier_timeout(model)
     with ThreadPoolExecutor(max_workers=MAX_PARALLEL) as pool:
-        futures = {pool.submit(_run_one_nfsim_rep, model, xml_path, t_end, n_steps,
-                               nfsim_flags, seed, nf_timeout): seed
-                   for seed in range(1, n_reps + 1)}
+        futures = {
+            pool.submit(
+                _run_one_nfsim_rep, model, xml_path, t_end, n_steps, nfsim_flags, seed, nf_timeout
+            ): seed
+            for seed in range(1, n_reps + 1)
+        }
         for future in as_completed(futures):
             result = future.result()
             if result is not None:
@@ -467,8 +501,7 @@ def generate_nfsim_reference(model, t_end, n_steps, nfsim_flags, n_reps=DEFAULT_
         mean_row = []
         std_row = []
         for ci in range(n_cols):
-            vals = [all_data[ri][ti][ci] for ri in range(len(all_data))
-                    if ti < len(all_data[ri])]
+            vals = [all_data[ri][ti][ci] for ri in range(len(all_data)) if ti < len(all_data[ri])]
             m = statistics.mean(vals) if vals else 0
             s = statistics.stdev(vals) if len(vals) > 1 else 0
             mean_row.append(m)
@@ -485,22 +518,23 @@ def generate_nfsim_reference(model, t_end, n_steps, nfsim_flags, n_reps=DEFAULT_
 # Parsing & I/O
 # ---------------------------------------------------------------------------
 
+
 def parse_gdat(text):
     """Parse gdat text output (from stdout)."""
-    lines = [l.strip() for l in text.strip().split('\n') if l.strip()]
+    lines = [l.strip() for l in text.strip().split("\n") if l.strip()]
     # Find header line (first line starting with # or containing 'time')
     header_line = lines[0]
-    headers = header_line.lstrip('#').strip().split()
+    headers = header_line.lstrip("#").strip().split()
     # Clean up headers: some NFsim outputs use tabs, some spaces
     if len(headers) <= 1:
-        headers = header_line.lstrip('#').strip().split('\t')
+        headers = header_line.lstrip("#").strip().split("\t")
     rows = []
     for line in lines[1:]:
-        if line.startswith('#'):
+        if line.startswith("#"):
             continue
         parts = line.split()
         if len(parts) <= 1:
-            parts = line.split('\t')
+            parts = line.split("\t")
         try:
             rows.append([float(v) for v in parts])
         except ValueError:
@@ -514,16 +548,16 @@ def parse_gdat_file(path):
         # BNG2.pl gdat uses whitespace-separated columns with # header
         lines = [l.strip() for l in f if l.strip()]
     header_line = lines[0]
-    headers = header_line.lstrip('#').strip().split()
+    headers = header_line.lstrip("#").strip().split()
     if len(headers) <= 1:
-        headers = header_line.lstrip('#').strip().split('\t')
+        headers = header_line.lstrip("#").strip().split("\t")
     rows = []
     for line in lines[1:]:
-        if line.startswith('#'):
+        if line.startswith("#"):
             continue
         parts = line.split()
         if len(parts) <= 1:
-            parts = line.split('\t')
+            parts = line.split("\t")
         try:
             rows.append([float(v) for v in parts])
         except ValueError:
@@ -534,31 +568,34 @@ def parse_gdat_file(path):
 def read_tsv(path):
     with open(path) as f:
         lines = [l.strip() for l in f if l.strip()]
-    headers = lines[0].split('\t')
-    rows = [[float(v) for v in line.split('\t')] for line in lines[1:]]
+    headers = lines[0].split("\t")
+    rows = [[float(v) for v in line.split("\t")] for line in lines[1:]]
     return headers, rows
 
 
 def write_tsv(path, headers, rows):
-    with open(path, 'w') as f:
-        f.write('\t'.join(headers) + '\n')
+    with open(path, "w") as f:
+        f.write("\t".join(headers) + "\n")
         for row in rows:
-            f.write('\t'.join(f"{v:.6g}" for v in row) + '\n')
+            f.write("\t".join(f"{v:.6g}" for v in row) + "\n")
 
 
 def parse_timing(stderr_text):
     """Extract timing info from RM stderr output."""
-    info = {'events': 0, 'total_s': 0}
-    m = re.search(r'events=(\d+)', stderr_text)
-    if m: info['events'] = int(m.group(1))
-    m = re.search(r'total=([\d.]+)s', stderr_text)
-    if m: info['total_s'] = float(m.group(1))
+    info = {"events": 0, "total_s": 0}
+    m = re.search(r"events=(\d+)", stderr_text)
+    if m:
+        info["events"] = int(m.group(1))
+    m = re.search(r"total=([\d.]+)s", stderr_text)
+    if m:
+        info["total_s"] = float(m.group(1))
     return info
 
 
 # ---------------------------------------------------------------------------
 # RM execution
 # ---------------------------------------------------------------------------
+
 
 def run_rm_rep(xml_path, t_end, n_steps, seed, rm_flags=None, timeout=30):
     """Run a single RM rep."""
@@ -581,13 +618,14 @@ def run_rm_rep(xml_path, t_end, n_steps, seed, rm_flags=None, timeout=30):
 # Correctness comparison
 # ---------------------------------------------------------------------------
 
+
 def compare_rm_vs_reference(model, rm_reps, ref_mean_path, ref_std_path, ref_label="ref"):
     """Compare RM ensemble against a reference (ODE, SSA, or NFsim).
 
     Returns dict with max_z, worst_obs, tz_max, verdict.
     """
     if not os.path.exists(ref_mean_path):
-        return {'verdict': 'NO_REF', 'label': ref_label}
+        return {"verdict": "NO_REF", "label": ref_label}
     if ref_std_path is None or not os.path.exists(ref_std_path):
         # ODE has no std — use mean-only comparison
         ref_has_std = False
@@ -708,8 +746,10 @@ def compare_rm_vs_reference(model, rm_reps, ref_mean_path, ref_std_path, ref_lab
                     vals.append(t2v[tp][rm_ci])
                 if not ok:
                     continue
-                I = sum(0.5 * (vals[i] + vals[i+1]) * (tp_sorted[i+1] - tp_sorted[i])
-                        for i in range(len(tp_sorted) - 1))
+                I = sum(
+                    0.5 * (vals[i] + vals[i + 1]) * (tp_sorted[i + 1] - tp_sorted[i])
+                    for i in range(len(tp_sorted) - 1)
+                )
                 per_rep_I.append(I)
 
             if not per_rep_I:
@@ -719,11 +759,15 @@ def compare_rm_vs_reference(model, rm_reps, ref_mean_path, ref_std_path, ref_lab
             ref_vals = []
             for tp in tp_sorted:
                 ref_vals.append(ref_mean[ref_time_idx[tp]][ref_ci])
-            I_ref = sum(0.5 * (ref_vals[i] + ref_vals[i+1]) * (tp_sorted[i+1] - tp_sorted[i])
-                        for i in range(len(tp_sorted) - 1))
+            I_ref = sum(
+                0.5 * (ref_vals[i] + ref_vals[i + 1]) * (tp_sorted[i + 1] - tp_sorted[i])
+                for i in range(len(tp_sorted) - 1)
+            )
 
             rm_I_mean = statistics.mean(per_rep_I)
-            rm_I_se = statistics.stdev(per_rep_I) / math.sqrt(len(per_rep_I)) if len(per_rep_I) > 1 else 0
+            rm_I_se = (
+                statistics.stdev(per_rep_I) / math.sqrt(len(per_rep_I)) if len(per_rep_I) > 1 else 0
+            )
 
             denom = rm_I_se if rm_I_se > ZERO_EPS else 1.0
             tz = abs(rm_I_mean - I_ref) / denom if denom > ZERO_EPS else 0
@@ -737,20 +781,27 @@ def compare_rm_vs_reference(model, rm_reps, ref_mean_path, ref_std_path, ref_lab
     # For ODE (no std), use relative error with generous threshold
     # (stochastic RM will naturally differ from deterministic ODE by ~sqrt(N))
     if not ref_has_std:
-        max_ref_val = max(abs(ref_mean[i][j]) for i in range(len(ref_mean))
-                         for j in range(1, len(ref_mean[0]))) if ref_mean else 1.0
+        max_ref_val = (
+            max(
+                abs(ref_mean[i][j])
+                for i in range(len(ref_mean))
+                for j in range(1, len(ref_mean[0]))
+            )
+            if ref_mean
+            else 1.0
+        )
         rel_err = max_abs_diff / (max_ref_val + 1.0)
         verdict = "PASS" if rel_err < 0.25 else "FAIL"
 
     return {
-        'label': ref_label,
-        'max_z': max_z,
-        'worst_obs': worst_obs,
-        'tz_max': tz_max,
-        'worst_tz_obs': worst_tz_obs,
-        'max_abs_diff': max_abs_diff,
-        'n_compared': n_compared,
-        'verdict': verdict,
+        "label": ref_label,
+        "max_z": max_z,
+        "worst_obs": worst_obs,
+        "tz_max": tz_max,
+        "worst_tz_obs": worst_tz_obs,
+        "max_abs_diff": max_abs_diff,
+        "n_compared": n_compared,
+        "verdict": verdict,
     }
 
 
@@ -758,16 +809,17 @@ def compare_rm_vs_reference(model, rm_reps, ref_mean_path, ref_std_path, ref_lab
 # Report generation
 # ---------------------------------------------------------------------------
 
+
 def write_report(results, report_path):
     """Write markdown benchmark report."""
-    with open(report_path, 'w') as f:
+    with open(report_path, "w") as f:
         f.write("# Feature Coverage Benchmark Report\n\n")
         f.write(f"Generated: {time.strftime('%Y-%m-%d %H:%M:%S')}\n\n")
 
         # Summary
-        n_pass = sum(1 for r in results if r['verdict'] == 'PASS')
-        n_fail = sum(1 for r in results if r['verdict'] == 'FAIL')
-        n_skip = sum(1 for r in results if r['verdict'] in ('SKIP', 'ERROR', 'NO_REF'))
+        n_pass = sum(1 for r in results if r["verdict"] == "PASS")
+        n_fail = sum(1 for r in results if r["verdict"] == "FAIL")
+        n_skip = sum(1 for r in results if r["verdict"] in ("SKIP", "ERROR", "NO_REF"))
         f.write(f"**Summary: {n_pass} PASS / {n_fail} FAIL / {n_skip} SKIP**\n\n")
 
         # Coverage matrix
@@ -776,21 +828,21 @@ def write_report(results, report_path):
         f.write("|-------|------|----------|-------------|-----------|--------|\n")
 
         for r in results:
-            tier = model_tier(r['model'])
-            features = r.get('features', [''])
-            feat_str = features[0][:50] if features else ''
-            nfsim_str = r.get('nfsim_verdict', '-')
-            ode_str = r.get('ode_verdict', '-')
-            verdict = r['verdict']
+            tier = model_tier(r["model"])
+            features = r.get("features", [""])
+            feat_str = features[0][:50] if features else ""
+            nfsim_str = r.get("nfsim_verdict", "-")
+            ode_str = r.get("ode_verdict", "-")
+            verdict = r["verdict"]
             mark = "PASS" if verdict == "PASS" else f"**{verdict}**"
             f.write(f"| {r['model']} | {tier} | {feat_str} | {nfsim_str} | {ode_str} | {mark} |\n")
 
         # Detailed results
         f.write("\n## Detailed Results\n\n")
         for r in results:
-            if r['verdict'] in ('SKIP', 'ERROR'):
+            if r["verdict"] in ("SKIP", "ERROR"):
                 f.write(f"### {r['model']} — {r['verdict']}\n")
-                if 'error' in r:
+                if "error" in r:
                     f.write(f"  Error: {r['error']}\n\n")
                 continue
 
@@ -798,24 +850,24 @@ def write_report(results, report_path):
             f.write(f"- Tier: {model_tier(r['model'])}\n")
             f.write(f"- RM reps: {r.get('n_reps', '?')}, wall time: {r.get('rm_wall_s', 0):.3f}s\n")
 
-            for comp in r.get('comparisons', []):
-                label = comp['label']
-                if comp['verdict'] == 'NO_REF':
+            for comp in r.get("comparisons", []):
+                label = comp["label"]
+                if comp["verdict"] == "NO_REF":
                     f.write(f"- vs {label}: no reference data\n")
                 else:
                     f.write(f"- vs {label}: max_z={comp['max_z']:.2f}")
-                    if comp.get('worst_obs'):
+                    if comp.get("worst_obs"):
                         f.write(f" ({comp['worst_obs']})")
                     f.write(f", tz_max={comp.get('tz_max', 0):.2f}")
                     f.write(f" — **{comp['verdict']}**\n")
 
-            inv_v = r.get('invariant_violations', [])
+            inv_v = r.get("invariant_violations", [])
             if inv_v:
                 f.write(f"- invariant violations: {len(inv_v)}\n")
                 for v in inv_v[:5]:
                     f.write(f"  - {v}\n")
                 if len(inv_v) > 5:
-                    f.write(f"  - ... {len(inv_v)-5} more\n")
+                    f.write(f"  - ... {len(inv_v) - 5} more\n")
 
             f.write(f"- **Overall: {r['verdict']}**\n\n")
 
@@ -824,31 +876,44 @@ def write_report(results, report_path):
 # Main
 # ---------------------------------------------------------------------------
 
-def run_benchmark(models, n_reps, generate_refs_only=False, nfsim_reps=DEFAULT_NFSIM_REPS,
-                  ssa_reps=DEFAULT_SSA_REPS, full_mode=False):
+
+def run_benchmark(
+    models,
+    n_reps,
+    generate_refs_only=False,
+    nfsim_reps=DEFAULT_NFSIM_REPS,
+    ssa_reps=DEFAULT_SSA_REPS,
+    full_mode=False,
+):
     """Run the feature-coverage benchmark."""
     results = []
 
     for model in models:
-        print(f"\n{'='*60}")
+        print(f"\n{'=' * 60}")
         print(f"  {model} ({model_tier(model)})")
-        print(f"{'='*60}")
+        print(f"{'=' * 60}")
 
         bngl_path = os.path.join(SUITE_DIR, f"{model}.bngl")
         if not os.path.exists(bngl_path):
             print(f"  SKIP: {bngl_path} not found")
-            results.append({'model': model, 'verdict': 'SKIP', 'error': 'BNGL not found'})
+            results.append({"model": model, "verdict": "SKIP", "error": "BNGL not found"})
             continue
 
         features = parse_model_features(bngl_path)
         t_end, n_steps, nfsim_flags = extract_sim_params(bngl_path)
 
         # 1. Generate XML
-        print(f"  XML...", end=" ", flush=True)
+        print("  XML...", end=" ", flush=True)
         xml_path = generate_xml(model)
         if not xml_path:
-            results.append({'model': model, 'verdict': 'ERROR', 'error': 'XML gen failed',
-                           'features': features})
+            results.append(
+                {
+                    "model": model,
+                    "verdict": "ERROR",
+                    "error": "XML gen failed",
+                    "features": features,
+                }
+            )
             continue
         print("OK", end="", flush=True)
 
@@ -856,16 +921,16 @@ def run_benchmark(models, n_reps, generate_refs_only=False, nfsim_reps=DEFAULT_N
         nf_only = is_network_free_only(model)
         use_ode_verdict = model in NFSIM_UNRELIABLE
         rm_flags = []
-        if '-bscb' in nfsim_flags:
-            rm_flags.append('-bscb')
+        if "-bscb" in nfsim_flags:
+            rm_flags.append("-bscb")
         if model in TIER0_IGNORE_UNSUPPORTED:  # noqa: currently empty
-            rm_flags.append('--ignore-unsupported')
+            rm_flags.append("--ignore-unsupported")
 
         ode_path = None
         ssa_mean = ssa_std = None
 
         if (full_mode and not nf_only) or use_ode_verdict:
-            print(f", ODE...", end="", flush=True)
+            print(", ODE...", end="", flush=True)
             ode_path = generate_ode_reference(model, t_end, n_steps)
             print("OK" if ode_path else "skip", end="", flush=True)
 
@@ -879,7 +944,7 @@ def run_benchmark(models, n_reps, generate_refs_only=False, nfsim_reps=DEFAULT_N
         print("OK" if nf_mean else "skip", flush=True)
 
         if generate_refs_only:
-            results.append({'model': model, 'verdict': 'REF_ONLY', 'features': features})
+            results.append({"model": model, "verdict": "REF_ONLY", "features": features})
             continue
 
         # 3. Run RM (parallel)
@@ -887,9 +952,10 @@ def run_benchmark(models, n_reps, generate_refs_only=False, nfsim_reps=DEFAULT_N
         rm_timeout = tier_timeout(model)
         t0 = time.monotonic()
         with ThreadPoolExecutor(max_workers=MAX_PARALLEL) as pool:
-            futures = {pool.submit(run_rm_rep, xml_path, t_end, n_steps, 42 + i, rm_flags,
-                                   rm_timeout): i
-                       for i in range(n_reps)}
+            futures = {
+                pool.submit(run_rm_rep, xml_path, t_end, n_steps, 42 + i, rm_flags, rm_timeout): i
+                for i in range(n_reps)
+            }
             for future in as_completed(futures):
                 rep = future.result()
                 if rep:
@@ -899,8 +965,14 @@ def run_benchmark(models, n_reps, generate_refs_only=False, nfsim_reps=DEFAULT_N
 
         if not rm_reps:
             print()
-            results.append({'model': model, 'verdict': 'ERROR', 'error': 'all RM reps failed',
-                           'features': features})
+            results.append(
+                {
+                    "model": model,
+                    "verdict": "ERROR",
+                    "error": "all RM reps failed",
+                    "features": features,
+                }
+            )
             continue
 
         # 4. Compare
@@ -910,7 +982,7 @@ def run_benchmark(models, n_reps, generate_refs_only=False, nfsim_reps=DEFAULT_N
         if nf_mean and nf_std:
             comp = compare_rm_vs_reference(model, rm_reps, nf_mean, nf_std, "NFsim")
             comparisons.append(comp)
-            print(f", tz={comp.get('tz_max',0):.2f}->{comp['verdict']}", end="", flush=True)
+            print(f", tz={comp.get('tz_max', 0):.2f}->{comp['verdict']}", end="", flush=True)
 
         if (full_mode and not nf_only) or use_ode_verdict:
             # vs ODE (verdict for NFSIM_UNRELIABLE models, informational otherwise)
@@ -918,7 +990,11 @@ def run_benchmark(models, n_reps, generate_refs_only=False, nfsim_reps=DEFAULT_N
                 comp_ode = compare_rm_vs_reference(model, rm_reps, ode_path, None, "ODE")
                 comparisons.append(comp_ode)
                 if use_ode_verdict:
-                    print(f", ODE_tz={comp_ode.get('tz_max',0):.2f}->{comp_ode['verdict']}", end="", flush=True)
+                    print(
+                        f", ODE_tz={comp_ode.get('tz_max', 0):.2f}->{comp_ode['verdict']}",
+                        end="",
+                        flush=True,
+                    )
 
             # vs SSA (informational)
             if full_mode and not nf_only and ssa_mean and ssa_std:
@@ -928,43 +1004,47 @@ def run_benchmark(models, n_reps, generate_refs_only=False, nfsim_reps=DEFAULT_N
         # Overall verdict: NFsim is normally the sole verdict reference.
         # For models in NFSIM_UNRELIABLE (where NFsim ignores the tested
         # feature), ODE reference is used as the verdict instead.
-        nfsim_comp = next((c for c in comparisons if c['label'] == 'NFsim'), None)
-        ode_comp = next((c for c in comparisons if c['label'] == 'ODE'), None)
+        nfsim_comp = next((c for c in comparisons if c["label"] == "NFsim"), None)
+        ode_comp = next((c for c in comparisons if c["label"] == "ODE"), None)
 
-        if use_ode_verdict and ode_comp and ode_comp['verdict'] != 'NO_REF':
-            overall = ode_comp['verdict']
-        elif nfsim_comp and nfsim_comp['verdict'] != 'NO_REF':
-            overall = nfsim_comp['verdict']
+        if use_ode_verdict and ode_comp and ode_comp["verdict"] != "NO_REF":
+            overall = ode_comp["verdict"]
+        elif nfsim_comp and nfsim_comp["verdict"] != "NO_REF":
+            overall = nfsim_comp["verdict"]
         else:
             # No NFsim ref: fall back to any available
-            verdicts = [c['verdict'] for c in comparisons if c['verdict'] != 'NO_REF']
-            overall = 'FAIL' if any(v == 'FAIL' for v in verdicts) else ('PASS' if verdicts else 'NO_REF')
+            verdicts = [c["verdict"] for c in comparisons if c["verdict"] != "NO_REF"]
+            overall = (
+                "FAIL" if any(v == "FAIL" for v in verdicts) else ("PASS" if verdicts else "NO_REF")
+            )
 
         # 5. Invariant checks (non-negativity always; conservation/balance per model)
         invariants = parse_invariants(bngl_path)
         inv_violations = check_invariants(rm_reps, invariants)
         if inv_violations:
             print(f", INV:{len(inv_violations)}", end="", flush=True)
-            overall = 'FAIL'
+            overall = "FAIL"
 
-        nfsim_v = next((c['verdict'] for c in comparisons if c['label'] == 'NFsim'), '-')
-        ode_v = next((c['verdict'] for c in comparisons if c['label'] == 'ODE'), '-')
+        nfsim_v = next((c["verdict"] for c in comparisons if c["label"] == "NFsim"), "-")
+        ode_v = next((c["verdict"] for c in comparisons if c["label"] == "ODE"), "-")
 
-        results.append({
-            'model': model,
-            'verdict': overall,
-            'features': features,
-            'comparisons': comparisons,
-            'n_reps': len(rm_reps),
-            'rm_wall_s': rm_wall,
-            'nfsim_verdict': nfsim_v,
-            'ode_verdict': ode_v,
-            'invariant_violations': inv_violations,
-        })
+        results.append(
+            {
+                "model": model,
+                "verdict": overall,
+                "features": features,
+                "comparisons": comparisons,
+                "n_reps": len(rm_reps),
+                "rm_wall_s": rm_wall,
+                "nfsim_verdict": nfsim_v,
+                "ode_verdict": ode_v,
+                "invariant_violations": inv_violations,
+            }
+        )
 
         # Parse RM timing from last rep
         timing = parse_timing(rm_reps[-1][2])
-        if timing['events'] > 0:
+        if timing["events"] > 0:
             print(f", {timing['events']}ev", end="", flush=True)
         print(flush=True)
 
@@ -975,19 +1055,30 @@ def main():
     parser = argparse.ArgumentParser(description="Feature coverage benchmark")
     parser.add_argument("models", nargs="*", help="Specific model names (omit for all)")
     parser.add_argument("--reps", type=int, default=DEFAULT_REPS, help="RM replicate count")
-    parser.add_argument("--tier", choices=["base", "combinations", "network-free", "stress", "all"],
-                        default="all", help="Run only models from this tier")
-    parser.add_argument("--full", action="store_true",
-                        help="Full mode: also generate ODE/SSA references (slower)")
-    parser.add_argument("--generate-refs", action="store_true",
-                        help="Generate reference data only (no RM comparison)")
-    parser.add_argument("--nfsim-reps", type=int, default=DEFAULT_NFSIM_REPS,
-                        help="NFsim reference replicate count")
-    parser.add_argument("--ssa-reps", type=int, default=DEFAULT_SSA_REPS,
-                        help="SSA reference replicate count")
+    parser.add_argument(
+        "--tier",
+        choices=["base", "combinations", "network-free", "stress", "all"],
+        default="all",
+        help="Run only models from this tier",
+    )
+    parser.add_argument(
+        "--full", action="store_true", help="Full mode: also generate ODE/SSA references (slower)"
+    )
+    parser.add_argument(
+        "--generate-refs",
+        action="store_true",
+        help="Generate reference data only (no RM comparison)",
+    )
+    parser.add_argument(
+        "--nfsim-reps", type=int, default=DEFAULT_NFSIM_REPS, help="NFsim reference replicate count"
+    )
+    parser.add_argument(
+        "--ssa-reps", type=int, default=DEFAULT_SSA_REPS, help="SSA reference replicate count"
+    )
     parser.add_argument("--output", default=REPORT_PATH, help="Output report path")
-    parser.add_argument("--force-refs", action="store_true",
-                        help="Regenerate reference data even if it exists")
+    parser.add_argument(
+        "--force-refs", action="store_true", help="Regenerate reference data even if it exists"
+    )
     args = parser.parse_args()
 
     # Discover models
@@ -998,8 +1089,12 @@ def main():
             print(f"No matching models found. Available: {', '.join(all_models[:10])}...")
             sys.exit(1)
     elif args.tier != "all":
-        tier_prefix = {"base": "ft_", "combinations": "combo_", "network-free": "nf_",
-                       "stress": "ss_"}
+        tier_prefix = {
+            "base": "ft_",
+            "combinations": "combo_",
+            "network-free": "nf_",
+            "stress": "ss_",
+        }
         prefix = tier_prefix.get(args.tier, "")
         models = [m for m in all_models if m.startswith(prefix)]
     else:
@@ -1021,23 +1116,26 @@ def main():
     for d in [XML_DIR, ODE_DIR, SSA_DIR, NFSIM_DIR]:
         os.makedirs(d, exist_ok=True)
 
-    results = run_benchmark(models, args.reps,
-                            generate_refs_only=args.generate_refs,
-                            nfsim_reps=args.nfsim_reps,
-                            ssa_reps=args.ssa_reps,
-                            full_mode=args.full)
+    results = run_benchmark(
+        models,
+        args.reps,
+        generate_refs_only=args.generate_refs,
+        nfsim_reps=args.nfsim_reps,
+        ssa_reps=args.ssa_reps,
+        full_mode=args.full,
+    )
 
     # Write report
     write_report(results, args.output)
     print(f"\nReport written to {args.output}")
 
     # Summary
-    n_pass = sum(1 for r in results if r['verdict'] == 'PASS')
-    n_fail = sum(1 for r in results if r['verdict'] == 'FAIL')
+    n_pass = sum(1 for r in results if r["verdict"] == "PASS")
+    n_fail = sum(1 for r in results if r["verdict"] == "FAIL")
     n_other = len(results) - n_pass - n_fail
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print(f"  TOTAL: {n_pass} PASS / {n_fail} FAIL / {n_other} other")
-    print(f"{'='*60}")
+    print(f"{'=' * 60}")
 
     sys.exit(1 if n_fail > 0 else 0)
 

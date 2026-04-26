@@ -26,7 +26,7 @@ begin reaction rules
 
  A(s) + S(active,p~U) <-> A(s!1).S(active!1,p~U) konA,koffA
  A(s!1).S(active!1,p~U) -> A(s) + S(active,p~P)  kcatA
- 
+
  B(s) + S(active,p~P) <-> B(s!1).S(active!1,p~P) konB,koffB
  B(s!1).S(active!1,p~P) -> B(s) + S(active,p~U)  kcatB
 

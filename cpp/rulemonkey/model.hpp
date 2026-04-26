@@ -24,14 +24,16 @@ struct MoleculeType {
 
   int comp_index_by_name(const std::string& cname) const {
     for (int i = 0; i < static_cast<int>(components.size()); ++i)
-      if (components[i].name == cname) return i;
+      if (components[i].name == cname)
+        return i;
     return -1;
   }
 
   int state_index(int comp_idx, const std::string& state) const {
     auto& allowed = components[comp_idx].allowed_states;
     for (int i = 0; i < static_cast<int>(allowed.size()); ++i)
-      if (allowed[i] == state) return i;
+      if (allowed[i] == state)
+        return i;
     return -1;
   }
 
@@ -42,7 +44,8 @@ struct MoleculeType {
   bool has_symmetric_components() const {
     for (int i = 0; i < static_cast<int>(components.size()); ++i)
       for (int j = i + 1; j < static_cast<int>(components.size()); ++j)
-        if (components[i].name == components[j].name) return true;
+        if (components[i].name == components[j].name)
+          return true;
     return false;
   }
 };
@@ -53,18 +56,18 @@ enum class BondConstraint { Free, Bound, BoundTo, Wildcard };
 
 struct PatternComponent {
   std::string name;
-  int comp_type_index = -1;       // index in MoleculeType::components
-  std::string required_state;     // "" = don't care
-  int required_state_index = -1;  // resolved index, -1 = don't care
+  int comp_type_index = -1;      // index in MoleculeType::components
+  std::string required_state;    // "" = don't care
+  int required_state_index = -1; // resolved index, -1 = don't care
   BondConstraint bond_constraint = BondConstraint::Wildcard;
-  int bond_label = -1;            // for BondTo: label to match with partner
+  int bond_label = -1; // for BondTo: label to match with partner
 };
 
 struct PatternMolecule {
   std::string type_name;
-  int type_index = -1;  // index into Model::molecule_types
+  int type_index = -1; // index into Model::molecule_types
   std::vector<PatternComponent> components;
-  std::string xml_id;   // for Map/Operation resolution
+  std::string xml_id; // for Map/Operation resolution
 };
 
 // Bond pair within a pattern: two flat component indices connected by a bond.
@@ -79,12 +82,13 @@ struct Pattern {
   std::vector<PatternBond> bonds;
 
   // For Species observables: optional stoichiometric constraint
-  std::string relation;  // "", "==", ">=", "<="
+  std::string relation; // "", "==", ">=", "<="
   int quantity = -1;
 
   int flat_comp_count() const {
     int n = 0;
-    for (auto& m : molecules) n += static_cast<int>(m.components.size());
+    for (auto& m : molecules)
+      n += static_cast<int>(m.components.size());
     return n;
   }
 
@@ -104,7 +108,7 @@ enum class OpType { AddBond, DeleteBond, StateChange, AddMolecule, DeleteMolecul
 
 struct AddMoleculeSpec {
   int type_index = -1;
-  std::vector<std::pair<int, int>> comp_states;  // (comp_idx, state_index)
+  std::vector<std::pair<int, int>> comp_states; // (comp_idx, state_index)
 };
 
 struct RuleOp {
@@ -126,13 +130,13 @@ struct RuleOp {
   // For StateChange: which flat component, new state index
   int comp_flat = -1;
   int new_state_index = -1;
-  std::string new_state;       // raw string before resolution
-  bool is_increment = false;   // PLUS
-  bool is_decrement = false;   // MINUS
+  std::string new_state;     // raw string before resolution
+  bool is_increment = false; // PLUS
+  bool is_decrement = false; // MINUS
 
   // For AddMolecule
   AddMoleculeSpec add_spec;
-  int add_product_mol_idx = -1;  // product-pattern molecule index of the added mol
+  int add_product_mol_idx = -1; // product-pattern molecule index of the added mol
 
   // For DeleteBond: if true, the bond deletion may only fire when the
   // two molecules remain connected through another path (ring bond).
@@ -142,7 +146,7 @@ struct RuleOp {
 
   // For DeleteMolecule: which reactant-pattern molecule to delete
   int delete_pattern_mol_idx = -1;
-  bool delete_connected = false;  // true = delete entire species; false = molecule-only
+  bool delete_connected = false; // true = delete entire species; false = molecule-only
 };
 
 // ---- Rate law --------------------------------------------------------------
@@ -154,14 +158,14 @@ enum class TfunCounterSource { None, Time, Parameter, Observable, Function };
 struct RateLaw {
   RateLawType type = RateLawType::Ele;
   double rate_value = 0.0;
-  std::string rate_expr;  // symbolic, before resolution
+  std::string rate_expr; // symbolic, before resolution
   bool is_total_rate = false;
 
   // For Function rate law
   bool is_dynamic = false;
   std::shared_ptr<expr::AstNode> rate_ast;
-  std::string function_name;  // if referencing a global function
-  bool is_local = false;      // has local molecule/species arguments
+  std::string function_name;          // if referencing a global function
+  bool is_local = false;              // has local molecule/species arguments
   bool local_arg_is_molecule = false; // true = arg bound to molecule (per-mol eval)
                                       // false = arg bound to pattern (complex-wide eval)
 
@@ -181,7 +185,7 @@ struct RateLaw {
 struct Rule {
   std::string id;
   std::string name;
-  int molecularity = 0;       // 0 (synthesis from nothing), 1, or 2
+  int molecularity = 0; // 0 (synthesis from nothing), 1, or 2
   double symmetry_factor = 1.0;
   RateLaw rate_law;
 
@@ -209,7 +213,7 @@ struct Rule {
   // runs a BFS check at fire time and rejects events that leave the
   // molecules still connected (e.g., breaking one bond in a ring).
   int n_product_patterns = 0;
-  std::vector<int> product_pattern_starts;  // analogous to reactant_pattern_starts
+  std::vector<int> product_pattern_starts; // analogous to reactant_pattern_starts
 
   // exclude_reactants / include_reactants / exclude_products / include_products
   // Each constraint applies to one reactant or product pattern (by index).
@@ -217,10 +221,10 @@ struct Rule {
   //   exclude: reject if molecule matches ANY exclusion pattern
   //   include: reject if molecule matches NONE of the inclusion patterns
   struct Constraint {
-    int pattern_idx;       // which reactant/product pattern (0-based)
-    Pattern pattern;       // the constraint pattern (single-molecule)
-    bool is_exclude;       // true = exclude, false = include
-    bool is_product;       // true = product constraint, false = reactant
+    int pattern_idx; // which reactant/product pattern (0-based)
+    Pattern pattern; // the constraint pattern (single-molecule)
+    bool is_exclude; // true = exclude, false = include
+    bool is_product; // true = product constraint, false = reactant
   };
   std::vector<Constraint> constraints;
 };
@@ -230,9 +234,9 @@ struct Rule {
 struct Observable {
   std::string id;
   std::string name;
-  std::string type;  // "Molecules" or "Species"
+  std::string type; // "Molecules" or "Species"
   std::vector<Pattern> patterns;
-  bool rate_dependent = false;  // true if referenced by a rate law or function
+  bool rate_dependent = false; // true if referenced by a rate law or function
 };
 
 // ---- Global function -------------------------------------------------------
@@ -243,8 +247,8 @@ struct GlobalFunction {
   std::string expression_text;
 
   // Local function support
-  std::vector<std::string> argument_names;            // e.g. {"z"}
-  std::vector<std::string> local_observable_names;     // observables referenced locally
+  std::vector<std::string> argument_names;         // e.g. {"z"}
+  std::vector<std::string> local_observable_names; // observables referenced locally
 
   bool is_local() const { return !argument_names.empty(); }
 
@@ -260,13 +264,13 @@ struct GlobalFunction {
 struct SpeciesInitMol {
   std::string type_name;
   int type_index = -1;
-  std::vector<std::pair<std::string, std::string>> comp_states;  // (name, state)
+  std::vector<std::pair<std::string, std::string>> comp_states; // (name, state)
 };
 
 struct SpeciesInitBond {
   // Indices are (mol_local_idx, comp_name) pairs resolved to flat form
   int mol_a = -1;
-  int comp_a = -1;  // local component index within mol_a
+  int comp_a = -1; // local component index within mol_a
   int mol_b = -1;
   int comp_b = -1;
 };
@@ -287,9 +291,9 @@ struct SpeciesInit {
 // Multiple Fixed species of the same MoleculeType are also refused to
 // avoid overlap/precedence ambiguity during replenishment.
 struct FixedSpecies {
-  int source_init_idx = -1;     // index into Model::initial_species
-  int mol_type_idx = -1;        // the single molecule's type
-  int target_count = 0;         // clamped population (truncated from concentration)
+  int source_init_idx = -1; // index into Model::initial_species
+  int mol_type_idx = -1;    // the single molecule's type
+  int target_count = 0;     // clamped population (truncated from concentration)
   // Per-component required state.  Vector length = MoleculeType::components
   // size.  Each entry is the state index a matching molecule must hold
   // on that component, or -1 if any state is acceptable (typeless
@@ -317,7 +321,7 @@ struct Model {
   std::unordered_map<std::string, int> observable_index;
 
   std::vector<SpeciesInit> initial_species;
-  std::vector<FixedSpecies> fixed_species;  // forward-declared; defined below
+  std::vector<FixedSpecies> fixed_species; // forward-declared; defined below
 
   std::string xml_path;
 
@@ -345,4 +349,4 @@ struct Model {
   }
 };
 
-}  // namespace rulemonkey
+} // namespace rulemonkey

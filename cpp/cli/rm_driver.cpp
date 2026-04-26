@@ -37,7 +37,7 @@ int main(int argc, char* argv[]) {
   double t_end = std::stod(argv[2]);
   int n_steps = std::stoi(argv[3]);
   uint64_t seed = 42;
-  bool bscb = true;  // strict BNGL semantics by default
+  bool bscb = true; // strict BNGL semantics by default
   bool ignore_unsupported = false;
   std::string save_state_path;
   std::string load_state_path;
@@ -53,13 +53,22 @@ int main(int argc, char* argv[]) {
     } else if (std::strcmp(argv[i], "--ignore-unsupported") == 0) {
       ignore_unsupported = true;
     } else if (std::strcmp(argv[i], "--save-state") == 0) {
-      if (++i >= argc) { std::cerr << "--save-state requires a path\n"; return 1; }
+      if (++i >= argc) {
+        std::cerr << "--save-state requires a path\n";
+        return 1;
+      }
       save_state_path = argv[i];
     } else if (std::strcmp(argv[i], "--load-state") == 0) {
-      if (++i >= argc) { std::cerr << "--load-state requires a path\n"; return 1; }
+      if (++i >= argc) {
+        std::cerr << "--load-state requires a path\n";
+        return 1;
+      }
       load_state_path = argv[i];
     } else if (std::strcmp(argv[i], "--t-start") == 0) {
-      if (++i >= argc) { std::cerr << "--t-start requires a value\n"; return 1; }
+      if (++i >= argc) {
+        std::cerr << "--t-start requires a value\n";
+        return 1;
+      }
       t_start = std::stod(argv[i]);
       t_start_set = true;
     } else {
