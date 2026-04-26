@@ -7,4 +7,4 @@
 # Add only commits that are pure-formatting / pure-rename changes.
 
 # Apply pre-commit formatting baseline (clang-format, ruff-format, EOF/whitespace)
-6c18bc5fe6f0d20b80de9c50907d3717c9ae09ff
+6c18bc5a9c6caa2bede02a8f091e084c79c0ee05
