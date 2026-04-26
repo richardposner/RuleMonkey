@@ -52,13 +52,8 @@ tests/
 harness/             Python benchmarking + validation drivers
 ```
 
-## Test corpora
 
-| Suite | Models | Purpose |
-|-------|--------|---------|
-| `tests/models/feature_coverage/` | 51+ | BNGL feature coverage (invariants + golden values) |
-| `tests/models/corpus/` | 71 | Real-world models (efficiency + correctness) |
-| `tests/models/nfsim_basicmodels/` | 72 | NFsim-parity regression suite (Sneddon et al.) |
+
 
 Reference trajectories under `tests/reference/nfsim/` are 100-replicate ensemble
 means and standard deviations regenerated 2026-04-10 from a known NFsim build,
