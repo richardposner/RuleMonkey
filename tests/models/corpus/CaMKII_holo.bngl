@@ -1,0 +1,207 @@
+begin model
+begin parameters
+  V = 0.125*1e-15/8 # um^3 -> liters (PSD is 1/8 of the spine)
+  NA = 6.022e23/1e6
+  tauR = 0.002 #time constant for Ca decay
+  tauF = 0.01
+  tics_per_second = 1000
+  
+	#Rate Constants 
+	k_on1C = 4/(NA*V) #1/uM 1/s
+	k_off1C = 40.24 #1/s
+	k_on2C = 10/(NA*V) #1/uM 1/s
+	k_off2C = 9.3 #1/s
+	k_on1N = 100/(NA*V) #1/uM 1/s
+	k_off1N = 2660 #1/s
+	k_on2N = 150/(NA*V) #1/uM 1/s
+	k_off2N = 990 #1/s
+	
+	k_onCaM0 = (3.8/(NA*V))/1000 #1/uM 1/s
+	k_offCaM0 = 6.56 #1/s
+	k_onCaM1C = (59/(NA*V))/1000 #1/uM 1/s
+	k_offCaM1C = 6.72 #1/s 
+	k_onCaM2C = 0.92/(NA*V) #1/uM 1/s  
+	k_offCaM2C = 6.35 #1/s
+	k_onCaM1C1N = 0.33/(NA*V) #1/uM 1/s 
+	k_offCaM1C1N = 5.68 #1/s
+	k_onCaM2C1N = 5.2/(NA*V) #1/uM 1/s
+	k_offCaM2C1N = 5.25 #1/s	
+	k_onCaM1N = (22/(NA*V))/1000 #1/uM 1/s
+	k_offCaM1N = 5.75 #1/s
+	k_onCaM2N = 0.1/(NA*V) #1/uM 1/s
+	k_offCaM2N = 1.68 #1/s
+	k_onCaM1C2N = 1.9/(NA*V) #1/uM 1/s
+	k_offCaM1C2N = 2.09 #1/s
+	k_onCaM4 = 30/(NA*V) #1/uM 1/s
+	k_offCaM4 = 1.95 #1/s
+	
+	k_onK1C = 44/(NA*V) #1/uM 1/s
+	k_offK1C = 29.04 #1/s
+	k_onK2C = 44/(NA*V) #1/uM 1/s
+	k_offK2C = 2.52 #1/s 
+	k_onK1N = 75/(NA*V) #1/uM 1/s
+	k_offK1N = 301.5 #1/s
+	k_onK2N = 76/(NA*V) #1/uM 1/s
+	k_offK2N = 32.68 #1/s
+	
+	k_onCaMKII = 50/(NA*V) #1/uM 1/s
+	k_offCaMKII = 1000 #60 #1/s
+	
+	k_pCaM0 = 0 #1/s
+	k_pCaM1C = 0.032 #1/s
+	k_pCaM2C = 0.064 #1/s
+	k_pCaM1C1N = 0.094 #1/s
+	k_pCaM2C1N = 0.124 #1/s 
+	k_pCaM1N = 0.06 #1/s
+	k_pCaM2N = 0.12 #1/s
+	k_pCaM1C2N = 0.154 #1/s
+	k_pCaM4 = 0.96 #1/s
+	#k_decayCa = 10 #1/s
+	
+	# Binding neurogranin
+ 	k_onNg = 5/(NA*V) #1/uM 1/s 
+	k_offNg = 1 #1/s 
+	
+	#CaM binding and unbinding to phospoeylated CaMKII, not present in Pepke model, rates adjusted/borrowd from the Pepke model, and Meyer et al Scinece 1992
+	k_onpCaM0 = (3.8/(NA*V))/3000 #1/uM 1/s
+	k_onpCaM1C = (59/(NA*V))/3000 #1/uM 1/s
+	k_onpCaM2C = 0.92/(NA*V)/3 #1/uM 1/s  
+	k_onpCaM1C1N = 3.4/(NA*V)/3 #1/uM 1/s
+	k_onpCaM2C1N = 5.2/(NA*V)/3 #1/uM 1/s
+	k_onpCaM1N = (22/(NA*V))/3000 #1/uM 1/s
+	k_onpCaM2N = 0.12/(NA*V)/3 #1/uM 1/s 
+	k_onpCaM1C2N = 1.9/(NA*V)/3 #1/uM 1/s
+	k_onpCaM4 = 37/(NA*V)/3 #1/uM 1/s 
+	k_offpCaM4 = 0.07 #1/s
+	
+	# 	#Dephosphorylation
+	k_cat = (31/1.25)/60 # 
+	K_m = 11*(NA*V) #uM 
+	
+end parameters
+begin molecule types
+  Ca()
+  CaM(C~0~1~2,N~0~1~2,ng,camkii)
+  Ng(cam)
+  CaMKII(docked~y~n,r,l,c,Y286~0~P,S306~0~P,cam)
+  PP1()
+  time_counter()
+end molecule types
+begin seed species
+  Ca() 0.1*(NA*V) #uM 
+  CaM(C~0,N~0,ng,camkii) 10*(NA*V) #uM (10, 30, 50 or 100)*(NA*V)
+  #Ng(cam) 20*(NA*V) #uM
+  CaMKII(docked~y,r!1,l!6,c!13,Y286~0,S306~0,cam).CaMKII(docked~y,r!2,l!1,c!14,Y286~0,S306~0,cam).\
+CaMKII(docked~y,r!3,l!2,c!15,Y286~0,S306~0,cam).CaMKII(docked~y,r!4,l!3,c!16,Y286~0,S306~0,cam).\
+CaMKII(docked~y,r!5,l!4,c!17,Y286~0,S306~0,cam).CaMKII(docked~y,r!6,l!5,c!18,Y286~0,S306~0,cam).\
+CaMKII(docked~y,r!7,l!12,c!13,Y286~0,S306~0,cam).CaMKII(docked~y,r!8,l!7,c!14,Y286~0,S306~0,cam).\
+CaMKII(docked~y,r!9,l!8,c!15,Y286~0,S306~0,cam).CaMKII(docked~y,r!10,l!9,c!16,Y286~0,S306~0,cam).\
+CaMKII(docked~y,r!11,l!10,c!17,Y286~0,S306~0,cam).CaMKII(docked~y,r!12,l!11,c!18,Y286~0,S306~0,cam) 63 #200 #90-240 in PSD from Feng, Raghavachari & Lisman Brain research.2011. #53.3*(NA*V)/8 #uM (80*8/12 = 53.3 for holo in PSD)
+  PP1() 1.25*(NA*V) #uM
+end seed species
+
+begin observables
+  Molecules Ca Ca()
+  Molecules CaM CaM()
+  Molecules CaM1N CaM(C~0,N~1,camkii)
+  Molecules CaM2N CaM(C~0,N~2,camkii)
+  Molecules CaM1C CaM(C~1,N~0,camkii)
+  Molecules CaM1C1N CaM(C~1,N~1,camkii)
+  Molecules CaM1C2N CaM(C~1,N~2,camkii)
+  Molecules CaM2C CaM(C~2,N~0,camkii)
+  Molecules Cam2C1N CaM(C~2,N~1,camkii) 
+  Molecules Cam4Ca CaM(C~2,N~2,camkii)
+  Molecules KCaM1N CaMKII(Y286~0,cam!1).CaM(C~0,N~1,camkii!1)
+  Molecules KCaM2N CaMKII(Y286~0,cam!1).CaM(C~0,N~2,camkii!1)
+  Molecules KCaM1C CaMKII(Y286~0,cam!1).CaM(C~1,N~0,camkii!1)
+  Molecules KCaM1C1N CaMKII(Y286~0,cam!1).CaM(C~1,N~1,camkii!1)
+  Molecules KCaM1C2N CaMKII(Y286~0,cam!1).CaM(C~1,N~2,camkii!1)
+  Molecules KCaM2C CaMKII(Y286~0,cam!1).CaM(C~2,N~0,camkii!1)
+  Molecules KCam2C1N CaMKII(Y286~0,cam!1).CaM(C~2,N~1,camkii!1)
+  Molecules KCam4Ca CaMKII(Y286~0,cam!1).CaM(C~2,N~2,camkii!1)
+  Molecules pKCaM0 CaMKII(Y286~P,cam!1).CaM(C~0,N~0,camkii!1)
+  Molecules KCaM0 CaMKII(Y286~0,cam!1).CaM(C~0,N~0,camkii!1)
+  Molecules KCaM CaMKII(Y286~0,cam!1).CaM(camkii!1)
+  Molecules pKCaM1N CaMKII(Y286~P,cam!1).CaM(C~0,N~1,camkii!1)
+  Molecules pKCaM2N CaMKII(Y286~P,cam!1).CaM(C~0,N~2,camkii!1)
+  Molecules pKCaM1C CaMKII(Y286~P,cam!1).CaM(C~1,N~0,camkii!1)
+  Molecules pKCaM1C1N CaMKII(Y286~P,cam!1).CaM(C~1,N~1,camkii!1)
+  Molecules pKCaM1C2N CaMKII(Y286~P,cam!1).CaM(C~1,N~2,camkii!1)
+  Molecules pKCaM2C CaMKII(Y286~P,cam!1).CaM(C~2,N~0,camkii!1)
+  Molecules pKCam2C1N CaMKII(Y286~P,cam!1).CaM(C~2,N~1,camkii!1)
+  Molecules pKCam4Ca CaMKII(Y286~P,cam!1).CaM(C~2,N~2,camkii!1)
+  Molecules pKCaM CaMKII(Y286~P,cam!1).CaM(camkii!1)
+  Molecules KCaMII CaMKII(Y286~0,cam)
+  Molecules pKCaMII CaMKII(Y286~P,cam)
+  Molecules pKCaM_tot CaMKII(Y286~P)
+  Molecules uKCaMII_tot CaMKII(Y286~0)
+  Molecules KCaMKII_tot CaMKII(cam!1)CaM(camkii!1)
+  Molecules tics time_counter()
+end observables
+
+
+
+readFile({file=>"/Users/wish/Code/RuleHub/Published/Ordyan2020/extraCaMKIIHolo/extra_CaMKII_Holo.bngl"})
+
+begin reaction rules
+  CaM(C~0,ng,camkii) + Ca <-> CaM(C~1,ng,camkii) k_on1C,k_off1C
+  CaM(C~1,ng,camkii) + Ca <-> CaM(C~2,ng,camkii) k_on2C,k_off2C
+  CaM(N~0,ng,camkii) + Ca <-> CaM(N~1,ng,camkii) k_on1N,k_off1N
+  CaM(N~1,ng,camkii) + Ca <-> CaM(N~2,ng,camkii) k_on2N,k_off2N
+  CaMKII(Y286~0,cam) + CaM(C~0,N~0,ng,camkii) <-> CaMKII(Y286~0,cam!1).CaM(C~0,N~0,ng,camkii!1) k_onCaM0,k_offCaM0
+  CaMKII(Y286~0,cam) + CaM(C~1,N~0,camkii) <-> CaMKII(Y286~0,cam!1).CaM(C~1,N~0,camkii!1) k_onCaM1C,k_offCaM1C
+  CaMKII(Y286~0,cam) + CaM(C~2,N~0,camkii) <-> CaMKII(Y286~0,cam!1).CaM(C~2,N~0,camkii!1) k_onCaM2C,k_offCaM2C
+  CaMKII(Y286~0,cam) + CaM(C~0,N~1,camkii) <-> CaMKII(Y286~0,cam!1).CaM(C~0,N~1,camkii!1) k_onCaM1N,k_offCaM1N
+  CaMKII(Y286~0,cam) + CaM(C~1,N~1,camkii) <-> CaMKII(Y286~0,cam!1).CaM(C~1,N~1,camkii!1) k_onCaM1C1N,k_offCaM1C1N
+  CaMKII(Y286~0,cam) + CaM(C~2,N~1,camkii) <-> CaMKII(Y286~0,cam!1).CaM(C~2,N~1,camkii!1) k_onCaM2C1N,k_offCaM2C1N
+  CaMKII(Y286~0,cam) + CaM(C~0,N~2,camkii) <-> CaMKII(Y286~0,cam!1).CaM(C~0,N~2,camkii!1) k_onCaM2N,k_offCaM2N
+  CaMKII(Y286~0,cam) + CaM(C~1,N~2,camkii) <-> CaMKII(Y286~0,cam!1).CaM(C~1,N~2,camkii!1) k_onCaM1C2N,k_offCaM1C2N
+  CaMKII(Y286~0,cam) + CaM(C~2,N~2,camkii) <-> CaMKII(Y286~0,cam!1).CaM(C~2,N~2,camkii!1) k_onCaM4,k_offCaM4
+  
+  CaMKII(Y286~P,cam) + CaM(C~0,N~0,ng,camkii) <-> CaMKII(Y286~P,cam!1).CaM(C~0,N~0,ng,camkii!1) k_onpCaM0,k_offpCaM4
+  CaMKII(Y286~P,cam) + CaM(C~1,N~0,camkii) <-> CaMKII(Y286~P,cam!1).CaM(C~1,N~0,camkii!1) k_onpCaM1C,k_offpCaM4
+  CaMKII(Y286~P,cam) + CaM(C~2,N~0,camkii) <-> CaMKII(Y286~P,cam!1).CaM(C~2,N~0,camkii!1) k_onpCaM2C,k_offpCaM4
+  CaMKII(Y286~P,cam) + CaM(C~0,N~1,camkii) <-> CaMKII(Y286~P,cam!1).CaM(C~0,N~1,camkii!1) k_onpCaM1N,k_offpCaM4
+  CaMKII(Y286~P,cam) + CaM(C~1,N~1,camkii) <-> CaMKII(Y286~P,cam!1).CaM(C~1,N~1,camkii!1) k_onpCaM1C1N,k_offpCaM4
+  CaMKII(Y286~P,cam) + CaM(C~2,N~1,camkii) <-> CaMKII(Y286~P,cam!1).CaM(C~2,N~1,camkii!1) k_onpCaM2C1N,k_offpCaM4
+  CaMKII(Y286~P,cam) + CaM(C~0,N~2,camkii) <-> CaMKII(Y286~P,cam!1).CaM(C~0,N~2,camkii!1) k_onpCaM2N,k_offpCaM4
+  CaMKII(Y286~P,cam) + CaM(C~1,N~2,camkii) <-> CaMKII(Y286~P,cam!1).CaM(C~1,N~2,camkii!1) k_onpCaM1C2N,k_offpCaM4
+  CaMKII(Y286~P,cam) + CaM(C~2,N~2,camkii) <-> CaMKII(Y286~P,cam!1).CaM(C~2,N~2,camkii!1) k_onpCaM4,k_offpCaM4
+  
+  CaMKII(Y286~0,cam!1).CaM(C~0,ng,camkii!1) + Ca <-> CaMKII(Y286~0,cam!1).CaM(C~1,ng,camkii!1) k_onK1C, k_offK1C
+  CaMKII(Y286~0,cam!1).CaM(C~1,camkii!1) + Ca <-> CaMKII(Y286~0,cam!1).CaM(C~2,camkii!1) k_onK2C, k_offK2C
+  CaMKII(Y286~0,cam!1).CaM(N~0,ng,camkii!1) + Ca <-> CaMKII(Y286~0,cam!1).CaM(N~1,ng,camkii!1) k_onK1N, k_offK1N
+  CaMKII(Y286~0,cam!1).CaM(N~1,camkii!1) + Ca <-> CaMKII(Y286~0,cam!1).CaM(N~2,camkii!1) k_onK2N, k_offK2N
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~0,N~0,camkii!2).CaMKII(r!1,cam!+) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~0,N~0,camkii!2).CaMKII(r!1,cam!+) k_pCaM0
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~0,N~0,camkii!2).CaMKII(r!1,Y286~P) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~0,N~0,camkii!2).CaMKII(r!1,Y286~P) k_pCaM0
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~1,N~0,camkii!2).CaMKII(r!1,cam!+) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~1,N~0,camkii!2).CaMKII(r!1,cam!+) k_pCaM1C
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~1,N~0,camkii!2).CaMKII(r!1,Y286~P) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~1,N~0,camkii!2).CaMKII(r!1,Y286~P) k_pCaM1C
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~2,N~0,camkii!2).CaMKII(r!1,cam!+) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~2,N~0,camkii!2).CaMKII(r!1,cam!+) k_pCaM2C
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~2,N~0,camkii!2).CaMKII(r!1,Y286~P) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~2,N~0,camkii!2).CaMKII(r!1,Y286~P) k_pCaM2C
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~0,N~1,camkii!2).CaMKII(r!1,cam!+) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~0,N~1,camkii!2).CaMKII(r!1,cam!+) k_pCaM1N
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~0,N~1,camkii!2).CaMKII(r!1,Y286~P) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~0,N~1,camkii!2).CaMKII(r!1,Y286~P) k_pCaM1N
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~1,N~1,camkii!2).CaMKII(r!1,cam!+) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~1,N~1,camkii!2).CaMKII(r!1,cam!+) k_pCaM1C1N
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~1,N~1,camkii!2).CaMKII(r!1,Y286~P) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~1,N~1,camkii!2).CaMKII(r!1,Y286~P) k_pCaM1C1N
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~2,N~1,camkii!2).CaMKII(r!1,cam!+) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~2,N~1,camkii!2).CaMKII(r!1,cam!+) k_pCaM2C1N
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~2,N~1,camkii!2).CaMKII(r!1,Y286~P) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~2,N~1,camkii!2).CaMKII(r!1,Y286~P) k_pCaM2C1N
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~0,N~2,camkii!2).CaMKII(r!1,cam!+) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~0,N~2,camkii!2).CaMKII(r!1,cam!+) k_pCaM2N
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~0,N~2,camkii!2).CaMKII(r!1,Y286~P) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~0,N~2,camkii!2).CaMKII(r!1,Y286~P) k_pCaM2N
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~1,N~2,camkii!2).CaMKII(r!1,cam!+) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~1,N~2,camkii!2).CaMKII(r!1,cam!+) k_pCaM1C2N
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~1,N~2,camkii!2).CaMKII(r!1,Y286~P) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~1,N~2,camkii!2).CaMKII(r!1,Y286~P) k_pCaM1C2N
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~2,N~2,camkii!2).CaMKII(r!1,cam!+) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~2,N~2,camkii!2).CaMKII(r!1,cam!+) k_pCaM4
+  CaMKII(l!1,Y286~0,cam!2).CaM(C~2,N~2,camkii!2).CaMKII(r!1,Y286~P) -> CaMKII(l!1,Y286~P,cam!2).CaM(C~2,N~2,camkii!2).CaMKII(r!1,Y286~P) k_pCaM4
+  CaM(C~0,N~0,ng,camkii) + Ng(cam) <-> CaM(C~0,N~0,ng!1,camkii).Ng(cam!1) k_onNg, k_offNg
+  CaMKII(Y286~P) + PP1 -> CaMKII(Y286~0) + PP1 MM(k_cat,K_m)
+  0 -> time_counter() tics_per_second
+  0 -> Ca() alpha_function()
+  0 <-> Ca() 100, 3000/(NA*V)
+end reaction rules
+end model
+#writeXML();
+#simulate({method=>"nf",gml=>1000000,t_end=>179.863,n_steps=>100000,print_functions=>1})
+
+
+begin actions
+simulate({method=>"nf",t_end=>10,n_steps=>100})
+
+end actions

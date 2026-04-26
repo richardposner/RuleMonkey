@@ -1,0 +1,7 @@
+observable	I_mean	I_std	n_reps
+Obs_Free_L	8.12343e+07	9810.59	100
+Obs_Free_R	398331	5767.64	100
+Obs_Bonds	1.61857e+07	16492.8	100
+Obs_Free_L_sites	1.63814e+08	16492.8	100
+Obs_Free_R_sites	1.81426e+06	16492.8	100
+Obs_Cyclic_Dimer	3.40646e+06	9001.54	100

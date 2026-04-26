@@ -1,0 +1,41 @@
+model	tier	t_end	n_steps	nfsim_flags	network_free
+combo_addbond_connected	combinations	200	100		no
+combo_exclude_with_complex	combinations	100	100		no
+combo_localfcn_multisite	combinations	200	100		no
+combo_multimol_unimol	combinations	100	100		no
+combo_shorthand_embed	combinations	100	100		no
+combo_strict_product_plus	combinations	100	100		no
+combo_symmetric_rings	combinations	100	100	-bscb -utl 5	no
+combo_synth_degrade_equilibrium	combinations	500	100		no
+ft_blbr	base	100	100		no
+ft_bond_wildcards	base	100	100		no
+ft_catalytic_unbinding	base	100	100		no
+ft_clamped_species	base	100	100		no
+ft_competitive_binding	base	100	100		no
+ft_conditional_rate	base	500	100		no
+ft_cooperative_binding	base	100	100		no
+ft_delete_molecules	base	200	100		no
+ft_energy_patterns	base	500	100		no
+ft_exclude_reactants	base	100	100		no
+ft_functional_rate	base	300	100		no
+ft_include_reactants	base	100	100		no
+ft_local_functions	base	100	100		no
+ft_match_once	base	10	50		no
+ft_multi_product	base	200	100		no
+ft_multi_site_binding	base	100	100		no
+ft_multisite_phospho	base	200	100		no
+ft_multistate	base	300	100		no
+ft_push_pull	base	200	100		no
+ft_receptor_dimerization	base	100	100		no
+ft_receptor_heterogeneity	base	100	100		no
+ft_ring_closure	base	100	100	-bscb -utl 5	no
+ft_signaling_cascade	base	100	100		no
+ft_species_vs_molecules	base	50	100		no
+ft_state_wildcards	base	200	100		no
+ft_stiff_system	base	200	100		no
+ft_synthesis_degradation	base	500	100		no
+ft_tlbr	base	100	100		no
+ft_total_rate	base	100	100		no
+nf_branching_aggregate	network-free	200	100		yes
+nf_large_multivalent	network-free	100	100		yes
+nf_linear_polymer	network-free	200	100		yes

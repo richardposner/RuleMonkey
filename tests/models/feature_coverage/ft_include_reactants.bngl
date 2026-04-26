@@ -1,0 +1,47 @@
+# Feature: include_reactants(N, pattern) modifier on rules
+# Tests: only allows reaction when reactant N matches the included pattern
+# Tier: base
+# Expected: slow phosphorylation converts A(p~U) to A(p~P). include_reactants
+#   allows only A(p~P) to bind B, so AB accumulation is rate-limited by
+#   phosphorylation. Without the constraint, all A binds B immediately.
+#   ODE (BNG2 network expansion) correctly enforces this. NFsim ignores it.
+# Note: NFsim ignores include_reactants in network-free mode; ODE used as verdict
+
+begin model
+begin parameters
+    A_tot   100
+    B_tot   100
+    k_phos  0.01   # /s — slow phosphorylation (tau ~ 100s)
+    kf      0.01   # /(s*molecule) — binding
+    kr      0.05   # /s — unbinding
+end parameters
+
+begin molecule types
+    A(s,p~U~P)
+    B(s)
+end molecule types
+
+begin seed species
+    A(s,p~U)  A_tot
+    B(s)      B_tot
+end seed species
+
+begin observables
+    Molecules  A_phos     A(p~P)
+    Molecules  AB_total   A(s!1).B(s!1)
+    Molecules  B_free     B(s)
+end observables
+
+begin reaction rules
+    # Slow phosphorylation: rate-limits available A for binding
+    A(p~U) -> A(p~P)  k_phos
+
+    # Binding: only phosphorylated A can bind B
+    # ODE and RM enforce this; NFsim ignores it
+    A(s) + B(s) <-> A(s!1).B(s!1)  kf, kr  include_reactants(1,A(p~P))
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>200,n_steps=>50})
+end actions

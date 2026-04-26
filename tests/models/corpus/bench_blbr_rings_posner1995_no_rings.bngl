@@ -1,0 +1,128 @@
+begin model
+
+#@title: |
+#  Bivalent ligand-bivalent receptor aggregation without ring closure
+#  (Posner, Wofsy, and Goldstein, 1995; Posner, Wofsy, and Goldstein, 1995)
+
+#@description: |
+#  Network-free (NFsim) kinetic model of symmetric bivalent ligand
+#  binding to bivalent cell-surface receptors, forming open chains only.
+#  Three processes: (1) ligand capture from solution, (2) receptor
+#  cross-linking by tethered ligand, and (3) ligand-receptor bond
+#  dissociation. Ring closure is excluded, so no cyclic species form.
+#
+#  This is a simplified variant of the full Dembo/Goldstein/Posner
+#  model that omits the ring closure pathway. It serves as a baseline
+#  for validation against the Posner et al. (1995) kinetic ODEs
+#  (eqs 14a-14i with j+2 = j-2 = 0).
+
+#@keyword: |
+#  bivalent ligand, bivalent receptor, cross-linking, aggregation,
+#  prozone effect, bell-shaped dose response, mass action, network-free,
+#  NFsim, IgE, basophil
+
+#@reference: |
+#  Dembo M, Goldstein B (1978). Theory of equilibrium binding of
+#  symmetric bivalent haptens to cell surface antibody: application
+#  to histamine release from basophils. J Immunol 121:345-353.
+#  doi:10.4049/jimmunol.121.1.345
+#
+#  Posner RG, Wofsy C, Goldstein B (1995). The kinetics of bivalent
+#  ligand-bivalent receptor aggregation: ring formation and the
+#  breakdown of the equivalent site approximation. Math Biosci
+#  126:171-190. doi:10.1016/0025-5564(94)00045-2
+
+#@note: |
+#  Network generation is not feasible because bivalent-bivalent
+#  cross-linking produces an unbounded set of chain species.
+#  NFsim is used with complex tracking (complex=>1).
+#
+#  Mapping to Posner et al. (1995) notation:
+#    k+1 = kf, k-1 = koff, k+2 = kxf, k-2 = koff
+#    j+2 = 0, j-2 = 0 (no ring closure or opening)
+#  Mapping to Posner et al. (1995):
+#    H = 2*Ka, k = KxRT
+
+begin parameters
+
+  # Physical constants
+  NA  6.02214076e23  # /mol
+
+  # Experimental conditions
+  V_cell  1e-9  # L/cell
+  R_per_cell  3e5  # molecules/cell
+
+  # SSA/NFsim scaling
+  f  0.01  # dimensionless
+  V_sim  V_cell*f  # L
+
+  # Scaled molecule counts
+  RT  R_per_cell*f  # molecules (= 3000)
+
+  # Total ligand
+  LT_per_cell  3e6  # molecules/cell
+  LT  LT_per_cell*f  # molecules
+
+  # Single-site kinetic rate constants
+  kon  1e6  # /M/s
+  koff  0.01  # /s
+
+  # Dimensionless control parameters
+  KxRT  5  # dimensionless
+
+  # Stochastic rate constants (single-site, per molecule pair)
+  kf  kon/(NA*V_sim)  # /(molecule*s)
+  kxf  KxRT/RT*koff  # /(molecule*s)
+
+end parameters
+
+begin molecule types
+  # Bivalent ligand: two identical receptor-binding sites
+  L(r,r)
+  # Bivalent receptor: two identical ligand-binding sites
+  R(l,l)
+end molecule types
+
+begin seed species
+  L(r,r)  LT  # molecules
+  R(l,l)  RT  # molecules
+end seed species
+
+begin observables
+  # Free ligand (both sites unbound)
+  Species    Obs_Free_L        L(r,r)
+  # Free receptor (both sites unbound)
+  Species    Obs_Free_R        R(l,l)
+  # Total ligand-receptor bonds
+  Molecules  Obs_Bonds         L(r!1).R(l!1)
+  # Free ligand sites (on any ligand)
+  Molecules  Obs_Free_L_sites  L(r)
+  # Free receptor sites (on any receptor)
+  Molecules  Obs_Free_R_sites  R(l)
+end observables
+
+begin reaction rules
+
+  # ================================================================
+  # Ligand capture: free ligand binds receptor site
+  # ================================================================
+  R_capture:  L(r,r) + R(l) -> L(r!1,r).R(l!1)  kf
+
+  # ================================================================
+  # Cross-linking: tethered ligand arm binds DIFFERENT complex
+  # ================================================================
+  R_crosslink:  L(r!+,r) + R(l) -> L(r!+,r!1).R(l!1)  kxf
+
+  # ================================================================
+  # Bond dissociation: any L-R bond breaks
+  # ================================================================
+  R_dissoc:  L(r!1).R(l!1) -> L(r) + R(l)  koff
+
+end reaction rules
+
+end model
+
+begin actions
+
+simulate({method=>"nf",t_end=>50,n_steps=>50})
+end actions

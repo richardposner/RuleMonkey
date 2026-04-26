@@ -1,0 +1,2564 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created by BioNetGen 2.9.3  -->
+<sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
+  <model id="egfr_nf_iter5p12h10">
+    <ListOfParameters>
+      <Parameter id="alpha1_pre__FREE" type="Constant" value="2.7045737e-5" expr="2.7045737314771113e-05"/>
+      <Parameter id="alpha2_pre__FREE" type="Constant" value="3.1845682e-5" expr="3.184568164050325e-05"/>
+      <Parameter id="alpha3_pre__FREE" type="Constant" value="4.2027182e-5" expr="4.202718194314338e-05"/>
+      <Parameter id="alpha4_pre__FREE" type="Constant" value="3.143997e-5" expr="3.143997007053603e-05"/>
+      <Parameter id="chi_r__FREE" type="Constant" value="16162.196" expr="16162.195588136357"/>
+      <Parameter id="k_c__FREE" type="Constant" value="1.6388775" expr="1.6388775237139481"/>
+      <Parameter id="k_o__FREE" type="Constant" value="0.76816811" expr="0.7681681066753975"/>
+      <Parameter id="kaf__FREE" type="Constant" value="58.96888" expr="58.96888043601492"/>
+      <Parameter id="kar__FREE" type="Constant" value="2.6746491" expr="2.6746491058184914"/>
+      <Parameter id="NA" type="Constant" value="6.02214e+14" expr="6.02214e14"/>
+      <Parameter id="f" type="Constant" value="0.01" expr="0.01"/>
+      <Parameter id="cellDen" type="Constant" value="6e+8" expr="6.0e8"/>
+      <Parameter id="Vo" type="Constant" value="1.6666667e-11" expr="f/cellDen"/>
+      <Parameter id="LT_nM" type="Constant" value="30" expr="30"/>
+      <Parameter id="LT" type="Constant" value="301107" expr="(LT_nM*NA)*Vo"/>
+      <Parameter id="RT" type="Constant" value="903.321" expr="(0.09*NA)*Vo"/>
+      <Parameter id="K11" type="Constant" value="4.6" expr="4.6"/>
+      <Parameter id="k11r" type="Constant" value="0.02" expr="0.02"/>
+      <Parameter id="k11f" type="Constant" value="9.1661768e-6" expr="(K11*k11r)/(NA*Vo)"/>
+      <Parameter id="K21" type="Constant" value="5.3" expr="5.3"/>
+      <Parameter id="k21r" type="Constant" value="0.02" expr="0.02"/>
+      <Parameter id="k21f" type="Constant" value="5.2805149e-6" expr="((K21*k21r)/2)/(NA*Vo)"/>
+      <Parameter id="K22" type="Constant" value="0.34" expr="0.34"/>
+      <Parameter id="k22r" type="Constant" value="0.2" expr="0.2"/>
+      <Parameter id="k22f" type="Constant" value="1.355e-5" expr="((2*K22)*k22r)/(NA*Vo)"/>
+      <Parameter id="L20" type="Constant" value="212" expr="212"/>
+      <Parameter id="l20r" type="Constant" value="1.24" expr="1.24"/>
+      <Parameter id="l20f" type="Constant" value="0.052382708" expr="((2*L20)*l20r)/(NA*Vo)"/>
+      <Parameter id="L21" type="Constant" value="244" expr="244"/>
+      <Parameter id="l21r" type="Constant" value="0.738" expr="0.738"/>
+      <Parameter id="l21f" type="Constant" value="0.017940998" expr="(L21*l21r)/(NA*Vo)"/>
+      <Parameter id="L22" type="Constant" value="18" expr="18.0"/>
+      <Parameter id="l22r" type="Constant" value="0.272" expr="0.272"/>
+      <Parameter id="l22f" type="Constant" value="0.00097560004" expr="((2*L22)*l22r)/(NA*Vo)"/>
+      <Parameter id="k_o" type="Constant" value="0.76816811" expr="k_o__FREE"/>
+      <Parameter id="k_c" type="Constant" value="1.6388775" expr="k_c__FREE"/>
+      <Parameter id="kaf" type="Constant" value="0.0058752085" expr="kaf__FREE/(NA*Vo)"/>
+      <Parameter id="kar" type="Constant" value="2.6746491" expr="kar__FREE"/>
+      <Parameter id="kp" type="Constant" value="1" expr="1"/>
+      <Parameter id="kdp" type="Constant" value="1" expr="1"/>
+      <Parameter id="chi_r" type="Constant" value="1.6221834e+8" expr="chi_r__FREE*(NA*Vo)"/>
+      <Parameter id="avg1" type="Constant" value="34.5" expr="34.5"/>
+      <Parameter id="avg2" type="Constant" value="25.6" expr="25.6"/>
+      <Parameter id="avg3" type="Constant" value="0.578" expr="0.578"/>
+      <Parameter id="avg4" type="Constant" value="0.75" expr="0.75"/>
+      <Parameter id="alpha1_pre" type="Constant" value="2.7045737e-5" expr="alpha1_pre__FREE"/>
+      <Parameter id="alpha2_pre" type="Constant" value="3.1845682e-5" expr="alpha2_pre__FREE"/>
+      <Parameter id="alpha3_pre" type="Constant" value="4.2027182e-5" expr="alpha3_pre__FREE"/>
+      <Parameter id="alpha4_pre" type="Constant" value="3.143997e-5" expr="alpha4_pre__FREE"/>
+      <Parameter id="alpha1" type="Constant" value="0.00093307794" expr="alpha1_pre*avg1"/>
+      <Parameter id="alpha2" type="Constant" value="0.00081524945" expr="alpha2_pre*avg2"/>
+      <Parameter id="alpha3" type="Constant" value="2.4291711e-5" expr="alpha3_pre*avg3"/>
+      <Parameter id="alpha4" type="Constant" value="2.3579978e-5" expr="alpha4_pre*avg4"/>
+      <Parameter id="KD" type="Constant" value="47.343868" expr="(2*l20r)/l20f"/>
+      <Parameter id="term" type="Constant" value="11.39516" expr="-1+sqrt((1+((8*RT)/KD)))"/>
+      <Parameter id="MT" type="Constant" value="134.87274" expr="(term*KD)/4"/>
+      <Parameter id="DT" type="Constant" value="384.22413" expr="((term*term)*KD)/16"/>
+      <Parameter id="_rateLaw1" type="Constant" value="8497436" expr="chi_r*l20f"/>
+      <Parameter id="_rateLaw2" type="Constant" value="2910358.9" expr="chi_r*l21f"/>
+      <Parameter id="_rateLaw3" type="Constant" value="158260.22" expr="chi_r*l22f"/>
+      <Parameter id="_rateLaw4" type="Constant" value="953066.58" expr="chi_r*kaf"/>
+    </ListOfParameters>
+    <ListOfMoleculeTypes>
+      <MoleculeType id="EGF">
+        <ListOfComponentTypes>
+          <ComponentType id="rec"/>
+        </ListOfComponentTypes>
+      </MoleculeType>
+      <MoleculeType id="EGFR">
+        <ListOfComponentTypes>
+          <ComponentType id="back"/>
+          <ComponentType id="lig"/>
+          <ComponentType id="cd">
+            <ListOfAllowedStates>
+              <AllowedState id="c"/>
+              <AllowedState id="o"/>
+            </ListOfAllowedStates>
+          </ComponentType>
+          <ComponentType id="Y">
+            <ListOfAllowedStates>
+              <AllowedState id="u"/>
+              <AllowedState id="p"/>
+            </ListOfAllowedStates>
+          </ComponentType>
+        </ListOfComponentTypes>
+      </MoleculeType>
+    </ListOfMoleculeTypes>
+    <ListOfCompartments>
+    </ListOfCompartments>
+    <ListOfSpecies>
+      <Species id="S1"  concentration="LT" name="EGF(rec)">
+        <ListOfMolecules>
+          <Molecule id="S1_M1" name="EGF">
+            <ListOfComponents>
+              <Component id="S1_M1_C1" name="rec" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+      </Species>
+      <Species id="S2"  concentration="MT" name="EGFR(Y~u,back,cd~c,lig)">
+        <ListOfMolecules>
+          <Molecule id="S2_M1" name="EGFR">
+            <ListOfComponents>
+              <Component id="S2_M1_C1" name="Y" state="u" numberOfBonds="0"/>
+              <Component id="S2_M1_C2" name="back" numberOfBonds="0"/>
+              <Component id="S2_M1_C3" name="cd" state="c" numberOfBonds="0"/>
+              <Component id="S2_M1_C4" name="lig" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+      </Species>
+      <Species id="S3"  concentration="DT" name="EGFR(Y~u,back!1,cd~c,lig).EGFR(Y~u,back!1,cd~c,lig)">
+        <ListOfMolecules>
+          <Molecule id="S3_M1" name="EGFR">
+            <ListOfComponents>
+              <Component id="S3_M1_C1" name="Y" state="u" numberOfBonds="0"/>
+              <Component id="S3_M1_C2" name="back" numberOfBonds="1"/>
+              <Component id="S3_M1_C3" name="cd" state="c" numberOfBonds="0"/>
+              <Component id="S3_M1_C4" name="lig" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S3_M2" name="EGFR">
+            <ListOfComponents>
+              <Component id="S3_M2_C1" name="Y" state="u" numberOfBonds="0"/>
+              <Component id="S3_M2_C2" name="back" numberOfBonds="1"/>
+              <Component id="S3_M2_C3" name="cd" state="c" numberOfBonds="0"/>
+              <Component id="S3_M2_C4" name="lig" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S3_B1" site1="S3_M1_C2" site2="S3_M2_C2"/>
+        </ListOfBonds>
+      </Species>
+    </ListOfSpecies>
+    <ListOfReactionRules>
+      <ReactionRule id="RR1" name="_R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR1_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP1_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR1_RP1_M1_C1" name="rec" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+          <ReactantPattern id="RR1_RP2">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP2_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR1_RP2_M1_C1" name="back" numberOfBonds="0"/>
+                  <Component id="RR1_RP2_M1_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR1_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP1_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR1_PP1_M1_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR1_PP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR1_PP1_M2_C1" name="back" numberOfBonds="0"/>
+                  <Component id="RR1_PP1_M2_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR1_PP1_B1" site1="RR1_PP1_M1_C1" site2="RR1_PP1_M2_C2"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR1_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="k11f"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR1_RP1_M1" targetID="RR1_PP1_M1"/>
+          <MapItem sourceID="RR1_RP1_M1_C1" targetID="RR1_PP1_M1_C1"/>
+          <MapItem sourceID="RR1_RP2_M1" targetID="RR1_PP1_M2"/>
+          <MapItem sourceID="RR1_RP2_M1_C1" targetID="RR1_PP1_M2_C1"/>
+          <MapItem sourceID="RR1_RP2_M1_C2" targetID="RR1_PP1_M2_C2"/>
+        </Map>
+        <ListOfOperations>
+          <AddBond site1="RR1_RP1_M1_C1" site2="RR1_RP2_M1_C2"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR2" name="_reverse__R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR2_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_RP1_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR2_RP1_M1_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR2_RP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR2_RP1_M2_C1" name="back" numberOfBonds="0"/>
+                  <Component id="RR2_RP1_M2_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR2_RP1_B1" site1="RR2_RP1_M1_C1" site2="RR2_RP1_M2_C2"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR2_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_PP1_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR2_PP1_M1_C1" name="rec" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+          <ProductPattern id="RR2_PP2">
+            <ListOfMolecules>
+              <Molecule id="RR2_PP2_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR2_PP2_M1_C1" name="back" numberOfBonds="0"/>
+                  <Component id="RR2_PP2_M1_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR2_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="k11r"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR2_RP1_M1" targetID="RR2_PP1_M1"/>
+          <MapItem sourceID="RR2_RP1_M1_C1" targetID="RR2_PP1_M1_C1"/>
+          <MapItem sourceID="RR2_RP1_M2" targetID="RR2_PP2_M1"/>
+          <MapItem sourceID="RR2_RP1_M2_C1" targetID="RR2_PP2_M1_C1"/>
+          <MapItem sourceID="RR2_RP1_M2_C2" targetID="RR2_PP2_M1_C2"/>
+        </Map>
+        <ListOfOperations>
+          <DeleteBond site1="RR2_RP1_M1_C1" site2="RR2_RP1_M2_C2"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR3" name="_R2" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR3_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR3_RP1_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR3_RP1_M1_C1" name="rec" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+          <ReactantPattern id="RR3_RP2">
+            <ListOfMolecules>
+              <Molecule id="RR3_RP2_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR3_RP2_M1_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR3_RP2_M1_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR3_RP2_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR3_RP2_M2_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR3_RP2_M2_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR3_RP2_B1" site1="RR3_RP2_M1_C1" site2="RR3_RP2_M2_C1"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR3_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR3_PP1_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR3_PP1_M1_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR3_PP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR3_PP1_M2_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR3_PP1_M2_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR3_PP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR3_PP1_M3_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR3_PP1_M3_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR3_PP1_B1" site1="RR3_PP1_M1_C1" site2="RR3_PP1_M2_C2"/>
+              <Bond id="RR3_PP1_B2" site1="RR3_PP1_M2_C1" site2="RR3_PP1_M3_C1"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR3_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="k21f"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR3_RP1_M1" targetID="RR3_PP1_M1"/>
+          <MapItem sourceID="RR3_RP1_M1_C1" targetID="RR3_PP1_M1_C1"/>
+          <MapItem sourceID="RR3_RP2_M1" targetID="RR3_PP1_M2"/>
+          <MapItem sourceID="RR3_RP2_M1_C1" targetID="RR3_PP1_M2_C1"/>
+          <MapItem sourceID="RR3_RP2_M1_C2" targetID="RR3_PP1_M2_C2"/>
+          <MapItem sourceID="RR3_RP2_M2" targetID="RR3_PP1_M3"/>
+          <MapItem sourceID="RR3_RP2_M2_C1" targetID="RR3_PP1_M3_C1"/>
+          <MapItem sourceID="RR3_RP2_M2_C2" targetID="RR3_PP1_M3_C2"/>
+        </Map>
+        <ListOfOperations>
+          <AddBond site1="RR3_RP1_M1_C1" site2="RR3_RP2_M1_C2"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR4" name="_reverse__R2" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR4_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR4_RP1_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR4_RP1_M1_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR4_RP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR4_RP1_M2_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR4_RP1_M2_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR4_RP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR4_RP1_M3_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR4_RP1_M3_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR4_RP1_B1" site1="RR4_RP1_M1_C1" site2="RR4_RP1_M2_C2"/>
+              <Bond id="RR4_RP1_B2" site1="RR4_RP1_M2_C1" site2="RR4_RP1_M3_C1"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR4_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR4_PP1_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR4_PP1_M1_C1" name="rec" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+          <ProductPattern id="RR4_PP2">
+            <ListOfMolecules>
+              <Molecule id="RR4_PP2_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR4_PP2_M1_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR4_PP2_M1_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR4_PP2_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR4_PP2_M2_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR4_PP2_M2_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR4_PP2_B1" site1="RR4_PP2_M1_C1" site2="RR4_PP2_M2_C1"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR4_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="k21r"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR4_RP1_M1" targetID="RR4_PP1_M1"/>
+          <MapItem sourceID="RR4_RP1_M1_C1" targetID="RR4_PP1_M1_C1"/>
+          <MapItem sourceID="RR4_RP1_M2" targetID="RR4_PP2_M1"/>
+          <MapItem sourceID="RR4_RP1_M2_C1" targetID="RR4_PP2_M1_C1"/>
+          <MapItem sourceID="RR4_RP1_M2_C2" targetID="RR4_PP2_M1_C2"/>
+          <MapItem sourceID="RR4_RP1_M3" targetID="RR4_PP2_M2"/>
+          <MapItem sourceID="RR4_RP1_M3_C1" targetID="RR4_PP2_M2_C1"/>
+          <MapItem sourceID="RR4_RP1_M3_C2" targetID="RR4_PP2_M2_C2"/>
+        </Map>
+        <ListOfOperations>
+          <DeleteBond site1="RR4_RP1_M1_C1" site2="RR4_RP1_M2_C2"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR5" name="_R3" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR5_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR5_RP1_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR5_RP1_M1_C1" name="rec" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+          <ReactantPattern id="RR5_RP2">
+            <ListOfMolecules>
+              <Molecule id="RR5_RP2_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR5_RP2_M1_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR5_RP2_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR5_RP2_M2_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR5_RP2_M2_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR5_RP2_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR5_RP2_M3_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR5_RP2_M3_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR5_RP2_B1" site1="RR5_RP2_M1_C1" site2="RR5_RP2_M2_C2"/>
+              <Bond id="RR5_RP2_B2" site1="RR5_RP2_M2_C1" site2="RR5_RP2_M3_C1"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR5_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR5_PP1_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR5_PP1_M1_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR5_PP1_M2" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR5_PP1_M2_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR5_PP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR5_PP1_M3_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR5_PP1_M3_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR5_PP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR5_PP1_M4_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR5_PP1_M4_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR5_PP1_B1" site1="RR5_PP1_M1_C1" site2="RR5_PP1_M4_C2"/>
+              <Bond id="RR5_PP1_B2" site1="RR5_PP1_M2_C1" site2="RR5_PP1_M3_C2"/>
+              <Bond id="RR5_PP1_B3" site1="RR5_PP1_M3_C1" site2="RR5_PP1_M4_C1"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR5_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="k22f"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR5_RP1_M1" targetID="RR5_PP1_M1"/>
+          <MapItem sourceID="RR5_RP1_M1_C1" targetID="RR5_PP1_M1_C1"/>
+          <MapItem sourceID="RR5_RP2_M1" targetID="RR5_PP1_M2"/>
+          <MapItem sourceID="RR5_RP2_M1_C1" targetID="RR5_PP1_M2_C1"/>
+          <MapItem sourceID="RR5_RP2_M2" targetID="RR5_PP1_M3"/>
+          <MapItem sourceID="RR5_RP2_M2_C1" targetID="RR5_PP1_M3_C1"/>
+          <MapItem sourceID="RR5_RP2_M2_C2" targetID="RR5_PP1_M3_C2"/>
+          <MapItem sourceID="RR5_RP2_M3" targetID="RR5_PP1_M4"/>
+          <MapItem sourceID="RR5_RP2_M3_C1" targetID="RR5_PP1_M4_C1"/>
+          <MapItem sourceID="RR5_RP2_M3_C2" targetID="RR5_PP1_M4_C2"/>
+        </Map>
+        <ListOfOperations>
+          <AddBond site1="RR5_RP1_M1_C1" site2="RR5_RP2_M3_C2"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR6" name="_reverse__R3" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR6_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR6_RP1_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR6_RP1_M1_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR6_RP1_M2" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR6_RP1_M2_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR6_RP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR6_RP1_M3_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR6_RP1_M3_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR6_RP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR6_RP1_M4_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR6_RP1_M4_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR6_RP1_B1" site1="RR6_RP1_M1_C1" site2="RR6_RP1_M4_C2"/>
+              <Bond id="RR6_RP1_B2" site1="RR6_RP1_M2_C1" site2="RR6_RP1_M3_C2"/>
+              <Bond id="RR6_RP1_B3" site1="RR6_RP1_M3_C1" site2="RR6_RP1_M4_C1"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR6_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR6_PP1_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR6_PP1_M1_C1" name="rec" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+          <ProductPattern id="RR6_PP2">
+            <ListOfMolecules>
+              <Molecule id="RR6_PP2_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR6_PP2_M1_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR6_PP2_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR6_PP2_M2_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR6_PP2_M2_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR6_PP2_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR6_PP2_M3_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR6_PP2_M3_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR6_PP2_B1" site1="RR6_PP2_M1_C1" site2="RR6_PP2_M2_C2"/>
+              <Bond id="RR6_PP2_B2" site1="RR6_PP2_M2_C1" site2="RR6_PP2_M3_C1"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR6_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="k22r"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR6_RP1_M1" targetID="RR6_PP1_M1"/>
+          <MapItem sourceID="RR6_RP1_M1_C1" targetID="RR6_PP1_M1_C1"/>
+          <MapItem sourceID="RR6_RP1_M2" targetID="RR6_PP2_M1"/>
+          <MapItem sourceID="RR6_RP1_M2_C1" targetID="RR6_PP2_M1_C1"/>
+          <MapItem sourceID="RR6_RP1_M3" targetID="RR6_PP2_M2"/>
+          <MapItem sourceID="RR6_RP1_M3_C1" targetID="RR6_PP2_M2_C1"/>
+          <MapItem sourceID="RR6_RP1_M3_C2" targetID="RR6_PP2_M2_C2"/>
+          <MapItem sourceID="RR6_RP1_M4" targetID="RR6_PP2_M3"/>
+          <MapItem sourceID="RR6_RP1_M4_C1" targetID="RR6_PP2_M3_C1"/>
+          <MapItem sourceID="RR6_RP1_M4_C2" targetID="RR6_PP2_M3_C2"/>
+        </Map>
+        <ListOfOperations>
+          <DeleteBond site1="RR6_RP1_M1_C1" site2="RR6_RP1_M4_C2"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR7" name="_R4" symmetry_factor="0.5">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR7_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR7_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR7_RP1_M1_C1" name="back" numberOfBonds="0"/>
+                  <Component id="RR7_RP1_M1_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+          <ReactantPattern id="RR7_RP2">
+            <ListOfMolecules>
+              <Molecule id="RR7_RP2_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR7_RP2_M1_C1" name="back" numberOfBonds="0"/>
+                  <Component id="RR7_RP2_M1_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR7_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR7_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR7_PP1_M1_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR7_PP1_M1_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR7_PP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR7_PP1_M2_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR7_PP1_M2_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR7_PP1_B1" site1="RR7_PP1_M1_C1" site2="RR7_PP1_M2_C1"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR7_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="l20f"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR7_RP1_M1" targetID="RR7_PP1_M1"/>
+          <MapItem sourceID="RR7_RP1_M1_C1" targetID="RR7_PP1_M1_C1"/>
+          <MapItem sourceID="RR7_RP1_M1_C2" targetID="RR7_PP1_M1_C2"/>
+          <MapItem sourceID="RR7_RP2_M1" targetID="RR7_PP1_M2"/>
+          <MapItem sourceID="RR7_RP2_M1_C1" targetID="RR7_PP1_M2_C1"/>
+          <MapItem sourceID="RR7_RP2_M1_C2" targetID="RR7_PP1_M2_C2"/>
+        </Map>
+        <ListOfOperations>
+          <AddBond site1="RR7_RP1_M1_C1" site2="RR7_RP2_M1_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR8" name="_reverse__R4" symmetry_factor="0.5">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR8_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR8_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR8_RP1_M1_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR8_RP1_M1_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR8_RP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR8_RP1_M2_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR8_RP1_M2_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR8_RP1_B1" site1="RR8_RP1_M1_C1" site2="RR8_RP1_M2_C1"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR8_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR8_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR8_PP1_M1_C1" name="back" numberOfBonds="0"/>
+                  <Component id="RR8_PP1_M1_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+          <ProductPattern id="RR8_PP2">
+            <ListOfMolecules>
+              <Molecule id="RR8_PP2_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR8_PP2_M1_C1" name="back" numberOfBonds="0"/>
+                  <Component id="RR8_PP2_M1_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR8_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="l20r"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR8_RP1_M1" targetID="RR8_PP1_M1"/>
+          <MapItem sourceID="RR8_RP1_M1_C1" targetID="RR8_PP1_M1_C1"/>
+          <MapItem sourceID="RR8_RP1_M1_C2" targetID="RR8_PP1_M1_C2"/>
+          <MapItem sourceID="RR8_RP1_M2" targetID="RR8_PP2_M1"/>
+          <MapItem sourceID="RR8_RP1_M2_C1" targetID="RR8_PP2_M1_C1"/>
+          <MapItem sourceID="RR8_RP1_M2_C2" targetID="RR8_PP2_M1_C2"/>
+        </Map>
+        <ListOfOperations>
+          <DeleteBond site1="RR8_RP1_M1_C1" site2="RR8_RP1_M2_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR9" name="_R5" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR9_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR9_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR9_RP1_M1_C1" name="back" numberOfBonds="0"/>
+                  <Component id="RR9_RP1_M1_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+          <ReactantPattern id="RR9_RP2">
+            <ListOfMolecules>
+              <Molecule id="RR9_RP2_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR9_RP2_M1_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR9_RP2_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR9_RP2_M2_C1" name="back" numberOfBonds="0"/>
+                  <Component id="RR9_RP2_M2_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR9_RP2_B1" site1="RR9_RP2_M1_C1" site2="RR9_RP2_M2_C2"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR9_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR9_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR9_PP1_M1_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR9_PP1_M1_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR9_PP1_M2" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR9_PP1_M2_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR9_PP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR9_PP1_M3_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR9_PP1_M3_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR9_PP1_B1" site1="RR9_PP1_M1_C1" site2="RR9_PP1_M3_C1"/>
+              <Bond id="RR9_PP1_B2" site1="RR9_PP1_M2_C1" site2="RR9_PP1_M3_C2"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR9_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="l21f"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR9_RP1_M1" targetID="RR9_PP1_M1"/>
+          <MapItem sourceID="RR9_RP1_M1_C1" targetID="RR9_PP1_M1_C1"/>
+          <MapItem sourceID="RR9_RP1_M1_C2" targetID="RR9_PP1_M1_C2"/>
+          <MapItem sourceID="RR9_RP2_M1" targetID="RR9_PP1_M2"/>
+          <MapItem sourceID="RR9_RP2_M1_C1" targetID="RR9_PP1_M2_C1"/>
+          <MapItem sourceID="RR9_RP2_M2" targetID="RR9_PP1_M3"/>
+          <MapItem sourceID="RR9_RP2_M2_C1" targetID="RR9_PP1_M3_C1"/>
+          <MapItem sourceID="RR9_RP2_M2_C2" targetID="RR9_PP1_M3_C2"/>
+        </Map>
+        <ListOfOperations>
+          <AddBond site1="RR9_RP1_M1_C1" site2="RR9_RP2_M2_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR10" name="_reverse__R5" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR10_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR10_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR10_RP1_M1_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR10_RP1_M1_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR10_RP1_M2" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR10_RP1_M2_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR10_RP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR10_RP1_M3_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR10_RP1_M3_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR10_RP1_B1" site1="RR10_RP1_M1_C1" site2="RR10_RP1_M3_C1"/>
+              <Bond id="RR10_RP1_B2" site1="RR10_RP1_M2_C1" site2="RR10_RP1_M3_C2"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR10_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR10_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR10_PP1_M1_C1" name="back" numberOfBonds="0"/>
+                  <Component id="RR10_PP1_M1_C2" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+          <ProductPattern id="RR10_PP2">
+            <ListOfMolecules>
+              <Molecule id="RR10_PP2_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR10_PP2_M1_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR10_PP2_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR10_PP2_M2_C1" name="back" numberOfBonds="0"/>
+                  <Component id="RR10_PP2_M2_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR10_PP2_B1" site1="RR10_PP2_M1_C1" site2="RR10_PP2_M2_C2"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR10_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="l21r"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR10_RP1_M1" targetID="RR10_PP1_M1"/>
+          <MapItem sourceID="RR10_RP1_M1_C1" targetID="RR10_PP1_M1_C1"/>
+          <MapItem sourceID="RR10_RP1_M1_C2" targetID="RR10_PP1_M1_C2"/>
+          <MapItem sourceID="RR10_RP1_M2" targetID="RR10_PP2_M1"/>
+          <MapItem sourceID="RR10_RP1_M2_C1" targetID="RR10_PP2_M1_C1"/>
+          <MapItem sourceID="RR10_RP1_M3" targetID="RR10_PP2_M2"/>
+          <MapItem sourceID="RR10_RP1_M3_C1" targetID="RR10_PP2_M2_C1"/>
+          <MapItem sourceID="RR10_RP1_M3_C2" targetID="RR10_PP2_M2_C2"/>
+        </Map>
+        <ListOfOperations>
+          <DeleteBond site1="RR10_RP1_M1_C1" site2="RR10_RP1_M3_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR11" name="_R6" symmetry_factor="0.5">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR11_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR11_RP1_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR11_RP1_M1_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR11_RP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR11_RP1_M2_C1" name="back" numberOfBonds="0"/>
+                  <Component id="RR11_RP1_M2_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR11_RP1_B1" site1="RR11_RP1_M1_C1" site2="RR11_RP1_M2_C2"/>
+            </ListOfBonds>
+          </ReactantPattern>
+          <ReactantPattern id="RR11_RP2">
+            <ListOfMolecules>
+              <Molecule id="RR11_RP2_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR11_RP2_M1_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR11_RP2_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR11_RP2_M2_C1" name="back" numberOfBonds="0"/>
+                  <Component id="RR11_RP2_M2_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR11_RP2_B1" site1="RR11_RP2_M1_C1" site2="RR11_RP2_M2_C2"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR11_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR11_PP1_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR11_PP1_M1_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR11_PP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR11_PP1_M2_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR11_PP1_M2_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR11_PP1_M3" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR11_PP1_M3_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR11_PP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR11_PP1_M4_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR11_PP1_M4_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR11_PP1_B1" site1="RR11_PP1_M1_C1" site2="RR11_PP1_M2_C2"/>
+              <Bond id="RR11_PP1_B2" site1="RR11_PP1_M2_C1" site2="RR11_PP1_M4_C1"/>
+              <Bond id="RR11_PP1_B3" site1="RR11_PP1_M3_C1" site2="RR11_PP1_M4_C2"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR11_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="l22f"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR11_RP1_M1" targetID="RR11_PP1_M1"/>
+          <MapItem sourceID="RR11_RP1_M1_C1" targetID="RR11_PP1_M1_C1"/>
+          <MapItem sourceID="RR11_RP1_M2" targetID="RR11_PP1_M2"/>
+          <MapItem sourceID="RR11_RP1_M2_C1" targetID="RR11_PP1_M2_C1"/>
+          <MapItem sourceID="RR11_RP1_M2_C2" targetID="RR11_PP1_M2_C2"/>
+          <MapItem sourceID="RR11_RP2_M1" targetID="RR11_PP1_M3"/>
+          <MapItem sourceID="RR11_RP2_M1_C1" targetID="RR11_PP1_M3_C1"/>
+          <MapItem sourceID="RR11_RP2_M2" targetID="RR11_PP1_M4"/>
+          <MapItem sourceID="RR11_RP2_M2_C1" targetID="RR11_PP1_M4_C1"/>
+          <MapItem sourceID="RR11_RP2_M2_C2" targetID="RR11_PP1_M4_C2"/>
+        </Map>
+        <ListOfOperations>
+          <AddBond site1="RR11_RP1_M2_C1" site2="RR11_RP2_M2_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR12" name="_reverse__R6" symmetry_factor="0.5">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR12_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR12_RP1_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR12_RP1_M1_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR12_RP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR12_RP1_M2_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR12_RP1_M2_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR12_RP1_M3" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR12_RP1_M3_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR12_RP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR12_RP1_M4_C1" name="back" numberOfBonds="1"/>
+                  <Component id="RR12_RP1_M4_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR12_RP1_B1" site1="RR12_RP1_M1_C1" site2="RR12_RP1_M2_C2"/>
+              <Bond id="RR12_RP1_B2" site1="RR12_RP1_M2_C1" site2="RR12_RP1_M4_C1"/>
+              <Bond id="RR12_RP1_B3" site1="RR12_RP1_M3_C1" site2="RR12_RP1_M4_C2"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR12_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR12_PP1_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR12_PP1_M1_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR12_PP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR12_PP1_M2_C1" name="back" numberOfBonds="0"/>
+                  <Component id="RR12_PP1_M2_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR12_PP1_B1" site1="RR12_PP1_M1_C1" site2="RR12_PP1_M2_C2"/>
+            </ListOfBonds>
+          </ProductPattern>
+          <ProductPattern id="RR12_PP2">
+            <ListOfMolecules>
+              <Molecule id="RR12_PP2_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="RR12_PP2_M1_C1" name="rec" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR12_PP2_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR12_PP2_M2_C1" name="back" numberOfBonds="0"/>
+                  <Component id="RR12_PP2_M2_C2" name="lig" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR12_PP2_B1" site1="RR12_PP2_M1_C1" site2="RR12_PP2_M2_C2"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR12_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="l22r"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR12_RP1_M1" targetID="RR12_PP1_M1"/>
+          <MapItem sourceID="RR12_RP1_M1_C1" targetID="RR12_PP1_M1_C1"/>
+          <MapItem sourceID="RR12_RP1_M2" targetID="RR12_PP1_M2"/>
+          <MapItem sourceID="RR12_RP1_M2_C1" targetID="RR12_PP1_M2_C1"/>
+          <MapItem sourceID="RR12_RP1_M2_C2" targetID="RR12_PP1_M2_C2"/>
+          <MapItem sourceID="RR12_RP1_M3" targetID="RR12_PP2_M1"/>
+          <MapItem sourceID="RR12_RP1_M3_C1" targetID="RR12_PP2_M1_C1"/>
+          <MapItem sourceID="RR12_RP1_M4" targetID="RR12_PP2_M2"/>
+          <MapItem sourceID="RR12_RP1_M4_C1" targetID="RR12_PP2_M2_C1"/>
+          <MapItem sourceID="RR12_RP1_M4_C2" targetID="RR12_PP2_M2_C2"/>
+        </Map>
+        <ListOfOperations>
+          <DeleteBond site1="RR12_RP1_M2_C1" site2="RR12_RP1_M4_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR13" name="_R7" symmetry_factor="0.5">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR13_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR13_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR13_RP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR13_RP1_M1_C2" name="back" numberOfBonds="0"/>
+                  <Component id="RR13_RP1_M1_C3" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR13_RP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR13_RP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR13_RP1_M2_C2" name="back" numberOfBonds="0"/>
+                  <Component id="RR13_RP1_M2_C3" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR13_RP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR13_RP1_M3_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR13_RP1_M3_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR13_RP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR13_RP1_M4_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR13_RP1_M4_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR13_RP1_B1" site1="RR13_RP1_M1_C1" site2="RR13_RP1_M4_C1"/>
+              <Bond id="RR13_RP1_B2" site1="RR13_RP1_M2_C1" site2="RR13_RP1_M3_C1"/>
+              <Bond id="RR13_RP1_B3" site1="RR13_RP1_M3_C2" site2="RR13_RP1_M4_C2"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR13_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR13_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR13_PP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR13_PP1_M1_C2" name="back" numberOfBonds="1"/>
+                  <Component id="RR13_PP1_M1_C3" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR13_PP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR13_PP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR13_PP1_M2_C2" name="back" numberOfBonds="1"/>
+                  <Component id="RR13_PP1_M2_C3" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR13_PP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR13_PP1_M3_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR13_PP1_M3_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR13_PP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR13_PP1_M4_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR13_PP1_M4_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR13_PP1_B1" site1="RR13_PP1_M1_C1" site2="RR13_PP1_M4_C1"/>
+              <Bond id="RR13_PP1_B2" site1="RR13_PP1_M1_C2" site2="RR13_PP1_M2_C2"/>
+              <Bond id="RR13_PP1_B3" site1="RR13_PP1_M2_C1" site2="RR13_PP1_M3_C1"/>
+              <Bond id="RR13_PP1_B4" site1="RR13_PP1_M3_C2" site2="RR13_PP1_M4_C2"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR13_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="_rateLaw1"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR13_RP1_M1" targetID="RR13_PP1_M1"/>
+          <MapItem sourceID="RR13_RP1_M1_C1" targetID="RR13_PP1_M1_C1"/>
+          <MapItem sourceID="RR13_RP1_M1_C2" targetID="RR13_PP1_M1_C2"/>
+          <MapItem sourceID="RR13_RP1_M1_C3" targetID="RR13_PP1_M1_C3"/>
+          <MapItem sourceID="RR13_RP1_M2" targetID="RR13_PP1_M2"/>
+          <MapItem sourceID="RR13_RP1_M2_C1" targetID="RR13_PP1_M2_C1"/>
+          <MapItem sourceID="RR13_RP1_M2_C2" targetID="RR13_PP1_M2_C2"/>
+          <MapItem sourceID="RR13_RP1_M2_C3" targetID="RR13_PP1_M2_C3"/>
+          <MapItem sourceID="RR13_RP1_M3" targetID="RR13_PP1_M3"/>
+          <MapItem sourceID="RR13_RP1_M3_C1" targetID="RR13_PP1_M3_C1"/>
+          <MapItem sourceID="RR13_RP1_M3_C2" targetID="RR13_PP1_M3_C2"/>
+          <MapItem sourceID="RR13_RP1_M4" targetID="RR13_PP1_M4"/>
+          <MapItem sourceID="RR13_RP1_M4_C1" targetID="RR13_PP1_M4_C1"/>
+          <MapItem sourceID="RR13_RP1_M4_C2" targetID="RR13_PP1_M4_C2"/>
+        </Map>
+        <ListOfOperations>
+          <AddBond site1="RR13_RP1_M1_C2" site2="RR13_RP1_M2_C2"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR14" name="_reverse__R7" symmetry_factor="0.5">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR14_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR14_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR14_RP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR14_RP1_M1_C2" name="back" numberOfBonds="1"/>
+                  <Component id="RR14_RP1_M1_C3" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR14_RP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR14_RP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR14_RP1_M2_C2" name="back" numberOfBonds="1"/>
+                  <Component id="RR14_RP1_M2_C3" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR14_RP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR14_RP1_M3_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR14_RP1_M3_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR14_RP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR14_RP1_M4_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR14_RP1_M4_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR14_RP1_B1" site1="RR14_RP1_M1_C1" site2="RR14_RP1_M4_C1"/>
+              <Bond id="RR14_RP1_B2" site1="RR14_RP1_M1_C2" site2="RR14_RP1_M2_C2"/>
+              <Bond id="RR14_RP1_B3" site1="RR14_RP1_M2_C1" site2="RR14_RP1_M3_C1"/>
+              <Bond id="RR14_RP1_B4" site1="RR14_RP1_M3_C2" site2="RR14_RP1_M4_C2"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR14_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR14_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR14_PP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR14_PP1_M1_C2" name="back" numberOfBonds="0"/>
+                  <Component id="RR14_PP1_M1_C3" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR14_PP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR14_PP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR14_PP1_M2_C2" name="back" numberOfBonds="0"/>
+                  <Component id="RR14_PP1_M2_C3" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR14_PP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR14_PP1_M3_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR14_PP1_M3_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR14_PP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR14_PP1_M4_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR14_PP1_M4_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR14_PP1_B1" site1="RR14_PP1_M1_C1" site2="RR14_PP1_M4_C1"/>
+              <Bond id="RR14_PP1_B2" site1="RR14_PP1_M2_C1" site2="RR14_PP1_M3_C1"/>
+              <Bond id="RR14_PP1_B3" site1="RR14_PP1_M3_C2" site2="RR14_PP1_M4_C2"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR14_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="l20r"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR14_RP1_M1" targetID="RR14_PP1_M1"/>
+          <MapItem sourceID="RR14_RP1_M1_C1" targetID="RR14_PP1_M1_C1"/>
+          <MapItem sourceID="RR14_RP1_M1_C2" targetID="RR14_PP1_M1_C2"/>
+          <MapItem sourceID="RR14_RP1_M1_C3" targetID="RR14_PP1_M1_C3"/>
+          <MapItem sourceID="RR14_RP1_M2" targetID="RR14_PP1_M2"/>
+          <MapItem sourceID="RR14_RP1_M2_C1" targetID="RR14_PP1_M2_C1"/>
+          <MapItem sourceID="RR14_RP1_M2_C2" targetID="RR14_PP1_M2_C2"/>
+          <MapItem sourceID="RR14_RP1_M2_C3" targetID="RR14_PP1_M2_C3"/>
+          <MapItem sourceID="RR14_RP1_M3" targetID="RR14_PP1_M3"/>
+          <MapItem sourceID="RR14_RP1_M3_C1" targetID="RR14_PP1_M3_C1"/>
+          <MapItem sourceID="RR14_RP1_M3_C2" targetID="RR14_PP1_M3_C2"/>
+          <MapItem sourceID="RR14_RP1_M4" targetID="RR14_PP1_M4"/>
+          <MapItem sourceID="RR14_RP1_M4_C1" targetID="RR14_PP1_M4_C1"/>
+          <MapItem sourceID="RR14_RP1_M4_C2" targetID="RR14_PP1_M4_C2"/>
+        </Map>
+        <ListOfOperations>
+          <DeleteBond site1="RR14_RP1_M1_C2" site2="RR14_RP1_M2_C2" ensureConnected="1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR15" name="_R8" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR15_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR15_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR15_RP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR15_RP1_M1_C2" name="back" numberOfBonds="0"/>
+                  <Component id="RR15_RP1_M1_C3" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR15_RP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR15_RP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR15_RP1_M2_C2" name="back" numberOfBonds="0"/>
+                  <Component id="RR15_RP1_M2_C3" name="lig" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR15_RP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR15_RP1_M3_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR15_RP1_M3_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR15_RP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR15_RP1_M4_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR15_RP1_M4_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR15_RP1_B1" site1="RR15_RP1_M1_C1" site2="RR15_RP1_M4_C1"/>
+              <Bond id="RR15_RP1_B2" site1="RR15_RP1_M2_C1" site2="RR15_RP1_M3_C1"/>
+              <Bond id="RR15_RP1_B3" site1="RR15_RP1_M3_C2" site2="RR15_RP1_M4_C2"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR15_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR15_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR15_PP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR15_PP1_M1_C2" name="back" numberOfBonds="1"/>
+                  <Component id="RR15_PP1_M1_C3" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR15_PP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR15_PP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR15_PP1_M2_C2" name="back" numberOfBonds="1"/>
+                  <Component id="RR15_PP1_M2_C3" name="lig" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR15_PP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR15_PP1_M3_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR15_PP1_M3_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR15_PP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR15_PP1_M4_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR15_PP1_M4_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR15_PP1_B1" site1="RR15_PP1_M1_C1" site2="RR15_PP1_M4_C1"/>
+              <Bond id="RR15_PP1_B2" site1="RR15_PP1_M1_C2" site2="RR15_PP1_M2_C2"/>
+              <Bond id="RR15_PP1_B3" site1="RR15_PP1_M2_C1" site2="RR15_PP1_M3_C1"/>
+              <Bond id="RR15_PP1_B4" site1="RR15_PP1_M3_C2" site2="RR15_PP1_M4_C2"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR15_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="_rateLaw2"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR15_RP1_M1" targetID="RR15_PP1_M1"/>
+          <MapItem sourceID="RR15_RP1_M1_C1" targetID="RR15_PP1_M1_C1"/>
+          <MapItem sourceID="RR15_RP1_M1_C2" targetID="RR15_PP1_M1_C2"/>
+          <MapItem sourceID="RR15_RP1_M1_C3" targetID="RR15_PP1_M1_C3"/>
+          <MapItem sourceID="RR15_RP1_M2" targetID="RR15_PP1_M2"/>
+          <MapItem sourceID="RR15_RP1_M2_C1" targetID="RR15_PP1_M2_C1"/>
+          <MapItem sourceID="RR15_RP1_M2_C2" targetID="RR15_PP1_M2_C2"/>
+          <MapItem sourceID="RR15_RP1_M2_C3" targetID="RR15_PP1_M2_C3"/>
+          <MapItem sourceID="RR15_RP1_M3" targetID="RR15_PP1_M3"/>
+          <MapItem sourceID="RR15_RP1_M3_C1" targetID="RR15_PP1_M3_C1"/>
+          <MapItem sourceID="RR15_RP1_M3_C2" targetID="RR15_PP1_M3_C2"/>
+          <MapItem sourceID="RR15_RP1_M4" targetID="RR15_PP1_M4"/>
+          <MapItem sourceID="RR15_RP1_M4_C1" targetID="RR15_PP1_M4_C1"/>
+          <MapItem sourceID="RR15_RP1_M4_C2" targetID="RR15_PP1_M4_C2"/>
+        </Map>
+        <ListOfOperations>
+          <AddBond site1="RR15_RP1_M1_C2" site2="RR15_RP1_M2_C2"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR16" name="_reverse__R8" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR16_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR16_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR16_RP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR16_RP1_M1_C2" name="back" numberOfBonds="1"/>
+                  <Component id="RR16_RP1_M1_C3" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR16_RP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR16_RP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR16_RP1_M2_C2" name="back" numberOfBonds="1"/>
+                  <Component id="RR16_RP1_M2_C3" name="lig" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR16_RP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR16_RP1_M3_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR16_RP1_M3_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR16_RP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR16_RP1_M4_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR16_RP1_M4_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR16_RP1_B1" site1="RR16_RP1_M1_C1" site2="RR16_RP1_M4_C1"/>
+              <Bond id="RR16_RP1_B2" site1="RR16_RP1_M1_C2" site2="RR16_RP1_M2_C2"/>
+              <Bond id="RR16_RP1_B3" site1="RR16_RP1_M2_C1" site2="RR16_RP1_M3_C1"/>
+              <Bond id="RR16_RP1_B4" site1="RR16_RP1_M3_C2" site2="RR16_RP1_M4_C2"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR16_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR16_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR16_PP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR16_PP1_M1_C2" name="back" numberOfBonds="0"/>
+                  <Component id="RR16_PP1_M1_C3" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR16_PP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR16_PP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR16_PP1_M2_C2" name="back" numberOfBonds="0"/>
+                  <Component id="RR16_PP1_M2_C3" name="lig" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR16_PP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR16_PP1_M3_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR16_PP1_M3_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR16_PP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR16_PP1_M4_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR16_PP1_M4_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR16_PP1_B1" site1="RR16_PP1_M1_C1" site2="RR16_PP1_M4_C1"/>
+              <Bond id="RR16_PP1_B2" site1="RR16_PP1_M2_C1" site2="RR16_PP1_M3_C1"/>
+              <Bond id="RR16_PP1_B3" site1="RR16_PP1_M3_C2" site2="RR16_PP1_M4_C2"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR16_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="l21r"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR16_RP1_M1" targetID="RR16_PP1_M1"/>
+          <MapItem sourceID="RR16_RP1_M1_C1" targetID="RR16_PP1_M1_C1"/>
+          <MapItem sourceID="RR16_RP1_M1_C2" targetID="RR16_PP1_M1_C2"/>
+          <MapItem sourceID="RR16_RP1_M1_C3" targetID="RR16_PP1_M1_C3"/>
+          <MapItem sourceID="RR16_RP1_M2" targetID="RR16_PP1_M2"/>
+          <MapItem sourceID="RR16_RP1_M2_C1" targetID="RR16_PP1_M2_C1"/>
+          <MapItem sourceID="RR16_RP1_M2_C2" targetID="RR16_PP1_M2_C2"/>
+          <MapItem sourceID="RR16_RP1_M2_C3" targetID="RR16_PP1_M2_C3"/>
+          <MapItem sourceID="RR16_RP1_M3" targetID="RR16_PP1_M3"/>
+          <MapItem sourceID="RR16_RP1_M3_C1" targetID="RR16_PP1_M3_C1"/>
+          <MapItem sourceID="RR16_RP1_M3_C2" targetID="RR16_PP1_M3_C2"/>
+          <MapItem sourceID="RR16_RP1_M4" targetID="RR16_PP1_M4"/>
+          <MapItem sourceID="RR16_RP1_M4_C1" targetID="RR16_PP1_M4_C1"/>
+          <MapItem sourceID="RR16_RP1_M4_C2" targetID="RR16_PP1_M4_C2"/>
+        </Map>
+        <ListOfOperations>
+          <DeleteBond site1="RR16_RP1_M1_C2" site2="RR16_RP1_M2_C2" ensureConnected="1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR17" name="_R9" symmetry_factor="0.5">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR17_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR17_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR17_RP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR17_RP1_M1_C2" name="back" numberOfBonds="0"/>
+                  <Component id="RR17_RP1_M1_C3" name="lig" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR17_RP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR17_RP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR17_RP1_M2_C2" name="back" numberOfBonds="0"/>
+                  <Component id="RR17_RP1_M2_C3" name="lig" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR17_RP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR17_RP1_M3_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR17_RP1_M3_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR17_RP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR17_RP1_M4_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR17_RP1_M4_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR17_RP1_B1" site1="RR17_RP1_M1_C1" site2="RR17_RP1_M4_C1"/>
+              <Bond id="RR17_RP1_B2" site1="RR17_RP1_M2_C1" site2="RR17_RP1_M3_C1"/>
+              <Bond id="RR17_RP1_B3" site1="RR17_RP1_M3_C2" site2="RR17_RP1_M4_C2"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR17_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR17_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR17_PP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR17_PP1_M1_C2" name="back" numberOfBonds="1"/>
+                  <Component id="RR17_PP1_M1_C3" name="lig" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR17_PP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR17_PP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR17_PP1_M2_C2" name="back" numberOfBonds="1"/>
+                  <Component id="RR17_PP1_M2_C3" name="lig" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR17_PP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR17_PP1_M3_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR17_PP1_M3_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR17_PP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR17_PP1_M4_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR17_PP1_M4_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR17_PP1_B1" site1="RR17_PP1_M1_C1" site2="RR17_PP1_M4_C1"/>
+              <Bond id="RR17_PP1_B2" site1="RR17_PP1_M1_C2" site2="RR17_PP1_M2_C2"/>
+              <Bond id="RR17_PP1_B3" site1="RR17_PP1_M2_C1" site2="RR17_PP1_M3_C1"/>
+              <Bond id="RR17_PP1_B4" site1="RR17_PP1_M3_C2" site2="RR17_PP1_M4_C2"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR17_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="_rateLaw3"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR17_RP1_M1" targetID="RR17_PP1_M1"/>
+          <MapItem sourceID="RR17_RP1_M1_C1" targetID="RR17_PP1_M1_C1"/>
+          <MapItem sourceID="RR17_RP1_M1_C2" targetID="RR17_PP1_M1_C2"/>
+          <MapItem sourceID="RR17_RP1_M1_C3" targetID="RR17_PP1_M1_C3"/>
+          <MapItem sourceID="RR17_RP1_M2" targetID="RR17_PP1_M2"/>
+          <MapItem sourceID="RR17_RP1_M2_C1" targetID="RR17_PP1_M2_C1"/>
+          <MapItem sourceID="RR17_RP1_M2_C2" targetID="RR17_PP1_M2_C2"/>
+          <MapItem sourceID="RR17_RP1_M2_C3" targetID="RR17_PP1_M2_C3"/>
+          <MapItem sourceID="RR17_RP1_M3" targetID="RR17_PP1_M3"/>
+          <MapItem sourceID="RR17_RP1_M3_C1" targetID="RR17_PP1_M3_C1"/>
+          <MapItem sourceID="RR17_RP1_M3_C2" targetID="RR17_PP1_M3_C2"/>
+          <MapItem sourceID="RR17_RP1_M4" targetID="RR17_PP1_M4"/>
+          <MapItem sourceID="RR17_RP1_M4_C1" targetID="RR17_PP1_M4_C1"/>
+          <MapItem sourceID="RR17_RP1_M4_C2" targetID="RR17_PP1_M4_C2"/>
+        </Map>
+        <ListOfOperations>
+          <AddBond site1="RR17_RP1_M1_C2" site2="RR17_RP1_M2_C2"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR18" name="_reverse__R9" symmetry_factor="0.5">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR18_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR18_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR18_RP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR18_RP1_M1_C2" name="back" numberOfBonds="1"/>
+                  <Component id="RR18_RP1_M1_C3" name="lig" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR18_RP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR18_RP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR18_RP1_M2_C2" name="back" numberOfBonds="1"/>
+                  <Component id="RR18_RP1_M2_C3" name="lig" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR18_RP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR18_RP1_M3_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR18_RP1_M3_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR18_RP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR18_RP1_M4_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR18_RP1_M4_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR18_RP1_B1" site1="RR18_RP1_M1_C1" site2="RR18_RP1_M4_C1"/>
+              <Bond id="RR18_RP1_B2" site1="RR18_RP1_M1_C2" site2="RR18_RP1_M2_C2"/>
+              <Bond id="RR18_RP1_B3" site1="RR18_RP1_M2_C1" site2="RR18_RP1_M3_C1"/>
+              <Bond id="RR18_RP1_B4" site1="RR18_RP1_M3_C2" site2="RR18_RP1_M4_C2"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR18_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR18_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR18_PP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR18_PP1_M1_C2" name="back" numberOfBonds="0"/>
+                  <Component id="RR18_PP1_M1_C3" name="lig" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR18_PP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR18_PP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR18_PP1_M2_C2" name="back" numberOfBonds="0"/>
+                  <Component id="RR18_PP1_M2_C3" name="lig" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR18_PP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR18_PP1_M3_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR18_PP1_M3_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR18_PP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR18_PP1_M4_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR18_PP1_M4_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR18_PP1_B1" site1="RR18_PP1_M1_C1" site2="RR18_PP1_M4_C1"/>
+              <Bond id="RR18_PP1_B2" site1="RR18_PP1_M2_C1" site2="RR18_PP1_M3_C1"/>
+              <Bond id="RR18_PP1_B3" site1="RR18_PP1_M3_C2" site2="RR18_PP1_M4_C2"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR18_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="l22r"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR18_RP1_M1" targetID="RR18_PP1_M1"/>
+          <MapItem sourceID="RR18_RP1_M1_C1" targetID="RR18_PP1_M1_C1"/>
+          <MapItem sourceID="RR18_RP1_M1_C2" targetID="RR18_PP1_M1_C2"/>
+          <MapItem sourceID="RR18_RP1_M1_C3" targetID="RR18_PP1_M1_C3"/>
+          <MapItem sourceID="RR18_RP1_M2" targetID="RR18_PP1_M2"/>
+          <MapItem sourceID="RR18_RP1_M2_C1" targetID="RR18_PP1_M2_C1"/>
+          <MapItem sourceID="RR18_RP1_M2_C2" targetID="RR18_PP1_M2_C2"/>
+          <MapItem sourceID="RR18_RP1_M2_C3" targetID="RR18_PP1_M2_C3"/>
+          <MapItem sourceID="RR18_RP1_M3" targetID="RR18_PP1_M3"/>
+          <MapItem sourceID="RR18_RP1_M3_C1" targetID="RR18_PP1_M3_C1"/>
+          <MapItem sourceID="RR18_RP1_M3_C2" targetID="RR18_PP1_M3_C2"/>
+          <MapItem sourceID="RR18_RP1_M4" targetID="RR18_PP1_M4"/>
+          <MapItem sourceID="RR18_RP1_M4_C1" targetID="RR18_PP1_M4_C1"/>
+          <MapItem sourceID="RR18_RP1_M4_C2" targetID="RR18_PP1_M4_C2"/>
+        </Map>
+        <ListOfOperations>
+          <DeleteBond site1="RR18_RP1_M1_C2" site2="RR18_RP1_M2_C2" ensureConnected="1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR19" name="_R10" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR19_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR19_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR19_RP1_M1_C1" name="lig" numberOfBonds="+"/>
+                  <Component id="RR19_RP1_M1_C2" name="cd" state="c" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR19_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR19_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR19_PP1_M1_C1" name="lig" numberOfBonds="+"/>
+                  <Component id="RR19_PP1_M1_C2" name="cd" state="o" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR19_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="k_o"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR19_RP1_M1" targetID="RR19_PP1_M1"/>
+          <MapItem sourceID="RR19_RP1_M1_C1" targetID="RR19_PP1_M1_C1"/>
+          <MapItem sourceID="RR19_RP1_M1_C2" targetID="RR19_PP1_M1_C2"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR19_RP1_M1_C2" finalState="o"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR20" name="_R11" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR20_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR20_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR20_RP1_M1_C1" name="cd" state="o" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR20_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR20_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR20_PP1_M1_C1" name="cd" state="c" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR20_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="k_c"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR20_RP1_M1" targetID="RR20_PP1_M1"/>
+          <MapItem sourceID="RR20_RP1_M1_C1" targetID="RR20_PP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR20_RP1_M1_C1" finalState="c"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR21" name="_R12" symmetry_factor="0.5">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR21_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR21_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR21_RP1_M1_C1" name="cd" state="o" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+          <ReactantPattern id="RR21_RP2">
+            <ListOfMolecules>
+              <Molecule id="RR21_RP2_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR21_RP2_M1_C1" name="cd" state="o" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR21_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR21_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR21_PP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR21_PP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR21_PP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR21_PP1_B1" site1="RR21_PP1_M1_C1" site2="RR21_PP1_M2_C1"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR21_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="kaf"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR21_RP1_M1" targetID="RR21_PP1_M1"/>
+          <MapItem sourceID="RR21_RP1_M1_C1" targetID="RR21_PP1_M1_C1"/>
+          <MapItem sourceID="RR21_RP2_M1" targetID="RR21_PP1_M2"/>
+          <MapItem sourceID="RR21_RP2_M1_C1" targetID="RR21_PP1_M2_C1"/>
+        </Map>
+        <ListOfOperations>
+          <AddBond site1="RR21_RP1_M1_C1" site2="RR21_RP2_M1_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR22" name="_reverse__R12" symmetry_factor="0.5">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR22_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR22_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR22_RP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR22_RP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR22_RP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR22_RP1_B1" site1="RR22_RP1_M1_C1" site2="RR22_RP1_M2_C1"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR22_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR22_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR22_PP1_M1_C1" name="cd" state="o" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+          <ProductPattern id="RR22_PP2">
+            <ListOfMolecules>
+              <Molecule id="RR22_PP2_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR22_PP2_M1_C1" name="cd" state="o" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR22_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="kar"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR22_RP1_M1" targetID="RR22_PP1_M1"/>
+          <MapItem sourceID="RR22_RP1_M1_C1" targetID="RR22_PP1_M1_C1"/>
+          <MapItem sourceID="RR22_RP1_M2" targetID="RR22_PP2_M1"/>
+          <MapItem sourceID="RR22_RP1_M2_C1" targetID="RR22_PP2_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <DeleteBond site1="RR22_RP1_M1_C1" site2="RR22_RP1_M2_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR23" name="_R13" symmetry_factor="0.5">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR23_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR23_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR23_RP1_M1_C1" name="cd" state="o" numberOfBonds="0"/>
+                  <Component id="RR23_RP1_M1_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR23_RP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR23_RP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR23_RP1_M2_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR23_RP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR23_RP1_M3_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR23_RP1_M3_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR23_RP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR23_RP1_M4_C1" name="cd" state="o" numberOfBonds="0"/>
+                  <Component id="RR23_RP1_M4_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR23_RP1_B1" site1="RR23_RP1_M1_C2" site2="RR23_RP1_M2_C2"/>
+              <Bond id="RR23_RP1_B2" site1="RR23_RP1_M2_C1" site2="RR23_RP1_M3_C1"/>
+              <Bond id="RR23_RP1_B3" site1="RR23_RP1_M3_C2" site2="RR23_RP1_M4_C2"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR23_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR23_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR23_PP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR23_PP1_M1_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR23_PP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR23_PP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR23_PP1_M2_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR23_PP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR23_PP1_M3_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR23_PP1_M3_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR23_PP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR23_PP1_M4_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR23_PP1_M4_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR23_PP1_B1" site1="RR23_PP1_M1_C1" site2="RR23_PP1_M4_C1"/>
+              <Bond id="RR23_PP1_B2" site1="RR23_PP1_M1_C2" site2="RR23_PP1_M2_C2"/>
+              <Bond id="RR23_PP1_B3" site1="RR23_PP1_M2_C1" site2="RR23_PP1_M3_C1"/>
+              <Bond id="RR23_PP1_B4" site1="RR23_PP1_M3_C2" site2="RR23_PP1_M4_C2"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR23_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="_rateLaw4"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR23_RP1_M1" targetID="RR23_PP1_M1"/>
+          <MapItem sourceID="RR23_RP1_M1_C1" targetID="RR23_PP1_M1_C1"/>
+          <MapItem sourceID="RR23_RP1_M1_C2" targetID="RR23_PP1_M1_C2"/>
+          <MapItem sourceID="RR23_RP1_M2" targetID="RR23_PP1_M2"/>
+          <MapItem sourceID="RR23_RP1_M2_C1" targetID="RR23_PP1_M2_C1"/>
+          <MapItem sourceID="RR23_RP1_M2_C2" targetID="RR23_PP1_M2_C2"/>
+          <MapItem sourceID="RR23_RP1_M3" targetID="RR23_PP1_M3"/>
+          <MapItem sourceID="RR23_RP1_M3_C1" targetID="RR23_PP1_M3_C1"/>
+          <MapItem sourceID="RR23_RP1_M3_C2" targetID="RR23_PP1_M3_C2"/>
+          <MapItem sourceID="RR23_RP1_M4" targetID="RR23_PP1_M4"/>
+          <MapItem sourceID="RR23_RP1_M4_C1" targetID="RR23_PP1_M4_C1"/>
+          <MapItem sourceID="RR23_RP1_M4_C2" targetID="RR23_PP1_M4_C2"/>
+        </Map>
+        <ListOfOperations>
+          <AddBond site1="RR23_RP1_M1_C1" site2="RR23_RP1_M4_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR24" name="_reverse__R13" symmetry_factor="0.5">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR24_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR24_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR24_RP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR24_RP1_M1_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR24_RP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR24_RP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR24_RP1_M2_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR24_RP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR24_RP1_M3_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR24_RP1_M3_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR24_RP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR24_RP1_M4_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR24_RP1_M4_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR24_RP1_B1" site1="RR24_RP1_M1_C1" site2="RR24_RP1_M4_C1"/>
+              <Bond id="RR24_RP1_B2" site1="RR24_RP1_M1_C2" site2="RR24_RP1_M2_C2"/>
+              <Bond id="RR24_RP1_B3" site1="RR24_RP1_M2_C1" site2="RR24_RP1_M3_C1"/>
+              <Bond id="RR24_RP1_B4" site1="RR24_RP1_M3_C2" site2="RR24_RP1_M4_C2"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR24_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR24_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR24_PP1_M1_C1" name="cd" state="o" numberOfBonds="0"/>
+                  <Component id="RR24_PP1_M1_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR24_PP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR24_PP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR24_PP1_M2_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR24_PP1_M3" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR24_PP1_M3_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR24_PP1_M3_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR24_PP1_M4" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR24_PP1_M4_C1" name="cd" state="o" numberOfBonds="0"/>
+                  <Component id="RR24_PP1_M4_C2" name="back" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR24_PP1_B1" site1="RR24_PP1_M1_C2" site2="RR24_PP1_M2_C2"/>
+              <Bond id="RR24_PP1_B2" site1="RR24_PP1_M2_C1" site2="RR24_PP1_M3_C1"/>
+              <Bond id="RR24_PP1_B3" site1="RR24_PP1_M3_C2" site2="RR24_PP1_M4_C2"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR24_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="kar"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR24_RP1_M1" targetID="RR24_PP1_M1"/>
+          <MapItem sourceID="RR24_RP1_M1_C1" targetID="RR24_PP1_M1_C1"/>
+          <MapItem sourceID="RR24_RP1_M1_C2" targetID="RR24_PP1_M1_C2"/>
+          <MapItem sourceID="RR24_RP1_M2" targetID="RR24_PP1_M2"/>
+          <MapItem sourceID="RR24_RP1_M2_C1" targetID="RR24_PP1_M2_C1"/>
+          <MapItem sourceID="RR24_RP1_M2_C2" targetID="RR24_PP1_M2_C2"/>
+          <MapItem sourceID="RR24_RP1_M3" targetID="RR24_PP1_M3"/>
+          <MapItem sourceID="RR24_RP1_M3_C1" targetID="RR24_PP1_M3_C1"/>
+          <MapItem sourceID="RR24_RP1_M3_C2" targetID="RR24_PP1_M3_C2"/>
+          <MapItem sourceID="RR24_RP1_M4" targetID="RR24_PP1_M4"/>
+          <MapItem sourceID="RR24_RP1_M4_C1" targetID="RR24_PP1_M4_C1"/>
+          <MapItem sourceID="RR24_RP1_M4_C2" targetID="RR24_PP1_M4_C2"/>
+        </Map>
+        <ListOfOperations>
+          <DeleteBond site1="RR24_RP1_M1_C1" site2="RR24_RP1_M4_C1" ensureConnected="1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR25" name="_R14" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR25_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR25_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR25_RP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR25_RP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR25_RP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR25_RP1_M2_C2" name="Y" state="u" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR25_RP1_B1" site1="RR25_RP1_M1_C1" site2="RR25_RP1_M2_C1"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR25_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR25_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR25_PP1_M1_C1" name="cd" state="o" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR25_PP1_M2" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR25_PP1_M2_C1" name="cd" state="o" numberOfBonds="1"/>
+                  <Component id="RR25_PP1_M2_C2" name="Y" state="p" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR25_PP1_B1" site1="RR25_PP1_M1_C1" site2="RR25_PP1_M2_C1"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR25_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="kp"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR25_RP1_M1" targetID="RR25_PP1_M1"/>
+          <MapItem sourceID="RR25_RP1_M1_C1" targetID="RR25_PP1_M1_C1"/>
+          <MapItem sourceID="RR25_RP1_M2" targetID="RR25_PP1_M2"/>
+          <MapItem sourceID="RR25_RP1_M2_C1" targetID="RR25_PP1_M2_C1"/>
+          <MapItem sourceID="RR25_RP1_M2_C2" targetID="RR25_PP1_M2_C2"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR25_RP1_M2_C2" finalState="p"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR26" name="_R15" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR26_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR26_RP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR26_RP1_M1_C1" name="Y" state="p" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR26_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR26_PP1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="RR26_PP1_M1_C1" name="Y" state="u" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR26_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="kdp"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR26_RP1_M1" targetID="RR26_PP1_M1"/>
+          <MapItem sourceID="RR26_RP1_M1_C1" targetID="RR26_PP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR26_RP1_M1_C1" finalState="u"/>
+        </ListOfOperations>
+      </ReactionRule>
+    </ListOfReactionRules>
+    <ListOfObservables>
+      <Observable id="O1" name="EGFfree" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O1_P1">
+            <ListOfMolecules>
+              <Molecule id="O1_P1_M1" name="EGF">
+                <ListOfComponents>
+                  <Component id="O1_P1_M1_C1" name="rec" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O2" name="EGFRfree" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O2_P1">
+            <ListOfMolecules>
+              <Molecule id="O2_P1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="O2_P1_M1_C1" name="lig" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O3" name="all_receptors" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O3_P1">
+            <ListOfMolecules>
+              <Molecule id="O3_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O4" name="Clusters" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O4_P1" relation="==" quantity="1">
+            <ListOfMolecules>
+              <Molecule id="O4_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P2" relation="==" quantity="2">
+            <ListOfMolecules>
+              <Molecule id="O4_P2_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P3" relation="==" quantity="3">
+            <ListOfMolecules>
+              <Molecule id="O4_P3_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P4" relation="==" quantity="4">
+            <ListOfMolecules>
+              <Molecule id="O4_P4_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P5" relation="==" quantity="5">
+            <ListOfMolecules>
+              <Molecule id="O4_P5_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P6" relation="==" quantity="6">
+            <ListOfMolecules>
+              <Molecule id="O4_P6_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P7" relation="==" quantity="7">
+            <ListOfMolecules>
+              <Molecule id="O4_P7_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P8" relation="==" quantity="8">
+            <ListOfMolecules>
+              <Molecule id="O4_P8_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P9" relation="==" quantity="9">
+            <ListOfMolecules>
+              <Molecule id="O4_P9_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P10" relation="==" quantity="10">
+            <ListOfMolecules>
+              <Molecule id="O4_P10_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P11" relation="==" quantity="11">
+            <ListOfMolecules>
+              <Molecule id="O4_P11_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P12" relation="==" quantity="12">
+            <ListOfMolecules>
+              <Molecule id="O4_P12_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P13" relation="==" quantity="13">
+            <ListOfMolecules>
+              <Molecule id="O4_P13_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P14" relation="==" quantity="14">
+            <ListOfMolecules>
+              <Molecule id="O4_P14_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P15" relation="==" quantity="15">
+            <ListOfMolecules>
+              <Molecule id="O4_P15_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P16" relation="==" quantity="16">
+            <ListOfMolecules>
+              <Molecule id="O4_P16_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P17" relation="==" quantity="17">
+            <ListOfMolecules>
+              <Molecule id="O4_P17_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P18" relation="==" quantity="18">
+            <ListOfMolecules>
+              <Molecule id="O4_P18_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P19" relation="==" quantity="19">
+            <ListOfMolecules>
+              <Molecule id="O4_P19_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P20" relation="==" quantity="20">
+            <ListOfMolecules>
+              <Molecule id="O4_P20_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O5" name="monomer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O5_P1" relation="==" quantity="1">
+            <ListOfMolecules>
+              <Molecule id="O5_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O6" name="dimer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O6_P1" relation="==" quantity="2">
+            <ListOfMolecules>
+              <Molecule id="O6_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O7" name="trimer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O7_P1" relation="==" quantity="3">
+            <ListOfMolecules>
+              <Molecule id="O7_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O8" name="tetramer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O8_P1" relation="==" quantity="4">
+            <ListOfMolecules>
+              <Molecule id="O8_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O9" name="pentamer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O9_P1" relation="==" quantity="5">
+            <ListOfMolecules>
+              <Molecule id="O9_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O10" name="hexamer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O10_P1" relation="==" quantity="6">
+            <ListOfMolecules>
+              <Molecule id="O10_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O11" name="heptamer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O11_P1" relation="==" quantity="7">
+            <ListOfMolecules>
+              <Molecule id="O11_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O12" name="octamer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O12_P1" relation="==" quantity="8">
+            <ListOfMolecules>
+              <Molecule id="O12_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O13" name="nonamer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O13_P1" relation="==" quantity="9">
+            <ListOfMolecules>
+              <Molecule id="O13_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O14" name="decamer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O14_P1" relation="==" quantity="10">
+            <ListOfMolecules>
+              <Molecule id="O14_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O15" name="undecamer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O15_P1" relation="==" quantity="11">
+            <ListOfMolecules>
+              <Molecule id="O15_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O16" name="dodecamer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O16_P1" relation="==" quantity="12">
+            <ListOfMolecules>
+              <Molecule id="O16_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O17" name="tridecamer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O17_P1" relation="==" quantity="13">
+            <ListOfMolecules>
+              <Molecule id="O17_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O18" name="tetradecamer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O18_P1" relation="==" quantity="14">
+            <ListOfMolecules>
+              <Molecule id="O18_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O19" name="pentadecamer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O19_P1" relation="==" quantity="15">
+            <ListOfMolecules>
+              <Molecule id="O19_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O20" name="hexadecamer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O20_P1" relation="==" quantity="16">
+            <ListOfMolecules>
+              <Molecule id="O20_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O21" name="heptadecamer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O21_P1" relation="==" quantity="17">
+            <ListOfMolecules>
+              <Molecule id="O21_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O22" name="octadecamer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O22_P1" relation="==" quantity="18">
+            <ListOfMolecules>
+              <Molecule id="O22_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O23" name="nonadecamer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O23_P1" relation="==" quantity="19">
+            <ListOfMolecules>
+              <Molecule id="O23_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O24" name="icosadecamer" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O24_P1" relation="==" quantity="20">
+            <ListOfMolecules>
+              <Molecule id="O24_P1_M1" name="EGFR"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O25" name="pEGFR" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O25_P1">
+            <ListOfMolecules>
+              <Molecule id="O25_P1_M1" name="EGFR">
+                <ListOfComponents>
+                  <Component id="O25_P1_M1_C1" name="Y" state="p" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+    </ListOfObservables>
+    <ListOfFunctions>
+      <Function id="pre1_dose">
+        <ListOfReferences>
+          <Reference name="f" type="Constant"/>
+          <Reference name="alpha1_pre" type="ConstantExpression"/>
+          <Reference name="Clusters" type="Observable"/>
+        </ListOfReferences>
+        <Expression> (alpha1_pre*Clusters)/f </Expression>
+      </Function>
+      <Function id="pre2_time">
+        <ListOfReferences>
+          <Reference name="f" type="Constant"/>
+          <Reference name="alpha2_pre" type="ConstantExpression"/>
+          <Reference name="Clusters" type="Observable"/>
+        </ListOfReferences>
+        <Expression> (alpha2_pre*Clusters)/f </Expression>
+      </Function>
+      <Function id="pre3_dose">
+        <ListOfReferences>
+          <Reference name="f" type="Constant"/>
+          <Reference name="alpha3_pre" type="ConstantExpression"/>
+          <Reference name="pEGFR" type="Observable"/>
+        </ListOfReferences>
+        <Expression> (alpha3_pre*pEGFR)/f </Expression>
+      </Function>
+      <Function id="pre4_time">
+        <ListOfReferences>
+          <Reference name="f" type="Constant"/>
+          <Reference name="alpha4_pre" type="ConstantExpression"/>
+          <Reference name="pEGFR" type="Observable"/>
+        </ListOfReferences>
+        <Expression> (alpha4_pre*pEGFR)/f </Expression>
+      </Function>
+      <Function id="out1_cDens_dose">
+        <ListOfReferences>
+          <Reference name="f" type="Constant"/>
+          <Reference name="alpha1" type="ConstantExpression"/>
+          <Reference name="Clusters" type="Observable"/>
+        </ListOfReferences>
+        <Expression> (alpha1*Clusters)/f </Expression>
+      </Function>
+      <Function id="out2_cDens_time">
+        <ListOfReferences>
+          <Reference name="f" type="Constant"/>
+          <Reference name="alpha2" type="ConstantExpression"/>
+          <Reference name="Clusters" type="Observable"/>
+        </ListOfReferences>
+        <Expression> (alpha2*Clusters)/f </Expression>
+      </Function>
+      <Function id="out3_pEGFR_dose">
+        <ListOfReferences>
+          <Reference name="f" type="Constant"/>
+          <Reference name="alpha3" type="ConstantExpression"/>
+          <Reference name="pEGFR" type="Observable"/>
+        </ListOfReferences>
+        <Expression> (alpha3*pEGFR)/f </Expression>
+      </Function>
+      <Function id="out4_pEGFR_time">
+        <ListOfReferences>
+          <Reference name="f" type="Constant"/>
+          <Reference name="alpha4" type="ConstantExpression"/>
+          <Reference name="pEGFR" type="Observable"/>
+        </ListOfReferences>
+        <Expression> (alpha4*pEGFR)/f </Expression>
+      </Function>
+      <Function id="receptors_in_small_oligo">
+        <ListOfReferences>
+          <Reference name="f" type="Constant"/>
+          <Reference name="dimer" type="Observable"/>
+          <Reference name="monomer" type="Observable"/>
+          <Reference name="tetramer" type="Observable"/>
+          <Reference name="trimer" type="Observable"/>
+        </ListOfReferences>
+        <Expression> ((((1*monomer)+(2*dimer))+(3*trimer))+(4*tetramer))/f </Expression>
+      </Function>
+      <Function id="receptors_in_large_oligo">
+        <ListOfReferences>
+          <Reference name="f" type="Constant"/>
+          <Reference name="decamer" type="Observable"/>
+          <Reference name="dodecamer" type="Observable"/>
+          <Reference name="heptadecamer" type="Observable"/>
+          <Reference name="heptamer" type="Observable"/>
+          <Reference name="hexadecamer" type="Observable"/>
+          <Reference name="hexamer" type="Observable"/>
+          <Reference name="icosadecamer" type="Observable"/>
+          <Reference name="nonadecamer" type="Observable"/>
+          <Reference name="nonamer" type="Observable"/>
+          <Reference name="octadecamer" type="Observable"/>
+          <Reference name="octamer" type="Observable"/>
+          <Reference name="pentadecamer" type="Observable"/>
+          <Reference name="pentamer" type="Observable"/>
+          <Reference name="tetradecamer" type="Observable"/>
+          <Reference name="tridecamer" type="Observable"/>
+          <Reference name="undecamer" type="Observable"/>
+        </ListOfReferences>
+        <Expression> ((((((((((((((((5*pentamer)+(6*hexamer))+(7*heptamer))+(8*octamer))+(9*nonamer))+(10*decamer))+(11*undecamer))+(12*dodecamer))+(13*tridecamer))+(14*tetradecamer))+(15*pentadecamer))+(16*hexadecamer))+(17*heptadecamer))+(18*octadecamer))+(19*nonadecamer))+(20*icosadecamer))/f </Expression>
+      </Function>
+    </ListOfFunctions>
+  </model>
+</sbml>

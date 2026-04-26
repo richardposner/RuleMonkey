@@ -1,0 +1,591 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created by BioNetGen 2.9.3  -->
+<sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
+  <model id="isingspin_localfcn">
+    <ListOfParameters>
+      <Parameter id="Gf_up" type="Constant" value="0" expr="0"/>
+      <Parameter id="Gf_misalign" type="Constant" value="0.7" expr="0.7"/>
+      <Parameter id="Eact0_flip" type="Constant" value="1" expr="1"/>
+      <Parameter id="phi" type="Constant" value="0.5" expr="0.5"/>
+    </ListOfParameters>
+    <ListOfMoleculeTypes>
+      <MoleculeType id="M">
+        <ListOfComponentTypes>
+          <ComponentType id="n"/>
+          <ComponentType id="e"/>
+          <ComponentType id="s"/>
+          <ComponentType id="w"/>
+          <ComponentType id="sp">
+            <ListOfAllowedStates>
+              <AllowedState id="up"/>
+              <AllowedState id="dn"/>
+            </ListOfAllowedStates>
+          </ComponentType>
+        </ListOfComponentTypes>
+      </MoleculeType>
+    </ListOfMoleculeTypes>
+    <ListOfCompartments>
+    </ListOfCompartments>
+    <ListOfSpecies>
+      <Species id="S1"  concentration="1" name="M(e!1,n!2,s!3,sp~dn,w!4).M(e!5,n!6,s!7,sp~dn,w!8).M(e!9,n!7,s!10,sp~dn,w!11).M(e!8,n!12,s!13,sp~dn,w!14).M(e!11,n!13,s!15,sp~dn,w!16).M(e!4,n!10,s!6,sp~dn,w!17).M(e!14,n!3,s!18,sp~dn,w!5).M(e!16,n!18,s!2,sp~dn,w!9).M(e!17,n!15,s!12,sp~dn,w!1)">
+        <ListOfMolecules>
+          <Molecule id="S1_M1" name="M">
+            <ListOfComponents>
+              <Component id="S1_M1_C1" name="e" numberOfBonds="1"/>
+              <Component id="S1_M1_C2" name="n" numberOfBonds="1"/>
+              <Component id="S1_M1_C3" name="s" numberOfBonds="1"/>
+              <Component id="S1_M1_C4" name="sp" state="dn" numberOfBonds="0"/>
+              <Component id="S1_M1_C5" name="w" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M2" name="M">
+            <ListOfComponents>
+              <Component id="S1_M2_C1" name="e" numberOfBonds="1"/>
+              <Component id="S1_M2_C2" name="n" numberOfBonds="1"/>
+              <Component id="S1_M2_C3" name="s" numberOfBonds="1"/>
+              <Component id="S1_M2_C4" name="sp" state="dn" numberOfBonds="0"/>
+              <Component id="S1_M2_C5" name="w" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M3" name="M">
+            <ListOfComponents>
+              <Component id="S1_M3_C1" name="e" numberOfBonds="1"/>
+              <Component id="S1_M3_C2" name="n" numberOfBonds="1"/>
+              <Component id="S1_M3_C3" name="s" numberOfBonds="1"/>
+              <Component id="S1_M3_C4" name="sp" state="dn" numberOfBonds="0"/>
+              <Component id="S1_M3_C5" name="w" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M4" name="M">
+            <ListOfComponents>
+              <Component id="S1_M4_C1" name="e" numberOfBonds="1"/>
+              <Component id="S1_M4_C2" name="n" numberOfBonds="1"/>
+              <Component id="S1_M4_C3" name="s" numberOfBonds="1"/>
+              <Component id="S1_M4_C4" name="sp" state="dn" numberOfBonds="0"/>
+              <Component id="S1_M4_C5" name="w" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M5" name="M">
+            <ListOfComponents>
+              <Component id="S1_M5_C1" name="e" numberOfBonds="1"/>
+              <Component id="S1_M5_C2" name="n" numberOfBonds="1"/>
+              <Component id="S1_M5_C3" name="s" numberOfBonds="1"/>
+              <Component id="S1_M5_C4" name="sp" state="dn" numberOfBonds="0"/>
+              <Component id="S1_M5_C5" name="w" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M6" name="M">
+            <ListOfComponents>
+              <Component id="S1_M6_C1" name="e" numberOfBonds="1"/>
+              <Component id="S1_M6_C2" name="n" numberOfBonds="1"/>
+              <Component id="S1_M6_C3" name="s" numberOfBonds="1"/>
+              <Component id="S1_M6_C4" name="sp" state="dn" numberOfBonds="0"/>
+              <Component id="S1_M6_C5" name="w" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M7" name="M">
+            <ListOfComponents>
+              <Component id="S1_M7_C1" name="e" numberOfBonds="1"/>
+              <Component id="S1_M7_C2" name="n" numberOfBonds="1"/>
+              <Component id="S1_M7_C3" name="s" numberOfBonds="1"/>
+              <Component id="S1_M7_C4" name="sp" state="dn" numberOfBonds="0"/>
+              <Component id="S1_M7_C5" name="w" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M8" name="M">
+            <ListOfComponents>
+              <Component id="S1_M8_C1" name="e" numberOfBonds="1"/>
+              <Component id="S1_M8_C2" name="n" numberOfBonds="1"/>
+              <Component id="S1_M8_C3" name="s" numberOfBonds="1"/>
+              <Component id="S1_M8_C4" name="sp" state="dn" numberOfBonds="0"/>
+              <Component id="S1_M8_C5" name="w" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M9" name="M">
+            <ListOfComponents>
+              <Component id="S1_M9_C1" name="e" numberOfBonds="1"/>
+              <Component id="S1_M9_C2" name="n" numberOfBonds="1"/>
+              <Component id="S1_M9_C3" name="s" numberOfBonds="1"/>
+              <Component id="S1_M9_C4" name="sp" state="dn" numberOfBonds="0"/>
+              <Component id="S1_M9_C5" name="w" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S1_B1" site1="S1_M1_C1" site2="S1_M9_C5"/>
+          <Bond id="S1_B2" site1="S1_M1_C2" site2="S1_M8_C3"/>
+          <Bond id="S1_B3" site1="S1_M1_C3" site2="S1_M7_C2"/>
+          <Bond id="S1_B4" site1="S1_M1_C5" site2="S1_M6_C1"/>
+          <Bond id="S1_B5" site1="S1_M2_C1" site2="S1_M7_C5"/>
+          <Bond id="S1_B6" site1="S1_M2_C2" site2="S1_M6_C3"/>
+          <Bond id="S1_B7" site1="S1_M2_C3" site2="S1_M3_C2"/>
+          <Bond id="S1_B8" site1="S1_M2_C5" site2="S1_M4_C1"/>
+          <Bond id="S1_B9" site1="S1_M3_C1" site2="S1_M8_C5"/>
+          <Bond id="S1_B10" site1="S1_M3_C3" site2="S1_M6_C2"/>
+          <Bond id="S1_B11" site1="S1_M3_C5" site2="S1_M5_C1"/>
+          <Bond id="S1_B12" site1="S1_M4_C2" site2="S1_M9_C3"/>
+          <Bond id="S1_B13" site1="S1_M4_C3" site2="S1_M5_C2"/>
+          <Bond id="S1_B14" site1="S1_M4_C5" site2="S1_M7_C1"/>
+          <Bond id="S1_B15" site1="S1_M5_C3" site2="S1_M9_C2"/>
+          <Bond id="S1_B16" site1="S1_M5_C5" site2="S1_M8_C1"/>
+          <Bond id="S1_B17" site1="S1_M6_C5" site2="S1_M9_C1"/>
+          <Bond id="S1_B18" site1="S1_M7_C3" site2="S1_M8_C2"/>
+        </ListOfBonds>
+      </Species>
+    </ListOfSpecies>
+    <ListOfReactionRules>
+      <ReactionRule id="RR1" name="_R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR1_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP1_M1" name="M" label="x">
+                <ListOfComponents>
+                  <Component id="RR1_RP1_M1_C1" name="sp" state="dn" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR1_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP1_M1" name="M" label="x">
+                <ListOfComponents>
+                  <Component id="RR1_PP1_M1_C1" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR1_RateLaw" type="Function" name="_rateLaw1" totalrate="0">
+          <ListOfArguments>
+            <Argument id="x" type="ObjectReference" value="RR1_RP1_M1"/>
+          </ListOfArguments>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR1_RP1_M1" targetID="RR1_PP1_M1"/>
+          <MapItem sourceID="RR1_RP1_M1_C1" targetID="RR1_PP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR1_RP1_M1_C1" finalState="up"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR2" name="_reverse__R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR2_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_RP1_M1" name="M" label="x">
+                <ListOfComponents>
+                  <Component id="RR2_RP1_M1_C1" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR2_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_PP1_M1" name="M" label="x">
+                <ListOfComponents>
+                  <Component id="RR2_PP1_M1_C1" name="sp" state="dn" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR2_RateLaw" type="Function" name="_rateLaw2" totalrate="0">
+          <ListOfArguments>
+            <Argument id="x" type="ObjectReference" value="RR2_RP1_M1"/>
+          </ListOfArguments>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR2_RP1_M1" targetID="RR2_PP1_M1"/>
+          <MapItem sourceID="RR2_RP1_M1_C1" targetID="RR2_PP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR2_RP1_M1_C1" finalState="dn"/>
+        </ListOfOperations>
+      </ReactionRule>
+    </ListOfReactionRules>
+    <ListOfObservables>
+      <Observable id="O1" name="M_spUp" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O1_P1">
+            <ListOfMolecules>
+              <Molecule id="O1_P1_M1" name="M">
+                <ListOfComponents>
+                  <Component id="O1_P1_M1_C1" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O2" name="M_spDown" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O2_P1">
+            <ListOfMolecules>
+              <Molecule id="O2_P1_M1" name="M">
+                <ListOfComponents>
+                  <Component id="O2_P1_M1_C1" name="sp" state="dn" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O3" name="M_spAny" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O3_P1">
+            <ListOfMolecules>
+              <Molecule id="O3_P1_M1" name="M">
+                <ListOfComponents>
+                  <Component id="O3_P1_M1_C1" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O3_P2">
+            <ListOfMolecules>
+              <Molecule id="O3_P2_M1" name="M">
+                <ListOfComponents>
+                  <Component id="O3_P2_M1_C1" name="sp" state="dn" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O4" name="Misaligned" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O4_P1">
+            <ListOfMolecules>
+              <Molecule id="O4_P1_M1" name="M">
+                <ListOfComponents>
+                  <Component id="O4_P1_M1_C1" name="n" numberOfBonds="1"/>
+                  <Component id="O4_P1_M1_C2" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O4_P1_M2" name="M">
+                <ListOfComponents>
+                  <Component id="O4_P1_M2_C1" name="s" numberOfBonds="1"/>
+                  <Component id="O4_P1_M2_C2" name="sp" state="dn" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="O4_P1_B1" site1="O4_P1_M1_C1" site2="O4_P1_M2_C1"/>
+            </ListOfBonds>
+          </Pattern>
+          <Pattern id="O4_P2">
+            <ListOfMolecules>
+              <Molecule id="O4_P2_M1" name="M">
+                <ListOfComponents>
+                  <Component id="O4_P2_M1_C1" name="n" numberOfBonds="1"/>
+                  <Component id="O4_P2_M1_C2" name="sp" state="dn" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O4_P2_M2" name="M">
+                <ListOfComponents>
+                  <Component id="O4_P2_M2_C1" name="s" numberOfBonds="1"/>
+                  <Component id="O4_P2_M2_C2" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="O4_P2_B1" site1="O4_P2_M1_C1" site2="O4_P2_M2_C1"/>
+            </ListOfBonds>
+          </Pattern>
+          <Pattern id="O4_P3">
+            <ListOfMolecules>
+              <Molecule id="O4_P3_M1" name="M">
+                <ListOfComponents>
+                  <Component id="O4_P3_M1_C1" name="e" numberOfBonds="1"/>
+                  <Component id="O4_P3_M1_C2" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O4_P3_M2" name="M">
+                <ListOfComponents>
+                  <Component id="O4_P3_M2_C1" name="w" numberOfBonds="1"/>
+                  <Component id="O4_P3_M2_C2" name="sp" state="dn" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="O4_P3_B1" site1="O4_P3_M1_C1" site2="O4_P3_M2_C1"/>
+            </ListOfBonds>
+          </Pattern>
+          <Pattern id="O4_P4">
+            <ListOfMolecules>
+              <Molecule id="O4_P4_M1" name="M">
+                <ListOfComponents>
+                  <Component id="O4_P4_M1_C1" name="e" numberOfBonds="1"/>
+                  <Component id="O4_P4_M1_C2" name="sp" state="dn" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O4_P4_M2" name="M">
+                <ListOfComponents>
+                  <Component id="O4_P4_M2_C1" name="w" numberOfBonds="1"/>
+                  <Component id="O4_P4_M2_C2" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="O4_P4_B1" site1="O4_P4_M1_C1" site2="O4_P4_M2_C1"/>
+            </ListOfBonds>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O5" name="M_total" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O5_P1">
+            <ListOfMolecules>
+              <Molecule id="O5_P1_M1" name="M"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O6" name="northUp" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O6_P1">
+            <ListOfMolecules>
+              <Molecule id="O6_P1_M1" name="M">
+                <ListOfComponents>
+                  <Component id="O6_P1_M1_C1" name="n" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O6_P1_M2" name="M">
+                <ListOfComponents>
+                  <Component id="O6_P1_M2_C1" name="s" numberOfBonds="1"/>
+                  <Component id="O6_P1_M2_C2" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="O6_P1_B1" site1="O6_P1_M1_C1" site2="O6_P1_M2_C1"/>
+            </ListOfBonds>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O7" name="eastUp" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O7_P1">
+            <ListOfMolecules>
+              <Molecule id="O7_P1_M1" name="M">
+                <ListOfComponents>
+                  <Component id="O7_P1_M1_C1" name="e" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O7_P1_M2" name="M">
+                <ListOfComponents>
+                  <Component id="O7_P1_M2_C1" name="w" numberOfBonds="1"/>
+                  <Component id="O7_P1_M2_C2" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="O7_P1_B1" site1="O7_P1_M1_C1" site2="O7_P1_M2_C1"/>
+            </ListOfBonds>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O8" name="southUp" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O8_P1">
+            <ListOfMolecules>
+              <Molecule id="O8_P1_M1" name="M">
+                <ListOfComponents>
+                  <Component id="O8_P1_M1_C1" name="s" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O8_P1_M2" name="M">
+                <ListOfComponents>
+                  <Component id="O8_P1_M2_C1" name="n" numberOfBonds="1"/>
+                  <Component id="O8_P1_M2_C2" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="O8_P1_B1" site1="O8_P1_M1_C1" site2="O8_P1_M2_C1"/>
+            </ListOfBonds>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O9" name="westUp" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O9_P1">
+            <ListOfMolecules>
+              <Molecule id="O9_P1_M1" name="M">
+                <ListOfComponents>
+                  <Component id="O9_P1_M1_C1" name="w" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O9_P1_M2" name="M">
+                <ListOfComponents>
+                  <Component id="O9_P1_M2_C1" name="e" numberOfBonds="1"/>
+                  <Component id="O9_P1_M2_C2" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="O9_P1_B1" site1="O9_P1_M1_C1" site2="O9_P1_M2_C1"/>
+            </ListOfBonds>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+    </ListOfObservables>
+    <ListOfFunctions>
+      <Function id="rateFlipUp">
+        <ListOfArguments>
+          <Argument id="z"/>
+        </ListOfArguments>
+        <ListOfReferences>
+          <Reference name="Eact0_flip" type="Constant"/>
+          <Reference name="Gf_misalign" type="Constant"/>
+          <Reference name="Gf_up" type="Constant"/>
+          <Reference name="phi" type="Constant"/>
+          <Reference name="z" type="Local"/>
+          <Reference name="eastUp" type="Observable"/>
+          <Reference name="northUp" type="Observable"/>
+          <Reference name="southUp" type="Observable"/>
+          <Reference name="westUp" type="Observable"/>
+        </ListOfReferences>
+        <Expression> exp((-((Eact0_flip+(phi*(Gf_up+(((((4-northUp(z))-eastUp(z))-southUp(z))-westUp(z))*Gf_misalign))))+((phi-1)*((((northUp(z)+eastUp(z))+southUp(z))+westUp(z))*Gf_misalign))))) </Expression>
+      </Function>
+      <Function id="rateFlipDn">
+        <ListOfArguments>
+          <Argument id="z"/>
+        </ListOfArguments>
+        <ListOfReferences>
+          <Reference name="Eact0_flip" type="Constant"/>
+          <Reference name="Gf_misalign" type="Constant"/>
+          <Reference name="Gf_up" type="Constant"/>
+          <Reference name="phi" type="Constant"/>
+          <Reference name="z" type="Local"/>
+          <Reference name="eastUp" type="Observable"/>
+          <Reference name="northUp" type="Observable"/>
+          <Reference name="southUp" type="Observable"/>
+          <Reference name="westUp" type="Observable"/>
+        </ListOfReferences>
+        <Expression> exp((-((Eact0_flip+(phi*((((northUp(z)+eastUp(z))+southUp(z))+westUp(z))*Gf_misalign)))+((phi-1)*(Gf_up+(((((4-northUp(z))-eastUp(z))-southUp(z))-westUp(z))*Gf_misalign)))))) </Expression>
+      </Function>
+      <Function id="_rateLaw1">
+        <ListOfArguments>
+          <Argument id="x"/>
+        </ListOfArguments>
+        <ListOfReferences>
+          <Reference name="rateFlipUp" type="Function"/>
+          <Reference name="x" type="Local"/>
+        </ListOfReferences>
+        <Expression> rateFlipUp(x) </Expression>
+      </Function>
+      <Function id="_rateLaw2">
+        <ListOfArguments>
+          <Argument id="x"/>
+        </ListOfArguments>
+        <ListOfReferences>
+          <Reference name="rateFlipDn" type="Function"/>
+          <Reference name="x" type="Local"/>
+        </ListOfReferences>
+        <Expression> rateFlipDn(x) </Expression>
+      </Function>
+    </ListOfFunctions>
+    <ListOfEnergyPatterns>
+      <EnergyPattern id="EP1" pattern="M(sp~up)" expression="Gf_up">
+        <Pattern id="EP1_P1">
+          <ListOfMolecules>
+            <Molecule id="EP1_P1_M1" name="M">
+              <ListOfComponents>
+                <Component id="EP1_P1_M1_C1" name="sp" state="up" numberOfBonds="0"/>
+              </ListOfComponents>
+            </Molecule>
+          </ListOfMolecules>
+        </Pattern>
+      </EnergyPattern>
+      <EnergyPattern id="EP2" pattern="M(n!1,sp~dn).M(s!1,sp~up)" expression="Gf_misalign">
+        <Pattern id="EP2_P1">
+          <ListOfMolecules>
+            <Molecule id="EP2_P1_M1" name="M">
+              <ListOfComponents>
+                <Component id="EP2_P1_M1_C1" name="n" numberOfBonds="1"/>
+                <Component id="EP2_P1_M1_C2" name="sp" state="dn" numberOfBonds="0"/>
+              </ListOfComponents>
+            </Molecule>
+            <Molecule id="EP2_P1_M2" name="M">
+              <ListOfComponents>
+                <Component id="EP2_P1_M2_C1" name="s" numberOfBonds="1"/>
+                <Component id="EP2_P1_M2_C2" name="sp" state="up" numberOfBonds="0"/>
+              </ListOfComponents>
+            </Molecule>
+          </ListOfMolecules>
+          <ListOfBonds>
+            <Bond id="EP2_P1_B1" site1="EP2_P1_M1_C1" site2="EP2_P1_M2_C1"/>
+          </ListOfBonds>
+        </Pattern>
+      </EnergyPattern>
+      <EnergyPattern id="EP3" pattern="M(n!1,sp~up).M(s!1,sp~dn)" expression="Gf_misalign">
+        <Pattern id="EP3_P1">
+          <ListOfMolecules>
+            <Molecule id="EP3_P1_M1" name="M">
+              <ListOfComponents>
+                <Component id="EP3_P1_M1_C1" name="n" numberOfBonds="1"/>
+                <Component id="EP3_P1_M1_C2" name="sp" state="up" numberOfBonds="0"/>
+              </ListOfComponents>
+            </Molecule>
+            <Molecule id="EP3_P1_M2" name="M">
+              <ListOfComponents>
+                <Component id="EP3_P1_M2_C1" name="s" numberOfBonds="1"/>
+                <Component id="EP3_P1_M2_C2" name="sp" state="dn" numberOfBonds="0"/>
+              </ListOfComponents>
+            </Molecule>
+          </ListOfMolecules>
+          <ListOfBonds>
+            <Bond id="EP3_P1_B1" site1="EP3_P1_M1_C1" site2="EP3_P1_M2_C1"/>
+          </ListOfBonds>
+        </Pattern>
+      </EnergyPattern>
+      <EnergyPattern id="EP4" pattern="M(e!1,sp~dn).M(w!1,sp~up)" expression="Gf_misalign">
+        <Pattern id="EP4_P1">
+          <ListOfMolecules>
+            <Molecule id="EP4_P1_M1" name="M">
+              <ListOfComponents>
+                <Component id="EP4_P1_M1_C1" name="e" numberOfBonds="1"/>
+                <Component id="EP4_P1_M1_C2" name="sp" state="dn" numberOfBonds="0"/>
+              </ListOfComponents>
+            </Molecule>
+            <Molecule id="EP4_P1_M2" name="M">
+              <ListOfComponents>
+                <Component id="EP4_P1_M2_C1" name="w" numberOfBonds="1"/>
+                <Component id="EP4_P1_M2_C2" name="sp" state="up" numberOfBonds="0"/>
+              </ListOfComponents>
+            </Molecule>
+          </ListOfMolecules>
+          <ListOfBonds>
+            <Bond id="EP4_P1_B1" site1="EP4_P1_M1_C1" site2="EP4_P1_M2_C1"/>
+          </ListOfBonds>
+        </Pattern>
+      </EnergyPattern>
+      <EnergyPattern id="EP5" pattern="M(e!1,sp~up).M(w!1,sp~dn)" expression="Gf_misalign">
+        <Pattern id="EP5_P1">
+          <ListOfMolecules>
+            <Molecule id="EP5_P1_M1" name="M">
+              <ListOfComponents>
+                <Component id="EP5_P1_M1_C1" name="e" numberOfBonds="1"/>
+                <Component id="EP5_P1_M1_C2" name="sp" state="up" numberOfBonds="0"/>
+              </ListOfComponents>
+            </Molecule>
+            <Molecule id="EP5_P1_M2" name="M">
+              <ListOfComponents>
+                <Component id="EP5_P1_M2_C1" name="w" numberOfBonds="1"/>
+                <Component id="EP5_P1_M2_C2" name="sp" state="dn" numberOfBonds="0"/>
+              </ListOfComponents>
+            </Molecule>
+          </ListOfMolecules>
+          <ListOfBonds>
+            <Bond id="EP5_P1_B1" site1="EP5_P1_M1_C1" site2="EP5_P1_M2_C1"/>
+          </ListOfBonds>
+        </Pattern>
+      </EnergyPattern>
+    </ListOfEnergyPatterns>
+  </model>
+</sbml>

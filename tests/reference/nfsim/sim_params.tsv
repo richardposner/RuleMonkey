@@ -1,0 +1,72 @@
+#model	suffix	t_end	n_steps	is_equil	nfsim_flags
+AN	default	100	100	no
+ANx	default	100	100	no
+ANx_noActivity	default	100	100	no
+BLBR	default	10	100	no
+CaMKII_holo	default	10	100	no
+PushPull	default	4000	40	no
+basicTLBR	default	20	100	no
+bench_blbr_cooperativity_posner2004	default	10	10	no
+bench_blbr_cooperativity_posner2004_rings	default	10	10	no
+bench_blbr_dembo1978	default	40	40	no	-bscb
+bench_blbr_dembo1978_monovalent_inhibitor	default	3000	300	no	-bscb
+bench_blbr_heterogeneity_goldstein1980	default	10	10	no	-bscb
+bench_blbr_rings_posner1995	default	3000	300	no	-bscb -utl 5
+bench_blbr_rings_posner1995_no_rings	default	50	50	no
+bench_tlbr_solution_macken1982	default	500	250	no	-bscb
+bench_tlbr_yang2008	default	3000	300	no
+blbr_rings_posner1995	default	3000	300	no	-bscb -utl 5
+e1	default	200	100	no
+e2	default	200	100	no
+e3	default	200	100	no
+e4	default	200	100	no
+e5	default	200	100	no
+e6	default	200	100	no
+e7	default	200	100	no
+e8	default	200	100	no
+e9	default	200	100	no
+egfr_nf_iter5p12h10	default	60	20	no
+ensemble	default	15	100	no
+example2_fit	default	126	20	no
+example3_fit	default	5000	10	no
+example4_fit	default	13	100	no
+example6_ground_truth	default	60	60	no
+gene_expr_func	default	1000	100	no
+isingspin_localfcn	default	5000	100	no
+machine	default	14	100	no
+nfsim_aggregation_gelation	default	50	200	no
+nfsim_coarse_graining	default	400	200	no
+nfsim_dynamic_compartments	default	20	100	no
+nfsim_hybrid_particle_field	default	10	50	no
+nfsim_ring_closure_polymer	default	50	200	no
+oscSystem	default	200	200	no
+poly	default	100	100	no
+receptor_nf_iter36p0h3	default	60	60	no
+simple_nfsim	default	100	50	no
+simple_system	default	100	50	no
+t3	default	100	100	no
+tcr	default	60	12	no
+tcr_gen20ind9	default	1.5	12	no
+tcr_gen27ind33	default	0.94	12	no
+tcr_iter28p4h2	default	0.94	12	no
+tcr_iter9p44	default	0.94	12	no
+tlbr	default	200	200	no
+A_plus_A	default	10	100	no
+A_plus_A_mixed_1	default	30	100	no
+A_plus_A_mixed_2	default	30	100	no
+A_plus_B_rings	default	10	10000	no	-bscb -utl 5
+Tutorial_Example	default	5	50	no
+rm_blbr	default	10	100	no
+egfr_net	default	120	120	no
+fceri_ji	default	500	500	no
+lat	default	10	100	no
+mlnr	default	1000	1000	no
+pltr	default	1000	1000	no
+st	default	10	100	no
+st_multi_1	default	10	100	no
+st_multi_2	default	10	100	no
+stiff	default	10	100	no
+testcase2a	default	1000	1000	no
+rm_tlbr	default	1000	1000	no
+rm_tlbr_rings	default	1000	100	no	-bscb -utl 5
+toy_jim	default	100	100	no

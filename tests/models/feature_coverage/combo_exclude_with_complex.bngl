@@ -1,0 +1,51 @@
+# Feature combination: exclude_reactants + complex formation
+# Tests: exclusion patterns that check complex context (bond state)
+# Tier: combinations
+# Expected: excess C with fast A-C binding saturates all A quickly.
+#   exclude_reactants(1,A(c!+)) blocks A-B binding when A is in complex with C.
+#   NFsim (enforcing the constraint): AB→0 after A-C saturates.
+#   RM (ignoring the constraint): AB at equilibrium regardless of A-C state.
+
+begin model
+begin parameters
+    A_tot  50
+    B_tot  50
+    C_tot  100    # 2x excess — enough to saturate all A
+    kfAC   0.1    # /s — fast A-C binding
+    krAC   0.001  # /s — nearly irreversible (tau ~ 1000s)
+    kfAB   0.005  # /s — moderate A-B binding
+    krAB   0.05   # /s — moderate A-B unbinding
+end parameters
+
+begin molecule types
+    A(b,c)
+    B(a)
+    C(a)
+end molecule types
+
+begin seed species
+    A(b,c)  A_tot
+    B(a)    B_tot
+    C(a)    C_tot
+end seed species
+
+begin observables
+    Molecules  AC        A(c!1).C(a!1)
+    Molecules  AB        A(b!1).B(a!1)
+    Molecules  B_free    B(a)
+    Molecules  C_free    C(a)
+end observables
+
+begin reaction rules
+    # A-C binding: fast and nearly irreversible
+    A(c) + C(a) <-> A(c!1).C(a!1)  kfAC, krAC
+
+    # A-B binding, but NOT if A is already bound to C
+    # NFsim enforces; RM ignores
+    A(b) + B(a) <-> A(b!1).B(a!1)  kfAB, krAB  exclude_reactants(1,A(c!+))
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>200,n_steps=>50})
+end actions

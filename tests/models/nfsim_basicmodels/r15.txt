@@ -1,0 +1,2 @@
+basic dimer test without complex bookkeeping to ensure molecule can't bind itself on the same site
+-sim 1 -oSteps 100

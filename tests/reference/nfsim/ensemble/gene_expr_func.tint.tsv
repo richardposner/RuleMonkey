@@ -1,0 +1,5 @@
+observable	I_mean	I_std	n_reps
+DNA_Active	128.1	261.501	100
+DNA_Total	1000	0	100
+mRNA_Total	25.15	90.0293	100
+Protein_Total	297.8	1418.31	100
