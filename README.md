@@ -5,10 +5,12 @@ in [BNGL](https://bionetgen.org/). RuleMonkey reads a BioNetGen-generated XML
 model and runs an exact discrete-event simulation, producing observable
 trajectories in `.gdat` format.
 
-This repository contains a cleanroom C++ implementation of RuleMonkey targeting
-integration with [BNGsim](https://github.com/...). The original C
-implementation by Yang, Monine, Faeder, and Hlavacek (2008) lives in repository
-history prior to this release.
+This is **RuleMonkey 3.0**, a cleanroom C++17 rewrite targeting integration
+with [BNGsim](https://github.com/...). The legacy C implementation
+(RuleMonkey 2.0.25), introduced in Colvin J, Monine MI, Gutenkunst RN,
+Hlavacek WS, Von Hoff DD, Posner RG. *RuleMonkey: software for stochastic
+simulation of rule-based models.* BMC Bioinformatics 11:404 (2010), is
+preserved in the parent fork's git history.
 
 ## Building
 
