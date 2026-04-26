@@ -26,30 +26,34 @@ models (high noise floor) get enough reps for T ≈ 5.0, while quiet
 models stay at the base rep count.
 
 Usage:
-  python3 dev/skills/benchmark_full.py                        # all models, 10 reps
-  python3 dev/skills/benchmark_full.py --tier smoke           # 8 models, 1 rep
-  python3 dev/skills/benchmark_full.py --tier guard           # 23 models, 3 reps
-  python3 dev/skills/benchmark_full.py --tier full --reps 5   # all, 5 reps
-  python3 dev/skills/benchmark_full.py --reps 3               # all, 3 reps
-  python3 dev/skills/benchmark_full.py --adaptive             # all, 10+ reps per model
-  python3 dev/skills/benchmark_full.py tcr ensemble           # specific models
-  python3 dev/skills/benchmark_full.py --output report.md     # custom output
+  python3 harness/benchmark_full.py                        # all models, 10 reps
+  python3 harness/benchmark_full.py --tier smoke           # 8 models, 1 rep
+  python3 harness/benchmark_full.py --tier guard           # 23 models, 3 reps
+  python3 harness/benchmark_full.py --tier full --reps 5   # all, 5 reps
+  python3 harness/benchmark_full.py --reps 3               # all, 3 reps
+  python3 harness/benchmark_full.py --adaptive             # all, 10+ reps per model
+  python3 harness/benchmark_full.py tcr ensemble           # specific models
+  python3 harness/benchmark_full.py --output report.md     # custom output
 
-Tier membership is defined in dev/FAILING_MODELS.md; keep the two in sync.
+Tier membership is defined in docs/FAILING_MODELS.md; keep the two in sync.
 """
 
 import subprocess, sys, os, time, re, math, statistics
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
-RM_DRIVER = os.path.join(REPO_ROOT, "build", "rm_driver")
-XML_DIR = os.path.join(REPO_ROOT, "models", "nfsim_reference", "xml")
-PARAMS = os.path.join(REPO_ROOT, "models", "nfsim_reference", "sim_params.tsv")
-ENS_DIR = os.path.join(REPO_ROOT, "models", "nfsim_reference", "ensemble")
-SUMMARY = os.path.join(REPO_ROOT, "models", "nfsim_reference", "summary.tsv")
-NOISE_FLOOR_FILE = os.path.join(REPO_ROOT, "models", "nfsim_reference", "noise_floor.tsv")
-TIMEOUT_FILE = os.path.join(REPO_ROOT, "dev", "model_timeouts.tsv")
+REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+RM_DRIVER = os.environ.get(
+    "RM_DRIVER",
+    os.path.join(REPO_ROOT, "build", "release", "rm_driver"),
+)
+REF_DIR = os.path.join(REPO_ROOT, "tests", "reference", "nfsim")
+XML_DIR = os.path.join(REF_DIR, "xml")
+PARAMS = os.path.join(REF_DIR, "sim_params.tsv")
+ENS_DIR = os.path.join(REF_DIR, "ensemble")
+SUMMARY = os.path.join(REF_DIR, "summary.tsv")
+NOISE_FLOOR_FILE = os.path.join(REF_DIR, "noise_floor.tsv")
+TIMEOUT_FILE = os.path.join(REPO_ROOT, "harness", "model_timeouts.tsv")
 
 DEFAULT_REPS = 10
 ADAPTIVE_MAX_REPS = 100  # cap for adaptive per-model reps
@@ -69,7 +73,7 @@ SCREEN_Z_THRESHOLD = 5.0
 # Verdict (secondary): max time-integrated-z over observables, compared to a
 # per-model noise floor derived from self-split of the NFsim replicates.
 # T_model = max(VERDICT_TZ_FLOOR, VERDICT_TZ_MARGIN * tz_p99) where p99 comes
-# from models/nfsim_reference/noise_floor.tsv.
+# from tests/reference/nfsim/noise_floor.tsv.
 VERDICT_TZ_FLOOR  = 5.0
 VERDICT_TZ_MARGIN = 1.2
 VERDICT_TZ_DEFAULT = 5.0  # fallback when no calibration row is present
@@ -80,7 +84,7 @@ TINT_TOL_REL = 1e-6
 
 
 # ---------------------------------------------------------------------------
-# Tiered model sets (keep in sync with dev/FAILING_MODELS.md)
+# Tiered model sets (keep in sync with docs/FAILING_MODELS.md)
 # ---------------------------------------------------------------------------
 
 # Smoke tier: fastest diverse coverage. Every major code path touched by at
@@ -708,7 +712,7 @@ def fmt(val, fmt_str=".1f"):
 def main():
     # Parse args
     args = sys.argv[1:]
-    output_path = os.path.join(REPO_ROOT, "dev", "benchmark_report.md")
+    output_path = os.path.join(REPO_ROOT, "build", "benchmark_report.md")
 
     tier = None
     if '--tier' in args:

@@ -11,27 +11,31 @@ reduces stochastic noise by 1/sqrt(N), resolving false positives on rare
 species.
 
 Usage:
-  python3 dev/skills/benchmark_validate.py                  # all models, 1 rep
-  python3 dev/skills/benchmark_validate.py --reps 10        # 10 reps
-  python3 dev/skills/benchmark_validate.py --reps 10 tcr    # 10 reps, subset
+  python3 harness/benchmark_validate.py                  # all models, 1 rep
+  python3 harness/benchmark_validate.py --reps 10        # 10 reps
+  python3 harness/benchmark_validate.py --reps 10 tcr    # 10 reps, subset
 """
 
 import subprocess, sys, os, concurrent.futures
 
 DEFAULT_TIMEOUT = 45
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
-RM_DRIVER = os.path.join(REPO_ROOT, "models", "rm_driver")
-XML_DIR = os.path.join(REPO_ROOT, "models", "nfsim_reference", "xml")
-PARAMS = os.path.join(REPO_ROOT, "models", "nfsim_reference", "sim_params.tsv")
-ENS_DIR = os.path.join(REPO_ROOT, "models", "nfsim_reference", "ensemble")
-TIMEOUT_FILE = os.path.join(REPO_ROOT, "dev", "model_timeouts.tsv")
+REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
+RM_DRIVER = os.environ.get(
+    "RM_DRIVER",
+    os.path.join(REPO_ROOT, "build", "release", "rm_driver"),
+)
+REF_DIR = os.path.join(REPO_ROOT, "tests", "reference", "nfsim")
+XML_DIR = os.path.join(REF_DIR, "xml")
+PARAMS = os.path.join(REF_DIR, "sim_params.tsv")
+ENS_DIR = os.path.join(REF_DIR, "ensemble")
+TIMEOUT_FILE = os.path.join(REPO_ROOT, "harness", "model_timeouts.tsv")
 
 Z_THRESHOLD = 5.0  # z-scores above this are flagged FAIL
 
 
 def load_timeouts():
-    """Load model-specific timeouts from dev/model_timeouts.tsv."""
+    """Load model-specific timeouts from harness/model_timeouts.tsv."""
     timeouts = {}
     if not os.path.exists(TIMEOUT_FILE):
         return timeouts
