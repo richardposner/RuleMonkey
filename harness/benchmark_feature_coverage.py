@@ -14,16 +14,24 @@ Four tiers:
                   branched aggregates). All network-free.
 
 Reference data:
-  - Default (fast): NFsim only — same network-free paradigm as RM
-  - --full mode:    Also generates ODE/SSA references for cross-checking
-  - References are cached; subsequent runs reuse them
+  - Default (fast): NFsim refs from tests/models/feature_coverage/reference/nfsim/
+  - --full mode:    Also reads ODE/SSA refs for cross-checking
+  - References are vendored in-tree at tests/models/feature_coverage/reference/.
+    If a ref is missing, the script tries to regenerate it via NFSIM_BIN and
+    BNG2 (env-overridable). The cleanroom does not vendor those binaries —
+    set NFSIM_BIN and BNG2 explicitly when adding a new model. Otherwise
+    the missing-ref model is skipped with a warning.
 
 Usage:
-  python3 dev/skills/benchmark_feature_coverage.py                  # fast: ~90s
-  python3 dev/skills/benchmark_feature_coverage.py --reps 5         # more RM reps
-  python3 dev/skills/benchmark_feature_coverage.py --full           # + ODE/SSA refs
-  python3 dev/skills/benchmark_feature_coverage.py --tier base      # base only
-  python3 dev/skills/benchmark_feature_coverage.py ft_bond_wildcards combo_strict_product_plus
+  python3 harness/benchmark_feature_coverage.py                  # fast: ~90s
+  python3 harness/benchmark_feature_coverage.py --reps 5         # more RM reps
+  python3 harness/benchmark_feature_coverage.py --full           # + ODE/SSA refs
+  python3 harness/benchmark_feature_coverage.py --tier base      # base only
+  python3 harness/benchmark_feature_coverage.py ft_bond_wildcards combo_strict_product_plus
+
+  # Reference regeneration (requires NFSIM_BIN and BNG2 binaries):
+  python3 harness/benchmark_feature_coverage.py --force-refs <model>     # regen + run
+  python3 harness/benchmark_feature_coverage.py --generate-refs <model>  # regen only, skip RM
 """
 
 import argparse
@@ -40,19 +48,35 @@ import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, "..", ".."))
-RM_DRIVER = os.path.join(REPO_ROOT, "build", "rm_driver")
-NFSIM = os.path.join(REPO_ROOT, "build", "NFsim")
-BNG2 = os.path.expanduser("~/Simulations/BioNetGen-2.9.3/BNG2.pl")
+REPO_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, ".."))
 
-SUITE_DIR = os.path.join(REPO_ROOT, "models", "feature_coverage")
+# rm_driver: built from this repo. Override via RM_DRIVER env var.
+RM_DRIVER = os.environ.get(
+    "RM_DRIVER",
+    os.path.join(REPO_ROOT, "build", "release", "rm_driver"),
+)
+
+# NFsim and BNG2 are external. The cleanroom does not vendor them. They
+# are only needed when regenerating references for a model whose ref
+# files don't already exist in tests/models/feature_coverage/reference/.
+# Defaults point at the sibling nfsim-rm checkout for convenience.
+NFSIM = os.environ.get(
+    "NFSIM_BIN",
+    os.path.expanduser("~/Code/nfsim-rm/build/NFsim"),
+)
+BNG2 = os.environ.get(
+    "BNG2",
+    os.path.expanduser("~/Simulations/BioNetGen-2.9.3/BNG2.pl"),
+)
+
+SUITE_DIR = os.path.join(REPO_ROOT, "tests", "models", "feature_coverage")
 XML_DIR = os.path.join(SUITE_DIR, "xml")
 REF_DIR = os.path.join(SUITE_DIR, "reference")
 ODE_DIR = os.path.join(REF_DIR, "ode")
 SSA_DIR = os.path.join(REF_DIR, "ssa")
 NFSIM_DIR = os.path.join(REF_DIR, "nfsim")
 
-REPORT_PATH = os.path.join(SUITE_DIR, "benchmark_report.md")
+REPORT_PATH = os.path.join(REPO_ROOT, "build", "feature_coverage_report.md")
 
 DEFAULT_REPS = 5
 DEFAULT_NFSIM_REPS = 20  # enough for stable z-scores with small models
@@ -1108,9 +1132,14 @@ def main():
         dirs_to_clear = [NFSIM_DIR]
         if args.full:
             dirs_to_clear.extend([ODE_DIR, SSA_DIR])
+        # Only clear refs for the selected models. Full-suite regeneration
+        # happens naturally when `models` covers everything.
         for d in dirs_to_clear:
-            if os.path.exists(d):
-                shutil.rmtree(d)
+            if not os.path.isdir(d):
+                continue
+            for m in models:
+                for path in glob.glob(os.path.join(d, f"{m}.*")):
+                    os.remove(path)
 
     # Ensure directories
     for d in [XML_DIR, ODE_DIR, SSA_DIR, NFSIM_DIR]:

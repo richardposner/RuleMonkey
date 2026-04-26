@@ -1,0 +1,37 @@
+model	name	last_run	verdict	rm_s	max_rel_err	worst_obs	notes
+01	simple binding, unbinding, and phosphorylation system	2026-04-26 15:37	PASS	3.42	0.030	Xp_free
+02	multiple identical phosphorylation sites	2026-04-26 15:37	FAIL-divergence	7.70	0.505	Xpp	final-step rel err 0.50 > 0.35
+03	basic connected to syntax	2026-04-26 15:37	PASS	0.59	0.012	Xp
+04	multiple identical site binding reactions	2026-04-26 15:37	PASS	1.93	0.216	Afree
+05	basic dimerization reaction test and basic species observable	2026-04-26 15:37	PASS	0.02	0.006	Complex
+06	cross phosphorylation of linked molecules, explicit	2026-04-26 15:37	PASS	2.76	0.000	Complex
+07	cross phosphorylation of linked molecules, more complex setup	2026-04-26 15:37	FAIL-divergence	2.80	0.479	full	final-step rel err 0.48 > 0.35
+08	simple degredation and synthesis reactions	2026-04-26 15:37	PASS	2.07	0.086	Protein1
+09	simple ring closure	2026-04-26 15:37	PASS	0.38	0.009	ring
+10	simple ring closure with two molecule types	2026-04-26 15:37	PASS	1.96	0.055	small_ring
+11	another dimerization test where there should be no symmetry	2026-04-26 15:37	PASS	0.15	0.002	Complex
+12	test deletion of species, and addition, and dimerization	2026-04-26 15:37	PASS	0.45	0.065	Atotal
+13	test creation of molecules with multiple identical sites	2026-04-26 15:37	PASS	0.10	0.020	Atotal
+14	test binding of a molecule to itself	2026-04-26 15:37	PASS	0.08	0.007	A_withBond
+15	basic dimer test without complex bookkeeping to ensure molecule can't bind itself on the same site	2026-04-26 15:37	PASS	0.03	0.189	Free
+16	creation of a molecule that is bound to an existing molecule	2026-04-26 15:37	PASS	0.05	0.140	Dimer
+17	Testing for multiple assignments per rule per molecule agent.	2026-04-26 15:37	PASS	0.01	0.007	Rsimple
+18	Testing for component handling with basic reactions in molecules with symmetric components	2026-04-26 15:37	PASS	0.51	0.215	triply_bound_L2
+19	Testing for the correct handling of parameters labeled through species-scoped references	2026-04-26 15:37	PASS	0.01	0.009	Yzero
+20	connectivity testing, simple binding, unbinding, and phosphorylation system	2026-04-26 15:37	PASS	3.45	0.030	Xp_free
+21	connectivity testing, mRNA monomer model	2026-04-26 15:38	PASS	0.07	0.204	rib_elong
+22	connectivity testing, mRNA monomer model with add operations	2026-04-26 15:38	FAIL-divergence	0.01	0.361	rib_elong	final-step rel err 0.36 > 0.35
+23	connectivity testing, mRNA monomer model with delete operations	2026-04-26 15:38	PASS	0.01	0.041	rib_elong
+24	connectivity testing, mRNA monomer model with add and delete operations	2026-04-26 15:38	FAIL-divergence	0.01	1.000	rib_elong	final-step rel err 1.00 > 0.35
+25	connectivity testing, mRNA monomer model, only `-rxnlog` check	2026-04-26 15:38	FAIL-divergence	0.01	1.000	rib_elong	final-step rel err 1.00 > 0.35
+26	connectivity testing, mRNA monomer model, logbuffer size check	2026-04-26 15:38	FAIL-divergence	0.01	1.000	rib_elong	final-step rel err 1.00 > 0.35
+27	NFSIM ONLY: population testing	2026-04-26 15:38	FAIL-harness				BNG2 produced no ODE output (no simulate_ode action?)
+28	NFSIM ONLY: population testing, with reaction log	2026-04-26 15:38	FAIL-harness				BNG2 produced no ODE output (no simulate_ode action?)
+29	NFSIM ONLY: population testing, with reaction log	2026-04-26 15:38	FAIL-harness				BNG2 produced no ODE output (no simulate_ode action?)
+30	NFSIM ONLY: population testing, with reaction log	2026-04-26 15:38	FAIL-harness				BNG2 produced no ODE output (no simulate_ode action?)
+31	NFSIM ONLY internal bond reconnection regression	2026-04-26 15:38	FAIL-harness				BNG2 produced no ODE output (no simulate_ode action?)
+32	NFSIM ONLY issue33 intramolecular species handling	2026-04-26 15:38	FAIL-harness				BNG2 produced no ODE output (no simulate_ode action?)
+33	NFSIM ONLY issue22/21 operations order and UTL low	2026-04-26 15:38	FAIL-harness				BNG2 produced no ODE output (no simulate_ode action?)
+34	NFSIM ONLY issue24 RandomBiBi occupied-site edge case	2026-04-26 15:38	FAIL-harness				BNG2 produced no ODE output (no simulate_ode action?)
+35	NFSIM ONLY issue14 rule disambiguation in bonded complex	2026-04-26 15:38	FAIL-harness				BNG2 produced no ODE output (no simulate_ode action?)
+36	NFSIM ONLY issue17 auto gml fallback for large initial populations	2026-04-26 15:38	FAIL-harness				BNG2 produced no ODE output (no simulate_ode action?)

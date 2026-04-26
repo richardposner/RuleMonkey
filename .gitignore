@@ -39,3 +39,6 @@ Thumbs.db
 
 # Replicate ensembles (regenerated; do not track)
 tests/reference/*/replicates/
+
+# basicmodels harness BNG2 cache (regenerated on demand)
+tests/models/nfsim_basicmodels/_cache/

@@ -1,0 +1,267 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created by BioNetGen 2.9.3  -->
+<sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
+  <model id="ft_local_functions">
+    <ListOfParameters>
+      <Parameter id="k_base" type="Constant" value="1" expr="1.0"/>
+      <Parameter id="J" type="Constant" value="0.5" expr="0.5"/>
+    </ListOfParameters>
+    <ListOfMoleculeTypes>
+      <MoleculeType id="S">
+        <ListOfComponentTypes>
+          <ComponentType id="nbr"/>
+          <ComponentType id="sp">
+            <ListOfAllowedStates>
+              <AllowedState id="up"/>
+              <AllowedState id="dn"/>
+            </ListOfAllowedStates>
+          </ComponentType>
+        </ListOfComponentTypes>
+      </MoleculeType>
+    </ListOfMoleculeTypes>
+    <ListOfCompartments>
+    </ListOfCompartments>
+    <ListOfSpecies>
+      <Species id="S1"  concentration="1" name="S(nbr!1,sp~dn).S(nbr!1,sp~dn)">
+        <ListOfMolecules>
+          <Molecule id="S1_M1" name="S">
+            <ListOfComponents>
+              <Component id="S1_M1_C1" name="nbr" numberOfBonds="1"/>
+              <Component id="S1_M1_C2" name="sp" state="dn" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M2" name="S">
+            <ListOfComponents>
+              <Component id="S1_M2_C1" name="nbr" numberOfBonds="1"/>
+              <Component id="S1_M2_C2" name="sp" state="dn" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S1_B1" site1="S1_M1_C1" site2="S1_M2_C1"/>
+        </ListOfBonds>
+      </Species>
+    </ListOfSpecies>
+    <ListOfReactionRules>
+      <ReactionRule id="RR1" name="_R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR1_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP1_M1" name="S" label="x">
+                <ListOfComponents>
+                  <Component id="RR1_RP1_M1_C1" name="sp" state="dn" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR1_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP1_M1" name="S" label="x">
+                <ListOfComponents>
+                  <Component id="RR1_PP1_M1_C1" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR1_RateLaw" type="Function" name="_rateLaw1" totalrate="0">
+          <ListOfArguments>
+            <Argument id="x" type="ObjectReference" value="RR1_RP1_M1"/>
+          </ListOfArguments>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR1_RP1_M1" targetID="RR1_PP1_M1"/>
+          <MapItem sourceID="RR1_RP1_M1_C1" targetID="RR1_PP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR1_RP1_M1_C1" finalState="up"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR2" name="_reverse__R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR2_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_RP1_M1" name="S" label="x">
+                <ListOfComponents>
+                  <Component id="RR2_RP1_M1_C1" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR2_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_PP1_M1" name="S" label="x">
+                <ListOfComponents>
+                  <Component id="RR2_PP1_M1_C1" name="sp" state="dn" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR2_RateLaw" type="Function" name="_rateLaw2" totalrate="0">
+          <ListOfArguments>
+            <Argument id="x" type="ObjectReference" value="RR2_RP1_M1"/>
+          </ListOfArguments>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR2_RP1_M1" targetID="RR2_PP1_M1"/>
+          <MapItem sourceID="RR2_RP1_M1_C1" targetID="RR2_PP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR2_RP1_M1_C1" finalState="dn"/>
+        </ListOfOperations>
+      </ReactionRule>
+    </ListOfReactionRules>
+    <ListOfObservables>
+      <Observable id="O1" name="S_up" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O1_P1">
+            <ListOfMolecules>
+              <Molecule id="O1_P1_M1" name="S">
+                <ListOfComponents>
+                  <Component id="O1_P1_M1_C1" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O2" name="S_dn" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O2_P1">
+            <ListOfMolecules>
+              <Molecule id="O2_P1_M1" name="S">
+                <ListOfComponents>
+                  <Component id="O2_P1_M1_C1" name="sp" state="dn" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O3" name="S_total" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O3_P1">
+            <ListOfMolecules>
+              <Molecule id="O3_P1_M1" name="S"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O4" name="NbrUp" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O4_P1">
+            <ListOfMolecules>
+              <Molecule id="O4_P1_M1" name="S">
+                <ListOfComponents>
+                  <Component id="O4_P1_M1_C1" name="nbr" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O4_P1_M2" name="S">
+                <ListOfComponents>
+                  <Component id="O4_P1_M2_C1" name="nbr" numberOfBonds="1"/>
+                  <Component id="O4_P1_M2_C2" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="O4_P1_B1" site1="O4_P1_M1_C1" site2="O4_P1_M2_C1"/>
+            </ListOfBonds>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O5" name="Aligned" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O5_P1">
+            <ListOfMolecules>
+              <Molecule id="O5_P1_M1" name="S">
+                <ListOfComponents>
+                  <Component id="O5_P1_M1_C1" name="nbr" numberOfBonds="1"/>
+                  <Component id="O5_P1_M1_C2" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O5_P1_M2" name="S">
+                <ListOfComponents>
+                  <Component id="O5_P1_M2_C1" name="nbr" numberOfBonds="1"/>
+                  <Component id="O5_P1_M2_C2" name="sp" state="up" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="O5_P1_B1" site1="O5_P1_M1_C1" site2="O5_P1_M2_C1"/>
+            </ListOfBonds>
+          </Pattern>
+          <Pattern id="O5_P2">
+            <ListOfMolecules>
+              <Molecule id="O5_P2_M1" name="S">
+                <ListOfComponents>
+                  <Component id="O5_P2_M1_C1" name="nbr" numberOfBonds="1"/>
+                  <Component id="O5_P2_M1_C2" name="sp" state="dn" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O5_P2_M2" name="S">
+                <ListOfComponents>
+                  <Component id="O5_P2_M2_C1" name="nbr" numberOfBonds="1"/>
+                  <Component id="O5_P2_M2_C2" name="sp" state="dn" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="O5_P2_B1" site1="O5_P2_M1_C1" site2="O5_P2_M2_C1"/>
+            </ListOfBonds>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+    </ListOfObservables>
+    <ListOfFunctions>
+      <Function id="flipUp">
+        <ListOfArguments>
+          <Argument id="z"/>
+        </ListOfArguments>
+        <ListOfReferences>
+          <Reference name="J" type="Constant"/>
+          <Reference name="k_base" type="Constant"/>
+          <Reference name="z" type="Local"/>
+          <Reference name="NbrUp" type="Observable"/>
+        </ListOfReferences>
+        <Expression> k_base*exp(((-J)*(1-NbrUp(z)))) </Expression>
+      </Function>
+      <Function id="flipDn">
+        <ListOfArguments>
+          <Argument id="z"/>
+        </ListOfArguments>
+        <ListOfReferences>
+          <Reference name="J" type="Constant"/>
+          <Reference name="k_base" type="Constant"/>
+          <Reference name="z" type="Local"/>
+          <Reference name="NbrUp" type="Observable"/>
+        </ListOfReferences>
+        <Expression> k_base*exp(((-J)*NbrUp(z))) </Expression>
+      </Function>
+      <Function id="_rateLaw1">
+        <ListOfArguments>
+          <Argument id="x"/>
+        </ListOfArguments>
+        <ListOfReferences>
+          <Reference name="flipUp" type="Function"/>
+          <Reference name="x" type="Local"/>
+        </ListOfReferences>
+        <Expression> flipUp(x) </Expression>
+      </Function>
+      <Function id="_rateLaw2">
+        <ListOfArguments>
+          <Argument id="x"/>
+        </ListOfArguments>
+        <ListOfReferences>
+          <Reference name="flipDn" type="Function"/>
+          <Reference name="x" type="Local"/>
+        </ListOfReferences>
+        <Expression> flipDn(x) </Expression>
+      </Function>
+    </ListOfFunctions>
+  </model>
+</sbml>
