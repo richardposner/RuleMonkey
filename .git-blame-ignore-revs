@@ -1,0 +1,10 @@
+# Revisions in this file are skipped by `git blame --ignore-revs-file`.
+# GitHub's web blame view honors this file automatically; for local
+# `git blame`, opt in once per clone with:
+#
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Add only commits that are pure-formatting / pure-rename changes.
+
+# Apply pre-commit formatting baseline (clang-format, ruff-format, EOF/whitespace)
+6c18bc5fe6f0d20b80de9c50907d3717c9ae09ff
