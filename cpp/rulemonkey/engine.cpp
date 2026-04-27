@@ -1133,137 +1133,73 @@ static int count_multi_molecule_embeddings(const AgentPool& pool, int seed_mol_i
 
   int total_count = 0;
 
-  // For each seed embedding, try to extend to a full multi-molecule match
+  // For each seed embedding, recursively enumerate all complete embeddings.
+  //
+  // The enumerator picks the next unassigned pattern molecule reachable from
+  // an already-assigned one via a bond, walks that bond into the actual
+  // partner molecule, and BRANCHES over all partner pattern-embeddings whose
+  // bond endpoint matches the walked bond. Branching is required when a
+  // partner molecule type has identical (symmetric) components only one of
+  // which the pattern names: every such embedding is a distinct mapping that
+  // contributes to a `Molecules` count. Once no bond-reachable pattern
+  // molecules remain, control falls through to the disconnected-pattern
+  // backtracker (preserving the original behavior for patterns like
+  // `egfr().egfr()`). Bonds whose endpoints are both already assigned are
+  // verified once at the leaves via `check_pattern_bonds`.
   for (auto& seed_comp_map : seed_embs) {
-    // mol_assignments[pat_mol_idx] = actual mol_id
     std::vector<int> mol_assignments(n_pat_mols, -1);
-    // comp_maps[pat_mol_idx] = vector of local comp assignments
     std::vector<std::vector<int>> comp_maps(n_pat_mols);
-
     mol_assignments[0] = seed_mol_id;
     comp_maps[0] = seed_comp_map;
 
-    // BFS to assign remaining pattern molecules via bond constraints
-    std::queue<int> bfs_queue;
-    bfs_queue.push(0);
-    bool valid = true;
-
-    while (!bfs_queue.empty() && valid) {
-      int cur_pat = bfs_queue.front();
-      bfs_queue.pop();
-
-      int cur_actual = mol_assignments[cur_pat];
-      auto& cur_comp_map = comp_maps[cur_pat];
-
-      for (auto& ae : adj[cur_pat]) {
-        int other_pat = ae.other_mol;
-
-        // Find the actual component ID for our local comp
-        if (ae.my_local >= static_cast<int>(cur_comp_map.size())) {
-          valid = false;
-          break;
-        }
-        int my_actual_local = cur_comp_map[ae.my_local];
-        int my_actual_comp_id = pool.molecule(cur_actual).comp_ids[my_actual_local];
-
-        // Follow the bond to find the partner
-        int partner_comp_id = pool.component(my_actual_comp_id).bond_partner;
-
-        if (partner_comp_id < 0) {
-          valid = false;
-          break;
-        }
-
-        int partner_mol_id = pool.mol_of_comp(partner_comp_id);
-
-        // Check: does the partner molecule match the other pattern molecule?
-        if (mol_assignments[other_pat] >= 0) {
-          // Already assigned — verify consistency
-          if (mol_assignments[other_pat] != partner_mol_id) {
-            valid = false;
-            break;
-          }
-          // Also verify the partner component matches
-          auto& other_comp_map = comp_maps[other_pat];
-          if (ae.other_local >= static_cast<int>(other_comp_map.size())) {
-            valid = false;
-            break;
-          }
-          int expected_local = other_comp_map[ae.other_local];
-          int expected_comp_id = pool.molecule(partner_mol_id).comp_ids[expected_local];
-          if (expected_comp_id != partner_comp_id) {
-            valid = false;
-            break;
-          }
+    std::function<int()> enumerate_extensions = [&]() -> int {
+      // Find an unassigned pattern molecule reachable from an assigned one
+      // via a bond. Deterministic order: scan assigned pats in index order
+      // and pick the first bond leading to an unassigned partner.
+      int via_pat = -1;
+      const AdjEntry* via_ae = nullptr;
+      for (int p = 0; p < n_pat_mols; ++p) {
+        if (mol_assignments[p] < 0)
           continue;
-        }
-
-        // New pattern molecule — check type and get embeddings
-        auto& other_pm = pat.molecules[other_pat];
-        auto& partner_mol = pool.molecule(partner_mol_id);
-        if (partner_mol.type_index != other_pm.type_index) {
-          valid = false;
-          break;
-        }
-
-        // Find embeddings of other_pm into partner_mol that are consistent
-        // with the bond constraint (ae.other_local maps to the specific
-        // component that is bonded to partner_comp_id).
-        std::vector<std::vector<int>> other_embs;
-        count_embeddings_single(pool, partner_mol_id, other_pm, model, &other_embs);
-
-        // Filter: the embedding must place ae.other_local at the component
-        // that matches partner_comp_id
-        // Find which local comp index in partner_mol corresponds to partner_comp_id
-        int partner_local = -1;
-        for (int ci = 0; ci < static_cast<int>(partner_mol.comp_ids.size()); ++ci) {
-          if (partner_mol.comp_ids[ci] == partner_comp_id) {
-            partner_local = ci;
+        for (auto& ae : adj[p]) {
+          if (mol_assignments[ae.other_mol] < 0) {
+            via_pat = p;
+            via_ae = &ae;
             break;
           }
         }
-
-        bool found_valid = false;
-        for (auto& emb : other_embs) {
-          if (ae.other_local < static_cast<int>(emb.size()) &&
-              emb[ae.other_local] == partner_local) {
-            mol_assignments[other_pat] = partner_mol_id;
-            comp_maps[other_pat] = emb;
-            bfs_queue.push(other_pat);
-            found_valid = true;
-            break;
-          }
-        }
-
-        if (!found_valid) {
-          valid = false;
+        if (via_pat >= 0)
           break;
+      }
+
+      if (via_pat < 0) {
+        // No bond-reachable extension. Either everything's assigned, or the
+        // pattern has disconnected components.
+        std::vector<int> unassigned;
+        for (int mi = 0; mi < n_pat_mols; ++mi) {
+          if (mol_assignments[mi] < 0)
+            unassigned.push_back(mi);
         }
-      }
-    }
 
-    // Check for unassigned pattern molecules not reachable via bonds.
-    // These are "disconnected" molecules in the pattern (e.g., pattern
-    // egfr().egfr() with no bonds means "two egfr in the same complex").
-    // For each unassigned molecule, enumerate candidates from the seed's complex.
-    if (valid) {
-      std::vector<int> unassigned;
-      for (int mi = 0; mi < n_pat_mols; ++mi) {
-        if (mol_assignments[mi] < 0)
-          unassigned.push_back(mi);
-      }
+        if (unassigned.empty()) {
+          if (!check_pattern_bonds(pool, pat, mol_assignments, comp_maps))
+            return 0;
+          if (!all_distinct_molecules(mol_assignments, 0, n_pat_mols))
+            return 0;
+          return 1;
+        }
 
-      if (!unassigned.empty()) {
-        // Get all molecules in the seed's complex
+        // Disconnected components: enumerate over molecules in the seed's
+        // complex (matches the original assign_unassigned behavior).
         int cx = pool.complex_of(seed_mol_id);
         auto cx_members = pool.molecules_in_complex(cx);
 
-        // Recursive backtracking to assign unassigned pattern molecules
+        int sub = 0;
         std::function<void(int)> assign_unassigned = [&](int ui) {
           if (ui == static_cast<int>(unassigned.size())) {
-            // All pattern molecules assigned — check bond constraints
-            if (check_pattern_bonds(pool, pat, mol_assignments, comp_maps))
-              ++total_count;
+            if (check_pattern_bonds(pool, pat, mol_assignments, comp_maps) &&
+                all_distinct_molecules(mol_assignments, 0, n_pat_mols))
+              ++sub;
             return;
           }
           int pat_mi = unassigned[ui];
@@ -1273,8 +1209,6 @@ static int count_multi_molecule_embeddings(const AgentPool& pool, int seed_mol_i
               continue;
             if (pool.molecule(cand).type_index != target_pm.type_index)
               continue;
-            // Skip if this actual molecule is already assigned to another
-            // pattern molecule (unless the pattern has multiple of the same type)
             bool already_used = false;
             for (int mi2 = 0; mi2 < n_pat_mols; ++mi2) {
               if (mi2 != pat_mi && mol_assignments[mi2] == cand) {
@@ -1297,13 +1231,60 @@ static int count_multi_molecule_embeddings(const AgentPool& pool, int seed_mol_i
           }
         };
         assign_unassigned(0);
-        // Don't increment total_count here; it's done inside the backtracking
-        continue; // skip the ++total_count below
+        return sub;
       }
-    }
 
-    if (valid && all_distinct_molecules(mol_assignments, 0, n_pat_mols))
-      ++total_count;
+      // Walk the bond from via_pat to find the actual partner molecule.
+      int via_actual = mol_assignments[via_pat];
+      auto& via_cm = comp_maps[via_pat];
+      if (via_ae->my_local >= static_cast<int>(via_cm.size()))
+        return 0;
+      int my_actual_local = via_cm[via_ae->my_local];
+      int my_actual_comp_id = pool.molecule(via_actual).comp_ids[my_actual_local];
+      int partner_comp_id = pool.component(my_actual_comp_id).bond_partner;
+      if (partner_comp_id < 0)
+        return 0;
+      int partner_mol_id = pool.mol_of_comp(partner_comp_id);
+
+      int next_pat = via_ae->other_mol;
+      auto& other_pm = pat.molecules[next_pat];
+      auto& partner_mol = pool.molecule(partner_mol_id);
+      if (partner_mol.type_index != other_pm.type_index)
+        return 0;
+
+      // Locate the partner-side component bonded to my_actual_comp_id.
+      int partner_local = -1;
+      for (int ci = 0; ci < static_cast<int>(partner_mol.comp_ids.size()); ++ci) {
+        if (partner_mol.comp_ids[ci] == partner_comp_id) {
+          partner_local = ci;
+          break;
+        }
+      }
+
+      std::vector<std::vector<int>> other_embs;
+      count_embeddings_single(pool, partner_mol_id, other_pm, model, &other_embs);
+
+      int sub = 0;
+      for (auto& emb : other_embs) {
+        if (via_ae->other_local >= static_cast<int>(emb.size()))
+          continue;
+        if (emb[via_ae->other_local] != partner_local)
+          continue;
+        // BUG FIX (vs. prior BFS): branch over EVERY embedding consistent
+        // with the bond. The old code committed to the first match and
+        // dropped sym-equivalent alternatives, under-counting `Molecules`
+        // observables whose pattern reaches a sym-component partner via a
+        // non-sym bond endpoint.
+        mol_assignments[next_pat] = partner_mol_id;
+        comp_maps[next_pat] = emb;
+        sub += enumerate_extensions();
+      }
+      mol_assignments[next_pat] = -1;
+      comp_maps[next_pat].clear();
+      return sub;
+    };
+
+    total_count += enumerate_extensions();
   }
 
   return total_count;
