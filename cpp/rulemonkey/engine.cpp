@@ -2183,13 +2183,24 @@ static constexpr bool kObsFastMatchInvariant = false;
 // 2-mol-1-bond-fully-constrained specialized matcher.
 static int count_multi_mol_fast(const AgentPool& pool, int seed_mol_id, const Pattern& pat,
                                 const Model& model, int pat_start, int pat_end, int seed_pat_idx,
-                                const PatternAdj& pa, const FastMatchSlot* fm = nullptr);
+                                const PatternAdj& pa, const FastMatchSlot* fm = nullptr,
+                                const std::vector<int>* reacting_local = nullptr);
 
 // Generic body extracted so the dispatcher can call it for the invariant-gate
 // comparison without recursing through the dispatch.
+//
+// `reacting_local`, when supplied, is forwarded to the seed-side
+// count_embeddings_single call so that injective embeddings sending all
+// reacting pattern components to the same molecule components collapse to
+// one. This dedup is what differentiates a 2-mol unimolecular RULE rate
+// (where embeddings differing only in non-reacting sym slots produce the
+// same physical reaction) from a Molecules OBSERVABLE count (which keeps
+// every embedding). Mirrors the dedup the single-mol path applies via
+// count_embeddings_single's reacting_local argument.
 static int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, const Pattern& pat,
                                         const Model& model, int pat_start, int pat_end,
-                                        int seed_pat_idx, const PatternAdj& pa) {
+                                        int seed_pat_idx, const PatternAdj& pa,
+                                        const std::vector<int>* reacting_local = nullptr) {
 
   // -- profiling scaffolding (gated) --
   using cm_clock = std::chrono::steady_clock;
@@ -2242,7 +2253,8 @@ static int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, 
   }
 
   std::vector<std::vector<int>> seed_embs;
-  count_embeddings_single(pool, seed_mol_id, pat.molecules[seed_pat_idx], model, &seed_embs);
+  count_embeddings_single(pool, seed_mol_id, pat.molecules[seed_pat_idx], model, &seed_embs,
+                          reacting_local);
   if constexpr (kCountMultiProfile) {
     if (cm_sampled) {
       auto now = cm_clock::now();
@@ -2459,7 +2471,8 @@ static int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, 
 // specialization bugs before they silently corrupt propensities.
 static int count_multi_mol_fast(const AgentPool& pool, int seed_mol_id, const Pattern& pat,
                                 const Model& model, int pat_start, int pat_end, int seed_pat_idx,
-                                const PatternAdj& pa, const FastMatchSlot* fm) {
+                                const PatternAdj& pa, const FastMatchSlot* fm,
+                                const std::vector<int>* reacting_local) {
   if constexpr (kCountMultiProfile)
     cm_profile_.calls++;
   if (fm && fm->enabled) {
@@ -2468,7 +2481,7 @@ static int count_multi_mol_fast(const AgentPool& pool, int seed_mol_id, const Pa
     int specialized = count_2mol_1bond_fc(pool, seed_mol_id, *fm);
     if (kFastMatchInvariant) {
       int generic = count_multi_mol_fast_generic(pool, seed_mol_id, pat, model, pat_start, pat_end,
-                                                 seed_pat_idx, pa);
+                                                 seed_pat_idx, pa, reacting_local);
       if (generic != specialized) {
         std::fprintf(stderr,
                      "[FastMatch mismatch] seed_mol=%d seed_type=%d partner_type=%d "
@@ -2481,7 +2494,7 @@ static int count_multi_mol_fast(const AgentPool& pool, int seed_mol_id, const Pa
     return specialized;
   }
   return count_multi_mol_fast_generic(pool, seed_mol_id, pat, model, pat_start, pat_end,
-                                      seed_pat_idx, pa);
+                                      seed_pat_idx, pa, reacting_local);
 }
 
 // Compute the diameter (max shortest-path distance between any two molecules)
@@ -3815,7 +3828,7 @@ struct Engine::Impl {
                         ? rule.reactant_pattern_starts[1]
                         : static_cast<int>(rule.reactant_pattern.molecules.size());
         count_a = count_multi_mol_fast(pool, mid, rule.reactant_pattern, model, seed_a, end_a,
-                                       seed_a, rs.pat_adj_a, &rs.fm_a);
+                                       seed_a, rs.pat_adj_a, &rs.fm_a, &rs.reacting_local_a);
       } else {
         count_a = count_embeddings_single(pool, mid, pm_a, model, nullptr, &rs.reacting_local_a);
       }
@@ -3838,7 +3851,7 @@ struct Engine::Impl {
         if (rs.use_multi_mol_count_b) {
           int end_b = static_cast<int>(rule.reactant_pattern.molecules.size());
           count_b = count_multi_mol_fast(pool, mid, rule.reactant_pattern, model, seed_b, end_b,
-                                         seed_b, rs.pat_adj_b, &rs.fm_b);
+                                         seed_b, rs.pat_adj_b, &rs.fm_b, &rs.reacting_local_b);
         } else {
           count_b = count_embeddings_single(pool, mid, pm_b, model, nullptr, &rs.reacting_local_b);
         }
@@ -5189,8 +5202,9 @@ struct Engine::Impl {
               int end_a_inc = (rule.reactant_pattern_starts.size() > 1)
                                   ? rule.reactant_pattern_starts[1]
                                   : static_cast<int>(rule.reactant_pattern.molecules.size());
-              nd.count_a = count_multi_mol_fast(pool, mid, rule.reactant_pattern, model, seed_a,
-                                                end_a_inc, seed_a, rs.pat_adj_a, &rs.fm_a);
+              nd.count_a =
+                  count_multi_mol_fast(pool, mid, rule.reactant_pattern, model, seed_a, end_a_inc,
+                                       seed_a, rs.pat_adj_a, &rs.fm_a, &rs.reacting_local_a);
             } else {
               if constexpr (kIncrUpdateProfile)
                 incr_profile_.count_a_single_calls++;
@@ -5216,8 +5230,9 @@ struct Engine::Impl {
                 if constexpr (kIncrUpdateProfile)
                   incr_profile_.count_b_multi_calls++;
                 int end_b_inc = static_cast<int>(rule.reactant_pattern.molecules.size());
-                nd.count_b = count_multi_mol_fast(pool, mid, rule.reactant_pattern, model, seed_b,
-                                                  end_b_inc, seed_b, rs.pat_adj_b, &rs.fm_b);
+                nd.count_b =
+                    count_multi_mol_fast(pool, mid, rule.reactant_pattern, model, seed_b, end_b_inc,
+                                         seed_b, rs.pat_adj_b, &rs.fm_b, &rs.reacting_local_b);
               } else {
                 if constexpr (kIncrUpdateProfile)
                   incr_profile_.count_b_single_calls++;
