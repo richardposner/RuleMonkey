@@ -12,11 +12,12 @@ Per-model flow:
   4. Aggregate to mean.tsv + std.tsv per model.
   5. Append a row to sim_params.tsv recording what was actually run.
 
-Excluded models (documented feature gaps; not generated):
-  r27, r28  — use BNGL `population` keyword (hybrid particle-population SSA;
-              RM has no support, simulation would diverge).
-  r36       — tests `-gml auto` fallback for large initial populations
-              (NFsim issue #17); RM has no equivalent.
+The corpus contains 33 models (r01-r26, r29-r35). Three of the original
+36 NFsim test models were removed because they don't apply to RM:
+r27/r28 used the BNGL `population` keyword (hybrid particle-population
+SSA); r36 tested `-gml auto` (NFsim issue #17). RM refuses the
+`population` case at Tier-0 with a clear error; `-gml auto` is simply
+not a flag RM honors.
 
 Flag translation:
   Pass through to NFsim:  -sim, -oSteps, -cb, -bscb, numeric -gml
@@ -27,10 +28,11 @@ Flag translation:
                           -printmoltypes, -printrxncounts
 
 Usage:
-  python3 harness/generate_basicmodels_refs.py                  # all 33
+  python3 harness/generate_basicmodels_refs.py                  # all
   python3 harness/generate_basicmodels_refs.py r01 r05 r10      # specific ids
   python3 harness/generate_basicmodels_refs.py --workers 4      # parallelism
   python3 harness/generate_basicmodels_refs.py --reps 20        # quick smoke
+  python3 harness/generate_basicmodels_refs.py --tint-only      # post-process
 
 Environment:
   NFSIM_BIN  NFsim binary (default: ~/Code/nfsim-rm/build/NFsim — has UTL+1 fix)
@@ -64,13 +66,6 @@ NFSIM = os.environ.get("NFSIM_BIN", os.path.expanduser("~/Code/nfsim-rm/build/NF
 BNG2 = os.environ.get("BNG2", os.path.expanduser("~/Simulations/BioNetGen-2.9.3/BNG2.pl"))
 N_REPS = 100
 
-# Models excluded from RM testing — feature gaps, not bugs.
-EXCLUDED = {
-    "r27": "uses BNGL `population` keyword (hybrid particle-population SSA; not in RM)",
-    "r28": "uses BNGL `population` keyword (hybrid particle-population SSA; not in RM)",
-    "r36": "tests `-gml auto` (NFsim issue #17 fallback for large initial pops; not in RM)",
-}
-
 # Output-only or -utl override flags to strip from NFsim invocation.
 STRIP_FLAGS = {
     "-ss",  # species file output (takes a path argument)
@@ -97,7 +92,11 @@ def model_id(num: int) -> str:
 
 
 def all_model_ids() -> list[str]:
-    return [model_id(n) for n in range(1, 37)]
+    """Discover testable model ids from the filesystem (r{NN}.txt files)."""
+    rids = []
+    for path in sorted(glob.glob(os.path.join(SUITE_DIR, "r??.txt"))):
+        rids.append(os.path.basename(path)[:-4])
+    return rids
 
 
 def load_config(rid: str) -> tuple[str, str] | None:
@@ -294,9 +293,6 @@ def regenerate(rid: str, n_reps: int) -> dict:
         return {"rid": rid, "status": "no-config", "name": "", "wall_s": 0}
     name, opts = cfg
 
-    if rid in EXCLUDED:
-        return {"rid": rid, "status": "excluded", "name": name, "wall_s": 0, "notes": EXCLUDED[rid]}
-
     xml = generate_xml(rid)
     if xml is None:
         return {"rid": rid, "status": "bng2-failed", "name": name, "wall_s": 0}
@@ -390,22 +386,24 @@ def write_sim_params(results: list[dict]) -> None:
 
 def write_provenance(results: list[dict], n_reps: int) -> None:
     today = datetime.date.today().isoformat()
-    excluded_section = "\n".join(
-        f"- **{rid}** — {reason}" for rid, reason in sorted(EXCLUDED.items())
-    )
     body = f"""# basicmodels Reference Data — Provenance
 
 100-replicate NFsim ensemble references for the historical NFsim parity
-suite (33 of 36 models; 3 excluded — see below).
+suite (33 testable models). Three models from the original NFsim
+test set were removed because they don't apply to RM:
+
+- **r27, r28** — used the BNGL `population` keyword (hybrid
+  particle-population SSA, Hogg 2013). RM has no equivalent and now
+  refuses such models at Tier-0 (`MoleculeType@population` error). See
+  `cpp/rulemonkey/simulator.cpp:scan_unsupported`.
+- **r36** — tested NFsim's `-gml auto` fallback (issue #17). RM only
+  honors numeric `set_molecule_limit`; the `auto` token is a
+  non-feature, not a bug.
 
 **Last regeneration:** {today}
 **NFsim binary:** `{NFSIM}` (has UTL+1 fix)
 **BNG2:** `{BNG2}`
 **Reps per model:** {n_reps}
-
-## Excluded models
-
-{excluded_section}
 
 ## Flag translation policy
 
@@ -477,7 +475,6 @@ def main() -> None:
 
     if args.tint_only:
         rids = args.models if args.models else all_model_ids()
-        rids = [r for r in rids if r not in EXCLUDED]
         for rid in rids:
             r = regenerate_tint_only(rid)
             print(f"  {rid:<5} {r['status']}")
@@ -489,8 +486,7 @@ def main() -> None:
         sys.exit(f"BNG2 not found at {BNG2} (set BNG2 env var)")
 
     rids = args.models if args.models else all_model_ids()
-    print(f"Generating {len(rids)} models × {args.reps} reps with {args.workers} workers")
-    print(f"  excluded: {', '.join(sorted(EXCLUDED))}\n")
+    print(f"Generating {len(rids)} models × {args.reps} reps with {args.workers} workers\n")
 
     os.makedirs(REF_DIR, exist_ok=True)
     results: list[dict] = []

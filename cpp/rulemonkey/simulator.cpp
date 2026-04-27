@@ -1484,6 +1484,35 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
                         "rate constant (no Boltzmann correction)."});
   }
 
+  // ERROR-level: BNGL `population` keyword (hybrid particle-population SSA,
+  // Hogg 2013).  NFsim treats `population`-typed molecule types as bulk
+  // counters rather than tracked individuals, with restricted semantics
+  // (one molecule per species, populations cannot bind to particles).
+  // RM has no equivalent — the keyword shows up as `population="1"` on
+  // the MoleculeType XML element and would be silently ignored, causing
+  // RM to instantiate population types as ordinary particles. For models
+  // with high population counts this both blows up memory and produces
+  // trajectories that don't match NFsim's bulk-counter semantics.
+  if (auto* mt_list = find_child(model_node, "ListOfMoleculeTypes")) {
+    for (auto& mt : mt_list->children) {
+      if (mt.name != "MoleculeType")
+        continue;
+      auto it = mt.attributes.find("population");
+      if (it != mt.attributes.end() && it->second == "1") {
+        std::string mt_name = opt_attr(mt, "id");
+        warnings.push_back({Severity::Error, "MoleculeType@population",
+                            "MoleculeType '" + mt_name +
+                                "' declared with `population` keyword — RM does not "
+                                "implement hybrid particle-population SSA; this molecule "
+                                "type would be silently treated as ordinary particles, "
+                                "producing trajectories that diverge from NFsim's "
+                                "bulk-counter semantics. Pass --ignore-unsupported to "
+                                "run anyway with the population type treated as "
+                                "particles (slow on high counts; trajectory will differ)."});
+      }
+    }
+  }
+
   // ERROR-level: Fixed species ($-prefixed seed species) outside the
   // v1 scope.  v1 handles exactly: single-molecule pattern, no bonds,
   // at most one Fixed per MoleculeType.  Anything outside that scope

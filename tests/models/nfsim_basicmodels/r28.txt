@@ -1,2 +1,0 @@
-NFSIM ONLY: population testing, with reaction log
--sim 100 -oSteps 100 -rxnlog basicModels/v28_rxns.json
