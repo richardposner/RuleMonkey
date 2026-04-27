@@ -3344,121 +3344,13 @@ struct Engine::Impl {
     }
   }
 
-  // Core implementation: compute embedding correction given a set of
-  // "distinguishing" component flat indices.
-  static double compute_embedding_correction_impl(const Pattern& pat, int pat_start, int pat_end,
-                                                  const std::unordered_set<int>& reacting_comps) {
-    if (pat_start >= pat_end)
-      return 1.0;
-
-    double correction = 1.0;
-    int flat_base = 0;
-    for (int mi = 0; mi < static_cast<int>(pat.molecules.size()); ++mi) {
-      if (mi < pat_start || mi >= pat_end) {
-        flat_base += static_cast<int>(pat.molecules[mi].components.size());
-        continue;
-      }
-      auto& pm = pat.molecules[mi];
-
-      struct CompSig {
-        std::string name;
-        int bond_constraint;
-        int state_index;
-        bool operator==(const CompSig& o) const {
-          return name == o.name && bond_constraint == o.bond_constraint &&
-                 state_index == o.state_index;
-        }
-      };
-
-      std::vector<CompSig> sigs;
-      std::vector<int> group_total;
-      std::vector<int> group_nonreacting;
-
-      for (int ci = 0; ci < static_cast<int>(pm.components.size()); ++ci) {
-        auto& pc = pm.components[ci];
-        CompSig sig{pc.name, static_cast<int>(pc.bond_constraint), pc.required_state_index};
-        int flat_idx = flat_base + ci;
-        bool is_reacting = reacting_comps.count(flat_idx) > 0;
-
-        int gi = -1;
-        for (int g = 0; g < static_cast<int>(sigs.size()); ++g) {
-          if (sigs[g] == sig) {
-            gi = g;
-            break;
-          }
-        }
-        if (gi < 0) {
-          gi = static_cast<int>(sigs.size());
-          sigs.push_back(sig);
-          group_total.push_back(0);
-          group_nonreacting.push_back(0);
-        }
-        group_total[gi]++;
-        if (!is_reacting)
-          group_nonreacting[gi]++;
-      }
-
-      for (int g = 0; g < static_cast<int>(group_nonreacting.size()); ++g) {
-        int nr = group_nonreacting[g];
-        double fact = 1.0;
-        for (int k = 2; k <= nr; ++k)
-          fact *= k;
-        correction *= fact;
-      }
-
-      flat_base += static_cast<int>(pm.components.size());
-    }
-    return correction;
-  }
-
-  // Compute the overcounting correction factor for a reactant pattern.
-  // When a pattern has N identical components (same name and same constraints)
-  // and only K of them participate in rule operations, the embedding count
-  // overcounts by (N-K)! because permuting the non-reacting identical components
-  // yields the same physical reaction.
-  static double compute_embedding_correction(const Pattern& pat, int pat_start, int pat_end,
-                                             const std::vector<RuleOp>& operations) {
-    std::unordered_set<int> reacting_comps;
-    for (auto& op : operations) {
-      if (op.comp_flat >= 0)
-        reacting_comps.insert(op.comp_flat);
-      if (op.comp_flat_a >= 0)
-        reacting_comps.insert(op.comp_flat_a);
-      if (op.comp_flat_b >= 0)
-        reacting_comps.insert(op.comp_flat_b);
-    }
-    return compute_embedding_correction_impl(pat, pat_start, pat_end, reacting_comps);
-  }
-
-  // Variant for multi-molecule patterns: BoundTo components on the seed
-  // connect to downstream pattern molecules via BFS.  Permuting them
-  // changes which downstream molecule is matched, so they should be
-  // treated as "distinguishing" (i.e., non-correctable).
-  static double compute_embedding_correction_multimol(const Pattern& pat, int pat_start,
-                                                      int pat_end,
-                                                      const std::vector<RuleOp>& operations) {
-    std::unordered_set<int> reacting_comps;
-    for (auto& op : operations) {
-      if (op.comp_flat >= 0)
-        reacting_comps.insert(op.comp_flat);
-      if (op.comp_flat_a >= 0)
-        reacting_comps.insert(op.comp_flat_a);
-      if (op.comp_flat_b >= 0)
-        reacting_comps.insert(op.comp_flat_b);
-    }
-    // Additionally treat BoundTo components on the seed as distinguishing
-    int flat_base = 0;
-    for (int mi = 0; mi < static_cast<int>(pat.molecules.size()); ++mi) {
-      if (mi >= pat_start && mi < pat_end) {
-        for (int ci = 0; ci < static_cast<int>(pat.molecules[mi].components.size()); ++ci) {
-          if (pat.molecules[mi].components[ci].bond_constraint == BondConstraint::BoundTo)
-            reacting_comps.insert(flat_base + ci);
-        }
-      }
-      flat_base += static_cast<int>(pat.molecules[mi].components.size());
-    }
-    return compute_embedding_correction_impl(pat, pat_start, pat_end, reacting_comps);
-  }
+  // Embedding overcounting is now corrected at count time inside
+  // count_embeddings_single via its `reacting_local` parameter (passed
+  // from rs.reacting_local_a/_b for both single-mol and multi-mol
+  // paths).  The previous compile-time pattern-automorphism correction
+  // (compute_embedding_correction[_multimol]) duplicated that work and
+  // halved the rate when both fired, so it has been removed.
+  // embedding_correction_a / _b are kept at 1.0 throughout.
 
   void init_rule_states() {
     int n_rules = static_cast<int>(model.rules.size());
@@ -3560,18 +3452,17 @@ struct Engine::Impl {
       }
 
       // For multi-molecule patterns, use full-match counting (scoped to
-      // each reactant).  The embedding correction must account for
-      // symmetric non-reacting components on the seed molecule.  For
-      // multi-mol patterns, BoundTo components on the seed connect to
-      // distinct downstream molecules via BFS, so they should be treated
-      // as "reacting" (distinguishing) even if the operation targets a
-      // non-seed molecule.
+      // each reactant).  Embedding deduplication is done at count time
+      // via count_embeddings_single's reacting_local parameter, applied
+      // to the seed-side enumeration in count_multi_mol_fast_generic.
+      // This subsumes the old pattern-automorphism correction for sym
+      // non-reacting components — applying both would halve the rate.
+      // Symmetric with the single-mol path below.
       rs.fm_a = FastMatchSlot{};
       rs.fm_b = FastMatchSlot{};
       rs.use_multi_mol_count = (end_a - start_a > 1);
       if (rs.use_multi_mol_count) {
-        rs.embedding_correction_a = compute_embedding_correction_multimol(
-            rule.reactant_pattern, start_a, start_a + 1, rule.operations);
+        rs.embedding_correction_a = 1.0;
         rs.pat_adj_a = build_pattern_adjacency(rule.reactant_pattern, start_a, end_a);
         // Candidate-B eligibility: only for the 2-mol-1-bond-fc template and
         // only for rules that don't need complex-expansion.  Disjoint patterns
@@ -3637,8 +3528,7 @@ struct Engine::Impl {
         int end_b = static_cast<int>(rule.reactant_pattern.molecules.size());
         rs.use_multi_mol_count_b = (end_b - start_b > 1);
         if (rs.use_multi_mol_count_b) {
-          rs.embedding_correction_b = compute_embedding_correction_multimol(
-              rule.reactant_pattern, start_b, start_b + 1, rule.operations);
+          rs.embedding_correction_b = 1.0;
           rs.pat_adj_b = build_pattern_adjacency(rule.reactant_pattern, start_b, end_b);
           {
             std::string fm_reason;
