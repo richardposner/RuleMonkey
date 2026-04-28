@@ -1,154 +1,115 @@
-# Sprint plan — basicmodels parity failures
+# Sprint outcome — basicmodels parity failures
 
-**Status: planned, not yet started.** Intended to be opened in a fresh session.
+**Status: complete (2026-04-27).** Started 2026-04-27 against a
+26 PASS / 5 FAIL / 2 NO_MATCH baseline on the 33-model basicmodels
+parity suite. Closed 2026-04-27 with **29 PASS / 0 FAIL / 0 NO_MATCH
+on the trimmed 29-model suite**. Three engine bugs fixed, four
+upstream NFsim tests dropped as not-applicable.
 
-## What landed before this sprint
-
-The basicmodels suite (33 testable models, see `tests/models/nfsim_basicmodels/`)
-was rewired to use the same z-score / `tz_max < T_model` verdict as
-the corpus harness. References are vendored at
-`tests/reference/basicmodels/{xml,ensemble,sim_params.tsv,PROVENANCE.md}`.
-
-First parity run (5 RM reps, no per-model `noise_floor.tsv`, so
-T = 5.0 across the board):
+## Final state
 
 ```
-26 PASS / 5 FAIL / 2 NO_MATCH
+basicmodels @ 5 reps : 29 PASS / 0 FAIL / 0 NO_MATCH (29 imported tests)
+ctest                : 1/1
+smoke benchmark      : 8/0
+feature_coverage     : 55/0  (added 2 regression tests)
+corpus guard tier    : 29/0
 ```
 
-The 2 NO_MATCH (r31, r34) have no `begin observables` block in their
-.bngl source — there's nothing to integrate or compare. Not failures.
+## What was queued at the start
 
-The 5 FAIL'd models are this sprint's target.
+Phase-1 triage (RM @ 5 then @ 20 reps) found these five FAILs:
 
-## The five failures
+| model | tz_max @ 5 reps | tz_max @ 20 reps | symptom |
+|---|---:|---:|---|
+| r02 | 31.96 | 66.06 | `Xpp` over-counted ~1.5×; doubly-phos X accumulates faster than NFsim |
+| r07 | 3755.18 | 4039.72 | `full` (5-mol palindrome) under-counted by exactly 2× |
+| r18 | 16.74 | 38.97 | `L2(r,r,r)` triply / doubly / singly distribution skew |
+| r33 | 177.52 | 177.52 | bond-swap rule plateaus at AC=149; NFsim drives to AC≈5 |
+| r35 | 19.47 | 35.97 | `bound_b1` doesn't decay in RM; NFsim drives to 0 |
 
-| Model | tz_max | Worst obs | What the model tests |
-|---|---:|---|---|
-| r02  | 31.96   | (TBD) | multiple identical phosphorylation sites |
-| r07  | 3755.18 | (TBD) | cross-phosphorylation of linked molecules, more complex setup |
-| r18  | 16.74   | (TBD) | component handling with basic reactions in molecules with symmetric components |
-| r33  | 177.52  | (TBD) | NFSIM ONLY issue22/21 — operations order at low UTL |
-| r35  | 19.47   | (TBD) | NFSIM ONLY issue14 — rule disambiguation in bonded complex |
+Plus two NO_MATCH (r31, r34) — no observable to compare against.
 
-`tz_max` here is a per-rep time-integrated z-score against the
-NFsim 100-rep ensemble. T = 5.0 default threshold (from
-`benchmark_full.VERDICT_TZ_DEFAULT`); with a calibrated
-`noise_floor.tsv` we'd get per-model T = max(5.0, 1.2 × tz_p99).
-**r07 at 3755 is two orders of magnitude beyond any plausible
-noise floor — that one is structural.**
+## What landed
 
-## Suggested investigation order
+### Three engine fixes
 
-I'd start with phase-1 triage (~30 min total) before committing
-to a fix order, because some of these may share a root cause and
-fixing one could cascade.
+| commit | subject | model | what it fixed |
+|---|---|---|---|
+| `5d90724` | `count_multi_molecule_embeddings: branch over all sym partner embeddings` | r07 | Multi-mol Molecules observable BFS committed to the first valid partner embedding and dropped sym-equivalent alternatives. Replaced BFS body with a recursive enumerator that branches over every partner embedding consistent with the walked bond. |
+| `7472a07` | `count_multi_mol_fast: forward reacting_local to seed dedup` | r02 | Multi-mol unimolecular rule-rate path called `count_embeddings_single` for the seed without `reacting_local`, so sym embeddings that all map reacting components to the same host slots were never deduped. Threaded `reacting_local` through. |
+| `3423b0d` | `init_rule_states: drop redundant compile-time embedding correction` | r18 | The previous commit's seed dedup made `compute_embedding_correction[_multimol]` redundant; with both active the rule rate halved on patterns whose seed had sym non-reacting components. Set `embedding_correction_a/_b = 1.0` for multi-mol (mirrors single-mol) and removed ~110 lines of dead code. |
 
-### Phase 1: triage
+### Four upstream NFsim tests dropped as not-applicable
 
-For each of the 5 failures:
+| commit | subject | tests |
+|---|---|---|
+| `85feae1` | `basicmodels: drop r33 and r35 — NFsim-only quirks, BNG2 strict refuses` | r33 (NFsim issue #22 occupied-site bond error); r35 (NFsim issue #14 dot-product split) |
+| `9fb2efb` | `basicmodels: drop r31 and r34 — no comparable observables` | r31 (crash test, no observables block); r34 (NFsim issue #24, observable commented out by author) |
 
-1. **Bump RM reps from 5 to 20**, re-run with
-   `python3 harness/basicmodels.py r02 r07 r18 r33 r35 --reps 20`.
-   Stochastic noise scales as 1/√N; if a model's tz_max drops
-   below 5 with more reps, it was a noise artifact at low rep count
-   and the model is fine.
+For r33 and r35, BNG2.pl `generate_network` was the deciding voice:
+on the BNGL the upstream tests carry, BNG2.pl emits the chemistry-correct
+network (bound by free-B pool for r33; zero reactions for r35) and
+RuleMonkey matches BNG2. The NFsim references they were generated from
+captured the historic NFsim quirks they were authored to test, and
+including them in the parity suite would have meant verifying RuleMonkey
+reproduces NFsim bugs.
 
-2. **Read the .bngl source** (`tests/models/nfsim_basicmodels/v{NN}.bngl`)
-   for unusual BNGL features: multi-mol reactant patterns, symmetric
-   components, ring-closure rules, unbinding patterns with `+` on the
-   product side, large UTL needs, function rate laws.
+The full per-test rationale (with the BNG2-confirmed counter-evidence for
+r33 / r35 and the author-comment evidence for r31 / r34) lives in
+`tests/reference/basicmodels/PROVENANCE.md`.
 
-3. **Spot-check a single observable trajectory**:
-   - Run `rm_driver` once with seed=1 on the cached XML
-     (`tests/reference/basicmodels/xml/r{NN}.xml`).
-   - Compare to `tests/reference/basicmodels/replicates/r{NN}/rep_001.gdat`
-     by eye for the worst observable (look for early-time disagreement —
-     usually the smoking gun).
+### Two regression tests added
 
-4. **Classify** as:
-   - `noise` — tz drops below 5 at 20 reps; close the issue
-   - `structural` — clear systematic divergence visible in a single rep
-   - `flag-related` — divergence depends on a translated NFsim flag
-     (revisit `STRIP_FLAGS` in `harness/generate_basicmodels_refs.py`)
+Pinned to `tests/models/feature_coverage/`:
 
-### Phase 2: fix in priority order
+- `ft_multimol_sym_obs.bngl` — pre-fix tz=506.91, post-fix tz=3.33.
+  Catches the r07 shape (multi-mol Molecules observable on a
+  palindromic 5-mol pattern with sym components on the partner).
+- `ft_multimol_unimol_unbind_sym.bngl` — pre-fix tz=39.80, post-fix
+  tz=2.11. Catches the r02 shape (multi-mol unimolecular unbind rule
+  on a host with sym components, where operations don't differentiate
+  the embeddings).
+- `ft_multimol_pattern_sym_nonreacting.bngl` — pre-fix tz=22.28,
+  post-fix tz=1.53. Catches the r18 shape (the embedding-correction
+  vs reacting_local-dedup double-correction).
 
-Suggested order (subject to revision after triage):
+(Three tests landed; a redundant invariant block was tightened during
+review on the first one.)
 
-1. **r07** first. Its tz=3755 is so far above noise that it's the
-   strongest signal of a structural bug. Cross-phosphorylation of
-   linked molecules involves multi-mol unimolecular patterns —
-   that's a code path with a long bug history (see
-   `nfsim-rm` memory entries `project_an_anx_fix.md`,
-   `project_multimol_sprint.md`, `project_obs_fm_landed.md`).
-   Fixing this bug may incidentally fix r02 / r18 if they share
-   the same code path.
+## Suite cleanup
 
-2. **r33** next (tz=177.52). The model name calls out "operations
-   order and UTL low." Even though we drop `-utl 3` in flag
-   translation, the .bngl may have rules whose `max_pattern_size`
-   creates an auto-UTL that doesn't match the test's assumptions.
-   Worth checking whether RM and NFsim arrive at the same auto-UTL
-   for this model.
+- `tests/reference/basicmodels/PROVENANCE.md` rewritten to lead with
+  what the suite *is* (29 imported tests, what they cover, how
+  references are generated). The seven upstream NFsim tests not
+  carried over (r27, r28, r31, r33, r34, r35, r36) live in an
+  appendix grouped by reason — features RM doesn't implement / NFsim
+  flags RM doesn't expose / NFsim regressions for bugs that contradict
+  BNGL strict / tests with no comparable observables.
+- `harness/basicmodels.py` and `harness/generate_basicmodels_refs.py`
+  docstrings tightened: a one-line origin pointer to PROVENANCE,
+  no exclusion enumeration in the docstring itself.
 
-3. **r02, r18, r35** — if not already fixed by 1 and 2, investigate
-   each. r35's "issue14" is rule disambiguation in a bonded complex,
-   which intersects with the multi-mol pattern matching in `count_*`
-   functions. r18's "symmetric components" intersects with the
-   sym-K matching code. Both are in the same neighborhood as r07.
+## Outcomes vs original plan
 
-For each fix:
+The original Phase-2 fix order was r07 → r02 → r18, with r33 and r35
+queued for after. The cluster hypothesis ("r02 / r07 / r18 might
+share a single sym-K root cause") held in spirit — all three lived
+in the embedding-counting / seed-dedup machinery — but landed as
+three distinct fixes, each on a different code path.
 
-- BNGL bisect first per
-  `~/.claude/projects/-Users-wish-Code-RuleMonkey/memory/feedback_bisect_before_reading.md`.
-  Strip features until parity is restored — that pinpoints the
-  triggering feature without any code reading.
-- Reproduce as a focused test in `tests/models/feature_coverage/`
-  if a small repro fits there. (One of the corpus's strengths is
-  having minimal feature-targeted models; a basicmodels regression
-  can become a permanent feature_coverage entry.)
-- Land the fix; verify both `harness/benchmark_full.py --tier guard`
-  (29/0 baseline) and `harness/basicmodels.py` (this sprint's
-  failures should drop) stay green.
+For r33 and r35 the original plan assumed they were RM bugs; both
+turned out to be NFsim-specific quirks. Verifying via BNG2.pl
+`generate_network` was the bisection step: the moment BNG2 either
+generated zero reactions (r35) or generated reactions bound by free-B
+count (r33), the divergence with NFsim's reference clearly belonged
+to NFsim, not RuleMonkey.
 
-### Phase 3: close out
-
-- Update this doc with outcomes per model (passed / fixed / skipped /
-  documented as gap).
-- Update `docs/FAILING_MODELS.md` with the basicmodels verdicts.
-- Bump CHANGELOG with a "Fixed" section listing what landed.
-- Consider whether to also generate a calibrated `noise_floor.tsv`
-  for the basicmodels suite. Without it the verdict uses T=5
-  uniformly; per-model T from self-split calibration would tighten
-  signal/noise. ~1 hour of work via porting `nfsim-rm/dev/compute_noise_floor.py`
-  to read from `tests/reference/basicmodels/replicates/`.
-
-## Expected outcomes
-
-Realistic ranges:
-
-- **2-3 models PASS at 20 reps** (noise artifacts at 5 reps).
-- **1-2 models become real RM bug fixes** (probably in the multi-mol
-  matching code path; will land as separate commits with
-  feature_coverage regression tests).
-- **0-1 models documented as gaps** (e.g., if a basicmodels test
-  exercises a feature genuinely outside RM's design — though this
-  is unlikely after the r27/r28/r36 cleanup).
-- **0 models lost to harness wiring** (the harness is now solid;
-  if it breaks, that's a separate bug).
-
-A "good" sprint outcome is **30+/0 PASS** on the next run, with
-the residual 0-3 documented in `FAILING_MODELS.md` and the gap
-pattern noted in CHANGELOG.
-
-## Re-entry checklist for the fresh session
+## Re-entry checklist for future basicmodels sprints
 
 1. `cd ~/Code/RuleMonkey && git pull && git status` (clean tree)
 2. `cmake --build --preset release && ctest --preset release` (1/1)
-3. `python3 harness/benchmark_full.py --tier smoke` (8/0 baseline)
-4. `python3 harness/basicmodels.py r02 r07 r18 r33 r35 --reps 20` (triage)
-5. Open this doc and `docs/FAILING_MODELS.md`; pick a target.
-
-Memory pointer: `project_basicmodels_failures.md` in the new RuleMonkey
-auto-memory dir.
+3. `python3 harness/benchmark_full.py --tier smoke` (8/0)
+4. `python3 harness/basicmodels.py --reps 5` (expect 29/0/0)
+5. Open this doc; if a new test is failing, triage first
+   (re-run @ 20 reps), then BNGL-bisect, then code.

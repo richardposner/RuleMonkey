@@ -5,6 +5,94 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Multi-mol Molecules observable counts on palindromic patterns
+  with symmetric components** (`5d90724`). The BFS in
+  `count_multi_molecule_embeddings` committed to the first valid
+  partner embedding consistent with the walked bond and silently
+  dropped sym-equivalent alternatives. On a 5-mol palindromic
+  observable like `B(c!1).R(b!1,a!2).A(r!2,r!3).R(b!4,a!3).B(c!4)`
+  with a sym partner reached via a non-sym bond endpoint (the
+  basicmodels v07 / r07 shape), this under-counted by exactly the
+  partner's symmetry factor. Replaced the BFS body with a recursive
+  enumerator that branches over every partner embedding consistent
+  with the walked bond. Untouched: rule rates (different code path),
+  `Species` observables (deduped by complex anyway), single-mol
+  observables, and the 2-mol-1-bond fast path.
+
+- **Multi-mol unimolecular rule rates over-counted on hosts with
+  symmetric components** (`7472a07`). `count_multi_mol_fast` (the
+  generic path; the 2-mol-1-bond specialization is gated off for
+  this shape) called `count_embeddings_single` for the seed without
+  `reacting_local`, so injective embeddings differing only in
+  non-reacting sym slots were never deduped. On the basicmodels
+  v02 / r02 unbind rule `X(y!1, p~0).Y(x!1) -> X(y, p~0) + Y(x)`
+  this fired at 2× the BNG2-strict rate. Threaded `reacting_local`
+  through `count_multi_mol_fast` → `count_multi_mol_fast_generic` →
+  the seed-side `count_embeddings_single` call. Phos remains
+  correct (mult=2): StateChange targets the matched p, so the two
+  sym embeddings produce different keys under dedup and stay
+  distinct.
+
+- **Compile-time embedding correction was double-applied for
+  multi-mol patterns after the seed-dedup fix** (`3423b0d`). The
+  previous fix subsumed the work `compute_embedding_correction_multimol`
+  was doing, so applying both halved the rate when the pattern had
+  sym non-reacting components (the basicmodels v18 / r18 shape).
+  Set `embedding_correction_a/_b = 1.0` for multi-mol (mirroring
+  single-mol, which always did this). Removed
+  `compute_embedding_correction[_multimol]` and `_impl` —
+  ~110 lines of dead code.
+
+### Removed
+
+- **Four upstream NFsim regression tests dropped from the basicmodels
+  suite** (`85feae1`, `9fb2efb`). All four tested NFsim-specific
+  behaviors that don't apply to RuleMonkey:
+  - `r33` and `r35` pinned NFsim issues #22 / #21 ("occupied-site
+    bond error") and #14 (RHS `.` between products that NFsim
+    splits anyway). On the BNGL these tests carry, BNG2.pl's
+    `generate_network` produces the chemistry-correct behavior
+    (bound by free-B count for r33; zero reactions for r35) and
+    RuleMonkey matches BNG2.pl. The NFsim references captured the
+    historic NFsim quirks, which by design diverge from BNGL strict.
+  - `r31` is a crash regression test with no `begin observables`
+    block (the author's own comment: *"validation harness will run
+    NFsim on this XML and ensure it doesn't crash"*).
+  - `r34` includes a `begin observables` block but the author
+    deliberately commented out the only line in it.
+
+  After the removals the suite is clean **29 PASS / 0 FAIL /
+  0 NO_MATCH**. Joins the pre-existing r27 / r28 / r36 in the
+  PROVENANCE appendix.
+
+### Added
+
+- Three feature_coverage regression tests pinning the sym-K shapes
+  fixed above:
+  - `ft_multimol_sym_obs.bngl` — 5-mol palindromic observable with
+    sym partner (the r07 shape).
+  - `ft_multimol_unimol_unbind_sym.bngl` — multi-mol unimolecular
+    unbind on a host with sym components, where operations don't
+    differentiate the embeddings (the r02 shape).
+  - `ft_multimol_pattern_sym_nonreacting.bngl` — multi-mol pattern
+    with sym non-reacting components on the seed (the r18 shape,
+    catches the embedding-correction × dedup double-apply).
+  Each was verified to fail pre-fix and pass post-fix via stash-
+  and-rerun.
+
+### Changed
+
+- `tests/reference/basicmodels/PROVENANCE.md` rewritten to lead with
+  what the suite *is* (29 imported tests, source, reference flow)
+  and treat the seven upstream NFsim tests not carried over as a
+  clearly-labeled appendix grouped by reason. `harness/basicmodels.py`
+  and `harness/generate_basicmodels_refs.py` docstrings tightened
+  to a one-line origin pointer.
+
 ## [3.0.0] — 2026-04-26
 
 First release of the cleanroom C++17 rewrite. Not source-, ABI-, or

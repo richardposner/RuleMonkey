@@ -1,5 +1,33 @@
 # Failing Models — Bug Sprint Tracker
 
+This file tracks per-suite parity status. Two suites are tracked:
+
+- **corpus** (71 real-world rule-based models, the historical "main"
+  suite) — see body of this doc.
+- **basicmodels** (29 imported from NFsim's `validate/basicModels/`) —
+  see section directly below.
+
+## basicmodels suite — clean (29 PASS / 0 FAIL / 0 NO_MATCH, 2026-04-27)
+
+Sprint outcome: `docs/sprint_basicmodels_failures.md`.
+Suite source / exclusions: `tests/reference/basicmodels/PROVENANCE.md`.
+
+Three engine bugs were fixed in the 2026-04-27 sprint
+(`5d90724`, `7472a07`, `3423b0d`) and four upstream NFsim tests
+(r31, r33, r34, r35) were dropped as not-applicable (joining the
+pre-existing r27 / r28 / r36 in the appendix). All 29 imported tests
+PASS at 5 RM reps vs the 100-rep NFsim ensemble references with the
+flat T=5 threshold; `tz_max` is well below 5 on every model.
+
+Two new feature_coverage regression tests pin the fixed shapes
+(`ft_multimol_sym_obs`, `ft_multimol_unimol_unbind_sym`,
+`ft_multimol_pattern_sym_nonreacting`) so the same bugs can't recur
+silently.
+
+---
+
+## corpus suite
+
 **Baseline:** 2026-04-10 · Commit `2de71bf` · 10-rep RM ensemble vs 100-rep NFsim reference (regenerated with `build/NFsim -bscb`)
 **Pass/fail criterion:** `tz_max < T_model`, where `T_model = max(5.0, 1.2 × tz_p99)` from per-model self-split calibration in `models/nfsim_reference/noise_floor.tsv`. The legacy `screen_z < 5.0` primary remains as an early-warning flag but no longer determines the verdict. See the baseline report's *Correctness* section for the full metric definition.
 **Current:** 71 PASS / 0 FAIL over 71 models (2026-04-15). All models pass. `nfsim_hybrid_particle_field` fixed in `2e0be6d` (ensureConnected check now accounts for AddBond ops). All previous fixes hold: AN/ANx (`773092f`), `toy_jim` (SSA reference), `rm_tlbr_rings` (`05a9a12`), `example3_fit` (`8f22ea9`). Guard tier 28/0. Full report: `dev/benchmark_report.md`.
