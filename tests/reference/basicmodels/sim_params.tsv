@@ -29,6 +29,4 @@ r29	NFSIM ONLY: population testing, with reaction log	100	100	-sim 100 -oSteps 1
 r30	NFSIM ONLY: population testing, with reaction log	100	100	-sim 100 -oSteps 100 -bscb	1.8	100
 r31	NFSIM ONLY internal bond reconnection regression	1	1	-sim 1 -oSteps 1 -bscb	9.8	100
 r32	NFSIM ONLY issue33 intramolecular species handling	5	200	-sim 5 -oSteps 200 -cb	2.0	100
-r33	NFSIM ONLY issue22/21 operations order and UTL low	40000	800	-sim 40000 -oSteps 800 -cb	2.7	100
 r34	NFSIM ONLY issue24 RandomBiBi occupied-site edge case	100	100	-sim 100 -oSteps 100 -cb	2.8	100
-r35	NFSIM ONLY issue14 rule disambiguation in bonded complex	50	100	-sim 50 -oSteps 100 -cb -gml 10000000	1.6	100

@@ -12,12 +12,21 @@ Per-model flow:
   4. Aggregate to mean.tsv + std.tsv per model.
   5. Append a row to sim_params.tsv recording what was actually run.
 
-The corpus contains 33 models (r01-r26, r29-r35). Three of the original
-36 NFsim test models were removed because they don't apply to RM:
-r27/r28 used the BNGL `population` keyword (hybrid particle-population
-SSA); r36 tested `-gml auto` (NFsim issue #17). RM refuses the
-`population` case at Tier-0 with a clear error; `-gml auto` is simply
-not a flag RM honors.
+The corpus contains 31 models (r01-r26, r29-r32, r34). Five of the
+original 36 NFsim test models were removed because they pin
+NFsim-specific behaviors that don't apply to RM:
+  r27/r28 used the BNGL `population` keyword (hybrid particle-population
+SSA); r36 tested `-gml auto` (NFsim issue #17); r33 pinned NFsim
+issue #22 (occupied-site bond error: rule's AddBond silently fails
+when the target site is already bonded, leaving B unbonded while
+still firing the DeleteBond half — BNG2.pl correctly bounds the
+reaction by the free-B count); r35 pinned NFsim issue #14 (rule
+RHS uses `.` to indicate same-complex but NFsim ignores the
+constraint and splits anyway — BNG2.pl generate_network correctly
+emits zero reactions for that rule shape because the result would
+not be a single complex). RM matches BNG2.pl strict semantics on
+both r33 and r35; their NFsim references capture the historical
+NFsim quirks they were authored to test.
 
 Flag translation:
   Pass through to NFsim:  -sim, -oSteps, -cb, -bscb, numeric -gml
