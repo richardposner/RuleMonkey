@@ -5,7 +5,7 @@ Thin wrapper around `harness/benchmark_full.py` that points its verdict
 machinery at `tests/reference/basicmodels/` instead of the corpus
 references. Same z-score / `tz_max < T_model` math; same report shape.
 
-The 31 BNGL files under `tests/models/nfsim_basicmodels/` are a parity
+The 29 BNGL files under `tests/models/nfsim_basicmodels/` are a parity
 test set derived from NFsim's `validate/basicModels/` regression suite.
 Most models are small and fast; the full suite runs in a few minutes.
 See `tests/reference/basicmodels/PROVENANCE.md` for the source, the
@@ -13,7 +13,7 @@ reference-generation flow, and which upstream NFsim tests aren't
 applicable to RM.
 
 Usage:
-  python3 harness/basicmodels.py                   # all 31 models
+  python3 harness/basicmodels.py                   # all 29 models
   python3 harness/basicmodels.py --batch 1..20     # contiguous slice
   python3 harness/basicmodels.py --reps 10         # more RM reps
   python3 harness/basicmodels.py r07 r25 r31       # specific models

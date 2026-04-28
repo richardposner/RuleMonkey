@@ -15,13 +15,13 @@ rule engine. The suite was inherited when RuleMonkey was forked from
 NFsim and is preserved here as one of three test corpora (alongside
 `feature_coverage/` and the larger model corpus under `corpus/`).
 
-The 31 BNGL files cover: simple binding / unbinding / phosphorylation,
+The 29 BNGL files cover: simple binding / unbinding / phosphorylation,
 multiple identical sites and dimerization, ring closure (single- and
 two-molecule-type), explicit and implicit cross-phosphorylation,
 species deletion / synthesis, mRNA monomer connectivity (r21–r26),
-function and parameter handling, and several intramolecular and
-edge-case feature checks (r29–r34). Per-model names, simulation times
-and flags are in `sim_params.tsv`.
+function and parameter handling, and a few intramolecular and
+edge-case feature checks (r29, r30, r32). Per-model names, simulation
+times and flags are in `sim_params.tsv`.
 
 ## Reference generation
 
@@ -39,8 +39,8 @@ and flags are in `sim_params.tsv`.
 from `nfsim-rm` commit 40e6b93).
 **BNG2:** `~/Simulations/BioNetGen-2.9.3/BNG2.pl`.
 **Reps per model:** 100.
-**Last regenerated:** 2026-04-26 (full 33-model run); r33 and r35 were
-later dropped on 2026-04-27 — see appendix.
+**Last regenerated:** 2026-04-26 (full 33-model run); r31, r33, r34,
+r35 were later dropped on 2026-04-27 — see appendix.
 
 ## Flag translation policy
 
@@ -60,7 +60,7 @@ wall time of each NFsim ref-gen run.
 
 ## Appendix — NFsim upstream tests not included
 
-NFsim's `validate/basicModels/` originally has 36 BNGL files. Five
+NFsim's `validate/basicModels/` originally has 36 BNGL files. Seven
 aren't carried over here because they test features or behaviors that
 don't apply to RuleMonkey. They aren't failures and they aren't pending
 work — there is simply nothing useful to verify on the RM side, so
@@ -102,3 +102,18 @@ The NFsim references for `r33` and `r35` therefore record the
 historical NFsim behavior, which by design diverges from BNGL strict.
 Including them in the parity suite would test that RuleMonkey
 reproduces NFsim bugs, which is not a goal.
+
+**Tests with no comparable observables**
+- `r31` — a crash-regression test. The author's own comment is
+  explicit: *"validation harness will run NFsim on this XML and ensure
+  it doesn't crash."* The model has no `begin observables` block and
+  was never intended to produce a comparable trajectory. Crash /
+  robustness coverage is the job of `ctest` and the smoke harness,
+  not the parity suite.
+- `r34` — pinned NFsim issue #24 ("RandomBiBi occupied-site
+  edge case"). The author included a `begin observables` block but
+  deliberately commented out the only line in it (`# Molecules Q
+  Q()`), so there is no observable to integrate against. Like r33
+  and r35, it's a regression test for an NFsim-specific edge case
+  rather than a chemistry test that would generalize across
+  engines.

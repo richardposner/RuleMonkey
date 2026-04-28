@@ -12,7 +12,7 @@ Per-model flow:
   4. Aggregate to mean.tsv + std.tsv per model.
   5. Append a row to sim_params.tsv recording what was actually run.
 
-The 31 BNGL files under tests/models/nfsim_basicmodels/ are derived
+The 29 BNGL files under tests/models/nfsim_basicmodels/ are derived
 from NFsim's `validate/basicModels/` regression suite. See
 `tests/reference/basicmodels/PROVENANCE.md` for the source, the
 upstream NFsim tests not carried over, and the rationale.
