@@ -2728,20 +2728,34 @@ static double compute_propensity(const RuleState& rs, const Rule& rule, double r
   double b_eff = rs.b_total / cb;
   double extra_eff = rs.total_extra / (ca * cb);
 
+  // The propensity formulas below do NOT subtract within-molecule pair
+  // contributions (`extra_eff`), and they keep the symmetric `ab*ab/2`
+  // form rather than the unordered `ab*(ab-1)/2`.  The mol-level
+  // rejection in select_reactants (engine.cpp:5484, mol_a==mol_b) is
+  // what removes self-pairs at sampling time, so subtracting them
+  // here too would double-count.  Equivalently, RM matches NFsim's
+  // convention of "ordered count at propensity level, mol_a!=mol_b
+  // rejection at sampler level".  Subtracting extra here was the
+  // pre-2026-04-28 behaviour and produced an `(N-1)/N` under-binding
+  // bias on A+A self-binding under bscb (caught by the edg_* stress
+  // suite at 500 reps).
+  (void)extra_eff;
   if (!rule.same_components) {
-    // For heterodimer rules (A+B, different types/components),
-    // symmetry_factor is always 1 in BNGL. Apply it for generality.
-    return (a_eff * b_eff - extra_eff) * rate * rule.symmetry_factor;
+    // Heterodimer (A+B different types, or A+A with different bond-target
+    // component names).  symmetry_factor is 1 in BNGL.  After the sampler
+    // rejects mol_a==mol_b cases (no-op for true heterodimer; ~1/N for
+    // same-type asymmetric self-binding), effective rate = N(N-1)*k.
+    return (a_eff * b_eff) * rate * rule.symmetry_factor;
   } else {
-    // For homodimer rules (A+A, same type and component), the formula
-    // ab*(ab-1)/2 already counts unordered pairs, incorporating the
-    // symmetry correction. Do NOT apply symmetry_factor here — it would
-    // double-count the correction (the 0.5 from BNG's symmetry_factor
-    // is already implicit in choosing unordered rather than ordered pairs).
+    // Homodimer (A+A, same type and same bond-target component).  The
+    // ordered-count form `ab*ab/2` becomes unordered N(N-1)/2 after the
+    // sampler rejects mol_a==mol_b at 1/N rate.  Symmetry_factor=0.5
+    // emitted by BNG2 is already implicit in the /2 — don't multiply
+    // it in (would be a double 0.5).
     double ao = rs.a_only_total / ca;
     double bo = rs.b_only_total / cb;
     double ab = rs.ab_both_total / ca; // ab_both counted from A perspective
-    return (ao * b_eff + ab * bo + ab * (ab - 1.0) / 2.0 - extra_eff) * rate;
+    return (ao * b_eff + ab * bo + ab * ab / 2.0) * rate;
   }
 }
 
