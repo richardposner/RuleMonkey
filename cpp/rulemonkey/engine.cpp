@@ -2615,7 +2615,6 @@ struct PerMolRuleData {
   double a_only = 0;             // binding sites matching only A
   double b_only = 0;             // binding sites matching only B
   double ab_both = 0;            // binding sites matching both A and B
-  double extra = 0;              // overcounting correction for this molecule
   double local_rate = 0.0;       // per-molecule rate (for local function rules)
   double local_propensity = 0.0; // count_a * local_rate
   // P1 cache (step 2): set true after the first full recompute of this
@@ -2629,7 +2628,6 @@ struct RuleState {
   std::vector<PerMolRuleData> mol_data; // indexed by mol_id
   double a_total = 0;
   double b_total = 0;
-  double total_extra = 0;
   double a_only_total = 0;
   double b_only_total = 0;
   double ab_both_total = 0;
@@ -2677,17 +2675,6 @@ struct RuleState {
   bool a_mask_complete = false;
   bool b_mask_complete = false;
 };
-
-// Compute overcounting correction for a single molecule.
-static double compute_extra(double a_only, double b_only, double ab_both, bool same_components) {
-  double extra = a_only * b_only + a_only * ab_both + ab_both * b_only;
-  if (!same_components) {
-    extra += ab_both * ab_both;
-  } else {
-    extra += std::floor(ab_both * (ab_both - 1.0) / 2.0);
-  }
-  return extra;
-}
 
 // Compute propensity for a rule given its accumulated state.
 // embedding_correction_a/b correct for overcounting due to permutations
@@ -2749,20 +2736,6 @@ static double compute_propensity(const RuleState& rs, const Rule& rule, double r
   // Bimolecular — apply corrections to the per-pattern totals.
   double a_eff = rs.a_total / ca;
   double b_eff = rs.b_total / cb;
-  double extra_eff = rs.total_extra / (ca * cb);
-
-  // The propensity formulas below do NOT subtract within-molecule pair
-  // contributions (`extra_eff`), and they keep the symmetric `ab*ab/2`
-  // form rather than the unordered `ab*(ab-1)/2`.  The mol-level
-  // rejection in select_reactants (engine.cpp:5484, mol_a==mol_b) is
-  // what removes self-pairs at sampling time, so subtracting them
-  // here too would double-count.  Equivalently, RM matches NFsim's
-  // convention of "ordered count at propensity level, mol_a!=mol_b
-  // rejection at sampler level".  Subtracting extra here was the
-  // pre-2026-04-28 behaviour and produced an `(N-1)/N` under-binding
-  // bias on A+A self-binding under bscb (caught by the edg_* stress
-  // suite at 500 reps).
-  (void)extra_eff;
   if (!rule.same_components) {
     // Heterodimer (A+B different types, or A+A with different bond-target
     // component names).  symmetry_factor is 1 in BNGL.  After the sampler
@@ -3720,7 +3693,6 @@ struct Engine::Impl {
     rs.mol_data.assign(pool_size, PerMolRuleData{});
     rs.a_total = 0;
     rs.b_total = 0;
-    rs.total_extra = 0;
     rs.a_only_total = 0;
     rs.b_only_total = 0;
     rs.ab_both_total = 0;
@@ -3797,14 +3769,11 @@ struct Engine::Impl {
           compute_shared_components(pool, mid, rule, model, seed_a, seed_b, bi.bind_local_a,
                                     bi.bind_local_b, bi.seed_mol_a, bi.seed_mol_b, md.a_only,
                                     md.b_only, md.ab_both);
-          md.extra = compute_extra(md.a_only, md.b_only, md.ab_both, rule.same_components);
         } else {
           md.a_only = md.count_a;
           md.b_only = md.count_b;
           md.ab_both = 0;
-          md.extra = 0;
         }
-        rs.total_extra += md.extra;
         rs.a_only_total += md.a_only;
         rs.b_only_total += md.b_only;
         rs.ab_both_total += md.ab_both;
@@ -3819,7 +3788,6 @@ struct Engine::Impl {
           md.a_only = md.count_a;
           md.b_only = md.count_b;
           md.ab_both = 0;
-          md.extra = 0;
           rs.a_only_total += md.a_only;
           rs.b_only_total += md.b_only;
         }
@@ -5098,7 +5066,6 @@ struct Engine::Impl {
         // Subtract old values
         rs.a_total -= old.count_a;
         rs.b_total -= old.count_b;
-        rs.total_extra -= old.extra;
         rs.a_only_total -= old.a_only;
         rs.b_only_total -= old.b_only;
         rs.ab_both_total -= old.ab_both;
@@ -5184,7 +5151,6 @@ struct Engine::Impl {
             compute_shared_components(pool, mid, rule, model, seed_a, seed_b, bi.bind_local_a,
                                       bi.bind_local_b, bi.seed_mol_a, bi.seed_mol_b, nd.a_only,
                                       nd.b_only, nd.ab_both);
-            nd.extra = compute_extra(nd.a_only, nd.b_only, nd.ab_both, rule.same_components);
           } else {
             nd.a_only = nd.count_a;
             nd.b_only = nd.count_b;
@@ -5234,7 +5200,6 @@ struct Engine::Impl {
         // Add new values
         rs.a_total += nd.count_a;
         rs.b_total += nd.count_b;
-        rs.total_extra += nd.extra;
         rs.a_only_total += nd.a_only;
         rs.b_only_total += nd.b_only;
         rs.ab_both_total += nd.ab_both;
