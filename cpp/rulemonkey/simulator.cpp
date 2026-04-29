@@ -1410,14 +1410,13 @@ bool any_has_move_connected(const XmlNode& node) {
   return false;
 }
 
-// Check if any rule uses an Arrhenius rate law — the eBNGL energy-based
-// kinetic form that derives rate constants at runtime from free-energy
-// sums over pattern matches.  RM does not implement that derivation.
-// (RM does support Ele, Function, and MM rate law types natively.)
-bool any_rule_has_arrhenius_ratelaw(const XmlNode& model_node) {
+// Find the first rule using a rate law of the given type.  Returns the
+// rule id if found, empty string otherwise.  Used by scan_unsupported to
+// flag the specific offending rule when refusing a model.
+std::string first_rule_with_ratelaw_type(const XmlNode& model_node, const std::string& type_name) {
   auto* rr_list = find_child(model_node, "ListOfReactionRules");
   if (!rr_list)
-    return false;
+    return "";
   for (auto& rr : rr_list->children) {
     if (rr.name != "ReactionRule")
       continue;
@@ -1425,10 +1424,17 @@ bool any_rule_has_arrhenius_ratelaw(const XmlNode& model_node) {
     if (!rl)
       continue;
     auto it = rl->attributes.find("type");
-    if (it != rl->attributes.end() && it->second == "Arrhenius")
-      return true;
+    if (it != rl->attributes.end() && it->second == type_name)
+      return opt_attr(rr, "id");
   }
-  return false;
+  return "";
+}
+
+// True iff any rule uses an Arrhenius rate law — the eBNGL energy-based
+// kinetic form that derives rate constants at runtime from free-energy
+// sums over pattern matches.  RM does not implement that derivation.
+bool any_rule_has_arrhenius_ratelaw(const XmlNode& model_node) {
+  return !first_rule_with_ratelaw_type(model_node, "Arrhenius").empty();
 }
 
 std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
@@ -1482,6 +1488,34 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
                         "incorrect. Pass --ignore-unsupported to run "
                         "anyway with the Ea parameter treated as a bare "
                         "rate constant (no Boltzmann correction)."});
+  }
+
+  // ERROR-level: legacy/unimplemented rate-law types.  BNG2 still parses
+  // these but RM's rule loader (cpp/rulemonkey/simulator.cpp:~1157)
+  // recognises only Ele, Function, and MM.  Anything else falls through
+  // to the default rate_law (type=Ele, rate_value=0.0), so the rule
+  // never fires — silently producing wrong trajectories.
+  //
+  //   Sat:             NFsim itself rejects this type explicitly with
+  //                    "use MM instead"; we follow that policy.
+  //   Hill:            no NFsim handler at all; only ODE/SSA networks.
+  //   FunctionProduct: NFsim has a handler; RM does not implement it.
+  for (const auto& [type_name, advice] : std::initializer_list<std::pair<const char*, const char*>>{
+           {"Sat", "Sat() is deprecated; rewrite the rule to use MM(kcat,Km) — "
+                   "NFsim itself rejects Sat with the same recommendation."},
+           {"Hill", "Hill() rate laws are network-only (no NFsim handler); "
+                    "use generate_network() + simulate({method=>\"ode\"}) instead "
+                    "of network-free simulation."},
+           {"FunctionProduct", "FunctionProduct() rate laws are not implemented in RM; "
+                               "rewrite as a single Function that multiplies the two factors."}}) {
+    auto rule_id = first_rule_with_ratelaw_type(model_node, type_name);
+    if (!rule_id.empty()) {
+      std::string msg = "Rate law type '" + std::string(type_name) + "' on rule '" + rule_id +
+                        "' — RM does not implement it; the rule would silently "
+                        "have zero propensity. " +
+                        advice + " Pass --ignore-unsupported to run anyway (rule will not fire).";
+      warnings.push_back({Severity::Error, "RateLaw@type=" + std::string(type_name), msg});
+    }
   }
 
   // ERROR-level: BNGL `population` keyword (hybrid particle-population SSA,
