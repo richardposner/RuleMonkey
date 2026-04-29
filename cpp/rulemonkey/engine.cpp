@@ -2701,6 +2701,29 @@ static double compute_propensity(const RuleState& rs, const Rule& rule, double r
     return rate;
   }
 
+  // MM(kcat, Km) — Michaelis-Menten with quasi-steady-state for free
+  // substrate.  Mirrors NFsim's MMRxnClass::update_a (reaction.cpp):
+  //   S = corrected substrate count   (reactant 0)
+  //   E = corrected enzyme count      (reactant 1)
+  //   sFree = 0.5 * ((S-Km-E) + sqrt((S-Km-E)^2 + 4*Km*S))
+  //   a     = kcat * sFree * E / (Km + sFree)
+  // NFsim requires exactly 2 reactants; ditto here.
+  if (rule.rate_law.type == RateLawType::MM) {
+    if (rule.molecularity != 2)
+      return 0;
+    double S = rs.a_total / ca;
+    double E = rs.b_total / cb;
+    if (S <= 0 || E <= 0)
+      return 0;
+    double kcat = rule.rate_law.mm_kcat;
+    double Km = rule.rate_law.mm_Km;
+    double diff = S - Km - E;
+    double sFree = 0.5 * (diff + std::sqrt(diff * diff + 4.0 * Km * S));
+    if (Km + sFree <= 0)
+      return 0;
+    return kcat * sFree * E / (Km + sFree);
+  }
+
   // totalrate="1": the rate function already returns the total propensity
   // (e.g., kf * Observable), so don't multiply by population counts.
   // However, if any reactant population is zero, propensity must be zero

@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created by BioNetGen 2.9.3  -->
+<sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
+  <model id="ft_mm_ratelaw">
+    <ListOfParameters>
+      <Parameter id="E0" type="Constant" value="5" expr="5"/>
+      <Parameter id="S0" type="Constant" value="100" expr="100"/>
+      <Parameter id="kcat" type="Constant" value="1" expr="1.0"/>
+      <Parameter id="Km" type="Constant" value="10" expr="10.0"/>
+    </ListOfParameters>
+    <ListOfMoleculeTypes>
+      <MoleculeType id="E"/>
+      <MoleculeType id="P"/>
+      <MoleculeType id="S"/>
+    </ListOfMoleculeTypes>
+    <ListOfCompartments>
+    </ListOfCompartments>
+    <ListOfSpecies>
+      <Species id="S1"  concentration="E0" name="E()">
+        <ListOfMolecules>
+          <Molecule id="S1_M1" name="E"/>
+        </ListOfMolecules>
+      </Species>
+      <Species id="S2"  concentration="S0" name="S()">
+        <ListOfMolecules>
+          <Molecule id="S2_M1" name="S"/>
+        </ListOfMolecules>
+      </Species>
+      <Species id="S3"  concentration="0" name="P()">
+        <ListOfMolecules>
+          <Molecule id="S3_M1" name="P"/>
+        </ListOfMolecules>
+      </Species>
+    </ListOfSpecies>
+    <ListOfReactionRules>
+      <ReactionRule id="RR1" name="_R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR1_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP1_M1" name="S"/>
+            </ListOfMolecules>
+          </ReactantPattern>
+          <ReactantPattern id="RR1_RP2">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP2_M1" name="E"/>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR1_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP1_M1" name="P"/>
+            </ListOfMolecules>
+          </ProductPattern>
+          <ProductPattern id="RR1_PP2">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP2_M1" name="E"/>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR1_RateLaw" type="MM" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="kcat"/>
+            <RateConstant value="Km"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR1_RP1_M1"/>
+          <MapItem sourceID="RR1_RP2_M1" targetID="RR1_PP2_M1"/>
+        </Map>
+        <ListOfOperations>
+          <Add id="RR1_PP1_M1"/>
+          <Delete id="RR1_RP1" DeleteMolecules="0"/>
+        </ListOfOperations>
+      </ReactionRule>
+    </ListOfReactionRules>
+    <ListOfObservables>
+      <Observable id="O1" name="S_n" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O1_P1">
+            <ListOfMolecules>
+              <Molecule id="O1_P1_M1" name="S"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O2" name="P_n" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O2_P1">
+            <ListOfMolecules>
+              <Molecule id="O2_P1_M1" name="P"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O3" name="E_n" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O3_P1">
+            <ListOfMolecules>
+              <Molecule id="O3_P1_M1" name="E"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O4" name="Total_S" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O4_P1">
+            <ListOfMolecules>
+              <Molecule id="O4_P1_M1" name="S"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O4_P2">
+            <ListOfMolecules>
+              <Molecule id="O4_P2_M1" name="P"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+    </ListOfObservables>
+    <ListOfFunctions>
+    </ListOfFunctions>
+  </model>
+</sbml>
