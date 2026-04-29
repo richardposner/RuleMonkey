@@ -1,0 +1,57 @@
+# Edge case: deep function-of-function chain in a rate law
+# Tests:  BNG2 promotes any parameter whose expression references
+#         another *expression-typed* parameter into a Function in the
+#         emitted XML (constants stay as ListOfParameters; expressions
+#         become entries in ListOfFunctions).  A 5-level chain forces
+#         RM's function-evaluator to recursively resolve a -> a4 -> a3
+#         -> a5 -> rate per propensity recompute.  ft_nested_functions
+#         exercises a 3-level chain (frac_P -> modulator -> phos_rate);
+#         this stretches the chain to 5 deep AND declares the
+#         dependencies in non-topological order so the loader cannot
+#         resolve in declaration order.
+# Edge:   intermediate "parameters" a3,a4,a5 all evaluate to 1 (a1=a2=1),
+#         so rate = base = 0.01.  A miswired chain would silently zero
+#         out the propensity (the failure mode RM falls back to when
+#         resolve_value throws).  The compute_observables fast-path
+#         must also keep the function values fresh.
+# Tier:   base
+
+begin model
+begin parameters
+    # Declared in non-topological order so the second-pass forward-
+    # ref resolver actually has to do work.
+    rate    base * a5
+    a3      a2 * a4
+    a4      a1 * a2
+    a5      a3 * a2
+    a1      1.0
+    a2      1.0
+    base    0.01
+    k_death 0.0
+end parameters
+
+begin molecule types
+    Src()
+    A()
+    Trash()
+end molecule types
+
+begin seed species
+    Src()      1
+    A()        0
+    $Trash()   0
+end seed species
+
+begin observables
+    Molecules  A_total  A()
+end observables
+
+begin reaction rules
+    Src() -> Src() + A()  rate
+    A()   -> Trash()       k_death
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>40,n_steps=>80})
+end actions

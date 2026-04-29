@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created by BioNetGen 2.9.3  -->
+<sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
+  <model id="edg_deep_param_chain">
+    <ListOfParameters>
+      <Parameter id="base" type="Constant" value="0.01" expr="0.01"/>
+      <Parameter id="a2" type="Constant" value="1" expr="1.0"/>
+      <Parameter id="a1" type="Constant" value="1" expr="1.0"/>
+      <Parameter id="k_death" type="Constant" value="0" expr="0.0"/>
+    </ListOfParameters>
+    <ListOfMoleculeTypes>
+      <MoleculeType id="A"/>
+      <MoleculeType id="Src"/>
+      <MoleculeType id="Trash"/>
+    </ListOfMoleculeTypes>
+    <ListOfCompartments>
+    </ListOfCompartments>
+    <ListOfSpecies>
+      <Species id="S1"  concentration="1" name="Src()">
+        <ListOfMolecules>
+          <Molecule id="S1_M1" name="Src"/>
+        </ListOfMolecules>
+      </Species>
+      <Species id="S2"  concentration="0" name="A()">
+        <ListOfMolecules>
+          <Molecule id="S2_M1" name="A"/>
+        </ListOfMolecules>
+      </Species>
+      <Species id="S3"  concentration="0" name="$Trash()" Fixed="1">
+        <ListOfMolecules>
+          <Molecule id="S3_M1" name="Trash"/>
+        </ListOfMolecules>
+      </Species>
+    </ListOfSpecies>
+    <ListOfReactionRules>
+      <ReactionRule id="RR1" name="_R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR1_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP1_M1" name="Src"/>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR1_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP1_M1" name="Src"/>
+            </ListOfMolecules>
+          </ProductPattern>
+          <ProductPattern id="RR1_PP2">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP2_M1" name="A"/>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR1_RateLaw" type="Function" name="rate" totalrate="0">
+          <ListOfArguments>
+          </ListOfArguments>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR1_RP1_M1" targetID="RR1_PP1_M1"/>
+        </Map>
+        <ListOfOperations>
+          <Add id="RR1_PP2_M1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR2" name="_R2" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR2_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_RP1_M1" name="A"/>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR2_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_PP1_M1" name="Trash"/>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR2_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="k_death"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR2_RP1_M1"/>
+        </Map>
+        <ListOfOperations>
+          <Add id="RR2_PP1_M1"/>
+          <Delete id="RR2_RP1" DeleteMolecules="0"/>
+        </ListOfOperations>
+      </ReactionRule>
+    </ListOfReactionRules>
+    <ListOfObservables>
+      <Observable id="O1" name="A_total" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O1_P1">
+            <ListOfMolecules>
+              <Molecule id="O1_P1_M1" name="A"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+    </ListOfObservables>
+    <ListOfFunctions>
+      <Function id="a4">
+        <ListOfReferences>
+          <Reference name="a1" type="Constant"/>
+          <Reference name="a2" type="Constant"/>
+        </ListOfReferences>
+        <Expression> a1*a2 </Expression>
+      </Function>
+      <Function id="a3">
+        <ListOfReferences>
+          <Reference name="a2" type="Constant"/>
+          <Reference name="a4" type="Function"/>
+        </ListOfReferences>
+        <Expression> a2*a4 </Expression>
+      </Function>
+      <Function id="a5">
+        <ListOfReferences>
+          <Reference name="a2" type="Constant"/>
+          <Reference name="a3" type="Function"/>
+        </ListOfReferences>
+        <Expression> a3*a2 </Expression>
+      </Function>
+      <Function id="rate">
+        <ListOfReferences>
+          <Reference name="base" type="Constant"/>
+          <Reference name="a5" type="Function"/>
+        </ListOfReferences>
+        <Expression> base*a5 </Expression>
+      </Function>
+    </ListOfFunctions>
+  </model>
+</sbml>

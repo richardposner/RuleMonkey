@@ -1,0 +1,55 @@
+# Edge case: rate law that explicitly depends on simulation time
+# Tests:  a Function-typed rate law whose AST evaluates time().  RM
+#         must look up the current simulation time on every event
+#         scheduled for this rule (or, more precisely, every time the
+#         dynamic propensity is recomputed).  Stale-time bugs would
+#         show up as a horizontal-shift in the decaying production
+#         curve.
+# Edge:   the production rate decays exponentially in time, so a
+#         passive birth-death system that would otherwise saturate
+#         instead peaks and falls.  The shape (peak time, peak height,
+#         tail) is sensitive to whether RM evaluates time() at the
+#         right moment.
+# Tier:   base
+# Expected: A_total rises early, peaks around t=10-20, then decays.
+
+begin model
+begin parameters
+    Src_tot   1
+    k0        4.0    # /s, initial production amplitude
+    k_decay   0.10   # /s, rate-decay constant inside time()
+    k_death   0.05   # /s, A degradation
+end parameters
+
+begin molecule types
+    Src()
+    A()
+    Trash()
+end molecule types
+
+begin seed species
+    Src()     Src_tot
+    A()       0
+    $Trash()  0
+end seed species
+
+begin observables
+    Molecules  A_total    A()
+    Molecules  Src_total  Src()
+end observables
+
+begin functions
+    # Time-explicit rate law.  exp(-k_decay * time()) at t=0 is k0;
+    # at t=20 it is ~k0*0.135.  Death rate is plain.
+    prod_rate() = k0 * exp(-k_decay * time())
+end functions
+
+begin reaction rules
+    Src() -> Src() + A()   prod_rate()
+    A()   -> Trash()        k_death
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>50,n_steps=>100})
+end actions

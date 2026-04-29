@@ -1,0 +1,59 @@
+# Edge case: state wildcard `~?` on LHS, fixed state on RHS
+# Tests:  a rule pattern with `s~?` matches any defined state (the
+#         wildcard collapses the state-dependent dispatch).  Combined
+#         with a fixed RHS state, the rule "resets" the component to a
+#         known value regardless of incoming state.  RM's StateChange
+#         op carries a new_state_index that resolves the new state
+#         from the rule body; the LHS wildcard means
+#         pc.required_state_index == -1 on the reactant side, so RM
+#         must NOT skip embeddings whose component holds a non-default
+#         state.  The existing ft_state_wildcards.bngl uses ~? for
+#         observation; this model uses it on the rule side, which is a
+#         distinct code path through count_embeddings_single's state
+#         filter.
+# Edge:   four-state component with three different "modified" states
+#         all collapsing to one canonical state via the wildcard rule.
+# Tier:   base
+# Expected: at long time A_canon dominates (all populations funnel into S0).
+
+begin model
+begin parameters
+    A_tot   60
+    k_drift 0.10   # /s, S0 -> any other (uniform)
+    k_reset 0.20   # /s, any-state-but-S0 -> S0
+end parameters
+
+begin molecule types
+    A(s~S0~S1~S2~S3)
+end molecule types
+
+begin seed species
+    A(s~S0)  A_tot
+end seed species
+
+begin observables
+    Molecules  A_total  A()
+    Molecules  A_S0     A(s~S0)
+    Molecules  A_S1     A(s~S1)
+    Molecules  A_S2     A(s~S2)
+    Molecules  A_S3     A(s~S3)
+    Molecules  A_any    A(s~?)
+end observables
+
+begin reaction rules
+    # Drift outward — three explicit transitions populate non-S0 states.
+    A(s~S0) -> A(s~S1)  k_drift
+    A(s~S0) -> A(s~S2)  k_drift
+    A(s~S0) -> A(s~S3)  k_drift
+    # The reset rule: state wildcard on LHS matches any state, and the
+    # exclusion against S0 below funnels only modified states to S0.
+    # NFsim's NFprop2 implementation expands the wildcard rule into
+    # per-state instances; RM should match the wildcard directly on
+    # the reactant pattern.
+    A(s~?) -> A(s~S0)  k_reset  exclude_reactants(1,A(s~S0))
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>40,n_steps=>80})
+end actions
