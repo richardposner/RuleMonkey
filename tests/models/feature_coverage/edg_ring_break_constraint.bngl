@@ -13,7 +13,8 @@
 #         and refuse on the 4-mer.  Hits engine.cpp's BFS-based
 #         product-side connectivity check.
 # Tier:   base
-# invariant: conserved A_total = 30
+# Seed: 10 × 2-mer (= 20 A) + 5 × 4-mer (= 20 A) = 40 A total.
+# invariant: conserved A_total = 40
 
 begin model
 begin parameters

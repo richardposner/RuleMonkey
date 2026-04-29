@@ -19,14 +19,16 @@
 begin model
 begin parameters
     # Declared in non-topological order so the second-pass forward-
-    # ref resolver actually has to do work.
+    # ref resolver actually has to do work.  Final rate = base * 1*1*1*1*1
+    # = 1.0 — picked so a 5-Src system at t_end=40 yields ~200 events,
+    # giving stable RM-vs-ODE rel-err under default 5 reps.
     rate    base * a5
     a3      a2 * a4
     a4      a1 * a2
     a5      a3 * a2
     a1      1.0
     a2      1.0
-    base    0.01
+    base    1.0
     k_death 0.0
 end parameters
 
@@ -37,7 +39,7 @@ begin molecule types
 end molecule types
 
 begin seed species
-    Src()      1
+    Src()      5
     A()        0
     $Trash()   0
 end seed species

@@ -3,7 +3,7 @@
 <sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
   <model id="edg_deep_param_chain">
     <ListOfParameters>
-      <Parameter id="base" type="Constant" value="0.01" expr="0.01"/>
+      <Parameter id="base" type="Constant" value="1" expr="1.0"/>
       <Parameter id="a2" type="Constant" value="1" expr="1.0"/>
       <Parameter id="a1" type="Constant" value="1" expr="1.0"/>
       <Parameter id="k_death" type="Constant" value="0" expr="0.0"/>
@@ -16,7 +16,7 @@
     <ListOfCompartments>
     </ListOfCompartments>
     <ListOfSpecies>
-      <Species id="S1"  concentration="1" name="Src()">
+      <Species id="S1"  concentration="5" name="Src()">
         <ListOfMolecules>
           <Molecule id="S1_M1" name="Src"/>
         </ListOfMolecules>

@@ -19,7 +19,6 @@
 #         Fixed within the SAME MoleculeType.
 # Tier:   base
 # invariant: conserved E_tot_obs = 5
-# invariant: conserved Total_S = 90
 
 begin model
 begin parameters

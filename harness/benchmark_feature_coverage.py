@@ -135,6 +135,14 @@ NFSIM_UNRELIABLE = {
     "combo_exclude_with_complex",
     # NFsim can't resolve function-calling-function; use ODE verdict instead.
     "ft_nested_functions",
+    # Same root cause: BNG2 promotes the deep parameter chain into
+    # ListOfFunctions entries that reference each other, and NFsim can't
+    # evaluate them (token resolution fails on the function names).
+    "edg_deep_param_chain",
+    # NFsim's FuncFactory doesn't expose time() to rate-law expressions
+    # ("Undefined token 'time'" at runtime).  BNG2 ODE evaluates time()
+    # natively.
+    "edg_time_dependent_rate",
     # NFsim (pinned release) silently ignores Fixed species; fix landed
     # upstream in NFsim PR #60 (not in our pinned release).  BNG2 ODE
     # correctly handles Fixed via species_deriv = 0.
