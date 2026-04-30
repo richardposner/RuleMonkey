@@ -7,10 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.1.0] — 2026-04-29
+
 ### Fixed
+
+- **Self-binding propensity under bscb under-counted by `(N-1)/N`**
+  (`9f25bba`). `compute_propensity` was subtracting within-molecule
+  pair contributions (`extra_eff`) at propensity time AND
+  `select_reactants` was rejecting `mol_a == mol_b` at sample time —
+  the same self-pairs were removed twice. Hetero-binding was
+  unaffected (`extra_eff` is naturally zero across distinct molecule
+  types); the bias only appeared on `A+A` shapes (both symmetric
+  `A(c)+A(c)` and asymmetric same-type `A(l)+A(r)`). Hidden under
+  the standard 20-rep 5σ benchmark noise floor; emerged at 100+
+  reps. RM-vs-NFsim avg-z dropped from ~−1.0 to ~−0.2 across the
+  affected models post-fix; vs deterministic ODE on
+  `combo_addbond_connected`, RM moved from z=−3.21 to z=−1.64 (now
+  better than NFsim's z=−2.02). Surfaced by the new `edg_*` stress
+  suite at 500 reps. Same bias also affected the existing
+  `combo_addbond_connected` corpus model.
+
+- **MM(kcat, Km) rate law was silently zero-rate** (`6421017`).
+  The XML loader parsed `RateLawType::MM` and stored `mm_kcat` /
+  `mm_Km` on the rule, but the engine never read those fields —
+  every MM rule ran at zero propensity. Confirmed live: an MM rule
+  on a 100-substrate / 5-enzyme system left S unchanged at 100
+  forever in RM, while NFsim depleted S to ~10 by t=30. Now uses
+  NFsim's QSS formula `sFree = 0.5·((S−Km−E) + √((S−Km−E)² + 4·Km·S))`,
+  `a = kcat·sFree·E/(Km+sFree)` (mirrors `MMRxnClass::update_a` in
+  the NFsim source). Verified at 50 reps each: RM and NFsim agree
+  within stochastic noise.
+
+- **TFUN sentinel substitution + .tfun file resolution**
+  (`cb03071`). Two bugs in RM's TFUN code path, both surfaced by
+  the new `ft_tfun.bngl` test:
+  - Sentinel name mismatch: RM looked for `__TFUN_VAL__` (single
+    underscore) but BNG2 2.9.3 emits `__TFUN__VAL__` (double
+    underscore). The dev branch `fix-tfun-has-tfuns-reset` reverts
+    to the single-underscore form for the new lowercase `tfun()`
+    syntax. RM now accepts both, longer match first.
+  - File-resolution path: RM only searched relative to the XML
+    directory; the harness lays out XML in `tests/.../xml/` with
+    the `.tfun` next to the source BNGL one level up. RM now falls
+    back to `<xml_dir>/..` so author-side and harness-side
+    layouts both work.
 
 - **Multi-mol Molecules observable counts on palindromic patterns
   with symmetric components** (`5d90724`). The BFS in
+  `count_multi_molecule_embeddings` committed to the first valid
+  partner embedding consistent with the walked bond and silently
   `count_multi_molecule_embeddings` committed to the first valid
   partner embedding consistent with the walked bond and silently
   dropped sym-equivalent alternatives. On a 5-mol palindromic
@@ -47,29 +92,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `compute_embedding_correction[_multimol]` and `_impl` —
   ~110 lines of dead code.
 
-### Removed
-
-- **Four upstream NFsim regression tests dropped from the basicmodels
-  suite** (`85feae1`, `9fb2efb`). All four tested NFsim-specific
-  behaviors that don't apply to RuleMonkey:
-  - `r33` and `r35` pinned NFsim issues #22 / #21 ("occupied-site
-    bond error") and #14 (RHS `.` between products that NFsim
-    splits anyway). On the BNGL these tests carry, BNG2.pl's
-    `generate_network` produces the chemistry-correct behavior
-    (bound by free-B count for r33; zero reactions for r35) and
-    RuleMonkey matches BNG2.pl. The NFsim references captured the
-    historic NFsim quirks, which by design diverge from BNGL strict.
-  - `r31` is a crash regression test with no `begin observables`
-    block (the author's own comment: *"validation harness will run
-    NFsim on this XML and ensure it doesn't crash"*).
-  - `r34` includes a `begin observables` block but the author
-    deliberately commented out the only line in it.
-
-  After the removals the suite is clean **29 PASS / 0 FAIL /
-  0 NO_MATCH**. Joins the pre-existing r27 / r28 / r36 in the
-  PROVENANCE appendix.
-
 ### Added
+
+- **`edg_*` stress-test suite — 20 honest probes designed to break
+  RM** (`38d2087`, `6617a84`, `563495b`). Targets feature
+  combinations not covered by the existing `ft_*` / `combo_*`
+  suite: state-increment ladders, synthesis-into-pre-bonded
+  complexes, time-explicit rates, pattern-level local functions,
+  ternary embeddings, branched aggregates, multi-Fixed competition,
+  zero-rate edge cases, and several `A+A` self-binding shapes that
+  were hiding the propensity bug above. 18 models use BNG2 ODE as
+  the deterministic verdict reference; the two polymer-style models
+  (`edg_pattern_local_fcn`, `edg_branched_polymer`) use 100-rep
+  NFsim refs since their network generation is intractable. Per-
+  model rationale and 500-rep verification table at
+  `tests/models/feature_coverage/EDG_RATIONALE.md`.
+
+- **Tier-0 refusal for Sat / Hill / FunctionProduct rate laws**
+  (`13bb424`). The rule loader recognised only `Ele`, `Function`,
+  and `MM`; everything else fell through to the default Ele type
+  with `rate_value=0.0`, so rules using `Sat()` / `Hill()` /
+  `FunctionProduct()` silently produced zero propensity and never
+  fired. RM now refuses loudly. Each error names the offending
+  rule id and gives per-type guidance: Sat → "use MM instead"
+  (mirroring NFsim's own policy at `NFinput.cpp:2459`); Hill →
+  "use generate_network + ODE"; FunctionProduct → "rewrite as a
+  single Function".
+
+- **Feature-coverage tests for MM and TFUN** (`6421017`,
+  `cb03071`).  `ft_mm_ratelaw.bngl` exercises `MM(kcat,Km)`
+  against NFsim; `ft_tfun.bngl` exercises the new lowercase
+  `tfun()` syntax against BNG dev-branch ODE (set
+  `BNG2=$HOME/Code/bionetgen/bng2/BNG2.pl` to regenerate). Both
+  code paths now have regression coverage; both exposed real RM
+  bugs while being authored.
+
+- **`examples/embed.cpp` + `examples/CMakeLists.txt`**
+  (`a797b81`).  Minimal compilable C++ embedding example showing
+  both stateless `run()` and stateful session usage. Off by
+  default; opt in via `cmake -DRULEMONKEY_BUILD_EXAMPLES=ON`.
 
 - Three feature_coverage regression tests pinning the sym-K shapes
   fixed above:
@@ -86,12 +147,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- `tests/reference/basicmodels/PROVENANCE.md` rewritten to lead with
-  what the suite *is* (29 imported tests, source, reference flow)
-  and treat the seven upstream NFsim tests not carried over as a
-  clearly-labeled appendix grouped by reason. `harness/basicmodels.py`
-  and `harness/generate_basicmodels_refs.py` docstrings tightened
-  to a one-line origin pointer.
+- **README**: replaced the bare "Public API" snippet with a longer
+  "Embedding (C++ API)" section that pairs stateless and session
+  usage and points at the new example and public headers
+  (`a797b81`).
+
+- **`harness/benchmark_feature_coverage.py`**: added
+  `_copy_aux_files()` to stage `*.tfun` next to the BNGL when
+  invoking BNG2 / NFsim from a tempdir; `_run_one_nfsim_rep` now
+  runs with `cwd=tmpdir` so NFsim's relative-path lookups
+  resolve. New `RM_ONLY` set (currently empty) for any future
+  model that has no third-party reference.
+
+- **Two existing models cleaned up post-`edg_*` benchmark**
+  (`6617a84`): `edg_fixed_competition` dropped a bogus
+  `conserved Total_S = 90` invariant (S is consumed by catalysis,
+  not conserved); `edg_ring_break_constraint` corrected
+  `conserved A_total` from 30 → 40 (miscounted seed: 10×2-mer +
+  5×4-mer = 40 A's); `edg_deep_param_chain` magnitudes bumped so
+  the default 5-rep ODE comparison is stable. Harness routes
+  `edg_time_dependent_rate` and `edg_deep_param_chain` through
+  ODE verdict (NFsim rejects `time()` and function-of-function
+  chains).
+
+- `tests/reference/basicmodels/PROVENANCE.md` rewritten to lead
+  with what the suite *is* (29 imported tests, source, reference
+  flow) and treat the seven upstream NFsim tests not carried over
+  as a clearly-labeled appendix grouped by reason.
+  `harness/basicmodels.py` and
+  `harness/generate_basicmodels_refs.py` docstrings tightened to
+  a one-line origin pointer.
+
+### Removed
+
+- **Dead `extra_eff` machinery** (`d061f18`). After the self-
+  binding propensity fix above, `compute_extra()`,
+  `PerMolRuleData::extra`, `RuleState::total_extra`, and
+  `extra_eff` in `compute_propensity` became unused — within-mol
+  pair removal is now handled at sample time by
+  `select_reactants`, not at propensity time. 35 lines removed
+  from `engine.cpp`.
+
+- **Four upstream NFsim regression tests dropped from the
+  basicmodels suite** (`85feae1`, `9fb2efb`). All four tested
+  NFsim-specific behaviors that don't apply to RuleMonkey:
+  - `r33` and `r35` pinned NFsim issues #22 / #21 ("occupied-
+    site bond error") and #14 (RHS `.` between products that
+    NFsim splits anyway). On the BNGL these tests carry,
+    BNG2.pl's `generate_network` produces the chemistry-correct
+    behavior (bound by free-B count for r33; zero reactions for
+    r35) and RuleMonkey matches BNG2.pl. The NFsim references
+    captured the historic NFsim quirks, which by design diverge
+    from BNGL strict.
+  - `r31` is a crash regression test with no `begin observables`
+    block (the author's own comment: *"validation harness will
+    run NFsim on this XML and ensure it doesn't crash"*).
+  - `r34` includes a `begin observables` block but the author
+    deliberately commented out the only line in it.
+
+  After the removals the suite is clean **29 PASS / 0 FAIL /
+  0 NO_MATCH**. Joins the pre-existing r27 / r28 / r36 in the
+  PROVENANCE appendix.
+
+### Verification
+
+End-to-end benchmark state on 2026-04-29 (post-fix):
+
+| Suite                                       | Result |
+|---------------------------------------------|---|
+| `feature_coverage` (77 models, --reps 5)    | 77 PASS / 0 FAIL |
+| `benchmark_full --tier full` (71 corpus)    | 71 PASS / 0 FAIL |
+| `nfsim_basicmodels`         (29 models)     | 29 PASS / 0 FAIL |
+
+177 / 177 models PASS RM-vs-NFsim z-score (or RM-vs-ODE rel-err
+for `NFSIM_UNRELIABLE` models) post-fix.
 
 ## [3.0.0] — 2026-04-26
 
@@ -160,4 +289,5 @@ The legacy implementation, RuleMonkey 2.0.25, was introduced in:
 > RG. *RuleMonkey: software for stochastic simulation of rule-based
 > models.* BMC Bioinformatics 11:404 (2010). PMID: 20673321.
 
+[3.1.0]: https://github.com/wshlavacek/RuleMonkey/releases/tag/v3.1.0
 [3.0.0]: https://github.com/wshlavacek/RuleMonkey/releases/tag/v3.0.0

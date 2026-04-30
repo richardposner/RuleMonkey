@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(RuleMonkey VERSION 3.0.0 LANGUAGES CXX)
+project(RuleMonkey VERSION 3.1.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -32,8 +32,14 @@ add_library(rulemonkey STATIC
 
 target_include_directories(rulemonkey
     PUBLIC  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+            $<INSTALL_INTERFACE:include>
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/cpp/rulemonkey
 )
+
+# Stable namespaced alias for in-tree consumers (`add_subdirectory`):
+#   target_link_libraries(my_app PRIVATE RuleMonkey::rulemonkey)
+# Mirrors the alias produced by find_package() against an install.
+add_library(RuleMonkey::rulemonkey ALIAS rulemonkey)
 
 target_compile_features(rulemonkey PUBLIC cxx_std_17)
 
@@ -66,3 +72,73 @@ endif()
 # ---------------------------------------------------------------------------
 enable_testing()
 add_subdirectory(tests)
+
+# ---------------------------------------------------------------------------
+# Install rules
+#
+# Layout under CMAKE_INSTALL_PREFIX (default /usr/local on Linux/macOS):
+#
+#   include/rulemonkey/{simulator,types}.hpp
+#   lib/librulemonkey.a
+#   bin/rm_driver
+#   lib/cmake/RuleMonkey/RuleMonkeyConfig.cmake
+#   lib/cmake/RuleMonkey/RuleMonkeyConfigVersion.cmake
+#   lib/cmake/RuleMonkey/RuleMonkeyTargets.cmake
+#
+# Host projects (e.g. BNGsim) consume RM via:
+#
+#   find_package(RuleMonkey 3.1 CONFIG REQUIRED)
+#   target_link_libraries(my_app PRIVATE RuleMonkey::rulemonkey)
+#
+# Set RULEMONKEY_INSTALL=OFF when RM is consumed via add_subdirectory()
+# from a parent project that doesn't want to advertise install rules.
+# ---------------------------------------------------------------------------
+option(RULEMONKEY_INSTALL "Generate install() rules for RuleMonkey" ON)
+
+if(RULEMONKEY_INSTALL)
+    include(GNUInstallDirs)
+    include(CMakePackageConfigHelpers)
+
+    # Public targets: the static library and the rm_driver CLI.
+    install(TARGETS rulemonkey rm_driver
+        EXPORT RuleMonkeyTargets
+        ARCHIVE  DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        RUNTIME  DESTINATION ${CMAKE_INSTALL_BINDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    )
+
+    # Public headers: simulator.hpp + types.hpp under include/rulemonkey/.
+    install(DIRECTORY include/rulemonkey
+        DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        FILES_MATCHING PATTERN "*.hpp"
+    )
+
+    # Generate and install the package config files so downstream
+    # `find_package(RuleMonkey CONFIG REQUIRED)` works.
+    set(_rulemonkey_cmake_dir ${CMAKE_INSTALL_LIBDIR}/cmake/RuleMonkey)
+
+    install(EXPORT RuleMonkeyTargets
+        FILE RuleMonkeyTargets.cmake
+        NAMESPACE RuleMonkey::
+        DESTINATION ${_rulemonkey_cmake_dir}
+    )
+
+    write_basic_package_version_file(
+        "${CMAKE_CURRENT_BINARY_DIR}/RuleMonkeyConfigVersion.cmake"
+        VERSION ${PROJECT_VERSION}
+        COMPATIBILITY SameMajorVersion
+    )
+
+    configure_package_config_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RuleMonkeyConfig.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/RuleMonkeyConfig.cmake"
+        INSTALL_DESTINATION ${_rulemonkey_cmake_dir}
+    )
+
+    install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/RuleMonkeyConfig.cmake"
+        "${CMAKE_CURRENT_BINARY_DIR}/RuleMonkeyConfigVersion.cmake"
+        DESTINATION ${_rulemonkey_cmake_dir}
+    )
+endif()
