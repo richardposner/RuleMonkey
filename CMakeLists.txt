@@ -54,6 +54,14 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
 endif()
 
 # ---------------------------------------------------------------------------
+# Examples (off by default — host projects opt in)
+# ---------------------------------------------------------------------------
+option(RULEMONKEY_BUILD_EXAMPLES "Build the C++ embedding examples" OFF)
+if(RULEMONKEY_BUILD_EXAMPLES)
+    add_subdirectory(examples)
+endif()
+
+# ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
 enable_testing()
