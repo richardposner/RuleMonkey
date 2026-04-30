@@ -50,6 +50,19 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
 endif()
 
 # ---------------------------------------------------------------------------
+# Optional dev-time profiler instrumentation.
+#
+# When ON, defines RM_DEV_PROFILES so engine_profile.hpp's gates resolve to
+# `true`, and the engine emits per-phase profile reports to stderr at the
+# end of each run.  Default OFF: profiler scaffolding compiles to nothing
+# (every `if constexpr (k*Profile)` block is dead-stripped).
+# ---------------------------------------------------------------------------
+option(RULEMONKEY_ENABLE_DEV_PROFILES "Compile in engine dev profiler instrumentation" OFF)
+if(RULEMONKEY_ENABLE_DEV_PROFILES)
+    target_compile_definitions(rulemonkey PRIVATE RM_DEV_PROFILES)
+endif()
+
+# ---------------------------------------------------------------------------
 # rm_driver: batch CLI
 # ---------------------------------------------------------------------------
 add_executable(rm_driver cpp/cli/rm_driver.cpp)
