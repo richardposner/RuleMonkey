@@ -131,6 +131,23 @@ add_subdirectory(tests)
 # ---------------------------------------------------------------------------
 option(RULEMONKEY_INSTALL "Generate install() rules for RuleMonkey" ON)
 
+if(RULEMONKEY_INSTALL AND RULEMONKEY_ENABLE_ASAN)
+    # Guard against installing an asan-instrumented archive: the asan flags
+    # are PRIVATE compile / PUBLIC link on the rulemonkey target, so every
+    # downstream `find_package(RuleMonkey)` consumer would inherit
+    # `-fsanitize=address,undefined` on its final link line.  That fails
+    # outright unless the consumer also enables asan, and even when it
+    # links it produces a binary that runs against the wrong runtime.
+    # Asan builds are dev-only; the supported `asan` preset disables
+    # install for this reason.  Refuse loudly rather than silently
+    # producing a poisoned install tree.
+    message(FATAL_ERROR
+        "RULEMONKEY_ENABLE_ASAN=ON is incompatible with RULEMONKEY_INSTALL=ON: "
+        "the asan runtime would propagate to every consumer via PUBLIC link "
+        "options and break their builds.  Pass -DRULEMONKEY_INSTALL=OFF (or "
+        "use the `asan` preset, which does this for you).")
+endif()
+
 if(RULEMONKEY_INSTALL)
     include(GNUInstallDirs)
     include(CMakePackageConfigHelpers)

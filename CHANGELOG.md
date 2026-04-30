@@ -28,6 +28,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   build.  Removed; the library now compiles warning-free under both
   the `release` and `asan` presets.
 
+### Changed
+
+- **`asan` preset disables `RULEMONKEY_INSTALL`; CMakeLists refuses
+  `RULEMONKEY_INSTALL=ON` with `RULEMONKEY_ENABLE_ASAN=ON`.**  The asan
+  flags are PRIVATE compile / PUBLIC link on the `rulemonkey` target,
+  so an asan-instrumented installed archive would propagate
+  `-fsanitize=address,undefined` to every downstream
+  `find_package(RuleMonkey)` consumer's final link line — failing
+  outright unless the consumer also enables asan, and producing a
+  binary that runs against the wrong runtime even when it links.
+  Asan is dev-only; the supported `asan` preset now auto-disables
+  install, and the build refuses the dangerous combo with an
+  actionable error message pointing at `-DRULEMONKEY_INSTALL=OFF`.
+
 ### Fixed (docs)
 
 - **CHANGELOG 3.0.0 model count off by one.** The 3.0.0 entry said
