@@ -14,6 +14,76 @@ Generated: `2026-04-29 22:30:37 MDT` (`benchmark_rm_vs_nfsim_timing.py`)
 - Geometric mean speedup: 0.78×
 - RM faster than NFsim on **72 / 173** models; NFsim faster on 101
 
+## Where does each engine win?
+
+The 173 scored models fall into six speedup buckets, and the buckets
+correlate cleanly with model shape:
+
+| Bucket | Count | Examples | What's going on |
+|---|---:|---|---|
+| RM ≥ 10× | 4 | `mlnr` 23.7×, `pltr` 24.8×, `testcase2a` 11.8×, `rm_tlbr` 12.0× | Pattern-quantifier (count-relation) Species observables |
+| RM 2–10× | 1 | `example3_fit` 2.96× | Single-model outlier |
+| RM 1.1–2× | 56 | `ss_tlbr_rings`, `combo_symmetric_rings`, many fast feature_coverage / basicmodels | RM's slightly lower per-process startup wins on short runs |
+| Parity (0.8–1.1×) | 32 | `BLBR`, `tlbr`, `A_plus_B_rings`, `bench_tlbr_yang2008` | Same network-free chemistry, both engines comparable |
+| NFsim 0.5–0.8× | 31 | `e1`–`e9`, `tcr_*` variants | Heavy enzyme-kinetics scaling; NFsim a bit ahead |
+| NFsim < 0.5× | 49 | `t3` 0.49×, `machine` 0.24×, `fceri_ji` 0.23×, `ensemble` 0.24×, `rm_tlbr_rings` 0.23×, `AN` 0.14× | Heavy stochastic corpus models: NFsim's tuning shows |
+
+### RM ≥ 10× — count-relation Species observables
+
+All four models in this bucket declare **exactly 300 Species observables
+of the form `R()=N`** (`R()=1`, `R()=2`, ..., `R()=300`) — histogram
+bins counting complexes that contain exactly *N* receptors.  No other
+model in the corpus declares any:
+
+| Model | Count-relation Species obs | Speedup |
+|---|---:|---:|
+| `mlnr`       | 300 | 23.7× |
+| `pltr`       | 300 | 24.8× |
+| `testcase2a` | 300 | 11.8× |
+| `rm_tlbr`    | 300 | 12.0× |
+| (next-largest model in any other bucket) | 0 | — |
+
+NFsim re-evaluates count-relation Species observables naively at each
+sample point: walk every complex, check the count constraint, for every
+observable.  At ~600 complexes peak × 300 observables × 1000 sample
+points, that's ~180M observable evaluations per run.  RM's
+Species-observable incremental tracking (landed 2026-04-23, see
+`harness/dev/`) only re-evaluates dirty complexes between sample
+points — typically O(1)–O(2) complexes per rule fire.  The speedup is
+proportional to (`# observables` × `# sample points`) ÷
+(`# events between samples`), and on these models the ratio happens to
+be ~10×–25×.
+
+### RM 1.1–2× — short / cheap models
+
+The 56 models in this band are mostly sub-100ms runs where end-to-end
+process startup is a non-trivial fraction of wall time.  RM has
+slightly lower startup overhead (smaller binary, simpler XML loader),
+which shows up as a 1.1×–1.5× win on short runs.  Vanishes once the
+simulation itself dominates wall time.
+
+### Parity — generic network-free chemistry without histogram observables
+
+`A_plus_B_rings` (no Size_N obs) sits at 0.99×; `bench_tlbr_yang2008`
+at 1.04×; `BLBR` at 1.01×.  Same kind of binding chemistry as the
+RM-winning Size_N models above — but without the observable-evaluation
+asymmetry, the engines are comparable.
+
+### NFsim < 0.5× — heavy stochastic corpus models
+
+The dominant story for the bottom of the table.  Models like `t3`,
+`machine`, `fceri_ji`, `ensemble`, `rm_tlbr_rings`, `AN` are the
+heavy-event-rate workloads NFsim has been tuned on for years.  RM has
+real ground to make up here.  Memory says the 2026-Q2 optimization
+sprints closed at "~55% cumulative on `msite_S3200`" and the engaged-
+set campaign was retired with a note that "next ≥5% requires
+structural change" — the corpus models in this bucket weren't the
+direct optimization target, and the gap shows.
+
+The single-model outlier `example3_fit` (2.96×) doesn't fit any of
+these buckets cleanly — worth a separate look if anyone wants to
+chase it.
+
 ## Caveats
 
 - Wall time, not CPU time.  Includes process startup, XML load, and result write — same for both engines, so the ratio is fair, but absolute numbers shift across machines.
