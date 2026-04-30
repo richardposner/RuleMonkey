@@ -143,11 +143,23 @@ NFSIM_UNRELIABLE = {
     # ("Undefined token 'time'" at runtime).  BNG2 ODE evaluates time()
     # natively.
     "edg_time_dependent_rate",
+    # NFsim's TFUN handler (parseFuncXML.cpp) accepts the type but the
+    # rate evaluates to zero throughout the run on observable-counter
+    # inputs.  BNG dev branch fix-tfun-has-tfuns-reset evaluates the
+    # new lowercase tfun() syntax correctly under ODE/SSA — we use ODE
+    # as the verdict reference (set BNG2 to ~/Code/bionetgen/bng2/BNG2.pl).
+    "ft_tfun",
     # NFsim (pinned release) silently ignores Fixed species; fix landed
     # upstream in NFsim PR #60 (not in our pinned release).  BNG2 ODE
     # correctly handles Fixed via species_deriv = 0.
     "ft_clamped_species_strict",
 }
+
+# Models for which no third-party simulator produces a usable
+# reference, so the harness runs RM only and verifies the result
+# via the model's `# invariant:` declarations (and crash-free run)
+# rather than a z-score comparison.  Currently empty.
+RM_ONLY: set[str] = set()
 
 # Models that declare BNGL features RM refuses by default (Tier-0
 # refusal) but whose .bngl additionally provides a workaround path
@@ -306,6 +318,18 @@ def extract_sim_params(bngl_path):
 # ---------------------------------------------------------------------------
 
 
+def _copy_aux_files(suite_dir, dest_dir):
+    """Copy auxiliary files referenced by BNGL (currently: *.tfun tables).
+
+    BNG2 reads `tfun('file.tfun')` paths relative to its working directory,
+    and so do NFsim and RM.  When BNG2 is invoked from a tempdir or when
+    NFsim runs against a copied XML, the .tfun file has to ride along.
+    """
+    for ext in ("*.tfun",):
+        for f in glob.glob(os.path.join(suite_dir, ext)):
+            shutil.copy(f, dest_dir)
+
+
 def generate_xml(model):
     """Generate XML from BNGL via BNG2.pl."""
     os.makedirs(XML_DIR, exist_ok=True)
@@ -316,6 +340,7 @@ def generate_xml(model):
     bngl_path = os.path.join(SUITE_DIR, f"{model}.bngl")
     with tempfile.TemporaryDirectory() as tmpdir:
         shutil.copy(bngl_path, tmpdir)
+        _copy_aux_files(SUITE_DIR, tmpdir)
         result = subprocess.run(
             ["perl", BNG2, f"{model}.bngl"], cwd=tmpdir, capture_output=True, text=True, timeout=30
         )
@@ -327,6 +352,10 @@ def generate_xml(model):
                 print(f"  stderr: {result.stderr[:200]}")
             return None
         shutil.copy(xml_files[0], xml_path)
+    # Also stage aux files next to the cached XML so NFsim (run from XML_DIR)
+    # finds them.  RM additionally falls back to xml_dir/.. so the BNGL-side
+    # copy under SUITE_DIR remains discoverable.
+    _copy_aux_files(SUITE_DIR, XML_DIR)
     return xml_path
 
 
@@ -362,6 +391,7 @@ def generate_ode_reference(model, t_end, n_steps):
             tmp_bngl = os.path.join(tmpdir, f"{model}.bngl")
             with open(tmp_bngl, "w") as f:
                 f.write(text)
+            _copy_aux_files(SUITE_DIR, tmpdir)
             result = subprocess.run(
                 ["perl", BNG2, f"{model}.bngl"],
                 cwd=tmpdir,
@@ -461,6 +491,9 @@ def generate_ssa_reference(model, t_end, n_steps, n_reps=DEFAULT_SSA_REPS):
 def _run_one_nfsim_rep(model, xml_path, t_end, n_steps, nfsim_flags, seed, timeout=30):
     """Run a single NFsim rep. Returns (headers, rows) or None."""
     with tempfile.TemporaryDirectory() as tmpdir:
+        # Stage any auxiliary files (e.g., .tfun tables) into the tempdir
+        # so NFsim's relative-path lookups resolve.
+        _copy_aux_files(SUITE_DIR, tmpdir)
         out_gdat = os.path.join(tmpdir, f"{model}_rep{seed}.gdat")
         cmd = [
             NFSIM,
@@ -480,7 +513,7 @@ def _run_one_nfsim_rep(model, xml_path, t_end, n_steps, nfsim_flags, seed, timeo
             cmd.append(flag)
         cmd.extend(["-o", out_gdat])
         try:
-            subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+            subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, cwd=tmpdir)
             if not os.path.exists(out_gdat):
                 return None
             return parse_gdat_file(out_gdat)
@@ -952,6 +985,7 @@ def run_benchmark(
         # 2. Generate references
         nf_only = is_network_free_only(model)
         use_ode_verdict = model in NFSIM_UNRELIABLE
+        rm_only = model in RM_ONLY
         rm_flags = []
         if "-bscb" in nfsim_flags:
             rm_flags.append("-bscb")
@@ -960,20 +994,26 @@ def run_benchmark(
 
         ode_path = None
         ssa_mean = ssa_std = None
+        nf_mean = nf_std = None
 
-        if (full_mode and not nf_only) or use_ode_verdict:
-            print(", ODE...", end="", flush=True)
-            ode_path = generate_ode_reference(model, t_end, n_steps)
-            print("OK" if ode_path else "skip", end="", flush=True)
+        if rm_only:
+            print(", RM_ONLY (no external ref)", end="", flush=True)
+        else:
+            if (full_mode and not nf_only) or use_ode_verdict:
+                print(", ODE...", end="", flush=True)
+                ode_path = generate_ode_reference(model, t_end, n_steps)
+                print("OK" if ode_path else "skip", end="", flush=True)
 
-            if full_mode and not nf_only:
-                print(f", SSA({ssa_reps})...", end="", flush=True)
-                ssa_mean, ssa_std = generate_ssa_reference(model, t_end, n_steps, ssa_reps)
-                print("OK" if ssa_mean else "skip", end="", flush=True)
+                if full_mode and not nf_only:
+                    print(f", SSA({ssa_reps})...", end="", flush=True)
+                    ssa_mean, ssa_std = generate_ssa_reference(model, t_end, n_steps, ssa_reps)
+                    print("OK" if ssa_mean else "skip", end="", flush=True)
 
-        print(f", NFsim({nfsim_reps})...", end="", flush=True)
-        nf_mean, nf_std = generate_nfsim_reference(model, t_end, n_steps, nfsim_flags, nfsim_reps)
-        print("OK" if nf_mean else "skip", flush=True)
+            print(f", NFsim({nfsim_reps})...", end="", flush=True)
+            nf_mean, nf_std = generate_nfsim_reference(
+                model, t_end, n_steps, nfsim_flags, nfsim_reps
+            )
+            print("OK" if nf_mean else "skip", flush=True)
 
         if generate_refs_only:
             results.append({"model": model, "verdict": "REF_ONLY", "features": features})
@@ -1039,7 +1079,12 @@ def run_benchmark(
         nfsim_comp = next((c for c in comparisons if c["label"] == "NFsim"), None)
         ode_comp = next((c for c in comparisons if c["label"] == "ODE"), None)
 
-        if use_ode_verdict and ode_comp and ode_comp["verdict"] != "NO_REF":
+        if rm_only:
+            # No external ref; PASS if RM ran cleanly (zero invariant
+            # violations, checked just below).
+            overall = "PASS"
+            print(", RM_ONLY->PASS", end="", flush=True)
+        elif use_ode_verdict and ode_comp and ode_comp["verdict"] != "NO_REF":
             overall = ode_comp["verdict"]
         elif nfsim_comp and nfsim_comp["verdict"] != "NO_REF":
             overall = nfsim_comp["verdict"]

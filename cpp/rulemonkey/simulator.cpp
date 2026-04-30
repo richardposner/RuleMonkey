@@ -803,7 +803,25 @@ Model load_model(const std::string& xml_path,
         auto y_attr = opt_attr(fn, "yData");
 
         if (!file_attr.empty()) {
-          auto tfun_path = (xml_dir / file_attr).lexically_normal().string();
+          // Search order for the .tfun data file, in priority order:
+          //   1. <xml_dir>/<file>           — typical: BNG2 ran in-place on the BNGL,
+          //                                    leaving XML and .tfun side by side.
+          //   2. <xml_dir>/../<file>        — typical for our test harness: XML is
+          //                                    generated to tests/.../xml/ but the
+          //                                    .tfun lives next to the BNGL one
+          //                                    directory up.
+          // (Absolute file_attr paths bypass both searches via filesystem rules.)
+          auto candidate1 = (xml_dir / file_attr).lexically_normal();
+          auto candidate2 = (xml_dir / ".." / file_attr).lexically_normal();
+          std::string tfun_path;
+          std::error_code ec;
+          if (std::filesystem::exists(candidate1, ec)) {
+            tfun_path = candidate1.string();
+          } else if (std::filesystem::exists(candidate2, ec)) {
+            tfun_path = candidate2.string();
+          } else {
+            tfun_path = candidate1.string(); // let from_file() raise the canonical error
+          }
           gf.tfun = std::make_shared<TableFunction>(
               TableFunction::from_file(gf.name, tfun_path, gf.tfun_counter_name, method));
         } else {
@@ -813,15 +831,27 @@ Model load_model(const std::string& xml_path,
                                                     gf.tfun_counter_name, method);
         }
 
-        // Parse the expression (may contain __TFUN_VAL__)
+        // Parse the expression (may contain __TFUN__VAL__)
         auto* expr_node = find_child(fn, "Expression");
         if (expr_node && !expr_node->text.empty()) {
           gf.expression_text = trim(expr_node->text);
-          // Replace __TFUN_VAL__ with the variable name for evaluation
+          // Replace __TFUN__VAL__ with the variable name for evaluation
           auto& et = gf.expression_text;
-          auto pos = et.find("__TFUN_VAL__");
-          if (pos != std::string::npos) {
-            et.replace(pos, 12, "__tfun_" + gf.name + "__");
+          // Two BNG2 emit conventions for the lookup-result sentinel:
+          //   - BNG2 2.9.3 (uppercase TFUN()):   "__TFUN__VAL__" (13 chars)
+          //   - BNG2 dev / fix-tfun-has-tfuns-reset (lowercase tfun()):
+          //                                      "__TFUN_VAL__"  (12 chars)
+          // Try the longer form first so we don't half-substitute it.
+          for (const auto& [sentinel, slen] :
+               std::initializer_list<std::pair<const char*, std::size_t>>{
+                   {"__TFUN__VAL__", 13},
+                   {"__TFUN_VAL__", 12},
+               }) {
+            auto pos = et.find(sentinel);
+            if (pos != std::string::npos) {
+              et.replace(pos, slen, "__tfun_" + gf.name + "__");
+              break;
+            }
           }
           try {
             gf.ast = expr::parse(et);
