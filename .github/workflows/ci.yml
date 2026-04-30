@@ -28,3 +28,73 @@ jobs:
 
       - name: Test
         run: ctest --preset release
+
+  feature_coverage:
+    # Runs the full feature_coverage benchmark on every push / PR.  ctest
+    # alone would not catch regressions in simulation correctness — the
+    # smoke test only verifies the engine loads and steps an XML.  This
+    # job runs the 77-model RM-vs-NFsim z-score + RM-vs-ODE rel-err
+    # comparison that surfaced the self-binding propensity bug, the MM
+    # silent-zero-rate bug, the TFUN sentinel typo, etc., in development.
+    #
+    # Wall budget: ~3-5 min including BioNetGen download and RM build.
+    # Linux only: the BioNetGen release tarball ships a Linux NFsim
+    # binary, but no macOS binary that matches the GitHub Actions runner.
+    runs-on: ubuntu-latest
+    needs: build  # don't bother running benchmark if the build is broken
+
+    env:
+      BNG_VERSION: "2.9.3"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Download BioNetGen + NFsim (Linux)
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/bng.tgz \
+            "https://github.com/RuleWorld/bionetgen/releases/download/BioNetGen-${BNG_VERSION}/BioNetGen-${BNG_VERSION}-linux.tar.gz"
+          tar -xzf /tmp/bng.tgz -C /tmp/
+          BNG_DIR="/tmp/BioNetGen-${BNG_VERSION}"
+          test -x "${BNG_DIR}/BNG2.pl"     # script
+          test -x "${BNG_DIR}/bin/NFsim"   # bundled NFsim binary
+          echo "BNG2=${BNG_DIR}/BNG2.pl"       >> "$GITHUB_ENV"
+          echo "NFSIM_BIN=${BNG_DIR}/bin/NFsim" >> "$GITHUB_ENV"
+
+      - name: Build RM
+        run: |
+          cmake --preset release
+          cmake --build --preset release
+
+      - name: Run feature_coverage benchmark
+        run: |
+          python3 harness/benchmark_feature_coverage.py --reps 5 \
+            | tee build/feature_coverage_console.log
+          # Fail the job if any model failed.  The runner's tail line is
+          # exactly "TOTAL: X PASS / Y FAIL / Z other"; we extract Y.
+          fails=$(grep -oE 'TOTAL: [0-9]+ PASS / [0-9]+ FAIL' \
+                    build/feature_coverage_console.log \
+                  | tail -1 | grep -oE '/ [0-9]+ FAIL' | grep -oE '[0-9]+')
+          echo "FAIL count: ${fails:-?}"
+          if [[ "${fails:-1}" != "0" ]]; then
+            echo "::error::feature_coverage benchmark reported failures"
+            exit 1
+          fi
+
+      - name: Upload benchmark report
+        if: always()  # surface the report even when the job failed
+        uses: actions/upload-artifact@v4
+        with:
+          name: feature-coverage-report
+          path: |
+            build/feature_coverage_report.md
+            build/feature_coverage_console.log
+          if-no-files-found: warn
