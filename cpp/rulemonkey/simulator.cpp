@@ -506,22 +506,16 @@ Model load_model(const std::string& xml_path,
         val = 0.0; // forward reference — will be resolved later
       }
       model.parameters[id] = val;
+      model.parameter_exprs[id] = val_str;
       model.parameter_names_ordered.push_back(id);
     }
     // Second pass for forward references
     for (auto& name : model.parameter_names_ordered) {
-      auto* pn_node = find_child(*param_list, "Parameter");
-      // Find the right Parameter node
-      for (auto& pn : param_list->children) {
-        if (pn.name == "Parameter" && need_attr(pn, "id") == name) {
-          auto val_str = need_attr(pn, "value");
-          try {
-            model.parameters[name] = resolve_value(val_str, model.parameters);
-          } catch (...) {
-            // leave as-is
-          }
-          break;
-        }
+      const auto& val_str = model.parameter_exprs[name];
+      try {
+        model.parameters[name] = resolve_value(val_str, model.parameters);
+      } catch (...) {
+        // leave as-is
       }
     }
   }
@@ -1673,10 +1667,44 @@ struct RuleMonkeySimulator::Impl {
   // Keep a clean copy of parameters for override/restore
   std::unordered_map<std::string, double> base_parameters;
 
-  void apply_overrides() {
+  // Rebuild model.parameters from base_parameters + param_overrides,
+  // cascading derived parameter expressions so an override on a base
+  // parameter propagates to any parameter that references it
+  // (e.g., `B = 2*A` recomputes when A is overridden).
+  //
+  // Cheap enough to call from set_param / clear_param_overrides so
+  // get_parameter() returns a coherent view between runs without
+  // requiring a full apply_overrides() rate-law / species walk.
+  void sync_parameters() {
     model.parameters = base_parameters;
     for (auto& [name, val] : param_overrides)
       model.parameters[name] = val;
+
+    // Re-cascade in declaration order: a parameter not directly
+    // overridden re-resolves its parsed expression against the
+    // current (overridden) map.  Overridden parameters keep their
+    // override regardless of expression.
+    for (auto& name : model.parameter_names_ordered) {
+      if (param_overrides.count(name))
+        continue;
+      auto eit = model.parameter_exprs.find(name);
+      if (eit == model.parameter_exprs.end())
+        continue;
+      try {
+        model.parameters[name] = resolve_value(eit->second, model.parameters);
+      } catch (...) {
+        // resolution failure leaves the base value in place
+      }
+    }
+  }
+
+  // Full override application: parameter cascade + re-resolve every
+  // parsed-at-load-time numeric field that the engine reads directly
+  // (Ele rate constants, MM kcat/Km, initial species concentrations,
+  // Fixed-species target counts).  Called by run / initialize /
+  // load_state immediately before the Engine snapshot is taken.
+  void apply_overrides() {
+    sync_parameters();
 
     // Ele/MM rate values are baked from `model.parameters` at parse time.
     // Re-resolve them here so set_param overrides actually reach Engine
@@ -1755,13 +1783,18 @@ const std::vector<UnsupportedFeature>& RuleMonkeySimulator::unsupported_features
 void RuleMonkeySimulator::set_param(const std::string& name, double value) {
   if (impl_->session)
     throw std::runtime_error("Cannot set_param during active session");
+  if (!impl_->base_parameters.count(name))
+    throw std::runtime_error("Unknown parameter '" + name +
+                             "' (set_param only accepts names declared in the loaded XML)");
   impl_->param_overrides[name] = value;
+  impl_->sync_parameters();
 }
 
 void RuleMonkeySimulator::clear_param_overrides() {
   if (impl_->session)
     throw std::runtime_error("Cannot clear_param_overrides during active session");
   impl_->param_overrides.clear();
+  impl_->sync_parameters();
 }
 
 void RuleMonkeySimulator::set_molecule_limit(int limit) {

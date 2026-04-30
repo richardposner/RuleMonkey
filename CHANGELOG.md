@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **`get_parameter` returned the parsed-at-load value between
+  `set_param` and the next `run()` / `initialize()`.** The
+  override map only synced into `model.parameters` inside
+  `apply_overrides()`, which only ran on session start. Embedders
+  querying overrides via `get_parameter()` between runs saw stale
+  values. `set_param` and `clear_param_overrides` now invoke a
+  light `sync_parameters()` so the public read is coherent
+  immediately.
+
+- **Derived parameter expressions (`B = 2*A`) did not cascade
+  through `set_param` overrides.** Parameter values were resolved
+  once at XML parse time and the override map only splatted the
+  literal name's value, leaving downstream derivations frozen at
+  their parsed numeric. Captured the symbolic expression for each
+  declared parameter at parse time (`Model::parameter_exprs`) and
+  re-cascade in declaration order inside `sync_parameters()` so
+  set_param on a base parameter propagates to every derived
+  parameter that references it. Override on a derived parameter
+  still wins (skips the expression for that name).
+
+### Changed
+
+- **`set_param` validates parameter names against the loaded XML.**
+  Typo'd names previously leaked into `param_overrides` as silent
+  no-ops; they now throw `std::runtime_error("Unknown parameter
+  '...'")`. Mirrors `get_parameter`'s existing throw on unknown
+  names.
+
+- **`docs/model_semantics.md`**: new "Parameter overrides" section
+  documents the cascade behavior and the unknown-name rejection.
+
+### Added
+
+- Regression coverage in `tests/cpp/set_param_test.cpp` and a new
+  `tests/cpp/derived_param_model.xml` fixture — two-layer derived-
+  parameter chains (`A_tot = A_base * A_factor`,
+  `kp = kp_base * kp_mult`) plus get_parameter-coherence and
+  unknown-name-rejection cases. Each new assertion was verified to
+  fail on the unfixed engine via stash-and-rerun.
+
 ## [3.1.0] — 2026-04-29
 
 ### Fixed

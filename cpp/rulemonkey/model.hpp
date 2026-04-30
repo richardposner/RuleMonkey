@@ -316,6 +316,16 @@ struct Model {
   std::unordered_map<std::string, double> parameters;
   std::vector<std::string> parameter_names_ordered;
 
+  // Symbolic source for each declared parameter, captured at XML parse
+  // time before any numeric resolution.  Used by
+  // RuleMonkeySimulator::Impl::sync_parameters to recompute derived
+  // parameters when set_param overrides a base parameter that other
+  // parameter expressions reference (e.g., `B = 2*A` cascades when A
+  // is overridden).  Keyed by parameter id; missing entries (none in
+  // the current parser, but a future emitter may omit) skip the
+  // cascade for that parameter and keep the parsed numeric value.
+  std::unordered_map<std::string, std::string> parameter_exprs;
+
   std::vector<std::string> observable_names_ordered;
 
   std::vector<GlobalFunction> functions;

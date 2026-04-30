@@ -53,8 +53,8 @@ The runtime severity model is two-level:
 ### Rate laws
 
 - **`Ele`** — elementary mass-action. Rate constants resolve from the
-  parameter map at run time (`set_param` overrides take effect — see the
-  `apply_overrides` re-resolve in `simulator.cpp`).
+  parameter map at run time (`set_param` overrides take effect, including
+  through derived-parameter chains — see "Parameter overrides" below).
 - **`Function`** — arbitrary expression evaluated against a live
   variable map. Supports parameters, observables, the special variables
   `time` / `t`, and references to other functions. Local functions
@@ -89,6 +89,26 @@ The runtime severity model is two-level:
   `A(x).B(y) -> A(x!1).B(y!1)` rule. Disable via
   `set_block_same_complex_binding(false)` or the CLI `-no-bscb` flag for
   parity with NFsim runs that omitted `-bscb`.
+
+### Parameter overrides
+
+- `set_param(name, value)` rejects names not declared in the loaded XML
+  (typos throw rather than silently no-op).
+- Overrides cascade through derived parameter expressions. If the BNGL
+  declares `B = 2*A` (i.e. the XML emits
+  `<Parameter id="B" value="2*A"/>`), `set_param("A", x)` recomputes
+  `B` to `2*x` for the next run AND for `get_parameter("B")` queries
+  in between runs. Overriding `B` directly wins over the cascade — the
+  expression for `B` is skipped, and parameters that derive from `B`
+  see the override.
+- Cascade order is the parameter declaration order in the XML; BNG2
+  emits parameters in dependency order, so a forward reference inside
+  a derivation that the XML happens to expose without a dependency-
+  ordered emit will still resolve as long as the chain is one level
+  deep (the parser does a single forward-reference retry pass at load
+  time; `apply_overrides` does not iterate to fixed point).
+- `get_parameter(name)` reflects the current overrides + cascade
+  immediately, without requiring a `run()` or `initialize()` call.
 
 ### Initial state and live mutation
 
@@ -172,7 +192,7 @@ auto result = sim.run({0.0, t_end, n_points}, seed);
 - Arrhenius / energy-pattern rate derivation — same.
 - Hybrid particle-population SSA — same.
 - Multi-molecule Fixed species — would require pattern-based
-  re-instantiation; not implemented in v1.
+  re-instantiation; not currently implemented (refused at Tier 0).
 - Pattern canonical labeling (nauty integration) — flagged in
   `CHANGELOG.md` as the leading candidate for the next major
   performance work; no impact on coverage, only on speed for models

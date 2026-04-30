@@ -75,7 +75,10 @@ public:
   std::vector<double> get_observable_values();
 
   // Returns the numeric parameter value that the simulator would currently use
-  // for the named declared parameter.
+  // for the named declared parameter, accounting for any active overrides.
+  // Derived parameter expressions (e.g., `B = 2*A` declared in the BNGL)
+  // re-resolve when their inputs are overridden, so this reflects the
+  // post-cascade value, not the parsed-at-load-time value.
   double get_parameter(const std::string& name) const;
 
   // Saves the active session state to a file. The session must be active.
@@ -93,9 +96,12 @@ public:
   void destroy_session();
 
   // Sets an instance-local override for a declared parameter. The override is
-  // applied to subsequent `run()` calls and future `initialize()` calls.
-  // Throws std::runtime_error if a session is currently active; call
-  // `destroy_session()` first to mutate overrides, then re-`initialize()`.
+  // applied to subsequent `run()` calls and future `initialize()` calls, and
+  // is reflected immediately in `get_parameter()` (including any derived
+  // parameters that reference `name`).
+  // Throws std::runtime_error if `name` is not a parameter declared in the
+  // loaded XML, or if a session is currently active; call `destroy_session()`
+  // first to mutate overrides, then re-`initialize()`.
   void set_param(const std::string& name, double value);
 
   // Clears all instance-local parameter overrides.
