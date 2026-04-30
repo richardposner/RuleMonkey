@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- **Dead pytest config in `pyproject.toml`.** The
+  `[tool.pytest.ini_options]` block declared
+  `testpaths = ["tests", "harness"]`, but `tests/` is C++-only and
+  `harness/` holds benchmark/research scripts — no `test_*.py`,
+  `*_test.py`, or `conftest.py` exists anywhere.  Running `pytest`
+  from the repo root collected zero tests, which is a misleading
+  signal for an external reader.  Removed the config block and the
+  unused `pytest>=8.0` dev dependency; the suite is C++ ctest plus
+  harness-driven Python scripts.
+
 ### Fixed
 
 - **`get_parameter` returned the parsed-at-load value between
