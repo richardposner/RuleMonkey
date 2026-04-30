@@ -25,14 +25,11 @@
 #include <unordered_set>
 #include <vector>
 
-// Dev-time profiler infrastructure: gate constants, sample-every cadences,
-// and the file-scope CountMultiProfile / CmmFcProfile / SrProfile structs
-// + their cm_profile_ / cmm_fc_profile_ singletons all live in
-// engine_profile.hpp (included above).  All gates compile to `false` unless
-// RM_DEV_PROFILES is defined (cmake -DRULEMONKEY_ENABLE_DEV_PROFILES=ON),
-// so the `if constexpr (kFooProfile)` blocks throughout this file are
-// dead-stripped in default builds.  Reporting blocks at the end of run_ssa
-// stay here because they touch private Impl state.
+// Dev-time profiler infrastructure (gates, profile structs, file-scope
+// singletons, end-of-run report bodies) lives in engine_profile.hpp.
+// Every `if constexpr (k*Profile)` site below dead-strips in default
+// builds (master gate off); turn it on with cmake
+// -DRULEMONKEY_ENABLE_DEV_PROFILES=ON.
 
 namespace rulemonkey {
 
@@ -609,37 +606,6 @@ private:
   std::unordered_map<int, int> cycle_bond_count_;
 
 public:
-  // remove_bond / split_complex_if_needed profiler (gated by
-  // kRemoveBondProfile).  All counters in `*_calls` style are always-on
-  // when the gate is on (negligible cost).  `*_ns` / `sampled_*` fields
-  // are 1-in-K sampled and must be multiplied by K at report time.
-  //
-  // Complex-size / half-edge histograms use 7 buckets:
-  //   0: size==1   1: size==2   2: 3-4   3: 5-8
-  //   4: 9-16      5: 17-32     6: 33+
-  struct RemoveBondProfile {
-    uint64_t remove_bond_calls = 0;
-    uint64_t split_calls = 0;
-    uint64_t singleton_short_circuit = 0;
-    uint64_t bfs_calls = 0;
-    uint64_t cycle_bond_removals = 0;
-    uint64_t tree_bond_splits = 0;
-    uint64_t sampled_calls = 0;
-    // Sampled chrono (ns)
-    uint64_t total_ns = 0;     // whole split_complex_if_needed body
-    uint64_t bfs_ns = 0;       // the while-queue loop
-    uint64_t partition_ns = 0; // the post-BFS split path (tree-bond only)
-    // Histograms
-    std::array<uint64_t, 7> cx_size_all = {0, 0, 0, 0, 0, 0, 0};
-    std::array<uint64_t, 7> cx_size_bfs = {0, 0, 0, 0, 0, 0, 0};
-    std::array<uint64_t, 7> cx_size_split = {0, 0, 0, 0, 0, 0, 0};
-    std::array<uint64_t, 7> half_edges_hist = {0, 0, 0, 0, 0, 0, 0};
-    // Sum/max (for avg + rough p95 via histogram lookup)
-    uint64_t cx_size_sum_bfs = 0;
-    uint64_t cx_size_max_bfs = 0;
-    uint64_t half_edges_sum = 0;
-    uint64_t half_edges_max = 0;
-  };
   const RemoveBondProfile& remove_profile() const { return remove_profile_; }
 
 private:
@@ -1117,204 +1083,6 @@ struct PatternAdj {
   };
   std::vector<std::vector<Entry>> adj; // indexed by pattern molecule
 };
-
-// Scoped variant: count multi-molecule embeddings within a sub-range
-// [pat_start, pat_end) of the pattern. Only bonds between molecules in
-// that range are followed. seed_pat_idx is the seed molecule within the
-// sub-range (must be in [pat_start, pat_end)).
-static int count_multi_molecule_embeddings_scoped(const AgentPool& pool, int seed_mol_id,
-                                                  const Pattern& pat, const Model& model,
-                                                  int pat_start, int pat_end, int seed_pat_idx) {
-
-  if (pat_end - pat_start <= 1) {
-    return count_embeddings_single(pool, seed_mol_id, pat.molecules[seed_pat_idx], model);
-  }
-
-  int n_pat_mols = static_cast<int>(pat.molecules.size());
-
-  struct BondInfo {
-    int mol_a, local_a, mol_b, local_b;
-  };
-  std::vector<BondInfo> bond_infos;
-  for (auto& bond : pat.bonds) {
-    BondInfo bi{-1, -1, -1, -1};
-    int base = 0;
-    for (int mi = 0; mi < n_pat_mols; ++mi) {
-      int nc = static_cast<int>(pat.molecules[mi].components.size());
-      if (bond.comp_flat_a >= base && bond.comp_flat_a < base + nc) {
-        bi.mol_a = mi;
-        bi.local_a = bond.comp_flat_a - base;
-      }
-      if (bond.comp_flat_b >= base && bond.comp_flat_b < base + nc) {
-        bi.mol_b = mi;
-        bi.local_b = bond.comp_flat_b - base;
-      }
-      base += nc;
-    }
-    if (bi.mol_a >= pat_start && bi.mol_a < pat_end && bi.mol_b >= pat_start && bi.mol_b < pat_end)
-      bond_infos.push_back(bi);
-  }
-
-  struct AdjEntry {
-    int bond_idx, other_mol, my_local, other_local;
-  };
-  std::vector<std::vector<AdjEntry>> adj(n_pat_mols);
-  for (int bi_idx = 0; bi_idx < static_cast<int>(bond_infos.size()); ++bi_idx) {
-    auto& bi = bond_infos[bi_idx];
-    adj[bi.mol_a].push_back({bi_idx, bi.mol_b, bi.local_a, bi.local_b});
-    adj[bi.mol_b].push_back({bi_idx, bi.mol_a, bi.local_b, bi.local_a});
-  }
-
-  std::vector<std::vector<int>> seed_embs;
-  count_embeddings_single(pool, seed_mol_id, pat.molecules[seed_pat_idx], model, &seed_embs);
-  if (seed_embs.empty())
-    return 0;
-
-  int total_count = 0;
-  for (auto& seed_comp_map : seed_embs) {
-    std::vector<int> mol_assignments(n_pat_mols, -1);
-    std::vector<std::vector<int>> comp_maps(n_pat_mols);
-    mol_assignments[seed_pat_idx] = seed_mol_id;
-    comp_maps[seed_pat_idx] = seed_comp_map;
-
-    std::queue<int> bfs_queue;
-    bfs_queue.push(seed_pat_idx);
-    bool valid = true;
-
-    while (!bfs_queue.empty() && valid) {
-      int cur_pat = bfs_queue.front();
-      bfs_queue.pop();
-      int cur_actual = mol_assignments[cur_pat];
-      auto& cur_comp_map = comp_maps[cur_pat];
-
-      for (auto& ae : adj[cur_pat]) {
-        int other_pat = ae.other_mol;
-        if (ae.my_local >= static_cast<int>(cur_comp_map.size())) {
-          valid = false;
-          break;
-        }
-        int my_actual_local = cur_comp_map[ae.my_local];
-        int my_actual_comp_id = pool.molecule(cur_actual).comp_ids[my_actual_local];
-        int partner_comp_id = pool.component(my_actual_comp_id).bond_partner;
-        if (partner_comp_id < 0) {
-          valid = false;
-          break;
-        }
-        int partner_mol_id = pool.mol_of_comp(partner_comp_id);
-
-        if (mol_assignments[other_pat] >= 0) {
-          if (mol_assignments[other_pat] != partner_mol_id) {
-            valid = false;
-            break;
-          }
-          auto& other_comp_map = comp_maps[other_pat];
-          if (ae.other_local >= static_cast<int>(other_comp_map.size())) {
-            valid = false;
-            break;
-          }
-          int expected_local = other_comp_map[ae.other_local];
-          int expected_comp_id = pool.molecule(partner_mol_id).comp_ids[expected_local];
-          if (expected_comp_id != partner_comp_id) {
-            valid = false;
-            break;
-          }
-          continue;
-        }
-
-        auto& other_pm = pat.molecules[other_pat];
-        if (pool.molecule(partner_mol_id).type_index != other_pm.type_index) {
-          valid = false;
-          break;
-        }
-
-        std::vector<std::vector<int>> other_embs;
-        count_embeddings_single(pool, partner_mol_id, other_pm, model, &other_embs);
-
-        int partner_local = -1;
-        for (int ci = 0; ci < static_cast<int>(pool.molecule(partner_mol_id).comp_ids.size());
-             ++ci) {
-          if (pool.molecule(partner_mol_id).comp_ids[ci] == partner_comp_id) {
-            partner_local = ci;
-            break;
-          }
-        }
-
-        bool found = false;
-        for (auto& emb : other_embs) {
-          if (ae.other_local < static_cast<int>(emb.size()) &&
-              emb[ae.other_local] == partner_local) {
-            mol_assignments[other_pat] = partner_mol_id;
-            comp_maps[other_pat] = emb;
-            bfs_queue.push(other_pat);
-            found = true;
-            break;
-          }
-        }
-        if (!found) {
-          valid = false;
-          break;
-        }
-      }
-    }
-
-    // Handle unassigned (disjoint) pattern molecules not reachable via bonds.
-    if (valid) {
-      std::vector<int> unassigned;
-      for (int mi = pat_start; mi < pat_end; ++mi) {
-        if (mol_assignments[mi] < 0)
-          unassigned.push_back(mi);
-      }
-
-      if (!unassigned.empty()) {
-        int cx = pool.complex_of(seed_mol_id);
-        auto cx_members = pool.molecules_in_complex(cx);
-
-        std::function<void(int)> assign_unassigned = [&](int ui) {
-          if (ui == static_cast<int>(unassigned.size())) {
-            if (all_distinct_molecules(mol_assignments, pat_start, pat_end) &&
-                check_pattern_bonds(pool, pat, mol_assignments, comp_maps))
-              ++total_count;
-            return;
-          }
-          int pat_mi = unassigned[ui];
-          auto& target_pm = pat.molecules[pat_mi];
-          for (int cand : cx_members) {
-            if (!pool.molecule(cand).active)
-              continue;
-            if (pool.molecule(cand).type_index != target_pm.type_index)
-              continue;
-            bool already_used = false;
-            for (int mi2 = pat_start; mi2 < pat_end; ++mi2) {
-              if (mi2 != pat_mi && mol_assignments[mi2] == cand) {
-                already_used = true;
-                break;
-              }
-            }
-            if (already_used)
-              continue;
-
-            std::vector<std::vector<int>> cand_embs;
-            count_embeddings_single(pool, cand, target_pm, model, &cand_embs);
-            for (auto& emb : cand_embs) {
-              mol_assignments[pat_mi] = cand;
-              comp_maps[pat_mi] = emb;
-              assign_unassigned(ui + 1);
-            }
-            mol_assignments[pat_mi] = -1;
-            comp_maps[pat_mi].clear();
-          }
-        };
-        assign_unassigned(0);
-        continue; // skip the ++total_count below
-      }
-    }
-
-    if (valid && all_distinct_molecules(mol_assignments, pat_start, pat_end))
-      ++total_count;
-  }
-  return total_count;
-}
-
 // Build pre-computed adjacency for a sub-range of a pattern.
 static PatternAdj build_pattern_adjacency(const Pattern& pat, int pat_start, int pat_end) {
   int n_pat_mols = static_cast<int>(pat.molecules.size());
@@ -1349,8 +1117,8 @@ static PatternAdj build_pattern_adjacency(const Pattern& pat, int pat_start, int
 //
 // Specializes count_multi_mol_fast for the shape common to every cmm-using
 // rule on the engaged multisite/homopoly workloads (16 multisite catalysis/
-// reverse-binding rules + 1 homopoly reverse rule — see dev/multimol_audit.md
-// §5 for the catalog).  A FastMatchSlot is populated at model load for each
+// reverse-binding rules + 1 homopoly reverse rule).  A FastMatchSlot is
+// populated at model load for each
 // eligible (rule, pattern-side) pair; at cmm entry, when enabled, we dispatch
 // here and skip the generic BFS/embedding-enumeration body.
 //
@@ -1876,18 +1644,9 @@ static inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id,
   return total;
 }
 
-// (Profile/invariant gate constants for kFastMatchInvariant / kProductMolInvariant
-// / kFastSelectInvariant / kFireRuleProfile / kIncrUpdateProfile / kRecordAtProfile
-// / kObsIncrProfile and their sample-every cadences are declared in
-// engine_profile.hpp.  Reporting blocks at the end of run_ssa stay in this file.)
-
-// Canonical-ish string signature of a Pattern for the obs-incr
-// profiler's dedup audit.  Not a true canonical form (no sorting of
-// symmetric molecule positions), but sufficient to flag obs that are
-// literal duplicates or share a common sub-structure.  Bonds are
-// serialized as comp_flat_a:comp_flat_b pairs in the pattern's
-// natural order; components serialize as name:state:bond_state.
-static std::string pattern_signature(const Pattern& pat) {
+// Pattern signature for the obs-incr profiler's dedup audit.  Not a
+// true canonical form — sufficient to flag obs that share substructure.
+[[maybe_unused]] static std::string pattern_signature(const Pattern& pat) {
   std::ostringstream os;
   for (size_t mi = 0; mi < pat.molecules.size(); ++mi) {
     if (mi)
@@ -1909,17 +1668,14 @@ static std::string pattern_signature(const Pattern& pat) {
   return os.str();
 }
 
-// Species-observable incremental tracker (feature flag).  When true, the
-// Molecules-only obs_mol_contrib path is extended to Species observables
-// via per-mol contribution + dirty-cx flush.  Companion invariant gate
-// kSpeciesIncrObsInvariant lives in engine_profile.hpp.
+// Species-observable incremental tracker.  Feature flag, not a profiler:
+// extends the Molecules-only obs_mol_contrib path to Species observables
+// via per-mol contribution + dirty-cx flush.
 static constexpr bool kSpeciesIncrObs = true;
 
-// 2-mol-1-bond-fc specialization for the obs-tracking path (feature flag).
-// When true, per-event obs recompute dispatches eligible 2-mol-1-bond
-// patterns to count_2mol_1bond_fc instead of the generic BFS; ineligible
-// patterns fall through unchanged.  Companion invariant gate
-// kObsFastMatchInvariant lives in engine_profile.hpp.
+// 2-mol-1-bond-fc obs-tracking specialization.  Feature flag, not a
+// profiler: per-event obs recompute dispatches eligible patterns to
+// count_2mol_1bond_fc instead of the generic BFS.
 static constexpr bool kObsFastMatch = true;
 
 // Fast multi-molecule embedding count using pre-computed adjacency.
@@ -2698,142 +2454,12 @@ struct Engine::Impl {
   double timing_obs = 0, timing_update = 0;
   double timing_record = 0, timing_wall = 0;
 
-  // fire_rule sub-phase profiler (gated by kFireRuleProfile).
-  // OpType order in engine.cpp / model.hpp:
-  //   0 AddBond, 1 DeleteBond, 2 StateChange, 3 AddMolecule, 4 DeleteMolecule
-  // `op_ns[i]`, `bfs_ns`, `cleanup_ns`, `cx_exp_ns`, `total_ns` are filled
-  // on sampled calls only (1-in-K); multiply by K to estimate totals.
-  // `*_calls` counters are always on when the gate is on (negligible cost).
-  struct FireRuleProfile {
-    uint64_t calls = 0;
-    uint64_t sampled_calls = 0;
-    std::array<uint64_t, 5> op_calls = {0, 0, 0, 0, 0};
-    std::array<uint64_t, 5> op_ns = {0, 0, 0, 0, 0};
-    uint64_t mark_mol_calls = 0;
-    uint64_t mark_comp_calls = 0;
-    uint64_t ensure_mask_resizes = 0;
-    uint64_t bfs_fires = 0;    // in-fire BFS expansion ran
-    uint64_t bfs_ns = 0;       // sampled
-    uint64_t cleanup_ns = 0;   // sampled (post-switch affected cleanup + re-include)
-    uint64_t switch_ns = 0;    // sampled (op switch loop)
-    uint64_t total_ns = 0;     // sampled (whole fire_rule body)
-    uint64_t cx_exp_fires = 0; // caller-side full-complex expansion ran
-    uint64_t cx_exp_sampled = 0;
-    uint64_t cx_exp_ns = 0;          // sampled (caller-side)
-    uint64_t affected_final_sum = 0; // sum of |affected| at end of fire_rule
-    uint64_t affected_final_max = 0;
-  };
+  // fire_rule / incremental_update / record_at profile counters.  Struct
+  // definitions live in engine_profile.hpp (along with their report_*()
+  // bodies); the instances here are populated by the gated `if constexpr`
+  // increment sites scattered through this file.
   FireRuleProfile fire_profile_;
-
-  // incremental_update sub-phase profiler (gated by kIncrUpdateProfile).
-  // Two-level sampling: outer chrono spans are recorded every
-  // `kIncrUpdateProfileSampleEvery` (K) calls; inner per-mid spans are
-  // recorded every `kIncrUpdateProfileInnerSample` (M) per-mid entries
-  // *within* a K-sampled call.  Outer *_ns fields are extrapolated at
-  // report by ×K; inner *_ns fields by ×K×M.  Always-on counters
-  // (everything not ending in _ns) are cheap integer increments.
-  //
-  // Question mapping (see dev/kickoff_incr_update_profiling.md):
-  //   Q1: expand_ns / dispatch_ns / rule_loop_ns / propensity_ns vs total
-  //   Q2: cache_hits_{epoch,mask} / cache_misses; cache_hit_ns share of
-  //       rule_loop_ns on the hit path.
-  //   Q3: subtract_ns, count_a_ns, count_b_ns, shared_ns, local_rate_ns,
-  //       add_ns, fenwick_ns, store_ns shares within recompute body.
-  //   Q4: expand_ns + dispatch_ns vs total (once-per-call overhead).
-  //   Q5: rules_visited_hist.
-  //   Q6: calls × (expand allocates `expanded`); dispatch allocates
-  //       `type_seen`; per-rule `local_rate_cache.clear()` — call counts
-  //       let us estimate allocation churn off-line.
-  struct IncrUpdateProfile {
-    // -- always on when gate is on --
-    uint64_t calls = 0;
-    uint64_t sampled_calls = 0;
-    uint64_t mids_visited = 0;                 // Σ |affected_mols| at entry
-    uint64_t rules_visited = 0;                // Σ rules with rule_needed_buf==1
-    uint64_t rules_skipped_needed = 0;         // synthesis-only early-continue
-    uint64_t have_local_calls = 0;             // entered expand branch
-    uint64_t mols_for_local_sum = 0;           // Σ |expanded| when have_local_rules_
-    uint64_t rule_local_rate_cache_clears = 0; // per-rule local_rate_cache.clear() calls
-    uint64_t per_mid_entries = 0;              // Σ per-mid inner-loop entries (pre-cache)
-    uint64_t cache_uncacheable = 0;            // rule_cacheable==false mid entries
-    uint64_t cache_hits_epoch = 0;             // had_change == false path
-    uint64_t cache_hits_mask = 0;              // relevant_mask intersection == 0
-    uint64_t cache_misses = 0;                 // fell through to recompute body
-    uint64_t count_a_multi_calls = 0;
-    uint64_t count_a_single_calls = 0;
-    uint64_t count_b_multi_calls = 0;
-    uint64_t count_b_single_calls = 0;
-    uint64_t shared_comp_calls = 0;
-    uint64_t local_rate_path_calls = 0;
-    uint64_t fenwick_a_updates = 0;
-    uint64_t fenwick_b_updates = 0;
-    uint64_t propensity_recomputes = 0;
-    std::array<uint64_t, 7> rules_visited_hist = {0, 0, 0, 0, 0, 0, 0};
-    // Persistent per-mid sampler counter.  Held across calls so the
-    // inner sample doesn't always land on the first mid of a K-sampled
-    // call (which would bias toward the originally-affected mol and
-    // underweight BFS-expanded neighbors).
-    uint64_t inner_counter = 0;
-    // -- sampled (outer: ×K at report) --
-    uint64_t total_ns = 0;
-    uint64_t expand_ns = 0;
-    uint64_t dispatch_ns = 0;
-    uint64_t rule_loop_ns = 0; // sum over rules of per-rule body + propensity
-    // propensity is captured via propensity_recomputes count only;
-    // per-rule chrono was too expensive (clock-inflation trap at K=8).
-    // -- sampled (inner: ×K×M at report) --
-    uint64_t per_mid_sampled = 0;
-    uint64_t cache_hit_ns = 0; // time inside hit-path when continue fires
-    uint64_t subtract_ns = 0;  // lines 3434-3443
-    uint64_t count_a_ns = 0;
-    uint64_t count_b_ns = 0;
-    uint64_t shared_ns = 0;
-    uint64_t local_rate_ns = 0;
-    uint64_t add_ns = 0;     // lines 3515-3523
-    uint64_t fenwick_ns = 0; // lines 3525-3533
-    uint64_t store_ns = 0;   // line 3537
-    // -- per-rule counters (no chrono; resize-on-demand; reported as top-N) --
-    std::vector<uint64_t> per_rule_entries;       // per-mid entries visiting rule
-    std::vector<uint64_t> per_rule_recomputes;    // cache misses per rule
-    std::vector<uint64_t> per_rule_count_a_multi; // count_a_multi calls per rule
-  };
   IncrUpdateProfile incr_profile_;
-
-  // record_at sub-phase profiler (gated by kRecordAtProfile).  Sampled
-  // at K=1: every record_at call is fully timed.  Per-observable
-  // counters attribute evaluate_observable wall + branch counts to the
-  // observable index set in `active_oi` before each evaluate_observable
-  // call.  `obs` vector is lazy-initialised on first compute_observables
-  // call when the model.observables size is known.
-  struct RecordAtProfile {
-    uint64_t calls = 0;
-    uint64_t compute_obs_ns = 0;
-    uint64_t record_ns = 0;
-    struct PerObs {
-      std::string name;
-      std::string type;
-      int pat_count = 0;
-      bool has_quantity = false;
-      std::string quantity_relation;
-      int quantity_value = -1;
-      uint64_t evaluate_calls = 0;
-      uint64_t evaluate_ns = 0;
-      uint64_t species_branch_calls = 0;
-      uint64_t molecules_branch_calls = 0;
-      uint64_t n_cx_visited = 0;
-      uint64_t n_counted_cx_hits = 0;
-      uint64_t n_embed_calls = 0;
-      uint64_t n_cx_members_walked = 0;
-    };
-    std::vector<PerObs> obs;
-    int active_oi = -1;
-    // Only accumulate per-obs counters when compute_observables is
-    // called from inside the record_at lambda.  Init-path
-    // compute_observables calls (Engine::initialize, load_state,
-    // add_molecules) set this false so the cross-check sum_per_obs
-    // vs compute_obs stays meaningful.
-    bool inside_record_at = false;
-  };
   RecordAtProfile rap_profile_;
 
   // Precomputed: indices into model.observables for all local-function observables
@@ -2925,39 +2551,9 @@ struct Engine::Impl {
   // the obs is tracked, else empty.
   std::vector<std::vector<FastMatchSlot>> obs_pat_fm;
 
-  // Sub-phase profiler for incremental_update_observables +
-  // flush_species_incr_observables.  Only populated when
-  // kObsIncrProfile is true; cost is zero otherwise.
-  struct ObsIncrProfile {
-    // Always-on call counts (cheap).
-    uint64_t update_calls = 0;
-    uint64_t update_sampled = 0;
-    uint64_t affected_sum = 0; // sum of |affected| over all calls
-    uint64_t flush_calls = 0;
-    uint64_t flush_sampled = 0;
-    uint64_t flush_dirty_cx_sum = 0;
-    uint64_t flush_dead_cx_sum = 0;
-
-    // Sub-phase ns (K-sampled).
-    uint64_t update_total_ns = 0;
-    uint64_t obs_loop_ns = 0;
-    uint64_t prev_cx_loop_ns = 0;
-    uint64_t flush_total_ns = 0;
-
-    // Per-obs counters (always-on counts; K-sampled ns).
-    struct PerObs {
-      std::string name;
-      std::string type;
-      int pat_count = 0;
-      int seed_type_index = -1;
-      std::string pat_signature;
-      uint64_t per_mid_calls = 0;  // count_multi_molecule_embeddings invocations
-      uint64_t per_mid_ns = 0;     // K-sampled
-      uint64_t dirty_inserts = 0;  // obs_dirty_cx[oi].insert count (species only)
-      uint64_t contrib_deltas = 0; // number of (new_c != old_c) transitions
-    };
-    std::vector<PerObs> obs;
-  };
+  // Observables-bucket profile counters (incremental_update_observables +
+  // flush_species_incr_observables) and select_reactants per-path
+  // counters.  Both struct definitions live in engine_profile.hpp.
   ObsIncrProfile obs_incr_profile_;
   SrProfile sr_profile_;
 
@@ -7027,14 +6623,10 @@ struct Engine::Impl {
 
     timing_wall = std::chrono::duration<double>(std::chrono::steady_clock::now() - wall_t0).count();
 
-    // Print timing breakdown to stderr.  `total` is the sum of the five
-    // per-phase buckets (kept as the backward-compatible field that
-    // dev/ab_*.sh scripts grep for); `wall` is the true wall-clock time
-    // for the SSA loop; `unaccounted` fills the gap (outer SSA loop
-    // overhead + anything else not covered by a phase timer).  On
-    // short-runtime models the record_at line can dominate — without
-    // this split the [RM timing] line under-reported wall clock by up
-    // to 76% (see dev/p3prime_reaudit.md §4).
+    // Print timing breakdown to stderr.  `total` sums the five per-phase
+    // buckets; `wall` is the true wall clock for the SSA loop;
+    // `unaccounted` fills the gap (outer-loop overhead + anything not
+    // covered by a phase timer).
     double total_time = timing_sample + timing_fire + timing_obs + timing_update + timing_record;
     if (total_time > 0 || timing_wall > 0) {
       double denom = total_time > 0 ? total_time : timing_wall;
@@ -7057,684 +6649,29 @@ struct Engine::Impl {
       }
     }
 
-    if constexpr (kFireRuleProfile) {
-      // Report fire_rule sub-phase breakdown.  Time fields are sampled:
-      // each 1-in-K fire_rule call records its sub-phase ns, so reported
-      // seconds are (sampled_ns / 1e9 * K) to extrapolate to the full run.
-      const auto& p = fire_profile_;
-      const int K = kFireRuleProfileSampleEvery;
-      static const char* op_names[5] = {"AddBond", "DeleteBond", "StateChange", "AddMolecule",
-                                        "DeleteMolecule"};
-      auto sample_to_sec = [&](uint64_t ns, uint64_t sampled) -> double {
-        if (sampled == 0)
-          return 0.0;
-        return (double)ns / 1e9 * (double)K;
-      };
-      double total_est = sample_to_sec(p.total_ns, p.sampled_calls);
-      double switch_est = sample_to_sec(p.switch_ns, p.sampled_calls);
-      double cleanup_est = sample_to_sec(p.cleanup_ns, p.sampled_calls);
-      double bfs_est = sample_to_sec(p.bfs_ns, p.sampled_calls);
-      double cx_exp_est = (p.cx_exp_sampled == 0) ? 0.0 : (double)p.cx_exp_ns / 1e9 * (double)K;
-      double denom_fr = total_est > 0 ? total_est : 1.0;
-      fprintf(stderr, "[fire_rule profile] K=%d  calls=%llu  sampled=%llu\n", K,
-              (unsigned long long)p.calls, (unsigned long long)p.sampled_calls);
-      fprintf(stderr,
-              "  total_est=%.3fs  vs timing_fire=%.3fs  (chrono/fire ratio "
-              "%.2f)\n",
-              total_est, timing_fire, timing_fire > 0 ? total_est / timing_fire : 0.0);
-      fprintf(stderr,
-              "  switch_loop=%.3fs (%.1f%% of total_est)  "
-              "cleanup=%.3fs (%.1f%%)  in_fire_bfs=%.3fs (%.1f%%)\n",
-              switch_est, 100.0 * switch_est / denom_fr, cleanup_est,
-              100.0 * cleanup_est / denom_fr, bfs_est, 100.0 * bfs_est / denom_fr);
-      fprintf(stderr,
-              "  post_fire_cx_exp=%.3fs  (fires=%llu sampled=%llu)  "
-              "[billed to timing_fire today]\n",
-              cx_exp_est, (unsigned long long)p.cx_exp_fires, (unsigned long long)p.cx_exp_sampled);
-      fprintf(stderr, "  per-op calls:\n");
-      for (int i = 0; i < 5; ++i) {
-        double op_est = sample_to_sec(p.op_ns[i], p.sampled_calls);
-        fprintf(stderr,
-                "    %-15s  calls=%llu  est_time=%.3fs (%.1f%% of "
-                "total_est)\n",
-                op_names[i], (unsigned long long)p.op_calls[i], op_est, 100.0 * op_est / denom_fr);
-      }
-      fprintf(stderr,
-              "  mask_bookkeeping: mark_mol=%llu  mark_comp=%llu  "
-              "ensure_mask_resizes=%llu\n",
-              (unsigned long long)p.mark_mol_calls, (unsigned long long)p.mark_comp_calls,
-              (unsigned long long)p.ensure_mask_resizes);
-      fprintf(stderr,
-              "  in_fire_bfs: fires=%llu  affected_final: sum=%llu max=%llu "
-              "avg=%.1f\n",
-              (unsigned long long)p.bfs_fires, (unsigned long long)p.affected_final_sum,
-              (unsigned long long)p.affected_final_max,
-              p.calls > 0 ? (double)p.affected_final_sum / (double)p.calls : 0.0);
-    }
+    if constexpr (kFireRuleProfile)
+      report_fire_rule(fire_profile_, timing_fire);
 
-    if constexpr (kRemoveBondProfile) {
-      // Report split_complex_if_needed breakdown.  Time fields are
-      // sampled (1-in-K); extrapolate by multiplying sampled ns by K.
-      const auto& p = pool.remove_profile();
-      const int K = kRemoveBondProfileSampleEvery;
-      auto est = [&](uint64_t ns) -> double {
-        if (p.sampled_calls == 0)
-          return 0.0;
-        return (double)ns / 1e9 * (double)K;
-      };
-      double total_est = est(p.total_ns);
-      double bfs_est = est(p.bfs_ns);
-      double partition_est = est(p.partition_ns);
+    if constexpr (kRemoveBondProfile)
+      report_remove_bond(pool.remove_profile());
 
-      fprintf(stderr,
-              "[remove_bond profile] K=%d  remove_bond_calls=%llu  "
-              "split_calls=%llu  sampled=%llu\n",
-              K, (unsigned long long)p.remove_bond_calls, (unsigned long long)p.split_calls,
-              (unsigned long long)p.sampled_calls);
-      fprintf(stderr,
-              "  total_est=%.3fs  bfs=%.3fs (%.1f%%)  "
-              "partition=%.3fs (%.1f%%)\n",
-              total_est, bfs_est, total_est > 0 ? 100.0 * bfs_est / total_est : 0.0, partition_est,
-              total_est > 0 ? 100.0 * partition_est / total_est : 0.0);
-      fprintf(stderr,
-              "  path counts: singleton=%llu (%.1f%%)  cycle_bond=%llu (%.1f%%)"
-              "  tree_split=%llu (%.1f%%)\n",
-              (unsigned long long)p.singleton_short_circuit,
-              p.split_calls > 0 ? 100.0 * (double)p.singleton_short_circuit / (double)p.split_calls
-                                : 0.0,
-              (unsigned long long)p.cycle_bond_removals,
-              p.split_calls > 0 ? 100.0 * (double)p.cycle_bond_removals / (double)p.split_calls
-                                : 0.0,
-              (unsigned long long)p.tree_bond_splits,
-              p.split_calls > 0 ? 100.0 * (double)p.tree_bond_splits / (double)p.split_calls : 0.0);
+    if constexpr (kIncrUpdateProfile)
+      report_incr_update(incr_profile_, timing_update);
 
-      auto print_hist = [&](const char* name, const std::array<uint64_t, 7>& h) {
-        uint64_t tot = 0;
-        for (auto v : h)
-          tot += v;
-        fprintf(stderr, "  %s: total=%llu  buckets", name, (unsigned long long)tot);
-        static const char* labels[7] = {"1", "2", "3-4", "5-8", "9-16", "17-32", "33+"};
-        for (int i = 0; i < 7; ++i) {
-          fprintf(stderr, "  %s=%llu", labels[i], (unsigned long long)h[i]);
-        }
-        fprintf(stderr, "\n");
-      };
-      print_hist("cx_size_all  ", p.cx_size_all);
-      print_hist("cx_size_bfs  ", p.cx_size_bfs);
-      print_hist("cx_size_split", p.cx_size_split);
-      print_hist("half_edges   ", p.half_edges_hist);
+    if constexpr (kRecordAtProfile)
+      report_record_at(rap_profile_, timing_record, use_incremental_obs);
 
-      double cx_avg = p.bfs_calls > 0 ? (double)p.cx_size_sum_bfs / (double)p.bfs_calls : 0.0;
-      double he_avg = p.bfs_calls > 0 ? (double)p.half_edges_sum / (double)p.bfs_calls : 0.0;
-      fprintf(stderr,
-              "  bfs_cx_size: avg=%.2f max=%llu   "
-              "half_edges_per_call: avg=%.2f max=%llu\n",
-              cx_avg, (unsigned long long)p.cx_size_max_bfs, he_avg,
-              (unsigned long long)p.half_edges_max);
-    }
+    if constexpr (kObsIncrProfile)
+      report_obs_incr(obs_incr_profile_, timing_obs, incr_tracked_obs_indices);
 
-    if constexpr (kIncrUpdateProfile) {
-      // Report incremental_update sub-phase breakdown.
-      //   Outer *_ns  : sampled ×K (every Kth call bracketed).
-      //   Inner *_ns  : sampled ×K×M (every Mth per-mid entry within a
-      //                 K-sampled call bracketed).
-      const auto& p = incr_profile_;
-      const int K = kIncrUpdateProfileSampleEvery;
-      const int M = kIncrUpdateProfileInnerSample;
-      auto outer_sec = [&](uint64_t ns) -> double {
-        if (p.sampled_calls == 0)
-          return 0.0;
-        return (double)ns / 1e9 * (double)K;
-      };
-      auto inner_sec = [&](uint64_t ns) -> double {
-        if (p.per_mid_sampled == 0)
-          return 0.0;
-        return (double)ns / 1e9 * (double)K * (double)M;
-      };
-      double total_est = outer_sec(p.total_ns);
-      double expand_est = outer_sec(p.expand_ns);
-      double dispatch_est = outer_sec(p.dispatch_ns);
-      double rule_loop_est = outer_sec(p.rule_loop_ns);
-      double cache_hit_est = inner_sec(p.cache_hit_ns);
-      double subtract_est = inner_sec(p.subtract_ns);
-      double count_a_est = inner_sec(p.count_a_ns);
-      double count_b_est = inner_sec(p.count_b_ns);
-      double shared_est = inner_sec(p.shared_ns);
-      double local_rate_est = inner_sec(p.local_rate_ns);
-      double add_est = inner_sec(p.add_ns);
-      double fenwick_est = inner_sec(p.fenwick_ns);
-      double store_est = inner_sec(p.store_ns);
-      double denom = total_est > 0 ? total_est : 1.0;
-      fprintf(stderr,
-              "[incr_update profile] K=%d  M=%d  calls=%llu  sampled=%llu"
-              "  per_mid_sampled=%llu\n",
-              K, M, (unsigned long long)p.calls, (unsigned long long)p.sampled_calls,
-              (unsigned long long)p.per_mid_sampled);
-      fprintf(stderr,
-              "  total_est=%.3fs  vs timing_update=%.3fs  "
-              "(chrono/update ratio %.2f)\n",
-              total_est, timing_update, timing_update > 0 ? total_est / timing_update : 0.0);
-      fprintf(stderr,
-              "  outer: expand=%.3fs (%.1f%%)  dispatch=%.3fs (%.1f%%)  "
-              "rule_loop=%.3fs (%.1f%%)  (rule_loop includes per-rule "
-              "propensity recompute)\n",
-              expand_est, 100.0 * expand_est / denom, dispatch_est, 100.0 * dispatch_est / denom,
-              rule_loop_est, 100.0 * rule_loop_est / denom);
-      double inner_sum = cache_hit_est + subtract_est + count_a_est + count_b_est + shared_est +
-                         local_rate_est + add_est + fenwick_est + store_est;
-      fprintf(stderr,
-              "  inner (est of full rule_loop via ×K×M; sum=%.3fs): "
-              "cache_hit=%.3fs (%.1f%%)  subtract=%.3fs (%.1f%%)  "
-              "count_a=%.3fs (%.1f%%)  count_b=%.3fs (%.1f%%)\n",
-              inner_sum, cache_hit_est, 100.0 * cache_hit_est / denom, subtract_est,
-              100.0 * subtract_est / denom, count_a_est, 100.0 * count_a_est / denom, count_b_est,
-              100.0 * count_b_est / denom);
-      fprintf(stderr,
-              "                 shared=%.3fs (%.1f%%)  "
-              "local_rate=%.3fs (%.1f%%)  add=%.3fs (%.1f%%)  "
-              "fenwick=%.3fs (%.1f%%)  store=%.3fs (%.1f%%)\n",
-              shared_est, 100.0 * shared_est / denom, local_rate_est,
-              100.0 * local_rate_est / denom, add_est, 100.0 * add_est / denom, fenwick_est,
-              100.0 * fenwick_est / denom, store_est, 100.0 * store_est / denom);
-      fprintf(stderr,
-              "  counters: mids_visited=%llu  rules_visited=%llu  "
-              "rules_skipped_synth=%llu  have_local_calls=%llu  "
-              "mols_for_local_sum=%llu  rule_cache_clears=%llu\n",
-              (unsigned long long)p.mids_visited, (unsigned long long)p.rules_visited,
-              (unsigned long long)p.rules_skipped_needed, (unsigned long long)p.have_local_calls,
-              (unsigned long long)p.mols_for_local_sum,
-              (unsigned long long)p.rule_local_rate_cache_clears);
-      fprintf(stderr,
-              "  per_mid: entries=%llu  cache_hits_epoch=%llu  "
-              "cache_hits_mask=%llu  cache_misses=%llu  "
-              "cache_uncacheable=%llu\n",
-              (unsigned long long)p.per_mid_entries, (unsigned long long)p.cache_hits_epoch,
-              (unsigned long long)p.cache_hits_mask, (unsigned long long)p.cache_misses,
-              (unsigned long long)p.cache_uncacheable);
-      fprintf(stderr,
-              "  recompute_calls: count_a_multi=%llu  count_a_single=%llu"
-              "  count_b_multi=%llu  count_b_single=%llu  "
-              "shared=%llu  local_rate=%llu  fenwick_a=%llu  fenwick_b=%llu"
-              "  propensity=%llu\n",
-              (unsigned long long)p.count_a_multi_calls, (unsigned long long)p.count_a_single_calls,
-              (unsigned long long)p.count_b_multi_calls, (unsigned long long)p.count_b_single_calls,
-              (unsigned long long)p.shared_comp_calls, (unsigned long long)p.local_rate_path_calls,
-              (unsigned long long)p.fenwick_a_updates, (unsigned long long)p.fenwick_b_updates,
-              (unsigned long long)p.propensity_recomputes);
-      {
-        uint64_t tot = 0;
-        for (auto v : p.rules_visited_hist)
-          tot += v;
-        static const char* labels[7] = {"1", "2", "3-4", "5-8", "9-16", "17-32", "33+"};
-        fprintf(stderr, "  rules_visited_hist: total=%llu  buckets", (unsigned long long)tot);
-        for (int i = 0; i < 7; ++i) {
-          fprintf(stderr, "  %s=%llu", labels[i], (unsigned long long)p.rules_visited_hist[i]);
-        }
-        fprintf(stderr, "\n");
-      }
-      // Per-rule top-N attribution (no chrono; call-count based).  Sorted by
-      // per_rule_recomputes (primary cost signal: full-recompute count).
-      {
-        auto dump_topn = [&](const char* label, const std::vector<uint64_t>& v, int topn) {
-          uint64_t tot = 0;
-          for (auto x : v)
-            tot += x;
-          std::vector<std::pair<uint64_t, int>> idx;
-          idx.reserve(v.size());
-          for (size_t i = 0; i < v.size(); ++i)
-            if (v[i] > 0)
-              idx.emplace_back(v[i], static_cast<int>(i));
-          std::sort(idx.begin(), idx.end(),
-                    [](const auto& a, const auto& b) { return a.first > b.first; });
-          fprintf(stderr, "  per_rule_%s (top %d of %zu, total=%llu):\n", label, topn, idx.size(),
-                  (unsigned long long)tot);
-          uint64_t cum = 0;
-          int shown = std::min<int>(topn, static_cast<int>(idx.size()));
-          for (int i = 0; i < shown; ++i) {
-            cum += idx[i].first;
-            double pct = tot > 0 ? 100.0 * idx[i].first / tot : 0.0;
-            double cum_pct = tot > 0 ? 100.0 * cum / tot : 0.0;
-            fprintf(stderr, "    RR%d: %llu (%.1f%%)  cum=%.1f%%\n", idx[i].second + 1,
-                    (unsigned long long)idx[i].first, pct, cum_pct);
-          }
-        };
-        dump_topn("recomputes", p.per_rule_recomputes, 15);
-        dump_topn("count_a_multi", p.per_rule_count_a_multi, 10);
-        dump_topn("entries", p.per_rule_entries, 10);
-      }
-    }
+    if constexpr (kCountMultiProfile)
+      report_count_multi();
 
-    if constexpr (kRecordAtProfile) {
-      // Report record_at sub-phase breakdown.  K=1: every record_at call
-      // is fully timed.  compute_obs_ns + record_ns should sum to
-      // approximately timing_record (modulo the outer chrono pair that
-      // defines timing_record itself).
-      const auto& p = rap_profile_;
-      double compute_obs_est = (double)p.compute_obs_ns / 1e9;
-      double record_est = (double)p.record_ns / 1e9;
-      double sum_est = compute_obs_est + record_est;
-      double denom = timing_record > 0 ? timing_record : 1.0;
-      fprintf(stderr,
-              "[record_at profile] K=1  calls=%llu  "
-              "use_incremental_obs=%d\n",
-              (unsigned long long)p.calls, (int)use_incremental_obs);
-      fprintf(stderr,
-              "  compute_obs=%.3fs (%.1f%% of timing_record)  "
-              "record_time_point=%.3fs (%.1f%%)  "
-              "chrono_sum/timing_record=%.3f\n",
-              compute_obs_est, 100.0 * compute_obs_est / denom, record_est,
-              100.0 * record_est / denom, timing_record > 0 ? sum_est / timing_record : 0.0);
+    if constexpr (kCmmFcProfile)
+      report_cmm_fc();
 
-      double co_denom = compute_obs_est > 0 ? compute_obs_est : 1.0;
-      fprintf(stderr, "  per-observable breakdown:\n");
-      for (size_t i = 0; i < p.obs.size(); ++i) {
-        const auto& po = p.obs[i];
-        double ev_s = (double)po.evaluate_ns / 1e9;
-        fprintf(stderr,
-                "    [%zu] %s (type=%s pats=%d)  calls=%llu  wall=%.4fs"
-                " (%.1f%% of compute_obs)\n",
-                i, po.name.c_str(), po.type.c_str(), po.pat_count,
-                (unsigned long long)po.evaluate_calls, ev_s, 100.0 * ev_s / co_denom);
-        fprintf(stderr, "        species_branch=%llu  molecules_branch=%llu\n",
-                (unsigned long long)po.species_branch_calls,
-                (unsigned long long)po.molecules_branch_calls);
-        fprintf(stderr,
-                "        cx_visited=%llu  counted_cx_hits=%llu  "
-                "embed_calls=%llu  cx_members_walked=%llu\n",
-                (unsigned long long)po.n_cx_visited, (unsigned long long)po.n_counted_cx_hits,
-                (unsigned long long)po.n_embed_calls, (unsigned long long)po.n_cx_members_walked);
-        if (po.has_quantity) {
-          fprintf(stderr, "        quantity_relation=\"%s\"  quantity_value=%d\n",
-                  po.quantity_relation.c_str(), po.quantity_value);
-        }
-      }
-
-      // Cross-check: sum of per-obs evaluate_ns should be close to
-      // compute_obs_ns (the per-obs timers are strictly inside the
-      // compute_obs bracket).
-      uint64_t sum_obs_ns = 0;
-      for (const auto& po : p.obs)
-        sum_obs_ns += po.evaluate_ns;
-      double sum_obs_s = (double)sum_obs_ns / 1e9;
-      fprintf(stderr,
-              "  cross-check: Sum_per_obs_wall=%.4fs  compute_obs=%.4fs"
-              "  ratio=%.3f\n",
-              sum_obs_s, compute_obs_est, compute_obs_est > 0 ? sum_obs_s / compute_obs_est : 0.0);
-    }
-
-    if constexpr (kObsIncrProfile) {
-      // Report the observables-bucket sub-phase breakdown.  Inflate
-      // K-sampled wall by kObsIncrProfileSampleEvery so the reported
-      // ns values estimate the true (un-sampled) total cost.
-      const auto& p = obs_incr_profile_;
-      const int K = kObsIncrProfileSampleEvery;
-      double update_est = (double)p.update_total_ns * K / 1e9;
-      double obs_loop_est = (double)p.obs_loop_ns * K / 1e9;
-      double prev_cx_loop_est = (double)p.prev_cx_loop_ns * K / 1e9;
-      double flush_est = (double)p.flush_total_ns / 1e9; // flush is full-sampled
-      double denom_obs = timing_obs > 0 ? timing_obs : 1.0;
-      fprintf(stderr,
-              "[obs_incr profile] K=%d  update_calls=%llu  sampled=%llu  "
-              "flush_calls=%llu\n",
-              K, (unsigned long long)p.update_calls, (unsigned long long)p.update_sampled,
-              (unsigned long long)p.flush_calls);
-      fprintf(stderr,
-              "  avg_affected=%.2f  flush_dirty_cx_avg=%.2f  "
-              "flush_dead_cx_avg=%.2f\n",
-              p.update_calls > 0 ? (double)p.affected_sum / (double)p.update_calls : 0.0,
-              p.flush_calls > 0 ? (double)p.flush_dirty_cx_sum / (double)p.flush_calls : 0.0,
-              p.flush_calls > 0 ? (double)p.flush_dead_cx_sum / (double)p.flush_calls : 0.0);
-      fprintf(stderr,
-              "  incremental_update=%.3fs (%.1f%% of timing_obs)  "
-              "flush=%.3fs (%.1f%%)\n",
-              update_est, 100.0 * update_est / denom_obs, flush_est, 100.0 * flush_est / denom_obs);
-      fprintf(stderr, "  update sub-phases:  obs_loop=%.3fs  prev_cx_loop=%.3fs\n", obs_loop_est,
-              prev_cx_loop_est);
-
-      fprintf(stderr, "  per-tracked-obs breakdown:\n");
-      // Sort by per_mid_ns desc so the biggest cost sources come first.
-      std::vector<int> order;
-      for (int oi : incr_tracked_obs_indices)
-        order.push_back(oi);
-      std::sort(order.begin(), order.end(),
-                [&](int a, int b) { return p.obs[a].per_mid_ns > p.obs[b].per_mid_ns; });
-      for (int oi : order) {
-        const auto& po = p.obs[oi];
-        double ev_s = (double)po.per_mid_ns * K / 1e9;
-        fprintf(stderr,
-                "    [%d] %s (type=%s pats=%d seed_t=%d)  "
-                "per_mid_calls=%llu  wall=%.4fs  deltas=%llu  "
-                "dirty_inserts=%llu\n",
-                oi, po.name.c_str(), po.type.c_str(), po.pat_count, po.seed_type_index,
-                (unsigned long long)po.per_mid_calls, ev_s, (unsigned long long)po.contrib_deltas,
-                (unsigned long long)po.dirty_inserts);
-      }
-
-      // Dedup audit: group tracked obs by pattern signature.  Multi-obs
-      // groups are the candidates for pattern-signature dedup.
-      std::unordered_map<std::string, std::vector<int>> by_sig;
-      for (int oi : incr_tracked_obs_indices) {
-        by_sig[p.obs[oi].pat_signature].push_back(oi);
-      }
-      int singleton_groups = 0, multi_groups = 0, obs_in_multi = 0;
-      for (auto& kv : by_sig) {
-        if (kv.second.size() == 1)
-          singleton_groups++;
-        else {
-          multi_groups++;
-          obs_in_multi += kv.second.size();
-        }
-      }
-      fprintf(stderr,
-              "  dedup audit: total_tracked=%zu  unique_signatures=%zu  "
-              "singleton_groups=%d  multi_groups=%d  obs_in_multi=%d\n",
-              incr_tracked_obs_indices.size(), by_sig.size(), singleton_groups, multi_groups,
-              obs_in_multi);
-      if (multi_groups > 0) {
-        fprintf(stderr, "  multi-obs groups (top 5 by size):\n");
-        std::vector<std::pair<std::string, std::vector<int>>> groups(by_sig.begin(), by_sig.end());
-        std::sort(groups.begin(), groups.end(),
-                  [](const auto& a, const auto& b) { return a.second.size() > b.second.size(); });
-        int printed = 0;
-        for (auto& kv : groups) {
-          if (kv.second.size() <= 1)
-            continue;
-          if (printed++ >= 5)
-            break;
-          fprintf(stderr, "    size=%zu  obs=", kv.second.size());
-          for (size_t i = 0; i < std::min<size_t>(4, kv.second.size()); ++i) {
-            fprintf(stderr, "%s%s", i ? "," : "", p.obs[kv.second[i]].name.c_str());
-          }
-          if (kv.second.size() > 4)
-            fprintf(stderr, ",...");
-          fprintf(stderr, "\n      sig=%s\n", kv.first.c_str());
-        }
-      }
-    }
-
-    if constexpr (kCountMultiProfile) {
-      const auto& p = cm_profile_;
-      const int K = kCountMultiProfileSampleEvery;
-      auto ksec = [&](uint64_t ns) -> double {
-        if (p.sampled_calls == 0)
-          return 0.0;
-        return (double)ns / 1e9 * (double)K;
-      };
-      double total_est = ksec(p.total_ns);
-      double seed_emb_est = ksec(p.seed_emb_ns);
-      double bfs_est = ksec(p.bfs_ns);
-      double disjoint_est = ksec(p.disjoint_ns);
-      double denom = total_est > 0 ? total_est : 1.0;
-      fprintf(stderr,
-              "[count_multi profile] K=%d  calls=%llu  fm_hits=%llu (%.1f%%)"
-              "  generic=%llu (%.1f%%)  sampled=%llu\n",
-              K, (unsigned long long)p.calls, (unsigned long long)p.fm_hits,
-              p.calls > 0 ? 100.0 * (double)p.fm_hits / (double)p.calls : 0.0,
-              (unsigned long long)p.generic_calls,
-              p.calls > 0 ? 100.0 * (double)p.generic_calls / (double)p.calls : 0.0,
-              (unsigned long long)p.sampled_calls);
-      fprintf(
-          stderr,
-          "  generic paths: singleton_pattern=%llu (%.1f%%)"
-          "  zero_seed=%llu (%.1f%%)  disjoint=%llu (%.1f%%)\n",
-          (unsigned long long)p.singleton_pattern_calls,
-          p.generic_calls > 0 ? 100.0 * (double)p.singleton_pattern_calls / (double)p.generic_calls
-                              : 0.0,
-          (unsigned long long)p.zero_seed_calls,
-          p.generic_calls > 0 ? 100.0 * (double)p.zero_seed_calls / (double)p.generic_calls : 0.0,
-          (unsigned long long)p.disjoint_calls,
-          p.generic_calls > 0 ? 100.0 * (double)p.disjoint_calls / (double)p.generic_calls : 0.0);
-      fprintf(stderr,
-              "  total_est=%.3fs  seed_emb=%.3fs (%.1f%%)  bfs=%.3fs (%.1f%%)"
-              "  disjoint=%.3fs (%.1f%%)\n",
-              total_est, seed_emb_est, 100.0 * seed_emb_est / denom, bfs_est,
-              100.0 * bfs_est / denom, disjoint_est, 100.0 * disjoint_est / denom);
-      double full_sum = seed_emb_est + bfs_est + disjoint_est;
-      fprintf(stderr,
-              "  sub-phase sum=%.3fs  residual vs total_est=%.3fs "
-              "(should be ≈ singleton/zero-seed early returns)\n",
-              full_sum, total_est - full_sum);
-      double npm_avg =
-          p.generic_calls > p.singleton_pattern_calls
-              ? (double)p.n_pat_mols_sum / (double)(p.generic_calls - p.singleton_pattern_calls)
-              : 0.0;
-      uint64_t gen_non_singleton = p.generic_calls > p.singleton_pattern_calls
-                                       ? p.generic_calls - p.singleton_pattern_calls
-                                       : 0;
-      double seed_avg =
-          gen_non_singleton > 0 ? (double)p.seed_emb_sum / (double)gen_non_singleton : 0.0;
-      double bfs_avg =
-          gen_non_singleton > 0 ? (double)p.bfs_visited_sum / (double)gen_non_singleton : 0.0;
-      fprintf(stderr,
-              "  per-call avg (non-singleton generic): n_pat_mols=%.2f (max=*)"
-              "  seed_embs=%.3f (sum=%llu max=%llu)"
-              "  bfs_visited=%.3f (sum=%llu max=%llu)\n",
-              npm_avg, seed_avg, (unsigned long long)p.seed_emb_sum,
-              (unsigned long long)p.seed_emb_max, bfs_avg, (unsigned long long)p.bfs_visited_sum,
-              (unsigned long long)p.bfs_visited_max);
-      auto print_hist = [&](const char* name, const std::array<uint64_t, 7>& h) {
-        uint64_t tot = 0;
-        for (auto v : h)
-          tot += v;
-        fprintf(stderr, "  %s hist: total=%llu  buckets", name, (unsigned long long)tot);
-        static const char* labels[7] = {"0-1", "2", "3-4", "5-8", "9-16", "17-32", "33+"};
-        for (int i = 0; i < 7; ++i) {
-          fprintf(stderr, "  %s=%llu", labels[i], (unsigned long long)h[i]);
-        }
-        fprintf(stderr, "\n");
-      };
-      print_hist("n_pat_mols ", p.n_pat_mols_hist);
-      print_hist("seed_embs  ", p.seed_emb_hist);
-      print_hist("bfs_visited", p.bfs_visited_hist);
-    }
-
-    if constexpr (kCmmFcProfile) {
-      const auto& q = cmm_fc_profile_;
-      const int K = kCmmFcProfileSampleEvery;
-      const int R = 5; // phase rotor width
-      auto phase_sec = [&](int p) -> double {
-        return (double)q.phase_ns[p] / 1e9 * (double)K * (double)R;
-      };
-      double p_seed = phase_sec(0);
-      double p_ptrc = phase_sec(1);
-      double p_plsc = phase_sec(2);
-      double p_pok = phase_sec(3);
-      double p_pnbc = phase_sec(4);
-      double p_total_est = p_seed + p_ptrc + p_plsc + p_pok + p_pnbc;
-      double denom = p_total_est > 0 ? p_total_est : 1.0;
-      fprintf(stderr,
-              "[cmm_fc profile] K=%d  rotor=%d  fc_calls=%llu  sampled=%llu"
-              "  inactive_seed=%llu  seed_type_mismatches=%llu"
-              "  seed_non_bond_rejects=%llu\n",
-              K, R, (unsigned long long)q.fc_calls, (unsigned long long)q.sampled_calls,
-              (unsigned long long)q.fc_inactive_seed, (unsigned long long)q.fc_seed_type_mismatches,
-              (unsigned long long)q.fc_seed_non_bond_rejects);
-      fprintf(stderr,
-              "  phase wall (×K×rotor): seed=%.4fs (%.1f%%)"
-              "  partner_trace=%.4fs (%.1f%%)"
-              "  partner_local_scan=%.4fs (%.1f%%)"
-              "  plocal_ok=%.4fs (%.1f%%)"
-              "  partner_non_bond=%.4fs (%.1f%%)"
-              "  sum=%.4fs\n",
-              p_seed, 100.0 * p_seed / denom, p_ptrc, 100.0 * p_ptrc / denom, p_plsc,
-              100.0 * p_plsc / denom, p_pok, 100.0 * p_pok / denom, p_pnbc, 100.0 * p_pnbc / denom,
-              p_total_est);
-      fprintf(stderr,
-              "  phase_hits: seed=%llu  partner_trace=%llu"
-              "  partner_local_scan=%llu  plocal_ok=%llu  partner_non_bond=%llu\n",
-              (unsigned long long)q.phase_hits[0], (unsigned long long)q.phase_hits[1],
-              (unsigned long long)q.phase_hits[2], (unsigned long long)q.phase_hits[3],
-              (unsigned long long)q.phase_hits[4]);
-      fprintf(
-          stderr,
-          "  candidate_iters=%llu  total_matches=%llu\n"
-          "    oob=%llu  state_rej=%llu  bond_rej=%llu  self_bond=%llu"
-          "  partner_inactive=%llu  partner_type_mm=%llu\n"
-          "    plocal_not_found=%llu  plocal_not_ok=%llu  partner_state_rej=%llu"
-          "  partner_non_bond_rej=%llu\n",
-          (unsigned long long)q.fc_candidate_iters, (unsigned long long)q.fc_total_matches,
-          (unsigned long long)q.fc_candidate_oob, (unsigned long long)q.fc_candidate_state_rejects,
-          (unsigned long long)q.fc_candidate_bond_rejects,
-          (unsigned long long)q.fc_candidate_self_bond, (unsigned long long)q.fc_partner_inactive,
-          (unsigned long long)q.fc_partner_type_mismatches,
-          (unsigned long long)q.fc_plocal_not_found, (unsigned long long)q.fc_plocal_not_ok,
-          (unsigned long long)q.fc_partner_state_rejects,
-          (unsigned long long)q.fc_partner_non_bond_rejects);
-      uint64_t rej_sum = q.fc_candidate_oob + q.fc_candidate_state_rejects +
-                         q.fc_candidate_bond_rejects + q.fc_candidate_self_bond +
-                         q.fc_partner_inactive + q.fc_partner_type_mismatches +
-                         q.fc_plocal_not_found + q.fc_plocal_not_ok + q.fc_partner_state_rejects +
-                         q.fc_partner_non_bond_rejects;
-      fprintf(stderr,
-              "  cross-check: rej_sum+matches=%llu  iters=%llu  (must be equal)"
-              "  fm_hits=%llu (from count_multi)\n",
-              (unsigned long long)(rej_sum + q.fc_total_matches),
-              (unsigned long long)q.fc_candidate_iters, (unsigned long long)cm_profile_.fm_hits);
-      double fc = q.fc_calls > 0 ? (double)q.fc_calls : 1.0;
-      fprintf(stderr,
-              "  per-call means: seed_bond_cand=%.2f (max=%llu)"
-              "  partner_bond_cand=%.2f (max=%llu)"
-              "  partner_non_bond_checks=%.2f (max=%llu)"
-              "  seed_non_bond_checks=%.2f\n",
-              (double)q.fc_seed_bond_candidates_sum / fc,
-              (unsigned long long)q.fc_seed_bond_candidates_max,
-              (double)q.fc_partner_bond_candidates_sum / fc,
-              (unsigned long long)q.fc_partner_bond_candidates_max,
-              (double)q.fc_partner_non_bond_checks_sum / fc,
-              (unsigned long long)q.fc_partner_non_bond_checks_max,
-              (double)q.fc_seed_non_bond_checks_sum / fc);
-      {
-        const auto& h = q.fc_partner_non_bond_checks_hist;
-        uint64_t tot = 0;
-        for (auto v : h)
-          tot += v;
-        fprintf(stderr,
-                "  partner_non_bond_checks hist (per fc call): total=%llu"
-                "  0=%llu  1=%llu  2=%llu  3=%llu  4=%llu  5=%llu  6+=%llu\n",
-                (unsigned long long)tot, (unsigned long long)h[0], (unsigned long long)h[1],
-                (unsigned long long)h[2], (unsigned long long)h[3], (unsigned long long)h[4],
-                (unsigned long long)h[5], (unsigned long long)h[6]);
-      }
-    }
-
-    if constexpr (kSelectReactantsProfile) {
-      // Report select_reactants per-path breakdown.  Per-path wall is
-      // K-sampled (chrono pair gated on calls % K == 0), so reported
-      // seconds inflate path_ns by K.  Always-on counters (path_calls,
-      // outcomes, sampler sub-decisions, work widths) are exact.
-      const auto& q = sr_profile_;
-      const int K = kSelectReactantsProfileSampleEvery;
-      static const char* path_names[SrProfile::kNPaths] = {"zero", "uni_single", "uni_multi_fm",
-                                                           "uni_multi_gen", "bimol"};
-      auto path_sec = [&](int p) -> double { return (double)q.path_ns[p] / 1e9 * (double)K; };
-      double total_est = 0.0;
-      for (int i = 0; i < SrProfile::kNPaths; ++i)
-        total_est += path_sec(i);
-      double denom = total_est > 0 ? total_est : 1.0;
-      double ts_denom = timing_sample > 0 ? timing_sample : 1.0;
-
-      fprintf(stderr,
-              "[sr profile] K=%d  calls=%llu  sampled=%llu"
-              "  total_est=%.3fs  vs timing_sample=%.3fs  (chrono/sel ratio "
-              "%.2f)\n",
-              K, (unsigned long long)q.calls, (unsigned long long)q.sampled_calls, total_est,
-              timing_sample, timing_sample > 0 ? total_est / timing_sample : 0.0);
-      fprintf(stderr, "  per-path (calls  wall  %%sel  %%est  ns/call"
-                      "  success  null_no_seed  null_post):\n");
-      for (int i = 0; i < SrProfile::kNPaths; ++i) {
-        double sec = path_sec(i);
-        double ns_per_call =
-            q.path_calls[i] > 0 ? (double)q.path_ns[i] * K / (double)q.path_calls[i] : 0.0;
-        fprintf(stderr,
-                "    %-14s  %10llu  %7.3fs  %5.1f%%  %5.1f%%  %7.1fns"
-                "  %10llu  %10llu  %10llu\n",
-                path_names[i], (unsigned long long)q.path_calls[i], sec, 100.0 * sec / ts_denom,
-                100.0 * sec / denom, ns_per_call, (unsigned long long)q.path_success[i],
-                (unsigned long long)q.path_null_no_seed[i],
-                (unsigned long long)q.path_null_post[i]);
-      }
-
-      fprintf(
-          stderr,
-          "  sampler: calls=%llu"
-          "  fenwick_uses=%llu (%.1f%%)  fenwick_drifts=%llu (%.1f%%)"
-          "  linear=%llu (%.1f%%)  empty=%llu  local_prop=%llu\n",
-          (unsigned long long)q.sampler_calls, (unsigned long long)q.sampler_fenwick_uses,
-          q.sampler_calls > 0 ? 100.0 * (double)q.sampler_fenwick_uses / (double)q.sampler_calls
-                              : 0.0,
-          (unsigned long long)q.sampler_fenwick_drifts,
-          q.sampler_calls > 0 ? 100.0 * (double)q.sampler_fenwick_drifts / (double)q.sampler_calls
-                              : 0.0,
-          (unsigned long long)q.sampler_linear_calls,
-          q.sampler_calls > 0 ? 100.0 * (double)q.sampler_linear_calls / (double)q.sampler_calls
-                              : 0.0,
-          (unsigned long long)q.sampler_empty_pool, (unsigned long long)q.sampler_local_prop_calls);
-      {
-        uint64_t d = q.sampler_fenwick_drifts;
-        double dd = d > 0 ? (double)d : 1.0;
-        fprintf(stderr,
-                "  drift breakdown: invalid_mid=%llu (%.1f%%)"
-                "  inactive_mol=%llu (%.1f%%)"
-                "  type_mismatch=%llu (%.1f%%)\n",
-                (unsigned long long)q.sampler_drift_invalid_mid,
-                100.0 * (double)q.sampler_drift_invalid_mid / dd,
-                (unsigned long long)q.sampler_drift_inactive_mol,
-                100.0 * (double)q.sampler_drift_inactive_mol / dd,
-                (unsigned long long)q.sampler_drift_type_mismatch,
-                100.0 * (double)q.sampler_drift_type_mismatch / dd);
-        {
-          double imd = q.sampler_drift_invalid_mid > 0 ? (double)q.sampler_drift_invalid_mid : 1.0;
-          double avg_excess_per_event =
-              q.sampler_drift_target_eq_sum > 0
-                  ? q.sampler_drift_excess_sum / (double)q.sampler_drift_target_eq_sum
-                  : 0.0;
-          double avg_total_per_event =
-              q.sampler_drift_target_eq_sum > 0
-                  ? q.sampler_drift_total_sum / (double)q.sampler_drift_target_eq_sum
-                  : 0.0;
-          double frac_loss =
-              avg_total_per_event > 0 ? avg_excess_per_event / avg_total_per_event : 0.0;
-          fprintf(stderr,
-                  "  invalid_mid breakdown:"
-                  " target_ge_sum=%llu (%.1f%%)  target_lt_sum=%llu (%.1f%%)\n"
-                  "  weight loss when target>=sum: avg_excess=%.6g"
-                  "  avg_total=%.6g  avg_loss_frac=%.4f%%\n",
-                  (unsigned long long)q.sampler_drift_target_eq_sum,
-                  100.0 * (double)q.sampler_drift_target_eq_sum / imd,
-                  (unsigned long long)q.sampler_drift_target_lt_sum,
-                  100.0 * (double)q.sampler_drift_target_lt_sum / imd, avg_excess_per_event,
-                  avg_total_per_event, 100.0 * frac_loss);
-        }
-      }
-
-      // Per-path work widths.
-      double uni_single_avg_embs =
-          q.path_calls[SrProfile::kPathUniSingle] > 0
-              ? (double)q.uni_single_embs_sum / (double)q.path_calls[SrProfile::kPathUniSingle]
-              : 0.0;
-      double bimol_a_avg =
-          q.path_calls[SrProfile::kPathBimol] > 0
-              ? (double)q.bimol_embs_a_sum / (double)q.path_calls[SrProfile::kPathBimol]
-              : 0.0;
-      double bimol_b_avg =
-          q.path_calls[SrProfile::kPathBimol] > 0
-              ? (double)q.bimol_embs_b_sum / (double)q.path_calls[SrProfile::kPathBimol]
-              : 0.0;
-      fprintf(stderr,
-              "  uni_single: avg_embs=%.3f  embs_empty=%llu\n"
-              "  uni_mm_fm:  success=%llu  null=%llu\n"
-              "  uni_mm_gen: success=%llu  null=%llu\n"
-              "  bimol: avg_embs_a=%.3f  avg_embs_b=%.3f"
-              "  same_mol=%llu  same_cx=%llu  embs_empty=%llu"
-              "  resolve_calls=%llu  resolve_failures=%llu\n",
-              uni_single_avg_embs, (unsigned long long)q.uni_single_embs_empty,
-              (unsigned long long)q.uni_mm_fm_success, (unsigned long long)q.uni_mm_fm_null,
-              (unsigned long long)q.uni_mm_gen_success, (unsigned long long)q.uni_mm_gen_null,
-              bimol_a_avg, bimol_b_avg, (unsigned long long)q.bimol_same_mol_rejects,
-              (unsigned long long)q.bimol_same_cx_rejects, (unsigned long long)q.bimol_embs_empty,
-              (unsigned long long)q.bimol_resolve_calls,
-              (unsigned long long)q.bimol_resolve_failures);
-    }
+    if constexpr (kSelectReactantsProfile)
+      report_select_reactants(sr_profile_, timing_sample);
 
     // Print per-rule fire counts and final propensities
     {
