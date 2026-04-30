@@ -17,33 +17,20 @@ struct TimeSpec {
   int n_points = 0;
 };
 
+// Plain data carrier for one simulation run's output.
+//
+// `observable_data` is column-major: `observable_data[obs_idx][t_idx]`
+// gives the value of the obs_idx-th observable at the t_idx-th sample
+// time.  Both inner and outer vectors have the same length on every
+// successful run (n_observables and n_times respectively).
+//
+// Construction and population is the engine's responsibility — host
+// code reads but does not write to these fields.
 struct Result {
   std::vector<double> time;
   std::vector<std::string> observable_names;
   std::vector<std::vector<double>> observable_data;
-  int64_t event_count = -1; // SSA events fired (-1 = not reported)
-
-  void set_observable_names(const std::vector<std::string>& names) {
-    observable_names = names;
-    observable_data.clear();
-    observable_data.reserve(observable_names.size());
-  }
-
-  void record_time_point(const double t, const std::vector<double>& values) {
-    if (!observable_names.empty() && values.size() != observable_names.size()) {
-      throw std::runtime_error("observable value count does not match observable name count");
-    }
-    if (observable_names.empty() && !values.empty()) {
-      throw std::runtime_error("cannot record observable values without observable names");
-    }
-    if (observable_data.empty()) {
-      observable_data.resize(values.size());
-    }
-    time.push_back(t);
-    for (std::size_t i = 0; i < values.size(); ++i) {
-      observable_data[i].push_back(values[i]);
-    }
-  }
+  int64_t event_count = 0; // SSA events fired during this run.
 
   std::size_t n_times() const noexcept { return time.size(); }
   std::size_t n_observables() const noexcept { return observable_names.size(); }

@@ -82,7 +82,7 @@ int main(int argc, char* argv[]) {
 
     // Check for unsupported BNGL features
     bool has_errors = false;
-    for (auto& w : sim.unsupported_warnings()) {
+    for (auto& w : sim.unsupported_features()) {
       const char* level = (w.severity == rulemonkey::Severity::Error) ? "ERROR" : "WARN";
       std::cerr << level << ": Unsupported BNGL feature: " << w.feature
                 << " (XML element: " << w.element << ")\n";

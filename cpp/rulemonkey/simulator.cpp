@@ -596,6 +596,7 @@ Model load_model(const std::string& xml_path,
       if (conc_str.empty())
         conc_str = opt_attr(spn, "count");
       si.concentration = resolve_value(conc_str, model.parameters);
+      si.concentration_expr = conc_str;
 
       // Map XML IDs to (mol_idx, comp_idx) within this species
       std::unordered_map<std::string, std::pair<int, int>> id_map;
@@ -1238,10 +1239,13 @@ Model load_model(const std::string& xml_path,
                 continue;
               auto val = need_attr(rcn, "value");
               double v = resolve_value(val, model.parameters);
-              if (idx == 0)
+              if (idx == 0) {
                 rule.rate_law.mm_kcat = v;
-              else if (idx == 1)
+                rule.rate_law.mm_kcat_expr = val;
+              } else if (idx == 1) {
                 rule.rate_law.mm_Km = v;
+                rule.rate_law.mm_Km_expr = val;
+              }
               ++idx;
             }
           }
@@ -1664,7 +1668,7 @@ struct RuleMonkeySimulator::Impl {
 
   std::vector<std::string> obs_names;
   std::vector<std::string> param_names;
-  std::vector<UnsupportedFeature> unsupported_warnings;
+  std::vector<UnsupportedFeature> unsupported_features;
 
   // Keep a clean copy of parameters for override/restore
   std::unordered_map<std::string, double> base_parameters;
@@ -1673,6 +1677,38 @@ struct RuleMonkeySimulator::Impl {
     model.parameters = base_parameters;
     for (auto& [name, val] : param_overrides)
       model.parameters[name] = val;
+
+    // Ele/MM rate values are baked from `model.parameters` at parse time.
+    // Re-resolve them here so set_param overrides actually reach Engine
+    // (which reads `rate_value` / `mm_kcat` / `mm_Km` directly for the
+    // non-dynamic paths). Function rate laws evaluate against eval_vars
+    // built live from `model.parameters`, so they need no fix-up.
+    for (auto& rule : model.rules) {
+      auto& rl = rule.rate_law;
+      if (rl.type == RateLawType::Ele && !rl.rate_expr.empty())
+        rl.rate_value = resolve_value(rl.rate_expr, model.parameters);
+      else if (rl.type == RateLawType::MM) {
+        if (!rl.mm_kcat_expr.empty())
+          rl.mm_kcat = resolve_value(rl.mm_kcat_expr, model.parameters);
+        if (!rl.mm_Km_expr.empty())
+          rl.mm_Km = resolve_value(rl.mm_Km_expr, model.parameters);
+      }
+    }
+
+    // Initial species concentrations are likewise baked at parse time
+    // (Engine reads SpeciesInit::concentration during init_species).
+    // FixedSpecies::target_count is derived from the same value during
+    // parse, so refresh it here from the (possibly re-resolved) source.
+    for (auto& si : model.initial_species) {
+      if (!si.concentration_expr.empty())
+        si.concentration = resolve_value(si.concentration_expr, model.parameters);
+    }
+    for (auto& fs : model.fixed_species) {
+      if (fs.source_init_idx >= 0 &&
+          fs.source_init_idx < static_cast<int>(model.initial_species.size())) {
+        fs.target_count = static_cast<int>(model.initial_species[fs.source_init_idx].concentration);
+      }
+    }
   }
 };
 
@@ -1686,13 +1722,15 @@ RuleMonkeySimulator::RuleMonkeySimulator(const std::string& xml_path, Method met
   impl_ = std::make_unique<Impl>();
   impl_->method = method;
   impl_->xml_path_str = xml_path;
-  impl_->model = load_model(xml_path, &impl_->unsupported_warnings);
+  impl_->model = load_model(xml_path, &impl_->unsupported_features);
   impl_->base_parameters = impl_->model.parameters;
   impl_->obs_names = impl_->model.observable_names_ordered;
   impl_->param_names = impl_->model.parameter_names_ordered;
 }
 
 RuleMonkeySimulator::~RuleMonkeySimulator() = default;
+RuleMonkeySimulator::RuleMonkeySimulator(RuleMonkeySimulator&&) noexcept = default;
+RuleMonkeySimulator& RuleMonkeySimulator::operator=(RuleMonkeySimulator&&) noexcept = default;
 
 // ---------------------------------------------------------------------------
 // Metadata
@@ -1706,8 +1744,8 @@ const std::string& RuleMonkeySimulator::xml_path() const { return impl_->xml_pat
 
 Method RuleMonkeySimulator::method() const { return impl_->method; }
 
-const std::vector<UnsupportedFeature>& RuleMonkeySimulator::unsupported_warnings() const {
-  return impl_->unsupported_warnings;
+const std::vector<UnsupportedFeature>& RuleMonkeySimulator::unsupported_features() const {
+  return impl_->unsupported_features;
 }
 
 // ---------------------------------------------------------------------------
@@ -1733,6 +1771,8 @@ void RuleMonkeySimulator::set_molecule_limit(int limit) {
 }
 
 void RuleMonkeySimulator::set_block_same_complex_binding(bool value) {
+  if (impl_->session)
+    throw std::runtime_error("Cannot set_block_same_complex_binding during active session");
   impl_->model.block_same_complex_binding = value;
 }
 
@@ -1798,7 +1838,7 @@ void RuleMonkeySimulator::destroy_session() { impl_->session.reset(); }
 // Session queries
 // ---------------------------------------------------------------------------
 
-std::vector<double> RuleMonkeySimulator::get_observable_values() const {
+std::vector<double> RuleMonkeySimulator::get_observable_values() {
   if (!impl_->session)
     throw std::runtime_error("No active session");
   return impl_->session->get_observable_values();

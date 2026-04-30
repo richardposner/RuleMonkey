@@ -2652,7 +2652,12 @@ struct ReactionMatch {
 };
 
 struct Engine::Impl {
-  const Model& model;
+  // Owned snapshot of the parsed model. Copied at Engine construction so
+  // a running session is insulated from subsequent mutations on the
+  // simulator side (parameter overrides, bscb toggles, etc.) — those
+  // take effect on the next initialize()/run(), not retroactively on
+  // the active session.
+  Model model;
   AgentPool pool;
   std::vector<RuleState> rule_states;
   std::vector<BindInfo> bind_infos; // per rule
@@ -2959,8 +2964,12 @@ struct Engine::Impl {
   // Dynamic rate evaluation state
   expr::VariableMap eval_vars;
 
+  // pool is initialized from `model` (the just-copied snapshot), not
+  // from `m` — declaration order guarantees `model` is constructed
+  // before `pool`, so AgentPool::model_ references the engine's own
+  // copy and outlives the input reference.
   Impl(const Model& m, uint64_t seed, int mol_limit)
-      : model(m), pool(m), molecule_limit(mol_limit), rng(seed) {}
+      : model(m), pool(model), molecule_limit(mol_limit), rng(seed) {}
 
   // Uniform [0, 1)
   double uniform() {
@@ -6563,8 +6572,17 @@ struct Engine::Impl {
 
   Result run_ssa(const TimeSpec& ts) {
     Result result;
-    result.set_observable_names(std::vector<std::string>(model.observable_names_ordered.begin(),
-                                                         model.observable_names_ordered.end()));
+    result.observable_names = model.observable_names_ordered;
+    result.observable_data.reserve(result.observable_names.size());
+
+    auto record_time_point = [&result](double t, const std::vector<double>& values) {
+      assert(values.size() == result.observable_names.size());
+      if (result.observable_data.empty())
+        result.observable_data.resize(values.size());
+      result.time.push_back(t);
+      for (std::size_t i = 0; i < values.size(); ++i)
+        result.observable_data[i].push_back(values[i]);
+    };
 
     // Compute sample times
     std::vector<double> sample_times;
@@ -6593,13 +6611,13 @@ struct Engine::Impl {
         rap_profile_.inside_record_at = false;
         rap_profile_.compute_obs_ns +=
             std::chrono::duration_cast<std::chrono::nanoseconds>(co_t1 - co_t0).count();
-        result.record_time_point(t, obs_values);
+        record_time_point(t, obs_values);
         auto rec_t1 = std::chrono::steady_clock::now();
         rap_profile_.record_ns +=
             std::chrono::duration_cast<std::chrono::nanoseconds>(rec_t1 - co_t1).count();
       } else {
         refresh_observables_for_sample();
-        result.record_time_point(t, obs_values);
+        record_time_point(t, obs_values);
       }
       timing_record +=
           std::chrono::duration<double>(std::chrono::steady_clock::now() - rec_t0).count();
@@ -7761,9 +7779,11 @@ Result Engine::run(const TimeSpec& ts) {
 
 double Engine::current_time() const { return impl_->current_time; }
 
-std::vector<double> Engine::get_observable_values() const {
-  // Re-evaluate to get current values
-  const_cast<Impl*>(impl_.get())->compute_observables();
+std::vector<double> Engine::get_observable_values() {
+  // Recompute against current pool state — observable values are only
+  // refreshed at SSA sample points during run_ssa, so a query in between
+  // events would otherwise return stale data.
+  impl_->compute_observables();
   return impl_->obs_values;
 }
 
@@ -7785,10 +7805,45 @@ void Engine::add_molecules(const std::string& type_name, int count) {
   for (int i = 0; i < count; ++i)
     impl_->pool.add_molecule(ti);
 
-  // Rescan all rules (could optimize to only affected rules)
-  for (int ri = 0; ri < static_cast<int>(impl_->model.rules.size()); ++ri)
-    impl_->rescan_all_molecules_for_rule(ri);
+  // Refresh observables first so dynamic-rate rules see the post-add state
+  // when their propensities are recomputed below.
   impl_->compute_observables();
+
+  // Targeted rescan: only rules whose propensities can actually change.
+  //   1. type_to_rules[ti]:        rules whose seed reactant pattern walks
+  //                                a molecule of the just-added type.
+  //   2. dynamic_rate_rules:       rules with Function-type rates whose
+  //                                eval_vars (parameters / observables)
+  //                                may have shifted.
+  //   3. dynamic_synthesis_rules:  zero-reactant rules with dynamic rates;
+  //                                same rationale.
+  // Other rules' a_total is unaffected by adding free, unbound molecules
+  // of type ti — their reactant patterns either don't reference ti, or
+  // reference it only as a non-seed bonded position (which a free ti
+  // molecule cannot satisfy without first being bonded by some other rule).
+  const auto& impl = *impl_;
+  std::vector<char> needed(impl.model.rules.size(), 0);
+  if (ti >= 0 && ti < static_cast<int>(impl.type_to_rules.size())) {
+    for (int ri : impl.type_to_rules[ti])
+      needed[ri] = 1;
+  }
+  for (int ri : impl.dynamic_rate_rules)
+    needed[ri] = 1;
+  for (int ri : impl.dynamic_synthesis_rules)
+    needed[ri] = 1;
+  for (int ri = 0; ri < static_cast<int>(impl.model.rules.size()); ++ri) {
+    if (needed[ri])
+      impl_->rescan_all_molecules_for_rule(ri);
+  }
+
+  // Re-seed the incremental observable tracker.  Without this, the
+  // kSpeciesIncrObs delta-update path keeps applying offsets relative
+  // to its pre-add baseline and Species observable counts drift on
+  // every subsequent SSA event (the post-add full compute_observables
+  // above gives the right value at this instant, but the tracker's
+  // dirty-cx / per-mol contribution caches don't know about the
+  // new molecules).
+  impl_->init_incremental_observables();
 }
 
 void Engine::save_state(const std::string& path) const { impl_->save_state_to(path); }

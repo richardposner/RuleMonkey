@@ -17,7 +17,7 @@
 //
 // or, if RuleMonkey has been installed:
 //   find_package(RuleMonkey CONFIG REQUIRED)
-//   target_link_libraries(my_app PRIVATE rulemonkey::rulemonkey)
+//   target_link_libraries(my_app PRIVATE RuleMonkey::rulemonkey)
 
 #include <rulemonkey/simulator.hpp>
 
@@ -45,7 +45,7 @@ int main(int argc, char* argv[]) {
     sim.set_block_same_complex_binding(true);
 
     // Surface any features the loaded model uses but RM does not implement.
-    for (const auto& w : sim.unsupported_warnings()) {
+    for (const auto& w : sim.unsupported_features()) {
       const char* level = (w.severity == rulemonkey::Severity::Error) ? "ERROR" : "WARN";
       std::fprintf(stderr, "%s: %s (XML element: %s)\n", level, w.feature.c_str(),
                    w.element.c_str());

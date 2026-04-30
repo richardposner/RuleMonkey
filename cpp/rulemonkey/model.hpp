@@ -172,6 +172,8 @@ struct RateLaw {
   // For MM
   double mm_Km = 0.0;
   double mm_kcat = 0.0;
+  std::string mm_kcat_expr; // symbolic, before resolution
+  std::string mm_Km_expr;   // symbolic, before resolution
 
   // TFUN backing (if rate depends on a table function)
   bool uses_tfun = false;
@@ -279,6 +281,7 @@ struct SpeciesInit {
   std::string id;
   std::string name;
   double concentration = 0.0;
+  std::string concentration_expr; // symbolic, before resolution
   std::vector<SpeciesInitMol> molecules;
   std::vector<SpeciesInitBond> bonds;
 };

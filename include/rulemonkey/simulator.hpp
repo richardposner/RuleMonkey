@@ -32,8 +32,12 @@ public:
 
   RuleMonkeySimulator(const RuleMonkeySimulator&) = delete;
   RuleMonkeySimulator& operator=(const RuleMonkeySimulator&) = delete;
-  RuleMonkeySimulator(RuleMonkeySimulator&&) = delete;
-  RuleMonkeySimulator& operator=(RuleMonkeySimulator&&) = delete;
+
+  // Move is canonical pImpl: only the unique_ptr<Impl> is rebound, no
+  // engine state is copied.  Defined out-of-line in simulator.cpp because
+  // Impl is incomplete in this header.
+  RuleMonkeySimulator(RuleMonkeySimulator&&) noexcept;
+  RuleMonkeySimulator& operator=(RuleMonkeySimulator&&) noexcept;
 
   // Executes a fresh simulation from the parsed model plus the current
   // instance-local parameter overrides and molecule limit.
@@ -64,9 +68,11 @@ public:
   // `MoleculeType`.
   int get_molecule_count(const std::string& molecule_type_name) const;
 
-  // Returns the current active-session observable values in the same order as
-  // `observable_names()`.
-  std::vector<double> get_observable_values() const;
+  // Returns the current active-session observable values in the same order
+  // as `observable_names()`.  Non-const because the engine recomputes lazily
+  // — calling this between SSA events forces a fresh evaluation of every
+  // observable against current pool state.
+  std::vector<double> get_observable_values();
 
   // Returns the numeric parameter value that the simulator would currently use
   // for the named declared parameter.
@@ -88,17 +94,23 @@ public:
 
   // Sets an instance-local override for a declared parameter. The override is
   // applied to subsequent `run()` calls and future `initialize()` calls.
+  // Throws std::runtime_error if a session is currently active; call
+  // `destroy_session()` first to mutate overrides, then re-`initialize()`.
   void set_param(const std::string& name, double value);
 
   // Clears all instance-local parameter overrides.
+  // Throws std::runtime_error if a session is currently active.
   void clear_param_overrides();
 
   // Sets an instance-local global molecule limit for subsequent runs and
   // future `initialize()` calls.
+  // Throws std::runtime_error if a session is currently active.
   void set_molecule_limit(int limit);
 
   // When true, bimolecular rules only fire between molecules in different
-  // complexes (equivalent to NFsim's -bscb flag).  Default: false.
+  // complexes (equivalent to NFsim's -bscb flag).  Default: true (strict
+  // BNGL semantics).
+  // Throws std::runtime_error if a session is currently active.
   void set_block_same_complex_binding(bool value);
 
   // Returns observable names in XML declaration order captured at
@@ -115,8 +127,13 @@ public:
   // Returns the validated runtime method for this simulator instance.
   Method method() const;
 
-  // Returns warnings about unsupported BNGL features detected in the XML.
-  const std::vector<UnsupportedFeature>& unsupported_warnings() const;
+  // Returns the list of unsupported BNGL features detected in the XML at
+  // load time.  Each entry has a `Severity` of `Warn` (best-effort run, may
+  // still produce useful output) or `Error` (RM cannot honor BNGL semantics
+  // for this construct — the rm_driver CLI refuses to run such models
+  // unless --ignore-unsupported is passed; embedders should inspect the
+  // severities themselves before deciding to call run()).
+  const std::vector<UnsupportedFeature>& unsupported_features() const;
 
 private:
   struct Impl;

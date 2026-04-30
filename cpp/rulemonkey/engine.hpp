@@ -23,7 +23,7 @@ public:
   Result run(const TimeSpec& ts);
 
   double current_time() const;
-  std::vector<double> get_observable_values() const;
+  std::vector<double> get_observable_values();
   int get_molecule_count(const std::string& type_name) const;
   void add_molecules(const std::string& type_name, int count);
 
