@@ -30,6 +30,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Parameter forward-reference resolution iterates to fixed point.**
+  `load_model` previously did a single retry pass after the initial
+  resolution pass, which handled at most one level of forward
+  reference.  BNG2 emits parameters in dependency order so this
+  never bit in practice, but arbitrary XML declaring
+  `P3 = 2*P2; P2 = P1; P1 = 1` in that order would have left `P3`
+  stale.  Now iterates until either every value is stable or the cap
+  (param-count + 4) is hit.
+
+- **CONTRACT comment on `*_expr` fields in `model.hpp`.**  Each
+  symbolic-source field (`rate_expr`, `mm_kcat_expr`, `mm_Km_expr`,
+  `concentration_expr`) now carries an inline note saying it must be
+  re-resolved in `RuleMonkeySimulator::Impl::apply_overrides`.
+  Defensive against future parser extensions that add a 5th
+  parameter-derived field and forget to wire it into the override
+  cascade — exactly the regression that the 3.1.x `apply_overrides`
+  fix was designed to close.
+
 - **`asan` preset disables `RULEMONKEY_INSTALL`; CMakeLists refuses
   `RULEMONKEY_INSTALL=ON` with `RULEMONKEY_ENABLE_ASAN=ON`.**  The asan
   flags are PRIVATE compile / PUBLIC link on the `rulemonkey` target,
@@ -54,6 +72,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that file is two lines (`add_executable` + `target_link_libraries`).
   The actual snippets live in the doc-comment header of
   `examples/embed.cpp`.  Updated the pointer.
+
+- **`docs/model_semantics.md` "RM v1" wording.**  The Tier-0 refusals
+  table for multi-molecule and duplicate Fixed species said "RM v1
+  only supports …" / "RM v1 allows at most …".  RM is at 3.x; a
+  reader could mistake "v1" for RuleMonkey 1.x rather than the v1
+  scope of the Fixed-species feature itself.  Wording tightened to
+  "RM currently …".
 
 ### Fixed
 

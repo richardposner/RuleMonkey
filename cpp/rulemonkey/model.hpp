@@ -155,10 +155,18 @@ enum class RateLawType { Ele, Function, MM };
 
 enum class TfunCounterSource { None, Time, Parameter, Observable, Function };
 
+// CONTRACT for symbolic-source fields below (`rate_expr`, `mm_kcat_expr`,
+// `mm_Km_expr`, and `SpeciesInit::concentration_expr`): any `*_expr`
+// capturing the un-resolved BNGL source for a parameter-derived numeric
+// MUST be re-resolved in RuleMonkeySimulator::Impl::apply_overrides
+// (simulator.cpp).  Otherwise set_param overrides silently fail to reach
+// the engine for that field — exactly the regression that the 3.1.x
+// fix-pass on apply_overrides was designed to close.
+
 struct RateLaw {
   RateLawType type = RateLawType::Ele;
   double rate_value = 0.0;
-  std::string rate_expr; // symbolic, before resolution
+  std::string rate_expr; // symbolic source — re-resolved in apply_overrides
   bool is_total_rate = false;
 
   // For Function rate law
@@ -172,8 +180,8 @@ struct RateLaw {
   // For MM
   double mm_Km = 0.0;
   double mm_kcat = 0.0;
-  std::string mm_kcat_expr; // symbolic, before resolution
-  std::string mm_Km_expr;   // symbolic, before resolution
+  std::string mm_kcat_expr; // symbolic source — re-resolved in apply_overrides
+  std::string mm_Km_expr;   // symbolic source — re-resolved in apply_overrides
 
   // TFUN backing (if rate depends on a table function)
   bool uses_tfun = false;
@@ -281,7 +289,7 @@ struct SpeciesInit {
   std::string id;
   std::string name;
   double concentration = 0.0;
-  std::string concentration_expr; // symbolic, before resolution
+  std::string concentration_expr; // symbolic source — re-resolved in apply_overrides
   std::vector<SpeciesInitMol> molecules;
   std::vector<SpeciesInitBond> bonds;
 };

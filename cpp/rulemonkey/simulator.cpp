@@ -503,14 +503,30 @@ Model load_model(const std::string& xml_path,
       model.parameter_exprs[id] = val_str;
       model.parameter_names_ordered.push_back(id);
     }
-    // Second pass for forward references
-    for (auto& name : model.parameter_names_ordered) {
-      const auto& val_str = model.parameter_exprs[name];
-      try {
-        model.parameters[name] = resolve_value(val_str, model.parameters);
-      } catch (...) {
-        // leave as-is
+    // Iterate to fixed point for forward references and chained
+    // derivations.  BNG2 emits parameters in dependency order so a
+    // single retry pass usually settles, but arbitrary XML may declare
+    // `P3 = 2*P2; P2 = P1; P1 = 1` in that order — a single retry
+    // resolves P2 and P1 but leaves P3 stale.  Iterate until either
+    // every value is stable or the cap is hit (cap > parameter count
+    // means the dependency graph has a cycle, which we can't resolve).
+    const int kMaxResolvePasses = static_cast<int>(model.parameter_names_ordered.size()) + 4;
+    for (int pass = 0; pass < kMaxResolvePasses; ++pass) {
+      bool changed = false;
+      for (auto& name : model.parameter_names_ordered) {
+        const auto& val_str = model.parameter_exprs[name];
+        try {
+          double resolved = resolve_value(val_str, model.parameters);
+          if (resolved != model.parameters[name]) {
+            model.parameters[name] = resolved;
+            changed = true;
+          }
+        } catch (...) {
+          // leave as-is — still a forward reference
+        }
       }
+      if (!changed)
+        break;
     }
   }
 

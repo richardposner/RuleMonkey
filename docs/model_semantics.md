@@ -144,8 +144,8 @@ treat at least one of these as a signal to refuse the model.
 | Any rule with `RateLaw type="Hill"` | Network-only; use `generate_network()` + ODE/SSA instead of network-free. |
 | Any rule with `RateLaw type="FunctionProduct"` | Not implemented; rewrite as a single multi-factor `Function`. |
 | Any `<MoleculeType population="1">` | Hybrid particle-population SSA not implemented; would be silently treated as ordinary particles with diverging trajectories. |
-| Multi-molecule or bonded `<Species Fixed="1">` | RM v1 only supports single-molecule, unbonded Fixed species. |
-| Two or more `<Species Fixed="1">` of the same `MoleculeType` | RM v1 allows at most one Fixed species per molecule type to avoid matching-overlap ambiguity. |
+| Multi-molecule or bonded `<Species Fixed="1">` | RM currently supports only single-molecule, unbonded Fixed species. |
+| Two or more `<Species Fixed="1">` of the same `MoleculeType` | RM currently allows at most one Fixed species per molecule type to avoid matching-overlap ambiguity. |
 
 The CLI's `--ignore-unsupported` flag downgrades these to runs-anyway
 mode. Each error message includes the specific behavior change that
