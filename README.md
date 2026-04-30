@@ -106,8 +106,8 @@ sim.destroy_session();
 See `include/rulemonkey/simulator.hpp` for the complete contract,
 `include/rulemonkey/types.hpp` for the result/time-spec/feature-warning
 structs, and `examples/embed.cpp` for a minimal compilable example
-(plus a `find_package` / `add_subdirectory` CMake snippet in
-`examples/CMakeLists.txt`).
+(its doc-comment header carries `find_package` / `add_subdirectory`
+CMake snippets for both consumption modes).
 
 ## Model coverage
 

@@ -268,12 +268,6 @@ const XmlNode* find_child(const XmlNode& p, const std::string& name) {
       return &c;
   return nullptr;
 }
-const XmlNode& need_child(const XmlNode& p, const std::string& name) {
-  auto* c = find_child(p, name);
-  if (!c)
-    throw std::runtime_error("XML: missing <" + name + "> in <" + p.name + ">");
-  return *c;
-}
 std::string need_attr(const XmlNode& n, const std::string& a) {
   auto it = n.attributes.find(a);
   if (it == n.attributes.end() || it->second.empty())
@@ -1251,13 +1245,8 @@ Model load_model(const std::string& xml_path,
       if (rule.molecularity == 2) {
         for (auto& op : rule.operations) {
           if (op.type == OpType::AddBond && op.comp_flat_a >= 0 && op.comp_flat_b >= 0) {
-            // Find which reactant pattern molecules these belong to
-            int rp_start_0 = rule.reactant_pattern_starts[0];
-            int rp_start_1 = rule.reactant_pattern_starts.size() > 1
-                                 ? rule.reactant_pattern_starts[1]
-                                 : static_cast<int>(rule.reactant_pattern.molecules.size());
-
-            // Find mol/comp for flat_a
+            // Walk reactant-pattern molecules to find which one each
+            // bond endpoint lives in.
             int flat_a = op.comp_flat_a, flat_b = op.comp_flat_b;
             int mol_a = -1, local_a = -1, mol_b = -1, local_b = -1;
             int running = 0;
@@ -1393,22 +1382,6 @@ Model load_model(const std::string& xml_path,
 
 bool has_child(const XmlNode& parent, const std::string& name) {
   return find_child(parent, name) != nullptr;
-}
-
-bool has_attr(const XmlNode& node, const std::string& attr) {
-  return node.attributes.count(attr) > 0;
-}
-
-// Recursively check if any ReactionRule has the named child element.
-bool any_rule_has_child(const XmlNode& model_node, const std::string& child_name) {
-  auto* rr_list = find_child(model_node, "ListOfReactionRules");
-  if (!rr_list)
-    return false;
-  for (auto& rr : rr_list->children) {
-    if (rr.name == "ReactionRule" && find_child(rr, child_name))
-      return true;
-  }
-  return false;
 }
 
 // Check if any ReactionRule has a non-empty attribute.

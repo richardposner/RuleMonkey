@@ -19,6 +19,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unused `pytest>=8.0` dev dependency; the suite is C++ ctest plus
   harness-driven Python scripts.
 
+- **Dead helper functions and locals in `simulator.cpp`.**
+  Three unused free functions in the XML-parser anonymous namespace
+  (`need_child`, `has_attr`, `any_rule_has_child`) and two unused
+  local variables (`rp_start_0`, `rp_start_1` inside the
+  same-components detection) had been triggering compiler
+  `-Wunused-function` / `-Wunused-variable` warnings on every clean
+  build.  Removed; the library now compiles warning-free under both
+  the `release` and `asan` presets.
+
+### Fixed (docs)
+
+- **CHANGELOG 3.0.0 model count off by one.** The 3.0.0 entry said
+  "51 BNGL feature-coverage models"; `git ls-tree v3.0.0 --
+  tests/models/feature_coverage/` counts 52 `.bngl` files.  Corrected.
+
+- **README pointer to the find_package / add_subdirectory snippet.**
+  The "Embedding (C++ API)" section pointed readers at
+  `examples/CMakeLists.txt` for the CMake consumption snippet, but
+  that file is two lines (`add_executable` + `target_link_libraries`).
+  The actual snippets live in the doc-comment header of
+  `examples/embed.cpp`.  Updated the pointer.
+
 ### Fixed
 
 - **`get_parameter` returned the parsed-at-load value between
@@ -291,7 +313,7 @@ CLI-compatible with RuleMonkey 2.0.25.
   step_to / simulate / add_molecules / set_param / save_state / load_state).
 - `rm_driver` batch CLI emitting `.gdat`-format trajectories.
 - Test corpora under `tests/models/`:
-  - `feature_coverage/` — 51 BNGL feature-coverage models with invariants
+  - `feature_coverage/` — 52 BNGL feature-coverage models with invariants
     and golden values.
   - `corpus/` — 71 real-world rule-based models for efficiency and
     correctness benchmarking.
