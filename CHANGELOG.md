@@ -30,6 +30,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **`engine_profile.hpp` file-scope counters are now `thread_local`.**
+  `cm_profile_` and `cmm_fc_profile_` (the two profile structs whose
+  call sites are static free functions with no Engine pointer in scope)
+  were previously plain `inline` globals.  Default builds were safe —
+  the master `RM_DEV_PROFILES` gate is off and the increment sites
+  dead-strip — but a `RULEMONKEY_ENABLE_DEV_PROFILES=ON` build run
+  under BNGsim's `ThreadPoolExecutor` simulation pattern (or its
+  imminent PyBNF integration) would race on the counters across
+  concurrent Engines on different threads, producing garbage profile
+  output.  `thread_local` gives each thread its own counters and the
+  per-Engine `report_*()` reads thread-coherent data.  Single-thread
+  semantics unchanged.
+
 - **Parameter forward-reference resolution iterates to fixed point.**
   `load_model` previously did a single retry pass after the initial
   resolution pass, which handled at most one level of forward

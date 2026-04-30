@@ -120,10 +120,14 @@ inline constexpr bool kObsFastMatchInvariant = false;
 // below.  Ordering of fields matches engine.cpp's increment sites; do
 // not reorder without updating both places.
 //
-// File-scope singletons (cm_profile_, cmm_fc_profile_) are valid for
-// the single-threaded driver in use today.  Multi-engine concurrency
-// would require per-Engine instances; SrProfile and the five engine-
-// owned structs already are per-Engine via Engine::Impl members.
+// `cm_profile_` and `cmm_fc_profile_` are file-scope because the call
+// sites (`count_multi_mol_fast`, `count_2mol_1bond_fc`) are static free
+// functions with no Engine pointer in scope.  They are `thread_local`
+// so concurrent Engines on different threads (BNGsim's ThreadPoolExecutor
+// spawn pattern, the imminent PyBNF integration target) accumulate
+// counters into per-thread storage and the report_*() output is
+// thread-coherent.  The other six profile structs are per-Engine via
+// Engine::Impl / AgentPool members and need no additional guard.
 // ===========================================================================
 
 struct CountMultiProfile {
@@ -387,10 +391,11 @@ struct ObsIncrProfile {
   std::vector<PerObs> obs;
 };
 
-// File-scope singletons.  `inline` so multiple TU inclusion is ODR-safe;
-// today only engine.cpp consumes them.
-inline CountMultiProfile cm_profile_;
-inline CmmFcProfile cmm_fc_profile_;
+// File-scope, per-thread.  `inline` so multiple TU inclusion is ODR-safe
+// (only engine.cpp consumes them today); `thread_local` so concurrent
+// Engines on different threads do not race on the counters.
+inline thread_local CountMultiProfile cm_profile_;
+inline thread_local CmmFcProfile cmm_fc_profile_;
 
 // ===========================================================================
 // End-of-run reporting bodies
