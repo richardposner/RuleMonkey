@@ -8,6 +8,9 @@ on:
 
 jobs:
   build:
+    # macOS runs build + smoke ctest only (the feature_coverage benchmark
+    # job below requires the Linux-only NFsim binary from BioNetGen).  Treat
+    # the macOS leg as a "build-clean" gate, not a correctness gate.
     strategy:
       fail-fast: false
       matrix:
@@ -28,6 +31,30 @@ jobs:
 
       - name: Test
         run: ctest --preset release
+
+  asan:
+    # AddressSanitizer + UBSan run of the unit-test suite on Linux.  This is
+    # the correctness gate for memory / pointer / index / signed-overflow
+    # bugs that observable-trajectory parity tests in feature_coverage cannot
+    # see (e.g., a use-after-free in pool reuse that happens to land on
+    # zeroed memory).  Linux-only — macOS sanitizer support is workable but
+    # diagnostic quality varies across runner images.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Configure (asan)
+        run: cmake --preset asan
+
+      - name: Build (asan)
+        run: cmake --build --preset asan
+
+      - name: Test (asan)
+        run: ctest --preset asan
 
   feature_coverage:
     # Runs the full feature_coverage benchmark on every push / PR.  ctest

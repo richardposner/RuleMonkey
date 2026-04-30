@@ -1,6 +1,6 @@
 [project]
 name = "rulemonkey-harness"
-version = "3.0.0"
+version = "3.1.0"
 description = "Test and benchmarking harness for the RuleMonkey C++ engine"
 readme = "README.md"
 requires-python = ">=3.10"

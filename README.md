@@ -5,7 +5,7 @@ in [BNGL](https://bionetgen.org/). RuleMonkey reads a BioNetGen-generated XML
 model and runs an exact discrete-event simulation, producing observable
 trajectories in `.gdat` format.
 
-This is **RuleMonkey 3.0**, a cleanroom C++17 rewrite designed to be
+This is the **RuleMonkey 3.x** cleanroom C++17 rewrite, designed to be
 embedded as an in-process simulation kernel.  The engine exposes a
 small C++ API (`include/rulemonkey/simulator.hpp`) that host
 applications — most notably the BNGsim simulation engine — can drive
@@ -108,6 +108,18 @@ See `include/rulemonkey/simulator.hpp` for the complete contract,
 structs, and `examples/embed.cpp` for a minimal compilable example
 (plus a `find_package` / `add_subdirectory` CMake snippet in
 `examples/CMakeLists.txt`).
+
+## Model coverage
+
+[`docs/model_semantics.md`](docs/model_semantics.md) is the reference for
+"will my BNGL model run on RM?" — it lists every supported BNGL
+construct, every Tier-0 refusal (compartments, Arrhenius / Sat / Hill /
+FunctionProduct rate laws, population types, multi-molecule fixed
+species), and the best-effort warnings the engine emits at load time.
+
+[`docs/timing_comparison.md`](docs/timing_comparison.md) is the
+companion performance reference: a 173-model RM-vs-NFsim wall-time
+comparison with a "where does each engine win?" breakdown.
 
 ## License
 

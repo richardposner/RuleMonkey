@@ -241,7 +241,7 @@ CLI-compatible with RuleMonkey 2.0.25.
     and golden values.
   - `corpus/` — 71 real-world rule-based models for efficiency and
     correctness benchmarking.
-  - `nfsim_basicmodels/` — 72 models from the NFsim parity suite.
+  - `nfsim_basicmodels/` — 36 models from the NFsim parity suite.
 - 100-replicate ensemble reference trajectories under
   `tests/reference/nfsim/` (regenerated 2026-04-10) — 69 of 71 models
   from a gold-standard NFsim build, with `toy_jim` and `rm_tlbr_rings`

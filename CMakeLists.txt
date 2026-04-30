@@ -73,6 +73,29 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
 endif()
 
 # ---------------------------------------------------------------------------
+# Optional AddressSanitizer + UndefinedBehaviorSanitizer.
+#
+# Heavy index-based pool manipulation, BFS / Fenwick code, and pattern-matching
+# fast paths are exactly the surface where ASan + UBSan routinely catch
+# regressions that observable-trajectory parity tests miss.  Off by default
+# (the perf hit is ~2x); cmake --preset asan turns it on.
+#
+# Linux-only by intent: macOS asan is workable but UBSan diagnostics are
+# noisier and the CI matrix reserves macOS for the build-clean smoke test.
+# Applied after rm_driver is declared so both library and CLI get the flags.
+# ---------------------------------------------------------------------------
+option(RULEMONKEY_ENABLE_ASAN "Build with AddressSanitizer + UBSan" OFF)
+if(RULEMONKEY_ENABLE_ASAN)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        message(FATAL_ERROR "RULEMONKEY_ENABLE_ASAN requires Clang or GCC")
+    endif()
+    set(_rm_asan_flags -fsanitize=address,undefined -fno-omit-frame-pointer)
+    target_compile_options(rulemonkey  PRIVATE ${_rm_asan_flags})
+    target_link_options   (rulemonkey  PUBLIC  ${_rm_asan_flags})
+    target_compile_options(rm_driver   PRIVATE ${_rm_asan_flags})
+endif()
+
+# ---------------------------------------------------------------------------
 # Examples (off by default — host projects opt in)
 # ---------------------------------------------------------------------------
 option(RULEMONKEY_BUILD_EXAMPLES "Build the C++ embedding examples" OFF)
