@@ -28,6 +28,11 @@ compile_commands.json
 # Local env overrides
 .envrc.local
 
+# Development scratch — sprint plans, draft issues, exploratory notes.
+# `docs/` is for proper documentation; ephemera goes here so git
+# history isn't polluted.
+dev/
+
 # OS noise
 .DS_Store
 Thumbs.db
