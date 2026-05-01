@@ -107,6 +107,11 @@ public:
   // Reports whether a live runtime/session state is currently active.
   bool has_session() const;
 
+  // Returns the active session's current logical time.  Useful when
+  // resuming after `load_state` to feed `simulate(t_start, …)` with
+  // the matching segment-start time.  Throws if no session is active.
+  double current_time() const;
+
   // Destroys any live runtime/session state while preserving parsed-model
   // metadata and stored configuration. Safe to call repeatedly.
   void destroy_session();

@@ -319,6 +319,47 @@ void test_derived_parameter_cascade(const std::string& xml) {
         "direct override of A_tot should reach the engine via initial concentration");
 }
 
+// simulate(t_start, t_end, n) must throw if t_start disagrees with the
+// session's current_time.  Pre-fix the user-supplied t_start was passed
+// straight through, producing degenerate trajectories: t_start <
+// current_time recorded all early sample slots at the post-advance
+// state; t_start > current_time silently discarded the burn-in window.
+void test_simulate_t_start_validation(const std::string& xml) {
+  rulemonkey::RuleMonkeySimulator sim(xml);
+  sim.initialize(/*seed=*/1);
+
+  // Initial: current_time = 0.  simulate(0, 1, 2) must succeed.
+  auto r = sim.simulate(0.0, 1.0, 2);
+  check(r.n_times() == 3, "simulate(0, 1, 2) at fresh session should produce 3 samples");
+
+  double now = sim.current_time();
+  check(now >= 1.0, "current_time should advance to at least t_end after simulate");
+
+  // Backwards is rejected.
+  bool threw = false;
+  try {
+    sim.simulate(now - 0.5, now + 1.0, 2);
+  } catch (const std::runtime_error&) {
+    threw = true;
+  }
+  check(threw, "simulate with t_start < current_time should throw");
+
+  // Forward gap is rejected.
+  threw = false;
+  try {
+    sim.simulate(now + 0.5, now + 1.5, 2);
+  } catch (const std::runtime_error&) {
+    threw = true;
+  }
+  check(threw, "simulate with t_start > current_time should throw");
+
+  // Matching t_start succeeds.
+  auto r2 = sim.simulate(now, now + 1.0, 2);
+  check(r2.n_times() == 3, "simulate(current_time, current_time+1, 2) should produce 3 samples");
+
+  sim.destroy_session();
+}
+
 // Parameters declared in REVERSE dependency order (`C = 2*B; B = 2*A; A = 1`)
 // must still cascade after a set_param on the deepest base.  load_model
 // already iterates resolution to fixed point at parse time; sync_parameters
@@ -368,6 +409,7 @@ int main(int argc, char* argv[]) {
     test_setparam_rejects_unknown_name(a_plus_a);
     test_derived_parameter_cascade(derived);
     test_out_of_order_cascade(out_of_order);
+    test_simulate_t_start_validation(a_plus_a);
   } catch (const std::exception& e) {
     std::fprintf(stderr, "ERROR: %s\n", e.what());
     return 2;

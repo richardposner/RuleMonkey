@@ -1870,6 +1870,28 @@ void RuleMonkeySimulator::step_to(double time) {
 Result RuleMonkeySimulator::simulate(double t_start, double t_end, int n_points) {
   if (!impl_->session)
     throw std::runtime_error("No active session (call initialize first)");
+
+  // The session has its own current_time (advanced by initialize, prior
+  // simulate() / step_to(), or load_state).  The contract is that the
+  // segment starts there; a caller passing a t_start that disagrees has
+  // a bug — going backwards is meaningless, and a forward gap silently
+  // discards the burn-in window.  Throw rather than produce a degenerate
+  // trajectory.
+  const double session_t = impl_->session->current_time();
+  const double tol = 1e-9 * std::max(1.0, std::fabs(session_t));
+  if (std::fabs(t_start - session_t) > tol) {
+    std::ostringstream msg;
+    msg << "simulate(t_start=" << t_start << ", t_end=" << t_end
+        << "): t_start disagrees with current session time " << session_t
+        << "; pass t_start = sim.current_time() (or call destroy_session/initialize"
+           " to restart at 0)";
+    throw std::runtime_error(msg.str());
+  }
+  if (t_end < session_t)
+    throw std::runtime_error("simulate: t_end (" + std::to_string(t_end) +
+                             ") is earlier than current session time (" +
+                             std::to_string(session_t) + ")");
+
   TimeSpec ts;
   ts.t_start = t_start;
   ts.t_end = t_end;
@@ -1891,6 +1913,12 @@ void RuleMonkeySimulator::load_state(const std::string& path) {
 }
 
 bool RuleMonkeySimulator::has_session() const { return impl_->session != nullptr; }
+
+double RuleMonkeySimulator::current_time() const {
+  if (!impl_->session)
+    throw std::runtime_error("No active session");
+  return impl_->session->current_time();
+}
 
 void RuleMonkeySimulator::destroy_session() { impl_->session.reset(); }
 

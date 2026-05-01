@@ -110,8 +110,14 @@ int main(int argc, char* argv[]) {
       // Session mode: needed for save/load state
       if (!load_state_path.empty()) {
         sim.load_state(load_state_path);
-        if (!t_start_set)
-          std::cerr << "WARN: --load-state without --t-start; using t_start=0\n";
+        if (!t_start_set) {
+          // Default t_start to the loaded session time so simulate()'s
+          // t_start ≈ current_time invariant holds.  Without this, a
+          // user who forgot --t-start would hit the contract throw.
+          t_start = sim.current_time();
+          std::cerr << "WARN: --load-state without --t-start; using t_start=" << t_start
+                    << " from loaded state\n";
+        }
       } else {
         sim.initialize(seed);
       }
