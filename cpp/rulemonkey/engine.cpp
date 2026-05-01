@@ -25,10 +25,11 @@
 #include <unordered_set>
 #include <vector>
 
-// Dev-time profiler infrastructure (gates, profile structs, file-scope
-// singletons, end-of-run report bodies) lives in engine_profile.hpp.
-// Every `if constexpr (k*Profile)` site below dead-strips in default
-// builds (master gate off); turn it on with cmake
+// Dev-time profiler infrastructure (gates, profile struct definitions,
+// end-of-run report bodies) lives in engine_profile.hpp; the eight
+// profile struct *instances* are per-Engine members on Engine::Impl /
+// AgentPool below.  Every `if constexpr (k*Profile)` site dead-strips
+// in default builds (master gate off); turn it on with cmake
 // -DRULEMONKEY_ENABLE_DEV_PROFILES=ON.
 
 namespace rulemonkey {

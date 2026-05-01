@@ -4,9 +4,11 @@
 // Dev profiler / invariant infrastructure for engine.cpp.
 //
 // Carries the gate constants, sampling cadences, profile-struct
-// definitions, file-scope singletons, and end-of-run reporting bodies
-// that the engine uses to instrument hot paths during optimization
-// sprints.  None of it is part of the runtime contract or the public
+// definitions, and end-of-run reporting bodies that the engine uses
+// to instrument hot paths during optimization sprints.  Profile-struct
+// instances live as per-Engine members on `Engine::Impl` / `AgentPool`
+// in engine.cpp; nothing in this header has process-wide mutable
+// state.  None of it is part of the runtime contract or the public
 // API — pure dev-time scaffolding.
 //
 // In default builds the master macro `RM_DEV_PROFILES` is undefined,
