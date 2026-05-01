@@ -1407,7 +1407,7 @@ static bool build_fastmatch_slot(const Pattern& pat, int pat_start, int pat_end,
 // pattern embeddings seeded at seed_mol_id — equal to the generic cmm
 // function's return value.  Pre-condition: fm.enabled == true.
 static inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id,
-                                      const FastMatchSlot& fm) {
+                                      const FastMatchSlot& fm, CmmFcProfile* fc_prof) {
   // -- profile scaffolding (gated, see kCmmFcProfile) --
   using fc_clock = std::chrono::steady_clock;
   bool fc_sampled = false;
@@ -1418,28 +1418,26 @@ static inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id,
         std::chrono::duration_cast<std::chrono::nanoseconds>(b - a).count());
   };
   if constexpr (kCmmFcProfile) {
-    cmm_fc_profile_.fc_calls++;
-    cmm_fc_profile_.fc_seed_bond_candidates_sum +=
-        static_cast<uint64_t>(fm.seed_bond_candidates.size());
-    cmm_fc_profile_.fc_partner_bond_candidates_sum +=
+    fc_prof->fc_calls++;
+    fc_prof->fc_seed_bond_candidates_sum += static_cast<uint64_t>(fm.seed_bond_candidates.size());
+    fc_prof->fc_partner_bond_candidates_sum +=
         static_cast<uint64_t>(fm.partner_bond_candidates.size());
     uint64_t pnbc = static_cast<uint64_t>(fm.partner_non_bond_checks.size());
-    cmm_fc_profile_.fc_partner_non_bond_checks_sum += pnbc;
-    cmm_fc_profile_.fc_seed_non_bond_checks_sum +=
-        static_cast<uint64_t>(fm.seed_non_bond_checks.size());
-    if (fm.seed_bond_candidates.size() > cmm_fc_profile_.fc_seed_bond_candidates_max)
-      cmm_fc_profile_.fc_seed_bond_candidates_max = fm.seed_bond_candidates.size();
-    if (fm.partner_bond_candidates.size() > cmm_fc_profile_.fc_partner_bond_candidates_max)
-      cmm_fc_profile_.fc_partner_bond_candidates_max = fm.partner_bond_candidates.size();
-    if (pnbc > cmm_fc_profile_.fc_partner_non_bond_checks_max)
-      cmm_fc_profile_.fc_partner_non_bond_checks_max = pnbc;
+    fc_prof->fc_partner_non_bond_checks_sum += pnbc;
+    fc_prof->fc_seed_non_bond_checks_sum += static_cast<uint64_t>(fm.seed_non_bond_checks.size());
+    if (fm.seed_bond_candidates.size() > fc_prof->fc_seed_bond_candidates_max)
+      fc_prof->fc_seed_bond_candidates_max = fm.seed_bond_candidates.size();
+    if (fm.partner_bond_candidates.size() > fc_prof->fc_partner_bond_candidates_max)
+      fc_prof->fc_partner_bond_candidates_max = fm.partner_bond_candidates.size();
+    if (pnbc > fc_prof->fc_partner_non_bond_checks_max)
+      fc_prof->fc_partner_non_bond_checks_max = pnbc;
     int pnbc_bucket = pnbc >= 6 ? 6 : static_cast<int>(pnbc);
-    cmm_fc_profile_.fc_partner_non_bond_checks_hist[pnbc_bucket]++;
-    if ((cmm_fc_profile_.fc_calls % kCmmFcProfileSampleEvery) == 0) {
+    fc_prof->fc_partner_non_bond_checks_hist[pnbc_bucket]++;
+    if ((fc_prof->fc_calls % kCmmFcProfileSampleEvery) == 0) {
       fc_sampled = true;
-      fc_phase = static_cast<int>(cmm_fc_profile_.sampled_calls % 5);
-      cmm_fc_profile_.sampled_calls++;
-      cmm_fc_profile_.phase_hits[fc_phase]++;
+      fc_phase = static_cast<int>(fc_prof->sampled_calls % 5);
+      fc_prof->sampled_calls++;
+      fc_prof->phase_hits[fc_phase]++;
     }
   }
   auto phase_start = [&](int p) {
@@ -1451,7 +1449,7 @@ static inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id,
   auto phase_stop = [&](int p) {
     if constexpr (kCmmFcProfile) {
       if (fc_sampled && fc_phase == p) {
-        cmm_fc_profile_.phase_ns[p] += fc_ns(fc_t0, fc_clock::now());
+        fc_prof->phase_ns[p] += fc_ns(fc_t0, fc_clock::now());
       }
     }
   };
@@ -1462,13 +1460,13 @@ static inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id,
   const auto& seed = pool.molecule(seed_mol_id);
   if (!seed.active) {
     if constexpr (kCmmFcProfile)
-      cmm_fc_profile_.fc_inactive_seed++;
+      fc_prof->fc_inactive_seed++;
     phase_stop(0);
     return 0;
   }
   if (seed.type_index != fm.seed_type) {
     if constexpr (kCmmFcProfile)
-      cmm_fc_profile_.fc_seed_type_mismatches++;
+      fc_prof->fc_seed_type_mismatches++;
     phase_stop(0);
     return 0;
   }
@@ -1491,7 +1489,7 @@ static inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id,
     }
     if (reject) {
       if constexpr (kCmmFcProfile)
-        cmm_fc_profile_.fc_seed_non_bond_rejects++;
+        fc_prof->fc_seed_non_bond_rejects++;
       phase_stop(0);
       return 0;
     }
@@ -1501,13 +1499,13 @@ static inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id,
   int total = 0;
   for (int seed_ci : fm.seed_bond_candidates) {
     if constexpr (kCmmFcProfile)
-      cmm_fc_profile_.fc_candidate_iters++;
+      fc_prof->fc_candidate_iters++;
 
     // ---- Phase 1: partner trace (seed bond endpoint checks → partner type) ----
     phase_start(1);
     if (seed_ci >= n_seed) {
       if constexpr (kCmmFcProfile)
-        cmm_fc_profile_.fc_candidate_oob++;
+        fc_prof->fc_candidate_oob++;
       phase_stop(1);
       continue;
     }
@@ -1515,19 +1513,19 @@ static inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id,
     const auto& sc = pool.component(seed_bond_cid);
     if (fm.seed_bond_state_req >= 0 && sc.state_index != fm.seed_bond_state_req) {
       if constexpr (kCmmFcProfile)
-        cmm_fc_profile_.fc_candidate_state_rejects++;
+        fc_prof->fc_candidate_state_rejects++;
       phase_stop(1);
       continue;
     }
     if (fm.seed_bond_bond_req == 1 && sc.bond_partner >= 0) {
       if constexpr (kCmmFcProfile)
-        cmm_fc_profile_.fc_candidate_bond_rejects++;
+        fc_prof->fc_candidate_bond_rejects++;
       phase_stop(1);
       continue;
     }
     if (fm.seed_bond_bond_req == 2 && sc.bond_partner < 0) {
       if constexpr (kCmmFcProfile)
-        cmm_fc_profile_.fc_candidate_bond_rejects++;
+        fc_prof->fc_candidate_bond_rejects++;
       phase_stop(1);
       continue;
     }
@@ -1535,7 +1533,7 @@ static inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id,
     int partner_cid = sc.bond_partner;
     if (partner_cid < 0) {
       if constexpr (kCmmFcProfile)
-        cmm_fc_profile_.fc_candidate_bond_rejects++;
+        fc_prof->fc_candidate_bond_rejects++;
       phase_stop(1);
       continue;
     }
@@ -1543,20 +1541,20 @@ static inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id,
     int partner_mol_id = pool.mol_of_comp(partner_cid);
     if (partner_mol_id == seed_mol_id) {
       if constexpr (kCmmFcProfile)
-        cmm_fc_profile_.fc_candidate_self_bond++;
+        fc_prof->fc_candidate_self_bond++;
       phase_stop(1);
       continue;
     }
     const auto& partner = pool.molecule(partner_mol_id);
     if (!partner.active) {
       if constexpr (kCmmFcProfile)
-        cmm_fc_profile_.fc_partner_inactive++;
+        fc_prof->fc_partner_inactive++;
       phase_stop(1);
       continue;
     }
     if (partner.type_index != fm.partner_type) {
       if constexpr (kCmmFcProfile)
-        cmm_fc_profile_.fc_partner_type_mismatches++;
+        fc_prof->fc_partner_type_mismatches++;
       phase_stop(1);
       continue;
     }
@@ -1574,7 +1572,7 @@ static inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id,
     }
     if (plocal < 0) {
       if constexpr (kCmmFcProfile)
-        cmm_fc_profile_.fc_plocal_not_found++;
+        fc_prof->fc_plocal_not_found++;
       phase_stop(2);
       continue;
     }
@@ -1590,7 +1588,7 @@ static inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id,
       }
     if (!plocal_ok) {
       if constexpr (kCmmFcProfile)
-        cmm_fc_profile_.fc_plocal_not_ok++;
+        fc_prof->fc_plocal_not_ok++;
       phase_stop(3);
       continue;
     }
@@ -1599,7 +1597,7 @@ static inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id,
     if (fm.partner_bond_state_req >= 0 &&
         pool.component(partner_cid).state_index != fm.partner_bond_state_req) {
       if constexpr (kCmmFcProfile)
-        cmm_fc_profile_.fc_partner_state_rejects++;
+        fc_prof->fc_partner_state_rejects++;
       phase_stop(3);
       continue;
     }
@@ -1632,12 +1630,12 @@ static inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id,
     phase_stop(4);
     if (!ok) {
       if constexpr (kCmmFcProfile)
-        cmm_fc_profile_.fc_partner_non_bond_rejects++;
+        fc_prof->fc_partner_non_bond_rejects++;
       continue;
     }
 
     if constexpr (kCmmFcProfile)
-      cmm_fc_profile_.fc_total_matches++;
+      fc_prof->fc_total_matches++;
     ++total;
   }
 
@@ -1683,11 +1681,18 @@ static constexpr bool kObsFastMatch = true;
 // 2-mol-1-bond-fully-constrained specialized matcher.
 static int count_multi_mol_fast(const AgentPool& pool, int seed_mol_id, const Pattern& pat,
                                 const Model& model, int pat_start, int pat_end, int seed_pat_idx,
-                                const PatternAdj& pa, const FastMatchSlot* fm = nullptr,
+                                const PatternAdj& pa, CountMultiProfile* cm_prof,
+                                CmmFcProfile* fc_prof, const FastMatchSlot* fm = nullptr,
                                 const std::vector<int>* reacting_local = nullptr);
 
 // Generic body extracted so the dispatcher can call it for the invariant-gate
 // comparison without recursing through the dispatch.
+//
+// `cm_prof` is the per-Engine CountMultiProfile destination — must be
+// non-null; the call sites pass `&Engine::Impl::cm_profile`.  Always
+// passed even when `kCountMultiProfile` is `false`, because the gate is
+// `if constexpr` and the increment sites compile to nothing in default
+// builds, so the parameter has no runtime cost there.
 //
 // `reacting_local`, when supplied, is forwarded to the seed-side
 // count_embeddings_single call so that injective embeddings sending all
@@ -1700,6 +1705,7 @@ static int count_multi_mol_fast(const AgentPool& pool, int seed_mol_id, const Pa
 static int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, const Pattern& pat,
                                         const Model& model, int pat_start, int pat_end,
                                         int seed_pat_idx, const PatternAdj& pa,
+                                        CountMultiProfile* cm_prof,
                                         const std::vector<int>* reacting_local = nullptr) {
 
   // -- profiling scaffolding (gated) --
@@ -1726,10 +1732,10 @@ static int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, 
     return 6;
   };
   if constexpr (kCountMultiProfile) {
-    cm_profile_.generic_calls++;
-    cm_sampled = (cm_profile_.generic_calls % kCountMultiProfileSampleEvery) == 0;
+    cm_prof->generic_calls++;
+    cm_sampled = (cm_prof->generic_calls % kCountMultiProfileSampleEvery) == 0;
     if (cm_sampled) {
-      cm_profile_.sampled_calls++;
+      cm_prof->sampled_calls++;
       cm_t_total_start = cm_clock::now();
       cm_t_section = cm_t_total_start;
     }
@@ -1737,10 +1743,10 @@ static int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, 
 
   if (pat_end - pat_start <= 1) {
     if constexpr (kCountMultiProfile) {
-      cm_profile_.singleton_pattern_calls++;
+      cm_prof->singleton_pattern_calls++;
       if (cm_sampled) {
         auto now = cm_clock::now();
-        cm_profile_.total_ns += cm_dns(cm_t_total_start, now);
+        cm_prof->total_ns += cm_dns(cm_t_total_start, now);
       }
     }
     return count_embeddings_single(pool, seed_mol_id, pat.molecules[seed_pat_idx], model);
@@ -1748,8 +1754,8 @@ static int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, 
 
   if constexpr (kCountMultiProfile) {
     int npm = pat_end - pat_start;
-    cm_profile_.n_pat_mols_sum += static_cast<uint64_t>(npm);
-    cm_profile_.n_pat_mols_hist[cm_bucket(static_cast<uint64_t>(npm))]++;
+    cm_prof->n_pat_mols_sum += static_cast<uint64_t>(npm);
+    cm_prof->n_pat_mols_hist[cm_bucket(static_cast<uint64_t>(npm))]++;
   }
 
   std::vector<std::vector<int>> seed_embs;
@@ -1758,21 +1764,21 @@ static int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, 
   if constexpr (kCountMultiProfile) {
     if (cm_sampled) {
       auto now = cm_clock::now();
-      cm_profile_.seed_emb_ns += cm_dns(cm_t_section, now);
+      cm_prof->seed_emb_ns += cm_dns(cm_t_section, now);
       cm_t_section = now;
     }
     uint64_t nse = static_cast<uint64_t>(seed_embs.size());
-    cm_profile_.seed_emb_sum += nse;
-    if (nse > cm_profile_.seed_emb_max)
-      cm_profile_.seed_emb_max = nse;
-    cm_profile_.seed_emb_hist[cm_bucket(nse)]++;
+    cm_prof->seed_emb_sum += nse;
+    if (nse > cm_prof->seed_emb_max)
+      cm_prof->seed_emb_max = nse;
+    cm_prof->seed_emb_hist[cm_bucket(nse)]++;
   }
   if (seed_embs.empty()) {
     if constexpr (kCountMultiProfile) {
-      cm_profile_.zero_seed_calls++;
+      cm_prof->zero_seed_calls++;
       if (cm_sampled) {
         auto now = cm_clock::now();
-        cm_profile_.total_ns += cm_dns(cm_t_total_start, now);
+        cm_prof->total_ns += cm_dns(cm_t_total_start, now);
       }
     }
     return 0;
@@ -1880,7 +1886,7 @@ static int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, 
     if constexpr (kCountMultiProfile) {
       if (cm_sampled) {
         auto now = cm_clock::now();
-        cm_profile_.bfs_ns += cm_dns(cm_t_section, now);
+        cm_prof->bfs_ns += cm_dns(cm_t_section, now);
         cm_t_section = now;
       }
     }
@@ -1938,7 +1944,7 @@ static int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, 
         if constexpr (kCountMultiProfile) {
           if (cm_sampled) {
             auto now = cm_clock::now();
-            cm_profile_.disjoint_ns += cm_dns(cm_t_section, now);
+            cm_prof->disjoint_ns += cm_dns(cm_t_section, now);
             cm_t_section = now;
           }
         }
@@ -1950,15 +1956,15 @@ static int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, 
       ++total_count;
   }
   if constexpr (kCountMultiProfile) {
-    cm_profile_.bfs_visited_sum += bfs_visited_this_call;
-    if (bfs_visited_this_call > cm_profile_.bfs_visited_max)
-      cm_profile_.bfs_visited_max = bfs_visited_this_call;
-    cm_profile_.bfs_visited_hist[cm_bucket(bfs_visited_this_call)]++;
+    cm_prof->bfs_visited_sum += bfs_visited_this_call;
+    if (bfs_visited_this_call > cm_prof->bfs_visited_max)
+      cm_prof->bfs_visited_max = bfs_visited_this_call;
+    cm_prof->bfs_visited_hist[cm_bucket(bfs_visited_this_call)]++;
     if (entered_disjoint)
-      cm_profile_.disjoint_calls++;
+      cm_prof->disjoint_calls++;
     if (cm_sampled) {
       auto now = cm_clock::now();
-      cm_profile_.total_ns += cm_dns(cm_t_total_start, now);
+      cm_prof->total_ns += cm_dns(cm_t_total_start, now);
     }
   }
   return total_count;
@@ -1971,17 +1977,18 @@ static int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, 
 // specialization bugs before they silently corrupt propensities.
 static int count_multi_mol_fast(const AgentPool& pool, int seed_mol_id, const Pattern& pat,
                                 const Model& model, int pat_start, int pat_end, int seed_pat_idx,
-                                const PatternAdj& pa, const FastMatchSlot* fm,
+                                const PatternAdj& pa, CountMultiProfile* cm_prof,
+                                CmmFcProfile* fc_prof, const FastMatchSlot* fm,
                                 const std::vector<int>* reacting_local) {
   if constexpr (kCountMultiProfile)
-    cm_profile_.calls++;
+    cm_prof->calls++;
   if (fm && fm->enabled) {
     if constexpr (kCountMultiProfile)
-      cm_profile_.fm_hits++;
-    int specialized = count_2mol_1bond_fc(pool, seed_mol_id, *fm);
+      cm_prof->fm_hits++;
+    int specialized = count_2mol_1bond_fc(pool, seed_mol_id, *fm, fc_prof);
     if (kFastMatchInvariant) {
       int generic = count_multi_mol_fast_generic(pool, seed_mol_id, pat, model, pat_start, pat_end,
-                                                 seed_pat_idx, pa, reacting_local);
+                                                 seed_pat_idx, pa, cm_prof, reacting_local);
       if (generic != specialized) {
         std::fprintf(stderr,
                      "[FastMatch mismatch] seed_mol=%d seed_type=%d partner_type=%d "
@@ -1994,7 +2001,7 @@ static int count_multi_mol_fast(const AgentPool& pool, int seed_mol_id, const Pa
     return specialized;
   }
   return count_multi_mol_fast_generic(pool, seed_mol_id, pat, model, pat_start, pat_end,
-                                      seed_pat_idx, pa, reacting_local);
+                                      seed_pat_idx, pa, cm_prof, reacting_local);
 }
 
 // Compute the diameter (max shortest-path distance between any two molecules)
@@ -2556,6 +2563,12 @@ struct Engine::Impl {
   // counters.  Both struct definitions live in engine_profile.hpp.
   ObsIncrProfile obs_incr_profile_;
   SrProfile sr_profile_;
+  // Per-Engine homes for the two profile structs whose call sites are
+  // static free functions (count_multi_mol_fast / count_2mol_1bond_fc).
+  // Threaded in by pointer so concurrent Engines on different threads
+  // don't trample each other and per-Engine reports are exact.
+  CountMultiProfile cm_profile_;
+  CmmFcProfile cmm_fc_profile_;
 
   // Dynamic rate evaluation state
   expr::VariableMap eval_vars;
@@ -3076,7 +3089,8 @@ struct Engine::Impl {
                         ? rule.reactant_pattern_starts[1]
                         : static_cast<int>(rule.reactant_pattern.molecules.size());
         count_a = count_multi_mol_fast(pool, mid, rule.reactant_pattern, model, seed_a, end_a,
-                                       seed_a, rs.pat_adj_a, &rs.fm_a, &rs.reacting_local_a);
+                                       seed_a, rs.pat_adj_a, &cm_profile_, &cmm_fc_profile_,
+                                       &rs.fm_a, &rs.reacting_local_a);
       } else {
         count_a = count_embeddings_single(pool, mid, pm_a, model, nullptr, &rs.reacting_local_a);
       }
@@ -3099,7 +3113,8 @@ struct Engine::Impl {
         if (rs.use_multi_mol_count_b) {
           int end_b = static_cast<int>(rule.reactant_pattern.molecules.size());
           count_b = count_multi_mol_fast(pool, mid, rule.reactant_pattern, model, seed_b, end_b,
-                                         seed_b, rs.pat_adj_b, &rs.fm_b, &rs.reacting_local_b);
+                                         seed_b, rs.pat_adj_b, &cm_profile_, &cmm_fc_profile_,
+                                         &rs.fm_b, &rs.reacting_local_b);
         } else {
           count_b = count_embeddings_single(pool, mid, pm_b, model, nullptr, &rs.reacting_local_b);
         }
@@ -3801,7 +3816,7 @@ struct Engine::Impl {
               }
             }
             if (fm) {
-              c = count_2mol_1bond_fc(pool, mid, *fm);
+              c = count_2mol_1bond_fc(pool, mid, *fm, &cmm_fc_profile_);
               if constexpr (kObsFastMatchInvariant) {
                 int ref = count_multi_molecule_embeddings(pool, mid, pat, model);
                 if (c != ref) {
@@ -4445,9 +4460,9 @@ struct Engine::Impl {
               int end_a_inc = (rule.reactant_pattern_starts.size() > 1)
                                   ? rule.reactant_pattern_starts[1]
                                   : static_cast<int>(rule.reactant_pattern.molecules.size());
-              nd.count_a =
-                  count_multi_mol_fast(pool, mid, rule.reactant_pattern, model, seed_a, end_a_inc,
-                                       seed_a, rs.pat_adj_a, &rs.fm_a, &rs.reacting_local_a);
+              nd.count_a = count_multi_mol_fast(pool, mid, rule.reactant_pattern, model, seed_a,
+                                                end_a_inc, seed_a, rs.pat_adj_a, &cm_profile_,
+                                                &cmm_fc_profile_, &rs.fm_a, &rs.reacting_local_a);
             } else {
               if constexpr (kIncrUpdateProfile)
                 incr_profile_.count_a_single_calls++;
@@ -4473,9 +4488,9 @@ struct Engine::Impl {
                 if constexpr (kIncrUpdateProfile)
                   incr_profile_.count_b_multi_calls++;
                 int end_b_inc = static_cast<int>(rule.reactant_pattern.molecules.size());
-                nd.count_b =
-                    count_multi_mol_fast(pool, mid, rule.reactant_pattern, model, seed_b, end_b_inc,
-                                         seed_b, rs.pat_adj_b, &rs.fm_b, &rs.reacting_local_b);
+                nd.count_b = count_multi_mol_fast(pool, mid, rule.reactant_pattern, model, seed_b,
+                                                  end_b_inc, seed_b, rs.pat_adj_b, &cm_profile_,
+                                                  &cmm_fc_profile_, &rs.fm_b, &rs.reacting_local_b);
               } else {
                 if constexpr (kIncrUpdateProfile)
                   incr_profile_.count_b_single_calls++;
@@ -6665,10 +6680,10 @@ struct Engine::Impl {
       report_obs_incr(obs_incr_profile_, timing_obs, incr_tracked_obs_indices);
 
     if constexpr (kCountMultiProfile)
-      report_count_multi();
+      report_count_multi(cm_profile_);
 
     if constexpr (kCmmFcProfile)
-      report_cmm_fc();
+      report_cmm_fc(cmm_fc_profile_, cm_profile_);
 
     if constexpr (kSelectReactantsProfile)
       report_select_reactants(sr_profile_, timing_sample);

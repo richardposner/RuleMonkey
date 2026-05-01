@@ -30,18 +30,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **`engine_profile.hpp` file-scope counters are now `thread_local`.**
-  `cm_profile_` and `cmm_fc_profile_` (the two profile structs whose
-  call sites are static free functions with no Engine pointer in scope)
-  were previously plain `inline` globals.  Default builds were safe —
-  the master `RM_DEV_PROFILES` gate is off and the increment sites
-  dead-strip — but a `RULEMONKEY_ENABLE_DEV_PROFILES=ON` build run
-  under BNGsim's `ThreadPoolExecutor` simulation pattern (or its
-  imminent PyBNF integration) would race on the counters across
-  concurrent Engines on different threads, producing garbage profile
-  output.  `thread_local` gives each thread its own counters and the
-  per-Engine `report_*()` reads thread-coherent data.  Single-thread
-  semantics unchanged.
+- **`CountMultiProfile` and `CmmFcProfile` are per-Engine.**
+  These two profile structs (whose call sites are static free
+  functions with no Engine pointer in scope) were file-scope mutable
+  globals — first plain `inline`, then briefly `inline thread_local`
+  as a one-keyword race fix.  TLS eliminated the concurrent-write
+  race but preserved a separate cross-Engine accumulation issue:
+  Engine B's report on the same thread would include Engine A's
+  counts.  Now `CountMultiProfile* cm_prof` / `CmmFcProfile* fc_prof`
+  are threaded through `count_multi_mol_fast`,
+  `count_multi_mol_fast_generic`, and `count_2mol_1bond_fc`; both
+  structs live as `Engine::Impl` members alongside the other six
+  profile structs.  `report_count_multi(p)` and
+  `report_cmm_fc(q, cm)` take their data by const reference.  Result:
+  per-Engine reports show only that Engine's contributions even
+  under BNGsim's ThreadPoolExecutor + PyBNF integration target where
+  multiple `RuleMonkeySimulator` instances run concurrently in one
+  process.  Default-build runtime cost: zero (every increment is
+  inside `if constexpr (k*Profile)` and dead-strips).
+  Dev-build runtime cost: one extra pointer in the call signatures.
+  Output format unchanged.
 
 - **Parameter forward-reference resolution iterates to fixed point.**
   `load_model` previously did a single retry pass after the initial

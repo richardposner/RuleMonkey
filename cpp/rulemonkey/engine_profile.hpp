@@ -120,14 +120,14 @@ inline constexpr bool kObsFastMatchInvariant = false;
 // below.  Ordering of fields matches engine.cpp's increment sites; do
 // not reorder without updating both places.
 //
-// `cm_profile_` and `cmm_fc_profile_` are file-scope because the call
-// sites (`count_multi_mol_fast`, `count_2mol_1bond_fc`) are static free
-// functions with no Engine pointer in scope.  They are `thread_local`
-// so concurrent Engines on different threads (BNGsim's ThreadPoolExecutor
-// spawn pattern, the imminent PyBNF integration target) accumulate
-// counters into per-thread storage and the report_*() output is
-// thread-coherent.  The other six profile structs are per-Engine via
-// Engine::Impl / AgentPool members and need no additional guard.
+// All eight profile structs are per-Engine: six live as Engine::Impl /
+// AgentPool members directly; the two whose call sites are static free
+// functions (CountMultiProfile, CmmFcProfile) are owned by Engine::Impl
+// and threaded into count_multi_mol_fast / count_2mol_1bond_fc by
+// pointer.  No process-wide profile state — concurrent Engines on
+// different threads (BNGsim's ThreadPoolExecutor pattern, the
+// PyBNF integration target) get clean per-Engine reports with no
+// cross-talk.
 // ===========================================================================
 
 struct CountMultiProfile {
@@ -390,12 +390,6 @@ struct ObsIncrProfile {
   };
   std::vector<PerObs> obs;
 };
-
-// File-scope, per-thread.  `inline` so multiple TU inclusion is ODR-safe
-// (only engine.cpp consumes them today); `thread_local` so concurrent
-// Engines on different threads do not race on the counters.
-inline thread_local CountMultiProfile cm_profile_;
-inline thread_local CmmFcProfile cmm_fc_profile_;
 
 // ===========================================================================
 // End-of-run reporting bodies
@@ -775,8 +769,7 @@ inline void report_obs_incr(const ObsIncrProfile& p, double timing_obs,
   }
 }
 
-inline void report_count_multi() {
-  const auto& p = cm_profile_;
+inline void report_count_multi(const CountMultiProfile& p) {
   const int K = kCountMultiProfileSampleEvery;
   auto ksec = [&](uint64_t ns) -> double {
     if (p.sampled_calls == 0)
@@ -850,8 +843,7 @@ inline void report_count_multi() {
   print_hist("bfs_visited", p.bfs_visited_hist);
 }
 
-inline void report_cmm_fc() {
-  const auto& q = cmm_fc_profile_;
+inline void report_cmm_fc(const CmmFcProfile& q, const CountMultiProfile& cm) {
   const int K = kCmmFcProfileSampleEvery;
   const int R = 5; // phase rotor width
   auto phase_sec = [&](int p) -> double {
@@ -911,7 +903,7 @@ inline void report_cmm_fc() {
                "  cross-check: rej_sum+matches=%llu  iters=%llu  (must be equal)"
                "  fm_hits=%llu (from count_multi)\n",
                (unsigned long long)(rej_sum + q.fc_total_matches),
-               (unsigned long long)q.fc_candidate_iters, (unsigned long long)cm_profile_.fm_hits);
+               (unsigned long long)q.fc_candidate_iters, (unsigned long long)cm.fm_hits);
   double fc = q.fc_calls > 0 ? (double)q.fc_calls : 1.0;
   std::fprintf(stderr,
                "  per-call means: seed_bond_cand=%.2f (max=%llu)"
