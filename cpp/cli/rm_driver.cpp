@@ -36,6 +36,12 @@ int main(int argc, char* argv[]) {
   std::string xml_path = argv[1];
   double t_end = std::stod(argv[2]);
   int n_steps = std::stoi(argv[3]);
+  if (n_steps < 1) {
+    std::cerr << "ERROR: n_steps must be >= 1 (got " << n_steps
+              << ").  Output is `n_steps + 1` sample rows from t_start to t_end;\n"
+                 "       use a positive integer.  See docs/gdat_format.md.\n";
+    return 1;
+  }
   uint64_t seed = 42;
   bool bscb = true; // strict BNGL semantics by default
   bool ignore_unsupported = false;
