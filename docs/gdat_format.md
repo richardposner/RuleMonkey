@@ -95,9 +95,12 @@ Two header-parsing notes:
 - **Absorbing state**: when the system reaches zero total propensity
   (no rule can fire), RM fills the remaining sample points by
   repeating the last computed state, so the row count is unchanged.
-- **`n_steps == 0`**: not supported on the CLI; pass `n_steps >= 1`.
-  The in-process API treats `n_points == 0` as "step to t_end without
-  recording" via `step_to`.
+- **`n_steps == 0`**: not supported on the CLI (rejected with an
+  actionable error; pass `n_steps >= 1`).  The in-process engine
+  treats `n_points == 0` as a two-endpoint sampling — the
+  `step_to(time)` API uses this internally and discards the
+  resulting trajectory, so the *caller* sees no output but the
+  endpoints are still computed.
 
 ## See also
 

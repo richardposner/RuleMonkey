@@ -52,8 +52,13 @@ public:
   // stored parameter overrides and molecule limit.
   void initialize(std::uint64_t seed = 42);
 
-  // Advances the active session to absolute logical time `time` without
-  // returning sampled output.
+  // Advances the active session to absolute logical time `time` and
+  // discards the sampled trajectory.  Internally this still records
+  // observable values at the segment endpoints (current_time and
+  // `time`) — the in-process engine has no zero-sample fast path —
+  // but the caller sees no `Result`.  Suitable for "equilibrate then
+  // perturb then sample" flows where the equilibration trajectory
+  // is uninteresting.
   void step_to(double time);
 
   // Samples a segment from the active session starting at the current session
