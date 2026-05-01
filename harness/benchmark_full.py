@@ -246,11 +246,8 @@ def read_tsv(path):
 
 
 # Sample sizes at which `noise_floor.tsv` is calibrated.  Must match
-# the `N_SAMPLES` tuple in the calibration script that emitted the
-# tsv; that script lives in the `nfsim-rm` sibling repo (see
-# tests/reference/nfsim/PROVENANCE.md "Regen tooling") because the
-# 1.9 GB of per-rep replicate trajectories needed to recompute the
-# noise floor are not tracked here.
+# the calibration sample sizes used to produce the committed tsv
+# (see tests/reference/nfsim/PROVENANCE.md).
 CALIBRATED_N = (2, 3, 10)
 
 
@@ -828,10 +825,9 @@ def main():
     if not noise_floor:
         print(
             "WARN: no noise_floor.tsv found at "
-            f"{NOISE_FLOOR_FILE} — verdict column will fall back "
-            "to a flat T=5 threshold. The tsv is a frozen calibration "
-            "artifact; regen recipe lives in the nfsim-rm sibling repo "
-            "(see tests/reference/nfsim/PROVENANCE.md).",
+            f"{NOISE_FLOOR_FILE} — verdict column will fall back to a "
+            "flat T=5 threshold (the tsv is a frozen calibration "
+            "artifact; see tests/reference/nfsim/PROVENANCE.md).",
             file=sys.stderr,
         )
 

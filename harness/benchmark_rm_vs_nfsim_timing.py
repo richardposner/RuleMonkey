@@ -15,8 +15,8 @@ Methodology:
   * Wall time is end-to-end subprocess time including process startup
     and XML load — measured identically for both engines, so the
     comparison is fair.
-  * NFsim binary path read from ``NFSIM_BIN`` env var (default
-    ``~/Code/nfsim-rm/build/NFsim``); RM driver from ``RM_DRIVER``.
+  * NFsim binary path read from ``NFSIM_BIN`` env var (must be set);
+    RM driver from ``RM_DRIVER``.
   * Models where NFsim refuses to load or produces no output are
     marked ``N/A`` with the captured stderr summary as the reason.
     NFsim that runs but produces wrong observables (e.g.
@@ -43,7 +43,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RM_DRIVER = Path(os.environ.get("RM_DRIVER", REPO_ROOT / "build" / "release" / "rm_driver"))
-NFSIM_BIN = Path(os.environ.get("NFSIM_BIN", Path.home() / "Code" / "nfsim-rm" / "build" / "NFsim"))
+NFSIM_BIN = Path(os.environ.get("NFSIM_BIN", ""))
 
 DEFAULT_N_REPS = 3
 DEFAULT_TIMEOUT_S = 300  # per single rep

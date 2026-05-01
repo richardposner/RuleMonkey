@@ -56,14 +56,12 @@ RM_DRIVER = os.environ.get(
     os.path.join(REPO_ROOT, "build", "release", "rm_driver"),
 )
 
-# NFsim and BNG2 are external. The cleanroom does not vendor them. They
-# are only needed when regenerating references for a model whose ref
-# files don't already exist in tests/models/feature_coverage/reference/.
-# Defaults point at the sibling nfsim-rm checkout for convenience.
-NFSIM = os.environ.get(
-    "NFSIM_BIN",
-    os.path.expanduser("~/Code/nfsim-rm/build/NFsim"),
-)
+# NFsim and BNG2 are external.  The cleanroom does not vendor them.
+# They are only needed when regenerating references for a model whose
+# ref files don't already exist in
+# tests/models/feature_coverage/reference/.  Set NFSIM_BIN and BNG2
+# in the environment to point at local installations.
+NFSIM = os.environ.get("NFSIM_BIN", "")
 BNG2 = os.environ.get(
     "BNG2",
     os.path.expanduser("~/Simulations/BioNetGen-2.9.3/BNG2.pl"),

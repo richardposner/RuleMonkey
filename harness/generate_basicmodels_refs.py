@@ -33,7 +33,8 @@ Usage:
   python3 harness/generate_basicmodels_refs.py --tint-only      # post-process
 
 Environment:
-  NFSIM_BIN  NFsim binary (default: ~/Code/nfsim-rm/build/NFsim — has UTL+1 fix)
+  NFSIM_BIN  Path to a local NFsim build (must be set; the binary needs
+             the UTL+1 fix — see tests/reference/basicmodels/PROVENANCE.md).
   BNG2       BNG2.pl path (default: ~/Simulations/BioNetGen-2.9.3/BNG2.pl)
 """
 
@@ -60,7 +61,7 @@ REP_DIR = os.path.join(REF_DIR, "replicates")  # gitignored
 PARAMS_TSV = os.path.join(REF_DIR, "sim_params.tsv")
 PROVENANCE = os.path.join(REF_DIR, "PROVENANCE.md")
 
-NFSIM = os.environ.get("NFSIM_BIN", os.path.expanduser("~/Code/nfsim-rm/build/NFsim"))
+NFSIM = os.environ.get("NFSIM_BIN", "")
 BNG2 = os.environ.get("BNG2", os.path.expanduser("~/Simulations/BioNetGen-2.9.3/BNG2.pl"))
 N_REPS = 100
 

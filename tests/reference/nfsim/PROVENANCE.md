@@ -11,9 +11,11 @@ should treat its contents as the canonical correctness reference for the
 RuleMonkey benchmark, not as pure NFsim output.
 
 **Last full regeneration:** 2026-04-10
-**Generator binary:** `build/NFsim` (local build, in the `nfsim-rm`
-development repository — not in this repo)
-**Source-repo commit at regen:** `2de71bf` (`Revert "Fixes to issues #48 and #49"`)
+**Generator binary:** a local NFsim build (the cleanroom RM repo
+intentionally does not vendor NFsim source or binaries).  Set
+`NFSIM_BIN` when regenerating.
+**NFsim source commit at regen:** `2de71bf` (`Revert "Fixes to issues
+#48 and #49"`) on the upstream NFsim tree.
 **Reps per model:** 100
 **Models:** all 71 in `sim_params.tsv`
 **Total regen wall time:** ~4.5 h (6 parallel workers, LPT-scheduled)
@@ -109,58 +111,62 @@ and a one-line note on why the regen was needed.
   time-integral stats (`I_mean`, `I_std`, `n_reps`) computed from the
   replicates, one file per model. Consumed by `benchmark_full.py` to
   compute the `tz_max` verdict metric without needing the full
-  replicates/ directory. Produced by the `dev/compute_noise_floor.py`
-  script in the `nfsim-rm` sibling repo (see "Regen tooling").
+  replicates/ directory.  Frozen artifact — the regen tooling that
+  produced it is not currently in this repo's tree (see "Regen
+  tooling" below).
 - `noise_floor.tsv` — **TRACKED** as of 2026-04-10. Per-model
   self-split noise-floor distributions of the primary `max_z` and
-  verdict `tz_max` metrics, calibrated at sample sizes n=2/3/10 (matching
-  smoke/guard/full tiers). Used by `benchmark_full.py` to derive the
-  per-model verdict threshold `T_model = max(5.0, 1.2 × tz_p99)`.
-  Produced by the `nfsim-rm` repo's `dev/compute_noise_floor.py`;
-  refreshed automatically by that repo's `regenerate_nfsim_reference.py`
-  at the end of any regen.
+  verdict `tz_max` metrics, calibrated at sample sizes n=2/3/10
+  (matching smoke/guard/full tiers). Used by `benchmark_full.py` to
+  derive the per-model verdict threshold
+  `T_model = max(5.0, 1.2 × tz_p99)`.  Frozen artifact — the regen
+  tooling that produced it is not currently in this repo's tree.
+  `benchmark_full.py` falls back to a flat `T=5` threshold with a
+  warning when the tsv is missing.
 - `summary.tsv`, `sim_params.tsv`, `xml/*.xml`, `PROVENANCE.md` —
   tracked.
 - `replicates/` — **NOT tracked.** 1.9 GB of raw per-rep trajectories.
   The ensembles are the canonical artifact; replicates are disposable
-  scratch kept locally to let us re-aggregate a subset if needed. If
-  you need to regen ensembles from replicates, use the per-model
-  aggregation logic in the `nfsim-rm` repo's
-  `dev/regenerate_nfsim_reference.py`. The calibration script
-  (`nfsim-rm`'s `dev/compute_noise_floor.py`) also needs this
-  directory to recompute `noise_floor.tsv` / `*.tint.tsv`, so keep at
-  least one full copy of the replicates in that repo's tree.
+  scratch kept locally to let us re-aggregate a subset if needed.
+  Re-aggregation logic and the noise-floor calibration script that
+  produced `noise_floor.tsv` and `*.tint.tsv` are not currently in
+  this repo's tree (see "Regen tooling" below).
 
 ## Regen tooling
 
-- **NFsim reference (69 of 71 models):** regeneration is performed in the
-  `nfsim-rm` development repository, which retains the NFsim build
-  infrastructure that the cleanroom RuleMonkey repo intentionally does
-  not vendor. The driver script is `dev/regenerate_nfsim_reference.py`
-  in that repo. At the end of a run it automatically invokes
-  `dev/compute_noise_floor.py` on any models it regenerated, so
-  `noise_floor.tsv` and the per-model `ensemble/*.tint.tsv` stats stay
-  in lock-step with the replicate data. Pass `--skip-noise-floor` to
-  bypass the refresh (e.g. if you want to regenerate multiple subsets
-  and calibrate once at the end).
+- **NFsim reference (69 of 71 models):** the driver script that
+  produced the 2026-04-10 reference (running NFsim 100 times per
+  model with LPT scheduling, then aggregating to mean/std/tint
+  files) and the noise-floor calibration script that emitted
+  `noise_floor.tsv` are **not currently in this repo's tree**.  The
+  cleanroom RuleMonkey repo intentionally does not vendor NFsim
+  source or binaries, and the regen scripts have not yet been
+  ported in.  Treat the committed `mean.tsv` / `std.tsv` /
+  `tint.tsv` / `noise_floor.tsv` files as frozen artifacts; if you
+  need to regenerate them, you will need a local NFsim build
+  (set `NFSIM_BIN`), `xml/*.xml` + `sim_params.tsv` from this
+  directory as inputs, and re-implementations of the aggregation
+  and self-split-calibration steps.
 - **SSA reference (`toy_jim`, `rm_tlbr_rings`):** regeneration is
   self-contained in this repo; run the corresponding script in
   `harness/ssa/`.
-- Parallelization: use LPT partitioning with 6 workers; the slow models
-  (`pltr`, `mlnr`, `testcase2a`, `rm_tlbr`) should each get their own
-  worker to avoid head-of-line blocking.
-- Output layout:
+- Output layout (consumed by `benchmark_full.py`, regardless of how
+  you produce the files):
   - `ensemble/{model}.mean.tsv`, `ensemble/{model}.std.tsv` — 100-rep
     aggregates (primary artifact consumed by the benchmark).
   - `ensemble/{model}.tint.tsv` — per-observable time-integral stats
     (`I_mean`, `I_std`, `n_reps`) for the `tz_max` verdict metric.
-    Produced by `nfsim-rm`'s `dev/compute_noise_floor.py`.
   - `noise_floor.tsv` — per-model self-split distributions of `max_z`
     and `tz_max` at n=2/3/10, used to derive the per-model verdict
-    threshold. Produced by `nfsim-rm`'s `dev/compute_noise_floor.py`.
-  - `replicates/{model}/rep_NNN_{model}.gdat` — raw per-rep trajectories.
+    threshold.
+  - `replicates/{model}/rep_NNN_{model}.gdat` — raw per-rep
+    trajectories (gitignored).
   - `summary.tsv` — per-model wall-time summary, used by
     `benchmark_full.py` for progress sorting.
+- Parallelization recommendation: use LPT partitioning with 6
+  workers; the slow models (`pltr`, `mlnr`, `testcase2a`,
+  `rm_tlbr`) should each get their own worker to avoid head-of-line
+  blocking.
 
 ## History
 

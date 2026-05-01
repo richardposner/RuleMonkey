@@ -35,8 +35,12 @@ times and flags are in `sim_params.tsv`.
      point. Per-rep `.gdat` files land in `replicates/r{NN}/`
      (gitignored).
 
-**NFsim binary:** `~/Code/nfsim-rm/build/NFsim` (with the UTL+1 fix
-from `nfsim-rm` commit 40e6b93).
+**NFsim binary:** a local NFsim build patched with the UTL+1 fix
+(NFsim's auto-computed unbinding-trace-length is one less than the
+correct `max_pattern_size + 1`; without the patch, large-pattern
+basicmodels rules silently miss matches).  Set the `NFSIM_BIN` env
+var when regenerating; an unpatched binary will produce diverging
+references for r07-style multi-mol patterns.
 **BNG2:** `~/Simulations/BioNetGen-2.9.3/BNG2.pl`.
 **Reps per model:** 100.
 **Last regenerated:** 2026-04-26 (full 33-model run); r31, r33, r34,
