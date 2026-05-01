@@ -638,10 +638,14 @@ Model load_model(const std::string& xml_path,
         }
       }
 
-      // Bonds in species
+      // Bonds in species.  Sometimes nested under <ListOfMolecules>
+      // (older BNG2 emit shape).  Guard the fallback against a missing
+      // <ListOfMolecules>: a degenerate <Species> without one would
+      // null-deref `*mol_list`.  BNG2 doesn't emit such species, but
+      // hand-crafted XML might.
       auto* bl = find_child(spn, "ListOfBonds");
-      if (!bl)
-        bl = find_child(*mol_list, "ListOfBonds"); // sometimes nested
+      if (!bl && mol_list)
+        bl = find_child(*mol_list, "ListOfBonds");
       if (bl) {
         for (auto& bn : bl->children) {
           if (bn.name != "Bond")
