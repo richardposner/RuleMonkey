@@ -5,13 +5,19 @@ Tests BNGL features via small, fast models (≤600 molecules, <5s each)
 plus a stress tier at larger scale to catch size-dependent bugs.
 Designed for fast iteration during development.
 
-Four tiers:
-  - base:         One small model per BNGL feature / simulation pattern
-  - combinations: Feature interactions that have caused past bugs
-  - network-free: Models requiring network-free simulation (NFsim ref only)
-  - stress:       Larger-scale, longer-sim-time models exercising incremental
-                  bookkeeping (rings, long chains, symmetric complexes,
-                  branched aggregates). All network-free.
+Model families (filter via --tier; default `all` runs every family):
+  - ft_*    (42 models)  base coverage:  one small model per BNGL feature
+                         (--tier base)
+  - combo_*  (8 models)  feature interactions that have caused past bugs
+                         (--tier combinations)
+  - edg_*   (20 models)  edge-case stress probes designed to break RM
+                         (no dedicated --tier flag; included by default)
+  - nf_*     (3 models)  network-free-only constructs (NFsim ref only)
+                         (--tier network-free)
+  - ss_*     (4 models)  steady-state / longer-sim-time models exercising
+                         incremental bookkeeping (--tier stress)
+
+Default (no --tier) runs all 77 models.
 
 Reference data:
   - Default (fast): NFsim refs from tests/models/feature_coverage/reference/nfsim/
@@ -23,10 +29,10 @@ Reference data:
     the missing-ref model is skipped with a warning.
 
 Usage:
-  python3 harness/benchmark_feature_coverage.py                  # fast: ~90s
+  python3 harness/benchmark_feature_coverage.py                  # all 77 models
   python3 harness/benchmark_feature_coverage.py --reps 5         # more RM reps
   python3 harness/benchmark_feature_coverage.py --full           # + ODE/SSA refs
-  python3 harness/benchmark_feature_coverage.py --tier base      # base only
+  python3 harness/benchmark_feature_coverage.py --tier base      # ft_* only (42 models)
   python3 harness/benchmark_feature_coverage.py ft_bond_wildcards combo_strict_product_plus
 
   # Reference regeneration (requires NFSIM_BIN and BNG2 binaries):

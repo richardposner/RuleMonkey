@@ -16,7 +16,7 @@ Usage:
   python3 harness/basicmodels.py                   # all 29 models
   python3 harness/basicmodels.py --batch 1..20     # contiguous slice
   python3 harness/basicmodels.py --reps 10         # more RM reps
-  python3 harness/basicmodels.py r07 r25 r31       # specific models
+  python3 harness/basicmodels.py r07 r25 r30       # specific models
 
   # Any flag accepted by benchmark_full.py works (the wrapper passes
   # them through). Useful: --output PATH, --reps N.

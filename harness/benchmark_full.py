@@ -15,7 +15,7 @@ Models are run fastest-first so you see progress quickly.
   --tier smoke  : 8 fast, diverse models, 2 reps each  (~2 min)
                   use while iterating on a fix; catches catastrophic
                   regressions only — z verdicts are noisy at 2 reps
-  --tier guard  : 27 regression-guard models, 3 reps   (~15 min)
+  --tier guard  : 29 regression-guard models, 3 reps   (~15 min)
                   run before every commit — must stay green
   --tier full   : all 71 models, 10 reps               (~3 h)
                   run before declaring a bug fixed / before merge
@@ -26,9 +26,9 @@ models (high noise floor) get enough reps for T ≈ 5.0, while quiet
 models stay at the base rep count.
 
 Usage:
-  python3 harness/benchmark_full.py                        # all models, 10 reps
-  python3 harness/benchmark_full.py --tier smoke           # 8 models, 1 rep
-  python3 harness/benchmark_full.py --tier guard           # 23 models, 3 reps
+  python3 harness/benchmark_full.py                        # all 71 models, 10 reps
+  python3 harness/benchmark_full.py --tier smoke           # 8 models, 2 reps
+  python3 harness/benchmark_full.py --tier guard           # 29 models, 3 reps
   python3 harness/benchmark_full.py --tier full --reps 5   # all, 5 reps
   python3 harness/benchmark_full.py --reps 3               # all, 3 reps
   python3 harness/benchmark_full.py --adaptive             # all, 10+ reps per model
