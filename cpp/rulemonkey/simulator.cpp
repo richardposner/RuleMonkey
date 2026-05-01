@@ -666,9 +666,9 @@ Model load_model(const std::string& xml_path,
       }
 
       // Fixed="1" attribute: build a FixedSpecies descriptor for the
-      // engine's replenish_fixed_species path.  v1 scope (see
-      // FixedSpecies comment in model.hpp): single molecule, no bonds,
-      // at most one Fixed per MoleculeType.  Scope violations are
+      // engine's replenish_fixed_species path.  Currently-implemented
+      // scope (see FixedSpecies comment in model.hpp): single
+      // molecule, no bonds, at most one Fixed per MoleculeType.  Scope violations are
       // surfaced separately by scan_unsupported() as Error-level
       // warnings; we silently skip building the descriptor here so
       // --ignore-unsupported can degrade to a no-replenish fallback
@@ -1569,10 +1569,11 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
   }
 
   // ERROR-level: Fixed species ($-prefixed seed species) outside the
-  // v1 scope.  v1 handles exactly: single-molecule pattern, no bonds,
+  // currently-implemented scope: single-molecule pattern, no bonds,
   // at most one Fixed per MoleculeType.  Anything outside that scope
   // (complex-fixed with bonds, duplicate-type Fixed) would require
-  // pattern-based re-instantiation that we haven't implemented.
+  // pattern-based re-instantiation that RM does not currently
+  // implement.
   if (auto* sp_list = find_child(model_node, "ListOfSpecies")) {
     std::unordered_map<std::string, int> fixed_type_counts;
     for (auto& spn : sp_list->children) {
@@ -1606,8 +1607,8 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
         std::string msg = "Fixed species '" + sp_name +
                           "' is multi-molecule or bonded (mols=" + std::to_string(n_mol) +
                           ", bonds=" + std::to_string(n_bond) +
-                          ") — RM v1 only "
-                          "supports single-molecule Fixed species with no bonds. Pass "
+                          ") — RM currently "
+                          "supports only single-molecule Fixed species with no bonds. Pass "
                           "--ignore-unsupported to run with Fixed enforcement DISABLED "
                           "(this species would behave as if the `$` were absent, which "
                           "silently diverges from BNG2 ODE semantics).";
@@ -1618,7 +1619,7 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
         std::string msg = "Multiple Fixed species declared for "
                           "MoleculeType '" +
                           mol_type_name +
-                          "' — RM v1 allows at "
+                          "' — RM currently allows at "
                           "most one Fixed species per MoleculeType to avoid "
                           "matching overlap. Pass --ignore-unsupported to run with "
                           "Fixed enforcement DISABLED for the duplicate declarations.";

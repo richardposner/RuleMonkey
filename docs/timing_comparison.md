@@ -47,9 +47,10 @@ NFsim re-evaluates count-relation Species observables naively at each
 sample point: walk every complex, check the count constraint, for every
 observable.  At ~600 complexes peak × 300 observables × 1000 sample
 points, that's ~180M observable evaluations per run.  RM's
-Species-observable incremental tracking (landed 2026-04-23, see
-`harness/dev/`) only re-evaluates dirty complexes between sample
-points — typically O(1)–O(2) complexes per rule fire.  The speedup is
+Species-observable incremental tracking only re-evaluates dirty
+complexes between sample points — typically O(1)–O(2) complexes per
+rule fire.  Implementation lives in `init_incremental_observables` /
+`flush_species_incr_observables` in `cpp/rulemonkey/engine.cpp`.  The speedup is
 proportional to (`# observables` × `# sample points`) ÷
 (`# events between samples`), and on these models the ratio happens to
 be ~10×–25×.

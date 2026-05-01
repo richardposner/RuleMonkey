@@ -297,10 +297,11 @@ struct SpeciesInit {
 // A seed species marked `Fixed="1"` in XML (BNGL `$` prefix).  Per
 // BNG2 ODE semantics, such a species has d/dt = 0: its population is
 // held at the initial value regardless of which reactions fire on it.
-// v1 scope is restricted to single-molecule fixed species (no bonds
-// within the pattern); multi-molecule complex-fixed is Tier-0 refused.
-// Multiple Fixed species of the same MoleculeType are also refused to
-// avoid overlap/precedence ambiguity during replenishment.
+// Currently-implemented scope is restricted to single-molecule fixed
+// species (no bonds within the pattern); multi-molecule complex-fixed
+// is Tier-0 refused.  Multiple Fixed species of the same MoleculeType
+// are also refused to avoid overlap/precedence ambiguity during
+// replenishment.
 struct FixedSpecies {
   int source_init_idx = -1; // index into Model::initial_species
   int mol_type_idx = -1;    // the single molecule's type

@@ -35,7 +35,8 @@ Usage:
   python3 harness/benchmark_full.py tcr ensemble           # specific models
   python3 harness/benchmark_full.py --output report.md     # custom output
 
-Tier membership is defined in docs/FAILING_MODELS.md; keep the two in sync.
+Tier membership is defined inline in the SMOKE_MODELS / GUARD_MODELS
+lists below — those are the canonical source.
 """
 
 import math
@@ -108,7 +109,7 @@ TINT_TOL_REL = 1e-6
 
 
 # ---------------------------------------------------------------------------
-# Tiered model sets (keep in sync with docs/FAILING_MODELS.md)
+# Tiered model sets — canonical definitions.
 # ---------------------------------------------------------------------------
 
 # Smoke tier: fastest diverse coverage. Every major code path touched by at
@@ -244,7 +245,13 @@ def read_tsv(path):
     return headers, rows
 
 
-CALIBRATED_N = (2, 3, 10)  # must match N_SAMPLES in dev/compute_noise_floor.py
+# Sample sizes at which `noise_floor.tsv` is calibrated.  Must match
+# the `N_SAMPLES` tuple in the calibration script that emitted the
+# tsv; that script lives in the `nfsim-rm` sibling repo (see
+# tests/reference/nfsim/PROVENANCE.md "Regen tooling") because the
+# 1.9 GB of per-rep replicate trajectories needed to recompute the
+# noise floor are not tracked here.
+CALIBRATED_N = (2, 3, 10)
 
 
 def load_noise_floor():
@@ -738,7 +745,7 @@ MD_HEADER = """\
 
 - **screen**: max |RM_mean - NFsim_mean| / (NFsim_std / sqrt(n_reps)) over all (time, obs) pairs. Fast early-warning metric. Flags values ≥ {screen_thresh} as "suspicious" but does not determine verdict. Historical benchmarks used this as the pass/fail criterion; for models with many rare-event Size_N observables it is statistically unreliable.
 - **tz_max**: max over observables of the z-score of the per-rep trapezoidal time integral, computed against precomputed NFsim stats in `ensemble/{{model}}.tint.tsv`. Collapses each 1001-point trajectory to one number per observable per rep, eliminating single-time-point coincidences.
-- **T**: per-model verdict threshold = max({tz_floor}, {tz_margin} × tz_p99), where tz_p99 is the 99th percentile of `tz_max` from self-splitting the NFsim replicates at n=10 (see `models/nfsim_reference/noise_floor.tsv`, produced by `dev/compute_noise_floor.py`). Adaptive to each model's intrinsic rare-event noise floor.
+- **T**: per-model verdict threshold = max({tz_floor}, {tz_margin} × tz_p99), where tz_p99 is the 99th percentile of `tz_max` from self-splitting the NFsim replicates at n=10 (see `tests/reference/nfsim/noise_floor.tsv`; provenance and regen recipe in the same directory's `PROVENANCE.md`). Adaptive to each model's intrinsic rare-event noise floor.
 - **std_ratio**: max(RM_std / NFsim_std) across observables with nontrivial variance. Diagnostic for variance consistency; not part of verdict.
 - **verdict**: PASS if `tz_max < T`, FAIL otherwise. Degenerate-observable mismatches (both stds zero, values differ) fail unconditionally.
 
@@ -820,9 +827,11 @@ def main():
     noise_floor = load_noise_floor()
     if not noise_floor:
         print(
-            "WARN: no noise_floor.tsv found — verdict column will fall back "
-            "to a flat T=5 threshold. Run dev/compute_noise_floor.py to "
-            "regenerate per-model thresholds.",
+            "WARN: no noise_floor.tsv found at "
+            f"{NOISE_FLOOR_FILE} — verdict column will fall back "
+            "to a flat T=5 threshold. The tsv is a frozen calibration "
+            "artifact; regen recipe lives in the nfsim-rm sibling repo "
+            "(see tests/reference/nfsim/PROVENANCE.md).",
             file=sys.stderr,
         )
 

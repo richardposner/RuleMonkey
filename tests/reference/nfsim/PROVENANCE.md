@@ -109,24 +109,27 @@ and a one-line note on why the regen was needed.
   time-integral stats (`I_mean`, `I_std`, `n_reps`) computed from the
   replicates, one file per model. Consumed by `benchmark_full.py` to
   compute the `tz_max` verdict metric without needing the full
-  replicates/ directory. Produced by `dev/compute_noise_floor.py`.
+  replicates/ directory. Produced by the `dev/compute_noise_floor.py`
+  script in the `nfsim-rm` sibling repo (see "Regen tooling").
 - `noise_floor.tsv` — **TRACKED** as of 2026-04-10. Per-model
   self-split noise-floor distributions of the primary `max_z` and
   verdict `tz_max` metrics, calibrated at sample sizes n=2/3/10 (matching
   smoke/guard/full tiers). Used by `benchmark_full.py` to derive the
   per-model verdict threshold `T_model = max(5.0, 1.2 × tz_p99)`.
-  Produced by `dev/compute_noise_floor.py`; refreshed automatically by
-  `regenerate_nfsim_reference.py` at the end of any regen.
+  Produced by the `nfsim-rm` repo's `dev/compute_noise_floor.py`;
+  refreshed automatically by that repo's `regenerate_nfsim_reference.py`
+  at the end of any regen.
 - `summary.tsv`, `sim_params.tsv`, `xml/*.xml`, `PROVENANCE.md` —
   tracked.
 - `replicates/` — **NOT tracked.** 1.9 GB of raw per-rep trajectories.
   The ensembles are the canonical artifact; replicates are disposable
   scratch kept locally to let us re-aggregate a subset if needed. If
   you need to regen ensembles from replicates, use the per-model
-  aggregation logic in `dev/regenerate_nfsim_reference.py`. The
-  calibration script (`dev/compute_noise_floor.py`) also needs this
+  aggregation logic in the `nfsim-rm` repo's
+  `dev/regenerate_nfsim_reference.py`. The calibration script
+  (`nfsim-rm`'s `dev/compute_noise_floor.py`) also needs this
   directory to recompute `noise_floor.tsv` / `*.tint.tsv`, so keep at
-  least one full copy locally.
+  least one full copy of the replicates in that repo's tree.
 
 ## Regen tooling
 
@@ -151,10 +154,10 @@ and a one-line note on why the regen was needed.
     aggregates (primary artifact consumed by the benchmark).
   - `ensemble/{model}.tint.tsv` — per-observable time-integral stats
     (`I_mean`, `I_std`, `n_reps`) for the `tz_max` verdict metric.
-    Produced by `dev/compute_noise_floor.py`.
+    Produced by `nfsim-rm`'s `dev/compute_noise_floor.py`.
   - `noise_floor.tsv` — per-model self-split distributions of `max_z`
     and `tz_max` at n=2/3/10, used to derive the per-model verdict
-    threshold. Produced by `dev/compute_noise_floor.py`.
+    threshold. Produced by `nfsim-rm`'s `dev/compute_noise_floor.py`.
   - `replicates/{model}/rep_NNN_{model}.gdat` — raw per-rep trajectories.
   - `summary.tsv` — per-model wall-time summary, used by
     `benchmark_full.py` for progress sorting.

@@ -101,12 +101,15 @@ The runtime severity model is two-level:
   in between runs. Overriding `B` directly wins over the cascade — the
   expression for `B` is skipped, and parameters that derive from `B`
   see the override.
-- Cascade order is the parameter declaration order in the XML; BNG2
-  emits parameters in dependency order, so a forward reference inside
-  a derivation that the XML happens to expose without a dependency-
-  ordered emit will still resolve as long as the chain is one level
-  deep (the parser does a single forward-reference retry pass at load
-  time; `apply_overrides` does not iterate to fixed point).
+- Cascade order is the parameter declaration order in the XML.  At
+  load time the parser iterates parameter resolution to fixed point
+  (capped at `parameter_count + 4` passes), so an arbitrarily-deep
+  chain of forward references in the XML resolves correctly even if
+  the emitter does not deliver them in dependency order — cycles are
+  the only thing that won't resolve.  At `set_param` time the override
+  cascade is a single pass in declaration order: BNG2 emits parameters
+  in dependency order, so any chain a real model could produce
+  cascades on the first pass.
 - `get_parameter(name)` reflects the current overrides + cascade
   immediately, without requiring a `run()` or `initialize()` call.
 

@@ -14,9 +14,9 @@
 #         full propensity vector recomputes after each E-touch event.
 # Edge:   Trash() is a separate Fixed sink — a SECOND distinct Fixed
 #         MoleculeType in the model, exercising the
-#         "multiple Fixed species, different types" path.  RM v1
-#         allows this; the Tier-0 refusal triggers only on duplicate
-#         Fixed within the SAME MoleculeType.
+#         "multiple Fixed species, different types" path.  RM
+#         currently allows this; the Tier-0 refusal triggers only on
+#         duplicate Fixed within the SAME MoleculeType.
 # Tier:   base
 # invariant: conserved E_tot_obs = 5
 
