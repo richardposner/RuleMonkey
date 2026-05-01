@@ -480,6 +480,27 @@ double evaluate(const AstNode& node, const VariableMap& vars) {
     return -evaluate(*node.children[0], vars);
 
   case NodeType::BinaryOp: {
+    // Short-circuit `&&` and `||` BEFORE evaluating the RHS — `if(x>0 && 1/x>1, ...)`
+    // must not divide by zero when x==0, and a NaN injected from the unreachable
+    // branch silently poisons rate-law evaluation downstream.  Falsy is `0.0` here
+    // (the comparison ops above produce 0.0/1.0); any non-zero LHS short-circuits
+    // `||` to 1.0, any zero LHS short-circuits `&&` to 0.0.  We coerce the RHS the
+    // same way (truthy → 1.0) so the result is always 0.0/1.0 regardless of which
+    // side decided it.
+    if (node.op == '&') {
+      double l = evaluate(*node.children[0], vars);
+      if (l == 0.0)
+        return 0.0;
+      double r = evaluate(*node.children[1], vars);
+      return (r != 0.0) ? 1.0 : 0.0;
+    }
+    if (node.op == '|') {
+      double l = evaluate(*node.children[0], vars);
+      if (l != 0.0)
+        return 1.0;
+      double r = evaluate(*node.children[1], vars);
+      return (r != 0.0) ? 1.0 : 0.0;
+    }
     double l = evaluate(*node.children[0], vars);
     double r = evaluate(*node.children[1], vars);
     switch (node.op) {
@@ -505,10 +526,6 @@ double evaluate(const AstNode& node, const VariableMap& vars) {
       return (l == r) ? 1.0 : 0.0; // ==
     case '!':
       return (l != r) ? 1.0 : 0.0; // !=
-    case '&':
-      return (l != 0.0 && r != 0.0) ? 1.0 : 0.0; // &&
-    case '|':
-      return (l != 0.0 || r != 0.0) ? 1.0 : 0.0; // ||
     default:
       throw std::runtime_error(std::string("expr_eval: unknown binary op '") + node.op + "'");
     }
