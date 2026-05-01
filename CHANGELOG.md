@@ -7,28 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Removed
+## [3.1.1] — 2026-04-30
 
-- **Dead pytest config in `pyproject.toml`.** The
-  `[tool.pytest.ini_options]` block declared
-  `testpaths = ["tests", "harness"]`, but `tests/` is C++-only and
-  `harness/` holds benchmark/research scripts — no `test_*.py`,
-  `*_test.py`, or `conftest.py` exists anywhere.  Running `pytest`
-  from the repo root collected zero tests, which is a misleading
-  signal for an external reader.  Removed the config block and the
-  unused `pytest>=8.0` dev dependency; the suite is C++ ctest plus
-  harness-driven Python scripts.
+### Added
 
-- **Dead helper functions and locals in `simulator.cpp`.**
-  Three unused free functions in the XML-parser anonymous namespace
-  (`need_child`, `has_attr`, `any_rule_has_child`) and two unused
-  local variables (`rp_start_0`, `rp_start_1` inside the
-  same-components detection) had been triggering compiler
-  `-Wunused-function` / `-Wunused-variable` warnings on every clean
-  build.  Removed; the library now compiles warning-free under both
-  the `release` and `asan` presets.
+- **Schema fingerprint on `save_state` / `load_state`.** The pool
+  serialization keys molecule and component instances by integer
+  indices into `Model::molecule_types` and `MoleculeType::components`,
+  so a state file written against one XML can be read against a
+  structurally different XML without runtime errors but with every
+  index referring to a different schema slot — silently corrupt
+  trajectories.  `save_state` now embeds an FNV-1a 64-bit hash over
+  the canonical schema text (molecule type names, ordered component
+  names, ordered allowed states); `load_state` recomputes the hash
+  and throws on mismatch with both digests in the error message.
+  Parameter values, rate constants, and seed species do NOT
+  participate, so a checkpoint can still resume with mutated
+  `set_param` overrides.  State file marker bumped `RM_STATE_V1` →
+  `RM_STATE_V2`; V1 files are refused explicitly with a "re-save
+  with this build" message.
+
+- **`tests/cpp/save_load_test.cpp`** — new ctest suite covering
+  (a) round-trip equivalence of split-run continuation vs an
+  uninterrupted run, (b) fingerprint-mismatch refusal across two
+  structurally different XMLs, (c) explicit V1 marker rejection.
+
+- **Regression coverage in `tests/cpp/set_param_test.cpp`** and a new
+  `tests/cpp/derived_param_model.xml` fixture — two-layer derived-
+  parameter chains (`A_tot = A_base * A_factor`,
+  `kp = kp_base * kp_mult`) plus get_parameter-coherence and
+  unknown-name-rejection cases. Each new assertion was verified to
+  fail on the unfixed engine via stash-and-rerun.
 
 ### Changed
+
+- **`set_param` validates parameter names against the loaded XML.**
+  Typo'd names previously leaked into `param_overrides` as silent
+  no-ops; they now throw `std::runtime_error("Unknown parameter
+  '...'")`. Mirrors `get_parameter`'s existing throw on unknown
+  names.
+
+- **`expr_eval` builtin dispatch returns `std::optional<double>`.**
+  `eval_builtin` previously used `quiet_NaN()` as the
+  no-signature-matched sentinel, which the caller couldn't
+  distinguish from a legitimate NaN result on out-of-domain input
+  (`pow(-2, 0.5)`, `acos(2)`, `log10` / `log2` / `atan2` of
+  out-of-domain input).  An ad-hoc allowlist on `{log, ln, sqrt}`
+  preserved their NaN results; every other builtin's NaN fell
+  through to variable lookup and surfaced as a confusing
+  "unknown function 'pow'" error.  Switched the return type to
+  `std::optional<double>`: a signature match returns the math
+  result (NaN included), no match returns `nullopt`.  The caller
+  now throws "wrong arity for builtin 'X'" rather than falling
+  through, eliminating the NaN-as-sentinel pattern.
 
 - **`CountMultiProfile` and `CmmFcProfile` are per-Engine.**
   These two profile structs (whose call sites are static free
@@ -81,27 +112,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   install, and the build refuses the dangerous combo with an
   actionable error message pointing at `-DRULEMONKEY_INSTALL=OFF`.
 
-### Fixed (docs)
+- **Tier-0 refusal error strings in `scan_unsupported` no longer say
+  "RM v1".**  The Tier-0 refusals for multi-mol / duplicate-type
+  Fixed species emitted "RM v1 only supports …" / "RM v1 allows at
+  most …" — a reader could mistake "v1" for RuleMonkey 1.x rather
+  than the scope of the Fixed-species feature.  Tightened to "RM
+  currently …" in the user-visible strings, the supporting comments
+  in `simulator.cpp` and `model.hpp`, and the `edg_fixed_competition`
+  test fixture comment (the docs-side change landed in the prior
+  cycle).
 
-- **CHANGELOG 3.0.0 model count off by one.** The 3.0.0 entry said
-  "51 BNGL feature-coverage models"; `git ls-tree v3.0.0 --
-  tests/models/feature_coverage/` counts 52 `.bngl` files.  Corrected.
+- **`docs/model_semantics.md`**: new "Parameter overrides" section
+  documents the cascade behavior and the unknown-name rejection;
+  the parameter-resolution paragraph now correctly distinguishes
+  parse-time fixed-point iteration from `apply_overrides`'s
+  single-pass cascade.
 
-- **README pointer to the find_package / add_subdirectory snippet.**
-  The "Embedding (C++ API)" section pointed readers at
-  `examples/CMakeLists.txt` for the CMake consumption snippet, but
-  that file is two lines (`add_executable` + `target_link_libraries`).
-  The actual snippets live in the doc-comment header of
-  `examples/embed.cpp`.  Updated the pointer.
+- **Cross-references throughout the repo**: dropped wrong-direction
+  pointer from `harness/benchmark_full.py` at "docs/FAILING_MODELS.md"
+  (the canonical tier list is the inline `SMOKE_MODELS` /
+  `GUARD_MODELS` Python lists), repointed three references to the
+  out-of-tree `compute_noise_floor.py` at the artifact
+  (`tests/reference/nfsim/noise_floor.tsv`) and its `PROVENANCE.md`,
+  fixed a `docs/sprint_basicmodels_failures.md` path that lived at
+  `dev/`, and replaced a `harness/dev/` pointer in
+  `docs/timing_comparison.md` with a pointer at the actual
+  implementation (`init_incremental_observables` /
+  `flush_species_incr_observables` in `cpp/rulemonkey/engine.cpp`).
 
-- **`docs/model_semantics.md` "RM v1" wording.**  The Tier-0 refusals
-  table for multi-molecule and duplicate Fixed species said "RM v1
-  only supports …" / "RM v1 allows at most …".  RM is at 3.x; a
-  reader could mistake "v1" for RuleMonkey 1.x rather than the v1
-  scope of the Fixed-species feature itself.  Wording tightened to
-  "RM currently …".
+### Removed
+
+- **All references to the `nfsim-rm` development repository.**  That
+  repo is being archived; this repo supersedes it.  Removed
+  hardcoded `~/Code/nfsim-rm/build/NFsim` defaults from three
+  harness scripts (`benchmark_feature_coverage.py`,
+  `benchmark_rm_vs_nfsim_timing.py`, `generate_basicmodels_refs.py`)
+  — `NFSIM_BIN` must now be set explicitly when regenerating
+  references.  Stripped `nfsim-rm` cross-references from
+  `harness/benchmark_full.py`, `tests/reference/basicmodels/PROVENANCE.md`,
+  and `tests/reference/nfsim/PROVENANCE.md`.  The "Regen tooling"
+  section of the latter is rewritten to honestly state that the
+  regeneration scripts are not currently in this repo's tree, and
+  that `mean.tsv` / `std.tsv` / `tint.tsv` / `noise_floor.tsv` are
+  treated as frozen artifacts.
+
+- **Dead pytest config in `pyproject.toml`.** The
+  `[tool.pytest.ini_options]` block declared
+  `testpaths = ["tests", "harness"]`, but `tests/` is C++-only and
+  `harness/` holds benchmark/research scripts — no `test_*.py`,
+  `*_test.py`, or `conftest.py` exists anywhere.  Running `pytest`
+  from the repo root collected zero tests, which is a misleading
+  signal for an external reader.  Removed the config block and the
+  unused `pytest>=8.0` dev dependency; the suite is C++ ctest plus
+  harness-driven Python scripts.
+
+- **Dead helper functions and locals in `simulator.cpp`.**
+  Three unused free functions in the XML-parser anonymous namespace
+  (`need_child`, `has_attr`, `any_rule_has_child`) and two unused
+  local variables (`rp_start_0`, `rp_start_1` inside the
+  same-components detection) had been triggering compiler
+  `-Wunused-function` / `-Wunused-variable` warnings on every clean
+  build.  Removed; the library now compiles warning-free under both
+  the `release` and `asan` presets.
 
 ### Fixed
+
+- **`save_state` / `load_state` had no XML-mismatch guard.** The
+  public docstring promised "the model XML must match the one used
+  to save the state" but nothing enforced it; loading state from a
+  structurally different XML produced silently corrupt trajectories
+  rather than an error.  See "Schema fingerprint" under Added above
+  for the fix.
+
+- **Null-deref window in `parse_pattern` species-bonds fallback.**
+  `<Species>` parsing fell back to `find_child(*mol_list,
+  "ListOfBonds")` when no top-level `<ListOfBonds>` existed, but
+  dereferenced `*mol_list` unconditionally — a degenerate
+  `<Species>` without `<ListOfMolecules>` would null-deref.  BNG2
+  doesn't emit such species, but hand-crafted XML or a future
+  emitter could trip it.  Guarded with `if (!bl && mol_list)`.
+
+- **Confusing arity-mismatch errors from `expr_eval` builtins.**
+  See "expr_eval builtin dispatch" under Changed above.
 
 - **`get_parameter` returned the parsed-at-load value between
   `set_param` and the next `run()` / `initialize()`.** The
@@ -123,25 +215,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   parameter that references it. Override on a derived parameter
   still wins (skips the expression for that name).
 
-### Changed
+### Fixed (docs)
 
-- **`set_param` validates parameter names against the loaded XML.**
-  Typo'd names previously leaked into `param_overrides` as silent
-  no-ops; they now throw `std::runtime_error("Unknown parameter
-  '...'")`. Mirrors `get_parameter`'s existing throw on unknown
-  names.
+- **CHANGELOG 3.0.0 model count off by one.** The 3.0.0 entry said
+  "51 BNGL feature-coverage models"; `git ls-tree v3.0.0 --
+  tests/models/feature_coverage/` counts 52 `.bngl` files.  Corrected.
 
-- **`docs/model_semantics.md`**: new "Parameter overrides" section
-  documents the cascade behavior and the unknown-name rejection.
+- **README pointer to the find_package / add_subdirectory snippet.**
+  The "Embedding (C++ API)" section pointed readers at
+  `examples/CMakeLists.txt` for the CMake consumption snippet, but
+  that file is two lines (`add_executable` + `target_link_libraries`).
+  The actual snippets live in the doc-comment header of
+  `examples/embed.cpp`.  Updated the pointer.
 
-### Added
-
-- Regression coverage in `tests/cpp/set_param_test.cpp` and a new
-  `tests/cpp/derived_param_model.xml` fixture — two-layer derived-
-  parameter chains (`A_tot = A_base * A_factor`,
-  `kp = kp_base * kp_mult`) plus get_parameter-coherence and
-  unknown-name-rejection cases. Each new assertion was verified to
-  fail on the unfixed engine via stash-and-rerun.
+- **`docs/model_semantics.md` "RM v1" wording.**  The Tier-0 refusals
+  table for multi-molecule and duplicate Fixed species said "RM v1
+  only supports …" / "RM v1 allows at most …".  RM is at 3.x; a
+  reader could mistake "v1" for RuleMonkey 1.x rather than the v1
+  scope of the Fixed-species feature itself.  Wording tightened to
+  "RM currently …" (this cycle extended the same tightening to the
+  user-visible error strings — see Changed above).
 
 ## [3.1.0] — 2026-04-29
 
@@ -425,5 +518,7 @@ The legacy implementation, RuleMonkey 2.0.25, was introduced in:
 > RG. *RuleMonkey: software for stochastic simulation of rule-based
 > models.* BMC Bioinformatics 11:404 (2010). PMID: 20673321.
 
+[Unreleased]: https://github.com/wshlavacek/RuleMonkey/compare/v3.1.1...HEAD
+[3.1.1]: https://github.com/wshlavacek/RuleMonkey/releases/tag/v3.1.1
 [3.1.0]: https://github.com/wshlavacek/RuleMonkey/releases/tag/v3.1.0
 [3.0.0]: https://github.com/wshlavacek/RuleMonkey/releases/tag/v3.0.0
