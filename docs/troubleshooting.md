@@ -126,13 +126,6 @@ The in-process C++ API (`rulemonkey::Result`) returns full
 double-precision values; the precision loss is purely a property of
 the text output path.
 
-### `rm_driver` writes `*_molecule_type_list.tsv` / `*_rxn_list.tsv` files in the cwd
-
-That's RuleMonkey's diagnostic dump (the file names are derived from
-the input XML).  They're listed in `.gitignore` for that reason.
-There's no flag to suppress them; if they're a problem for your
-pipeline, run `rm_driver` from a scratch directory.
-
 ## Building and testing
 
 ### `RULEMONKEY_INSTALL=ON` plus `RULEMONKEY_ENABLE_ASAN=ON` is refused

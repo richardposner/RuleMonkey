@@ -37,11 +37,6 @@ dev/
 .DS_Store
 Thumbs.db
 
-# rm_driver dumps molecule-type and reaction lists into cwd on every run.
-*_molecule_type_list.tsv
-*_rxn_list.tsv
-*_nf.gdat
-
 # Replicate ensembles (regenerated; do not track)
 tests/reference/*/replicates/
 
