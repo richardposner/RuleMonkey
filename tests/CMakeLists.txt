@@ -20,6 +20,7 @@ add_test(
         ${CMAKE_SOURCE_DIR}/tests/reference/nfsim/xml/A_plus_A.xml
         ${CMAKE_SOURCE_DIR}/tests/models/feature_coverage/xml/ft_mm_ratelaw.xml
         ${CMAKE_SOURCE_DIR}/tests/cpp/derived_param_model.xml
+        ${CMAKE_SOURCE_DIR}/tests/cpp/out_of_order_param_model.xml
 )
 
 # save_state / load_state regression: round-trip a mid-run snapshot

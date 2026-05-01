@@ -287,11 +287,25 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node);
 // ===========================================================================
 
 // Try to resolve a string as a double, else look up in parameters.
+//
+// `std::stod` is lenient — it parses a leading numeric prefix and returns
+// without complaint when garbage follows ("2*B" → 2.0, "3.14foo" → 3.14).
+// That silently mis-parses any expression starting with a digit and
+// short-circuits the expression-evaluation path.  Use the `pos` out-param
+// to require the entire string be consumed by the numeric parse before
+// accepting a literal-number resolution.
 double resolve_value(const std::string& s, const std::unordered_map<std::string, double>& params) {
   if (s.empty())
     return 0.0;
   try {
-    return std::stod(s);
+    std::size_t pos = 0;
+    double v = std::stod(s, &pos);
+    // Allow trailing whitespace but nothing else: a literal must be the
+    // whole token, not a prefix.
+    while (pos < s.size() && std::isspace(static_cast<unsigned char>(s[pos])))
+      ++pos;
+    if (pos == s.size())
+      return v;
   } catch (...) {
   }
   auto it = params.find(s);
@@ -1678,17 +1692,36 @@ struct RuleMonkeySimulator::Impl {
     // overridden re-resolves its parsed expression against the
     // current (overridden) map.  Overridden parameters keep their
     // override regardless of expression.
-    for (auto& name : model.parameter_names_ordered) {
-      if (param_overrides.count(name))
-        continue;
-      auto eit = model.parameter_exprs.find(name);
-      if (eit == model.parameter_exprs.end())
-        continue;
-      try {
-        model.parameters[name] = resolve_value(eit->second, model.parameters);
-      } catch (...) {
-        // resolution failure leaves the base value in place
+    //
+    // Iterate to fixed point so a chain `C = 2*B; B = 2*A; A = ...`
+    // declared in NON-dependency order still settles after a
+    // set_param("A", x) — matches load_model's parse-time fixed-point
+    // resolution.  BNG2 emits parameters in dependency order so a
+    // single pass settles in practice, but hand-crafted XML or a
+    // future emitter shouldn't silently produce a stale derived
+    // value.  Cap at param_count + 4 to bound the work and bail on
+    // dependency cycles (which can't resolve regardless).
+    const int max_passes = static_cast<int>(model.parameter_names_ordered.size()) + 4;
+    for (int pass = 0; pass < max_passes; ++pass) {
+      bool changed = false;
+      for (auto& name : model.parameter_names_ordered) {
+        if (param_overrides.count(name))
+          continue;
+        auto eit = model.parameter_exprs.find(name);
+        if (eit == model.parameter_exprs.end())
+          continue;
+        try {
+          double resolved = resolve_value(eit->second, model.parameters);
+          if (resolved != model.parameters[name]) {
+            model.parameters[name] = resolved;
+            changed = true;
+          }
+        } catch (...) {
+          // resolution failure leaves the prior value in place
+        }
       }
+      if (!changed)
+        break;
     }
   }
 

@@ -319,17 +319,42 @@ void test_derived_parameter_cascade(const std::string& xml) {
         "direct override of A_tot should reach the engine via initial concentration");
 }
 
+// Parameters declared in REVERSE dependency order (`C = 2*B; B = 2*A; A = 1`)
+// must still cascade after a set_param on the deepest base.  load_model
+// already iterates resolution to fixed point at parse time; sync_parameters
+// must do the same so a single declaration-order pass doesn't leave the
+// chain stale (single-pass: refresh C from old B, then refresh B —
+// fixed-point: iterate until stable).
+void test_out_of_order_cascade(const std::string& xml) {
+  rulemonkey::RuleMonkeySimulator sim(xml);
+  // Parsed defaults: A=1, B=2, C=4.
+  check(sim.get_parameter("A") == 1.0, "out-of-order: parsed A should be 1");
+  check(sim.get_parameter("B") == 2.0, "out-of-order: parsed B should be 2*A = 2");
+  check(sim.get_parameter("C") == 4.0, "out-of-order: parsed C should be 2*B = 4");
+
+  // Override the deepest base; both downstream derivations must update.
+  sim.set_param("A", 10.0);
+  check(sim.get_parameter("A") == 10.0, "out-of-order: A should reflect set_param");
+  check(sim.get_parameter("B") == 20.0,
+        "out-of-order: B should re-resolve to 2*A=20 after sync_parameters fixed point");
+  check(sim.get_parameter("C") == 40.0,
+        "out-of-order: C should re-resolve to 2*B=40 after sync_parameters fixed point");
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
-  if (argc < 4) {
-    std::fprintf(stderr, "usage: %s <A_plus_A.xml> <ft_mm_ratelaw.xml> <derived_param_model.xml>\n",
+  if (argc < 5) {
+    std::fprintf(stderr,
+                 "usage: %s <A_plus_A.xml> <ft_mm_ratelaw.xml> <derived_param_model.xml> "
+                 "<out_of_order_param_model.xml>\n",
                  argv[0]);
     return 2;
   }
   const std::string a_plus_a = argv[1];
   const std::string mm_model = argv[2];
   const std::string derived = argv[3];
+  const std::string out_of_order = argv[4];
 
   try {
     test_ele_rate(a_plus_a);
@@ -342,6 +367,7 @@ int main(int argc, char* argv[]) {
     test_get_parameter_reflects_overrides(a_plus_a);
     test_setparam_rejects_unknown_name(a_plus_a);
     test_derived_parameter_cascade(derived);
+    test_out_of_order_cascade(out_of_order);
   } catch (const std::exception& e) {
     std::fprintf(stderr, "ERROR: %s\n", e.what());
     return 2;
@@ -352,6 +378,7 @@ int main(int argc, char* argv[]) {
     return 1;
   }
   std::fprintf(stderr, "OK: set_param reaches Ele/MM/initial-conc, get_parameter is coherent, "
-                       "unknown names throw, derived parameters cascade\n");
+                       "unknown names throw, derived parameters cascade in declaration "
+                       "and reverse-dependency order\n");
   return 0;
 }
