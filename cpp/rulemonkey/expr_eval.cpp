@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <optional>
 #include <stdexcept>
 #include <string_view>
 
@@ -366,9 +367,19 @@ std::unique_ptr<AstNode> parse(const std::string& text) {
 // Evaluator
 // ---------------------------------------------------------------------------
 
-static double eval_builtin(const std::string& name,
-                           const std::vector<std::unique_ptr<AstNode>>& args,
-                           const VariableMap& vars) {
+// Returns std::nullopt when (name, arity) does not match a known builtin
+// signature; otherwise returns the computed value (which may itself be
+// NaN — log(-1), pow(-2, 0.5), acos(2), atan2(0,0), etc.).
+//
+// Returning std::optional rather than NaN-as-sentinel matters for
+// builtins that legitimately produce NaN on out-of-domain input
+// (pow / log10 / log2 / acos / asin / atan2 / etc.); the prior code
+// kept an ad-hoc allowlist {log, ln, sqrt} and silently fell through
+// to variable lookup for any other NaN result, which surfaced as a
+// confusing "unknown function 'pow'" error instead of returning NaN.
+static std::optional<double> eval_builtin(const std::string& name,
+                                          const std::vector<std::unique_ptr<AstNode>>& args,
+                                          const VariableMap& vars) {
   auto n = args.size();
 
   // 1-arg functions
@@ -432,7 +443,7 @@ static double eval_builtin(const std::string& name,
     return (cond != 0.0) ? evaluate(*args[1], vars) : evaluate(*args[2], vars);
   }
 
-  return std::numeric_limits<double>::quiet_NaN(); // sentinel: not a builtin
+  return std::nullopt; // (name, arity) did not match any builtin signature
 }
 
 static bool is_builtin(const std::string& name) {
@@ -494,17 +505,26 @@ double evaluate(const AstNode& node, const VariableMap& vars) {
   }
 
   case NodeType::FunctionCall: {
-    // Try builtin first
+    // Builtin: dispatch on (name, arity).  A signature match returns
+    // whatever the math function produced — including NaN, which is
+    // the well-defined IEEE-754 result for out-of-domain input
+    // (pow(-2, 0.5), acos(2), log(-1), …).  Wrong arity for a known
+    // builtin is a user error, not a fall-through to variable lookup
+    // — `if(x, y)` was almost certainly meant as the 3-arg ternary,
+    // not as `if` shadowed by a global function.
     if (is_builtin(node.name)) {
-      double result = eval_builtin(node.name, node.children, vars);
-      if (!std::isnan(result) || node.name == "log" || node.name == "ln" || node.name == "sqrt") {
-        // NaN is a valid result from log(-1) etc.
-        return result;
-      }
+      auto result = eval_builtin(node.name, node.children, vars);
+      if (result)
+        return *result;
+      throw std::runtime_error("expr_eval: builtin '" + node.name + "' called with " +
+                               std::to_string(node.children.size()) +
+                               " argument(s); no matching signature");
     }
 
-    // Fall through to variable-as-function: treat f() as variable "f"
-    // This supports BNG global functions referenced in expressions
+    // Non-builtin name used as a function call: support BNG global
+    // functions referenced via the variable map.  We treat `f()` as
+    // the value of the variable `f`; the caller is responsible for
+    // arranging that map.
     auto it = vars.find(node.name);
     if (it != vars.end())
       return it->second;
