@@ -264,11 +264,21 @@ private:
     return left;
   }
 
-  // unary: (-|+)? primary
+  // unary: (-|+)? power-operand
+  //
+  // The `-` / `+` operand is a full power-expression (parse_power) — not a
+  // bare primary — so unary binds LOOSER than `^`.  That makes `-2^2` parse
+  // as `-(2^2) = -4`, matching Python / BNG2 / standard math.  Reading the
+  // primary directly here would produce `(-2)^2 = 4`, a silent wrong answer
+  // for any rate law or TFUN expression with a negative base.
+  //
+  // The fallthrough (no leading sign) still calls parse_primary directly,
+  // which is what parse_power's LHS expects — wiring it through parse_power
+  // here would infinite-recurse since parse_power's LHS is parse_unary.
   std::unique_ptr<AstNode> parse_unary() {
     if (cur_.type == TokType::Op && cur_.text == "-") {
       advance();
-      auto child = parse_primary();
+      auto child = parse_power();
       auto node = std::make_unique<AstNode>();
       node->type = NodeType::UnaryNeg;
       node->children.push_back(std::move(child));
@@ -276,7 +286,7 @@ private:
     }
     if (cur_.type == TokType::Op && cur_.text == "+") {
       advance();
-      return parse_primary();
+      return parse_power();
     }
     return parse_primary();
   }
