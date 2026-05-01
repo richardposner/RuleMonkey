@@ -21,6 +21,7 @@
 #include <set>
 #include <sstream>
 #include <stdexcept>
+#include <string_view>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -33,6 +34,51 @@
 // -DRULEMONKEY_ENABLE_DEV_PROFILES=ON.
 
 namespace rulemonkey {
+
+// ---------------------------------------------------------------------------
+// Schema fingerprint — gates load_state on XML mismatch.
+//
+// The pool serialization (write_state / read_state) stores molecule
+// instances and components by integer indices into Model::molecule_types
+// and MoleculeType::components.  A state file written against one XML
+// can be read against a different XML without runtime errors, but every
+// index then refers to a different schema slot — silently corrupt
+// trajectories.
+//
+// We compute an FNV-1a 64-bit hash over the canonical schema text
+// (molecule type names, ordered component names, ordered allowed
+// states) at save_state and re-compute on load_state; mismatch throws
+// loudly with the saved-vs-current digests so the caller can see they
+// passed the wrong XML.  Parameter values, rate constants, and seed
+// species do NOT participate — those are run-time inputs that legally
+// vary between save and load (e.g., resuming a checkpoint with
+// modified set_param overrides).
+// ---------------------------------------------------------------------------
+static uint64_t compute_schema_fingerprint(const Model& model) {
+  // FNV-1a 64-bit.
+  constexpr uint64_t kOffset = 14695981039346656037ULL;
+  constexpr uint64_t kPrime = 1099511628211ULL;
+  uint64_t h = kOffset;
+  auto absorb = [&](std::string_view s) {
+    for (unsigned char c : s) {
+      h ^= c;
+      h *= kPrime;
+    }
+    h ^= '\0';
+    h *= kPrime; // record-separator
+  };
+  for (const auto& mt : model.molecule_types) {
+    absorb(mt.name);
+    for (const auto& comp : mt.components) {
+      absorb(comp.name);
+      for (const auto& st : comp.allowed_states)
+        absorb(st);
+      absorb("/c"); // component terminator
+    }
+    absorb("/m"); // molecule-type terminator
+  }
+  return h;
+}
 
 // ---------------------------------------------------------------------------
 // Helper: check that all assigned pattern molecules map to distinct actual
@@ -2594,7 +2640,9 @@ struct Engine::Impl {
     if (!os)
       throw std::runtime_error("Cannot open state file for writing: " + path);
     os << std::setprecision(17);
-    os << "RM_STATE_V1\n";
+    // V2 (2026-04-30): added schema fingerprint between marker and time.
+    os << "RM_STATE_V2\n";
+    os << std::hex << compute_schema_fingerprint(model) << std::dec << "\n";
     os << current_time << "\n";
     os << event_count << "\n";
     os << null_event_count << "\n";
@@ -2611,8 +2659,34 @@ struct Engine::Impl {
       throw std::runtime_error("Cannot open state file for reading: " + path);
     std::string marker;
     is >> marker;
-    if (marker != "RM_STATE_V1")
+    if (marker == "RM_STATE_V1") {
+      // V1 has no schema fingerprint; an XML mismatch silently corrupts
+      // the loaded run.  Reject loudly: callers should re-save against
+      // V2 (any save_state from this build emits V2).
+      throw std::runtime_error("State file is RM_STATE_V1 (pre-fingerprint format); re-save with "
+                               "this RuleMonkey build to get an XML-mismatch-checked V2 file");
+    }
+    if (marker != "RM_STATE_V2")
       throw std::runtime_error("Invalid state file header: " + marker);
+
+    // Schema fingerprint check.  Mismatch means the XML used at
+    // save_state is structurally different from the one this simulator
+    // was constructed from, so molecule/component indices in the pool
+    // serialization don't refer to the same schema slots.  Refuse
+    // rather than silently producing corrupt trajectories.
+    uint64_t saved_fp = 0;
+    is >> std::hex >> saved_fp >> std::dec;
+    uint64_t current_fp = compute_schema_fingerprint(model);
+    if (saved_fp != current_fp) {
+      std::ostringstream msg;
+      msg << "State file schema fingerprint mismatch: saved=" << std::hex << saved_fp
+          << " current=" << current_fp << std::dec
+          << " — the XML loaded into this simulator does not match the one "
+             "used at save_state (molecule types, components, or allowed "
+             "states differ)";
+      throw std::runtime_error(msg.str());
+    }
+
     is >> current_time;
     is >> event_count;
     is >> null_event_count;

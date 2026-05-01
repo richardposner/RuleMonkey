@@ -82,10 +82,21 @@ public:
   double get_parameter(const std::string& name) const;
 
   // Saves the active session state to a file. The session must be active.
+  // The file embeds a 64-bit fingerprint of the model schema (molecule
+  // types, components, allowed states) which `load_state` verifies on
+  // read; parameter values, rate constants, and seed species do not
+  // participate, so callers may legitimately mutate those between save
+  // and load.
   void save_state(const std::string& path) const;
 
-  // Creates a new session by loading state from a file. Replaces any existing
-  // session. The model XML must match the one used to save the state.
+  // Creates a new session by loading state from a file. Replaces any
+  // existing session.  Throws std::runtime_error if the file's schema
+  // fingerprint does not match the model XML this simulator was
+  // constructed from (the pool serialization is keyed by molecule-type
+  // and component indices, so a mismatched XML would silently produce
+  // corrupt trajectories).  The schema must match exactly; non-schema
+  // fields (parameter values, rate constants, seed concentrations) may
+  // differ between save and load.
   void load_state(const std::string& path);
 
   // Reports whether a live runtime/session state is currently active.
