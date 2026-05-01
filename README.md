@@ -109,17 +109,27 @@ structs, and `examples/embed.cpp` for a minimal compilable example
 (its doc-comment header carries `find_package` / `add_subdirectory`
 CMake snippets for both consumption modes).
 
-## Model coverage
+## Documentation
 
-[`docs/model_semantics.md`](docs/model_semantics.md) is the reference for
-"will my BNGL model run on RM?" — it lists every supported BNGL
-construct, every Tier-0 refusal (compartments, Arrhenius / Sat / Hill /
-FunctionProduct rate laws, population types, multi-molecule fixed
-species), and the best-effort warnings the engine emits at load time.
-
-[`docs/timing_comparison.md`](docs/timing_comparison.md) is the
-companion performance reference: a 173-model RM-vs-NFsim wall-time
-comparison with a "where does each engine win?" breakdown.
+- [`docs/quickstart.md`](docs/quickstart.md) — shortest path from a
+  BNGL model to RuleMonkey trajectories.
+- [`docs/model_semantics.md`](docs/model_semantics.md) — reference for
+  "will my BNGL model run on RM?".  Lists every supported BNGL
+  construct, every Tier-0 refusal (compartments, Arrhenius / Sat /
+  Hill / FunctionProduct rate laws, population types, multi-molecule
+  fixed species), and the best-effort warnings the engine emits at
+  load time.
+- [`docs/gdat_format.md`](docs/gdat_format.md) — the `.gdat` output
+  format spec, including precision and parsing recipes.
+- [`docs/troubleshooting.md`](docs/troubleshooting.md) — FAQ covering
+  unsupported features, `set_param` gotchas, save/load schema
+  fingerprints, and the `-bscb` default difference vs NFsim.
+- [`docs/test_corpora.md`](docs/test_corpora.md) — the three test
+  suites (`feature_coverage`, `corpus`, `nfsim_basicmodels`),
+  what each catches, and how to run them.
+- [`docs/timing_comparison.md`](docs/timing_comparison.md) — a
+  173-model RM-vs-NFsim wall-time comparison with a "where does
+  each engine win?" breakdown.
 
 ## License
 
