@@ -6713,32 +6713,56 @@ struct Engine::Impl {
 
     timing_wall = std::chrono::duration<double>(std::chrono::steady_clock::now() - wall_t0).count();
 
-    // Print timing breakdown to stderr.  `total` sums the five per-phase
-    // buckets; `wall` is the true wall clock for the SSA loop;
-    // `unaccounted` fills the gap (outer-loop overhead + anything not
-    // covered by a phase timer).
-    double total_time = timing_sample + timing_fire + timing_obs + timing_update + timing_record;
-    if (total_time > 0 || timing_wall > 0) {
-      double denom = total_time > 0 ? total_time : timing_wall;
-      fprintf(stderr, "[RM timing] events=%lld  null=%lld  total=%.3fs  wall=%.3fs\n",
-              (long long)event_count, (long long)null_event_count, total_time, timing_wall);
-      fprintf(stderr, "  select_reactants: %.3fs (%.1f%%)\n", timing_sample,
-              100.0 * timing_sample / denom);
-      fprintf(stderr, "  fire_rule:        %.3fs (%.1f%%)\n", timing_fire,
-              100.0 * timing_fire / denom);
-      fprintf(stderr, "  observables:      %.3fs (%.1f%%)\n", timing_obs,
-              100.0 * timing_obs / denom);
-      fprintf(stderr, "  incr_update:      %.3fs (%.1f%%)\n", timing_update,
-              100.0 * timing_update / denom);
-      fprintf(stderr, "  record_at:        %.3fs (%.1f%%)\n", timing_record,
-              100.0 * timing_record / denom);
-      double unaccounted = timing_wall - total_time;
-      if (unaccounted > 0.0005 * timing_wall) { // only show if > 0.05%
-        fprintf(stderr, "  unaccounted:      %.3fs (%.1f%%)\n", unaccounted,
-                100.0 * unaccounted / timing_wall);
+    // Diagnostic stderr blocks (per-phase timing + per-rule fire counts) are
+    // off by default — embedders and CLI users want a quiet stderr.  Set
+    // RM_PRINT_TIMING=1 in the environment to re-enable; the harness
+    // scripts that parse `events=N` / `total=Xs` from rm_driver's stderr
+    // do this themselves.
+    static const bool kPrintTiming = []() {
+      const char* v = std::getenv("RM_PRINT_TIMING");
+      return v != nullptr && v[0] != '\0' && v[0] != '0';
+    }();
+
+    if (kPrintTiming) {
+      // `total` sums the five per-phase buckets; `wall` is the true wall
+      // clock for the SSA loop; `unaccounted` fills the gap (outer-loop
+      // overhead + anything not covered by a phase timer).
+      double total_time = timing_sample + timing_fire + timing_obs + timing_update + timing_record;
+      if (total_time > 0 || timing_wall > 0) {
+        double denom = total_time > 0 ? total_time : timing_wall;
+        fprintf(stderr, "[RM timing] events=%lld  null=%lld  total=%.3fs  wall=%.3fs\n",
+                (long long)event_count, (long long)null_event_count, total_time, timing_wall);
+        fprintf(stderr, "  select_reactants: %.3fs (%.1f%%)\n", timing_sample,
+                100.0 * timing_sample / denom);
+        fprintf(stderr, "  fire_rule:        %.3fs (%.1f%%)\n", timing_fire,
+                100.0 * timing_fire / denom);
+        fprintf(stderr, "  observables:      %.3fs (%.1f%%)\n", timing_obs,
+                100.0 * timing_obs / denom);
+        fprintf(stderr, "  incr_update:      %.3fs (%.1f%%)\n", timing_update,
+                100.0 * timing_update / denom);
+        fprintf(stderr, "  record_at:        %.3fs (%.1f%%)\n", timing_record,
+                100.0 * timing_record / denom);
+        double unaccounted = timing_wall - total_time;
+        if (unaccounted > 0.0005 * timing_wall) { // only show if > 0.05%
+          fprintf(stderr, "  unaccounted:      %.3fs (%.1f%%)\n", unaccounted,
+                  100.0 * unaccounted / timing_wall);
+        }
+      }
+
+      // Per-rule fire counts and final propensities.
+      int n_rules = static_cast<int>(model.rules.size());
+      fprintf(stderr, "[RM per-rule] fire_counts and final propensities:\n");
+      for (int ri = 0; ri < n_rules; ++ri) {
+        auto& rule = model.rules[ri];
+        auto& rs = rule_states[ri];
+        fprintf(stderr, "  %s (%s): fires=%llu  propensity=%.6g  a_total=%.6g\n", rule.id.c_str(),
+                rule.name.c_str(), (unsigned long long)rule_fire_counts[ri], rs.propensity,
+                rs.a_total);
       }
     }
 
+    // Dev-profile end-of-run reports (gated by build-time RM_DEV_PROFILES
+    // master macro; dead-stripped in default builds).
     if constexpr (kFireRuleProfile)
       report_fire_rule(fire_profile_, timing_fire);
 
@@ -6762,19 +6786,6 @@ struct Engine::Impl {
 
     if constexpr (kSelectReactantsProfile)
       report_select_reactants(sr_profile_, timing_sample);
-
-    // Print per-rule fire counts and final propensities
-    {
-      int n_rules = static_cast<int>(model.rules.size());
-      fprintf(stderr, "[RM per-rule] fire_counts and final propensities:\n");
-      for (int ri = 0; ri < n_rules; ++ri) {
-        auto& rule = model.rules[ri];
-        auto& rs = rule_states[ri];
-        fprintf(stderr, "  %s (%s): fires=%llu  propensity=%.6g  a_total=%.6g\n", rule.id.c_str(),
-                rule.name.c_str(), (unsigned long long)rule_fire_counts[ri], rs.propensity,
-                rs.a_total);
-      }
-    }
 
     result.event_count = event_count;
     return result;

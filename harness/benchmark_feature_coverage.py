@@ -671,9 +671,13 @@ def run_rm_rep(xml_path, t_end, n_steps, seed, rm_flags=None, timeout=30):
     cmd = [RM_DRIVER, xml_path, str(t_end), str(n_steps), str(seed)]
     if rm_flags:
         cmd.extend(rm_flags)
+    # Opt into the per-run [RM timing] / [RM per-rule] stderr blocks so
+    # parse_timing() can extract events / total_s.  Off by default in the
+    # engine for embedder-friendly silence; re-enabled here.
+    env = {**os.environ, "RM_PRINT_TIMING": "1"}
     t0 = time.monotonic()
     try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, env=env)
         wall_s = time.monotonic() - t0
         if result.returncode != 0 or not result.stdout.strip():
             return None
