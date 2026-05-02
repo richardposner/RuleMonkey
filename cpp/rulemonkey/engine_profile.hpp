@@ -22,6 +22,38 @@
 // even when profilers are on; they run an O(N) reference-vs-fast-path
 // equality check on every call, intended for correctness verification
 // during refactors of the matching/sampling fast paths.
+//
+// Adding a new profile.  Five mechanical steps:
+//
+//   1. Declare a gate + (optional) sample cadence in the gate block:
+//        inline constexpr bool kMyPhaseProfile = kDevProfilesEnabled;
+//        inline constexpr int kMyPhaseProfileSampleEvery = 16;
+//   2. Define a struct in the "Profile struct definitions" block whose
+//      fields match what you increment.  Counters are `uint64_t`; chrono
+//      sums use `_ns` suffix.  Field order must match increment order in
+//      engine.cpp (the report function below traverses by name, not by
+//      order, but the convention keeps grep useful).
+//   3. Add a `MyPhaseProfile my_profile_;` member to the owning class
+//      in engine.cpp (Engine::Impl or AgentPool — pick by call-site
+//      ownership; per-Engine, never global).
+//   4. Wrap increments in `if constexpr (kMyPhaseProfile) { ... }` at
+//      every call site.  For chrono, gate on the sample counter:
+//        if constexpr (kMyPhaseProfile) {
+//          if (++my_profile_.calls % kMyPhaseProfileSampleEvery == 0) {
+//            auto t0 = std::chrono::steady_clock::now();
+//            ...
+//            my_profile_.total_ns += elapsed_ns(t0);
+//            my_profile_.sampled_calls++;
+//          }
+//        }
+//   5. Add a `report_my_profile()` body to the report block at the
+//      bottom of this header and call it from Engine::Impl::~Impl()
+//      next to the existing `report_*()` calls.
+//
+// All five steps are local; nothing in the public API changes.  When
+// the master gate is OFF, every `if constexpr` block dead-strips and
+// the new struct's per-Engine storage costs sizeof(MyPhaseProfile)
+// bytes per Engine instance — no runtime overhead.
 // =============================================================================
 
 #include <algorithm>
