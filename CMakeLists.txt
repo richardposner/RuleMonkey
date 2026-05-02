@@ -45,10 +45,20 @@ add_library(RuleMonkey::rulemonkey ALIAS rulemonkey)
 
 target_compile_features(rulemonkey PUBLIC cxx_std_17)
 
+# -Werror is on by default for the in-tree build so a warning shows up
+# as a compile failure on the developer's machine before it lands in
+# CI.  Downstream consumers building RM as a subdirectory or against an
+# installed package can opt out with -DRULEMONKEY_WARNINGS_AS_ERRORS=OFF
+# (their toolchain may flag things ours does not — e.g., a newer GCC's
+# -Wmaybe-uninitialized tightening).
+option(RULEMONKEY_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(rulemonkey PRIVATE
         -Wall -Wextra -Wno-deprecated-declarations
     )
+    if(RULEMONKEY_WARNINGS_AS_ERRORS)
+        target_compile_options(rulemonkey PRIVATE -Werror)
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------
@@ -71,7 +81,10 @@ add_executable(rm_driver cpp/cli/rm_driver.cpp)
 target_link_libraries(rm_driver PRIVATE rulemonkey)
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-    target_compile_options(rm_driver PRIVATE -Wno-deprecated-declarations)
+    target_compile_options(rm_driver PRIVATE -Wall -Wextra -Wno-deprecated-declarations)
+    if(RULEMONKEY_WARNINGS_AS_ERRORS)
+        target_compile_options(rm_driver PRIVATE -Werror)
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------
