@@ -26,10 +26,12 @@ std::unique_ptr<AstNode> AstNode::clone() const {
   return c;
 }
 
+namespace {
+
 // Map a function-call name to its BuiltinKind, or `None` if the name
 // is not a recognized builtin.  Called once per FunctionCall node at
 // parse time so the evaluator never has to compare strings.
-static BuiltinKind classify_builtin(std::string_view name) {
+BuiltinKind classify_builtin(std::string_view name) {
   // 1-arg
   if (name == "log" || name == "ln")
     return BuiltinKind::Ln; // log/ln share semantics
@@ -89,14 +91,14 @@ static BuiltinKind classify_builtin(std::string_view name) {
 enum class TokType { Number, Ident, Op, LParen, RParen, Comma, End };
 
 struct Token {
-  TokType type;
+  TokType type{};
   std::string text;
   double number{};
 };
 
 class Tokenizer {
 public:
-  explicit Tokenizer(std::string_view src) : src_(src), pos_(0) {}
+  explicit Tokenizer(std::string_view src) : src_(src) {}
 
   Token next() {
     skip_ws();
@@ -189,7 +191,7 @@ private:
   }
 
   std::string_view src_;
-  size_t pos_;
+  size_t pos_{0};
 };
 
 // ---------------------------------------------------------------------------
@@ -421,6 +423,8 @@ private:
   Token cur_;
 };
 
+} // namespace
+
 // ---------------------------------------------------------------------------
 // Public parse
 // ---------------------------------------------------------------------------
@@ -447,10 +451,12 @@ std::unique_ptr<AstNode> parse(const std::string& text) {
 // Templated on `EvalChild` so both the map evaluator (legacy, used by
 // the simulator parameter cascade) and the indexed evaluator (engine
 // per-event hot path) share the same dispatch chain.
+namespace {
+
 template <class EvalChild>
-static std::optional<double> eval_builtin(BuiltinKind kind,
-                                          const std::vector<std::unique_ptr<AstNode>>& args,
-                                          EvalChild eval_child) {
+std::optional<double> eval_builtin(BuiltinKind kind,
+                                   const std::vector<std::unique_ptr<AstNode>>& args,
+                                   EvalChild eval_child) {
   auto n = args.size();
 
   // 3-arg ternary: lazy-evaluate — the branch not taken must not run
@@ -531,7 +537,7 @@ static std::optional<double> eval_builtin(BuiltinKind kind,
 // the value of the variable `f` (this is how BNG global functions
 // are referenced — the caller arranges the var lookup to return the
 // function's evaluated value).
-template <class LookupFn> static double evaluate_impl(const AstNode& node, LookupFn lookup_var) {
+template <class LookupFn> double evaluate_impl(const AstNode& node, LookupFn lookup_var) {
   switch (node.type) {
   case NodeType::Literal:
     return node.literal;
@@ -628,6 +634,8 @@ template <class LookupFn> static double evaluate_impl(const AstNode& node, Looku
   }
   throw std::runtime_error("expr_eval: unknown node type");
 }
+
+} // namespace
 
 double evaluate(const AstNode& node, const VariableMap& vars) {
   return evaluate_impl(node, [&vars](const AstNode& n) -> double {

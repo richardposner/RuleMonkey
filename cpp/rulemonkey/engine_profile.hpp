@@ -746,6 +746,7 @@ inline void report_obs_incr(const ObsIncrProfile& p, double timing_obs,
 
   std::fprintf(stderr, "  per-tracked-obs breakdown:\n");
   std::vector<int> order;
+  order.reserve(incr_tracked_obs_indices.size());
   for (int oi : incr_tracked_obs_indices)
     order.push_back(oi);
   std::sort(order.begin(), order.end(),

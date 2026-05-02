@@ -47,7 +47,7 @@ enum class BuiltinKind {
 };
 
 struct AstNode {
-  NodeType type;
+  NodeType type{};
   double literal{};
   std::string name;
   char op{};

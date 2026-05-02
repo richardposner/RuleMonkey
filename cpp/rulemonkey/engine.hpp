@@ -16,6 +16,16 @@ public:
   Engine(const Model& model, uint64_t seed, int molecule_limit = -1);
   ~Engine();
 
+  // Engine owns a unique_ptr<Impl> with PIMPL semantics — copying it
+  // would alias the per-engine RNG and pool state, which is never what
+  // a caller wants.  Move is also disabled because callers always take
+  // an Engine by reference (the live session is held inside the
+  // surrounding Simulator).
+  Engine(const Engine&) = delete;
+  Engine& operator=(const Engine&) = delete;
+  Engine(Engine&&) = delete;
+  Engine& operator=(Engine&&) = delete;
+
   // Initialize agent pool from seed species; compute initial propensities.
   void initialize();
 

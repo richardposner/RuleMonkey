@@ -112,7 +112,7 @@ struct AddMoleculeSpec {
 };
 
 struct RuleOp {
-  OpType type;
+  OpType type{};
 
   // For AddBond / DeleteBond: flat reactant-pattern component indices
   int comp_flat_a = -1;
@@ -234,10 +234,10 @@ struct Rule {
   //   exclude: reject if molecule matches ANY exclusion pattern
   //   include: reject if molecule matches NONE of the inclusion patterns
   struct Constraint {
-    int pattern_idx; // which reactant/product pattern (0-based)
-    Pattern pattern; // the constraint pattern (single-molecule)
-    bool is_exclude; // true = exclude, false = include
-    bool is_product; // true = product constraint, false = reactant
+    int pattern_idx{}; // which reactant/product pattern (0-based)
+    Pattern pattern;   // the constraint pattern (single-molecule)
+    bool is_exclude{}; // true = exclude, false = include
+    bool is_product{}; // true = product constraint, false = reactant
   };
   std::vector<Constraint> constraints;
 };
