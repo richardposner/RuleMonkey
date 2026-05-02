@@ -92,6 +92,18 @@ public:
   // read; parameter values, rate constants, and seed species do not
   // participate, so callers may legitimately mutate those between save
   // and load.
+  //
+  // *Portability caveat*: the RNG state is serialized via the C++ stdlib's
+  // `operator<<` for `std::mt19937_64`, which is required by the standard
+  // to round-trip within the same implementation but is NOT specified to
+  // be byte-identical across different stdlib implementations (libc++ vs
+  // libstdc++ vs MSVC STL).  Save/load is reliably reproducible only
+  // between RuleMonkey binaries built against the same stdlib.  Crossing
+  // stdlibs (e.g. saving with libstdc++ and loading with libc++) may
+  // throw on read or, worse, succeed and continue from a divergent RNG
+  // state.  If you need cross-stdlib state portability, generate the
+  // checkpoint and resume on the same toolchain — RuleMonkey does not
+  // currently hand-serialize the Mersenne Twister state.
   void save_state(const std::string& path) const;
 
   // Creates a new session by loading state from a file. Replaces any
@@ -102,6 +114,20 @@ public:
   // corrupt trajectories).  The schema must match exactly; non-schema
   // fields (parameter values, rate constants, seed concentrations) may
   // differ between save and load.
+  //
+  // *Important caveat*: the fingerprint covers molecule-type schema only
+  // — molecule type names, component names, and allowed states.  It does
+  // NOT cover ReactionRule patterns/operators or Observable patterns.
+  // Loading a session into a simulator constructed from a different XML
+  // that adds, removes, or restructures rules / observables (while keeping
+  // the molecule-type schema unchanged) will succeed silently.  The pool
+  // state is valid in absolute terms but the trajectory continuation
+  // will reflect the *new* simulator's rules / observables, which may
+  // not be what the caller intended.  Do not rely on save/load to pin
+  // down a frozen rule set; instead, treat the source XML as the
+  // canonical contract and only resume sessions across simulators built
+  // from the same XML (or a strict superset that intentionally extends
+  // the rule list).
   void load_state(const std::string& path);
 
   // Reports whether a live runtime/session state is currently active.
