@@ -2897,15 +2897,18 @@ struct Engine::Impl {
 
   void init_species() {
     for (auto& si : model.initial_species) {
-      // Round-to-nearest-int (was: static_cast<int> truncate-toward-zero).
-      // Truncation silently dropped 1 molecule when a derived parameter
-      // cascade produced 999.99999... due to FP rounding (e.g. `100 *
-      // 9.9999999999`); std::lround makes "interpret concentration as a
-      // count" the explicit semantic.  All current parity-test models
-      // use integer-valued concentrations where both behaviors agree.
-      int count = static_cast<int>(std::lround(si.concentration));
-      if (count < 0)
-        count = 0;
+      // Truncate-toward-zero (NFsim parity).  NFsim's NFinput.cpp:774
+      // explicitly does `(int) convertToDouble(specCount)` with a
+      // comment "always round the number down to the nearest whole
+      // integer" — switching to `std::lround` here breaks parity on
+      // any model with a non-integer concentration that lands above
+      // .5 (e.g. basicTLBR's `NL = (L_conc*1e-9)*(NA*V) = 421.5498`
+      // becomes 422 under round but 421 under truncate; the reference
+      // ensemble was generated with NFsim's 421, and the new #29
+      // hard-fail catches the 1-molecule degenerate-observable
+      // mismatch).  Keep the cast explicit and the truncation intent
+      // documented rather than masking the FP edge case with rounding.
+      int count = static_cast<int>(si.concentration); // truncate toward zero (NFsim parity)
       for (int n = 0; n < count; ++n) {
         // Create molecules for this species instance
         std::vector<int> mol_ids;
