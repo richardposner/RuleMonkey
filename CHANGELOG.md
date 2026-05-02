@@ -5,6 +5,65 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.2] — 2026-05-02
+
+### Added
+
+- **`docs/internals.md`** — engine-internals reading guide for
+  contributors about to modify `cpp/rulemonkey/engine.cpp`.  Covers
+  the SSA event loop, the three pattern-matching layers
+  (`count_embeddings_single`, `count_multi_mol_fast`,
+  `count_2mol_1bond_fc`), complex tracking on bind/unbind, propensity
+  computation and `incremental_update`, the 2-mol/1-bond fast-path
+  specialization, `fire_rule`'s OpType switch, and the five
+  `select_reactants` paths.  Cites engine.cpp line ranges as anchors.
+
+- **"Adding a new profile" recipe in `engine_profile.hpp`.** Five
+  mechanical steps to wire a gate, struct, member, increment site,
+  and report function for a new hot path.  Existing per-profile gate
+  comments and field-level documentation were already strong; the
+  missing piece was a contributor recipe.
+
+- **`tests/cpp/error_paths_test.cpp`** — pins down that the
+  documented public-API error surfaces throw `std::runtime_error`
+  (not `std::exception`, not silent failure) for: missing XML file,
+  malformed XML, unknown `set_param` name, and the four mutators
+  that reject calls while a session is active (`set_param`,
+  `clear_param_overrides`, `set_molecule_limit`,
+  `set_block_same_complex_binding`).  Previously these paths
+  existed in `simulator.cpp` but were only exercised indirectly by
+  the corpus parity tests.
+
+- **`harness/perf_diff.py`** — diffs per-model wall-time between two
+  `feature_coverage_report.md` files.  Sorts by absolute `Δ%`;
+  flags ±15% as `SLOWER` / `FASTER`; marks `NEW` / `GONE` for
+  models present on only one side.  Companion `.github/workflows/perf-diff.yml`
+  runs the full feature_coverage benchmark on both PR base and HEAD
+  on the same runner (controls hardware variance) and uploads the
+  diff as an artifact.  Not a hard gate — shared GitHub runners are
+  noisy enough that single-model deltas of 30%+ come from
+  neighbour-VM contention rather than real regressions.
+
+### Changed
+
+- **`-Werror` is on by default** for the in-tree build, gated by
+  `RULEMONKEY_WARNINGS_AS_ERRORS=ON`.  Default ON so a stray warning
+  shows up on the developer's machine before it lands in CI.
+  Downstream consumers building RM as a subdirectory or against an
+  installed package can opt out with
+  `-DRULEMONKEY_WARNINGS_AS_ERRORS=OFF` if their toolchain flags
+  things ours does not.  Verified clean against AppleClang 17;
+  CI exercises Linux clang and gcc.
+
+- **CI `asan` job is now a Linux + macOS matrix.** Same code, same
+  compiler family (clang), but different stdlib (libstdc++ vs
+  libc++) and different sanitizer-runtime image — exactly the
+  divergence that hides UB on one platform and reveals it on the
+  other.  The CI step sets
+  `UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1` and
+  `ASAN_OPTIONS=detect_leaks=0` to keep diagnostic output uniform
+  across platforms.
+
 ## [3.1.1] — 2026-04-30
 
 ### Added

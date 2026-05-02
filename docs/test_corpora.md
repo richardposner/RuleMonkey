@@ -12,7 +12,7 @@ z-score threshold.
 | `corpus` | 71 | NFsim 100-rep ensemble (with 2 SSA exceptions) | `harness/benchmark_full.py` | smoke 2 min / guard 15 min / full 3 h |
 | `nfsim_basicmodels` | 29 | NFsim 100-rep ensemble | `harness/basicmodels.py` | ~5 min |
 
-Current health (2026-04-29): **177 / 177 PASS** at the canonical
+Current health (2026-05-02): **177 / 177 PASS** at the canonical
 verdict thresholds. The CI job runs `feature_coverage` on every push
 to `main`.
 

@@ -51,7 +51,8 @@ cpp/rulemonkey/      Core engine sources
 cpp/cli/             rm_driver CLI
 include/rulemonkey/  Public C++ API headers
 tests/
-  cpp/               C++ unit tests (smoke, set_param, save/load, homodimer rate, public API)
+  cpp/               C++ unit tests (smoke, set_param, save/load, homodimer rate,
+                     public API, expr_eval, table_function, error paths)
   models/            BNGL test corpora (feature_coverage, real-world, basicModels)
   reference/         Gold-standard reference trajectories from NFsim and earlier RM
 harness/             Python benchmarking + validation drivers
@@ -133,6 +134,11 @@ CMake snippets for both consumption modes).
 - [`docs/timing_comparison.md`](docs/timing_comparison.md) — a
   173-model RM-vs-NFsim wall-time comparison with a "where does
   each engine win?" breakdown.
+- [`docs/internals.md`](docs/internals.md) — engine-internals reading
+  guide for contributors about to modify `cpp/rulemonkey/engine.cpp`:
+  SSA loop, pattern matching layers, complex tracking, the
+  2-mol/1-bond fast path, `fire_rule`'s OpType switch, and the five
+  `select_reactants` paths.
 
 ## License
 
