@@ -37,3 +37,15 @@ repos:
         language: system
         pass_filenames: false
         stages: [pre-push]
+
+      # Lints staged C++ TU files against .clang-tidy using whichever
+      # compile_commands.json is available under build/.  The hook script
+      # is intentionally soft: if clang-tidy or the compile DB is missing,
+      # it skips with a hint rather than blocking the commit (so a fresh
+      # clone or a non-LLVM dev machine doesn't get stuck).
+      - id: clang-tidy
+        name: clang-tidy
+        entry: scripts/clang-tidy-staged.sh
+        language: system
+        files: ^(cpp|tests/cpp)/.+\.(c|cc|cpp|cxx)$
+        pass_filenames: true

@@ -1,0 +1,28 @@
+# Test-suite-specific clang-tidy overrides.
+#
+# RM's test runner uses a deliberate "throw-on-failure + global counter"
+# pattern: each test file declares a TU-local `g_failures` counter, asserts
+# throw `std::runtime_error` on mismatch, and `main` lets the throw escape
+# to surface a clear stack/message under ctest.  That's the right pattern
+# for this style of integration test, but it trips a few checks that
+# assume production-grade defensiveness:
+#
+#   - cppcoreguidelines-avoid-non-const-global-variables: the g_failures
+#     counter is intentionally a mutable file-scope variable.
+#   - bugprone-exception-escape: tests deliberately let exceptions escape
+#     `main` so failures surface as crashes with a useful diagnostic.
+#   - cppcoreguidelines-owning-memory: tests use C-style FILE* for
+#     temp-file scaffolding; gsl::owner<> ergonomics aren't worth it here.
+#   - cppcoreguidelines-missing-std-forward: forwarding-reference helpers
+#     in the test harness intentionally invoke the callable directly.
+#   - readability-function-size: a few test mains run several large
+#     scenarios end-to-end and exceed the default size threshold by design.
+
+InheritParentConfig: true
+
+Checks: >
+  -bugprone-exception-escape,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -cppcoreguidelines-missing-std-forward,
+  -cppcoreguidelines-owning-memory,
+  -readability-function-size

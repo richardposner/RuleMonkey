@@ -1,0 +1,100 @@
+# clang-tidy config for RuleMonkey.
+#
+# Scope: catches real bugs and encourages modern C++ idioms without drowning
+# the SSA / pattern-matching / pool-arena code in noise.  Style-only checks
+# (identifier naming, magic numbers, cognitive complexity, etc.) are off so
+# the hook stays useful as a defect detector rather than a style nag.
+#
+# WarningsAsErrors is intentionally empty: the pre-commit hook reports
+# findings but does not fail the commit.  Once findings are addressed, flip
+# specific check categories into WarningsAsErrors to ratchet quality.
+#
+# HeaderFilterRegex limits header diagnostics to RM's own headers — the
+# project includes <random>, <vector>, etc., and we don't want findings
+# inside the standard library or any future third-party header.
+#
+# Globally-disabled checks (noisy / opinionated, with rationale):
+#
+#   readability-suspicious-call-argument: high false-positive rate on
+#     scientific code where parameter names share prefixes intentionally
+#     (`seed_a`/`seed_mol_id`, `mol_a`/`mol_b`, etc.).  Sites caught the
+#     check were all parallel-partner helpers, no real swaps.
+#   readability-avoid-nested-conditional-operator: opinionated.  The few
+#     hits in the engine were path-classification ternaries (`is_multi
+#     ? (fm_enabled ? FM : Gen) : Single`) that read more clearly as
+#     nested ternaries than as if/else cascades.
+#   readability-function-size: load_model is one big BNG-XML parser by
+#     design; splitting it for size's sake hurts more than it helps.
+#   clang-analyzer-optin.performance.Padding: Engine::Impl has 60+
+#     fields and reordering for cache-line packing is impractical
+#     without disturbing logical grouping; the perf gain is negligible
+#     because Impl is allocated once per session.
+
+Checks: >
+  -*,
+  bugprone-*,
+  clang-analyzer-*,
+  concurrency-*,
+  cppcoreguidelines-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-narrowing-conversions,
+  -cppcoreguidelines-avoid-c-arrays,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-init-variables,
+  -cppcoreguidelines-narrowing-conversions,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-type-vararg,
+  -performance-enum-size,
+  -portability-avoid-pragma-once,
+  -clang-analyzer-optin.performance.Padding,
+  -misc-include-cleaner,
+  -misc-non-private-member-variables-in-classes,
+  -misc-no-recursion,
+  -modernize-avoid-c-arrays,
+  -modernize-use-nodiscard,
+  -modernize-use-trailing-return-type,
+  -readability-avoid-nested-conditional-operator,
+  -readability-braces-around-statements,
+  -readability-function-cognitive-complexity,
+  -readability-function-size,
+  -readability-identifier-length,
+  -readability-identifier-naming,
+  -readability-implicit-bool-conversion,
+  -readability-inconsistent-ifelse-braces,
+  -readability-isolate-declaration,
+  -readability-magic-numbers,
+  -readability-named-parameter,
+  -readability-qualified-auto,
+  -readability-suspicious-call-argument
+
+# Categories below have been driven to zero on the current tree.
+# Listing them as errors keeps any regression from sneaking back in
+# (the hook will fail the commit, not just print a warning).  The two
+# big remaining backlogs — misc-const-correctness (~610 hits) and
+# modernize-avoid-c-style-cast (~240 hits) — are intentionally NOT
+# listed; they remain advisory until a future cleanup pass.
+WarningsAsErrors: >
+  bugprone-*,
+  clang-analyzer-*,
+  concurrency-*,
+  cppcoreguidelines-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  -misc-const-correctness,
+  -modernize-avoid-c-style-cast
+
+HeaderFilterRegex: '(include|cpp)/rulemonkey/.*\.(hpp|h)$'
+
+FormatStyle: file
