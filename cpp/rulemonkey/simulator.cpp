@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -516,6 +517,7 @@ Model load_model(const std::string& xml_path,
     // every value is stable or the cap is hit (cap > parameter count
     // means the dependency graph has a cycle, which we can't resolve).
     const int kMaxResolvePasses = static_cast<int>(model.parameter_names_ordered.size()) + 4;
+    bool hit_cap = false;
     for (int pass = 0; pass < kMaxResolvePasses; ++pass) {
       bool changed = false;
       for (auto& name : model.parameter_names_ordered) {
@@ -530,8 +532,41 @@ Model load_model(const std::string& xml_path,
           // leave as-is — still a forward reference
         }
       }
-      if (!changed)
+      if (!changed) {
         break;
+      }
+      if (pass == kMaxResolvePasses - 1) {
+        hit_cap = true;
+      }
+    }
+    if (hit_cap) {
+      std::fprintf(stderr,
+                   "Warning: parameter resolution did not converge after %d passes "
+                   "(parameter count = %zu); a dependency cycle is likely. "
+                   "Stale parameter values may be used.\n",
+                   kMaxResolvePasses, model.parameter_names_ordered.size());
+    }
+    // Final pass: warn on parameters whose expression still fails to
+    // resolve (originally swallowed by `val = 0.0`).  Distinguishes
+    // unresolved from genuinely-zero by re-evaluating against the
+    // settled parameter map and checking only for thrown exceptions —
+    // a parameter with expression "0" or that legitimately evaluates
+    // to 0 will not throw.
+    for (auto& name : model.parameter_names_ordered) {
+      const auto& val_str = model.parameter_exprs[name];
+      try {
+        (void)resolve_cached(val_str, model.parameter_asts[name], model.parameters);
+      } catch (const std::exception& e) {
+        std::fprintf(stderr,
+                     "Warning: parameter '%s' could not be resolved (expression "
+                     "'%s'): %s. Using fallback value %.17g.\n",
+                     name.c_str(), val_str.c_str(), e.what(), model.parameters[name]);
+      } catch (...) {
+        std::fprintf(stderr,
+                     "Warning: parameter '%s' could not be resolved (expression "
+                     "'%s'). Using fallback value %.17g.\n",
+                     name.c_str(), val_str.c_str(), model.parameters[name]);
+      }
     }
   }
 
@@ -1695,6 +1730,7 @@ struct RuleMonkeySimulator::Impl {
     // value.  Cap at param_count + 4 to bound the work and bail on
     // dependency cycles (which can't resolve regardless).
     const int max_passes = static_cast<int>(model.parameter_names_ordered.size()) + 4;
+    bool hit_cap = false;
     for (int pass = 0; pass < max_passes; ++pass) {
       bool changed = false;
       for (auto& name : model.parameter_names_ordered) {
@@ -1714,8 +1750,19 @@ struct RuleMonkeySimulator::Impl {
           // resolution failure leaves the prior value in place
         }
       }
-      if (!changed)
+      if (!changed) {
         break;
+      }
+      if (pass == max_passes - 1) {
+        hit_cap = true;
+      }
+    }
+    if (hit_cap) {
+      std::fprintf(stderr,
+                   "Warning: parameter override cascade did not converge after %d passes "
+                   "(parameter count = %zu); a dependency cycle is likely. "
+                   "Stale parameter values may be used.\n",
+                   max_passes, model.parameter_names_ordered.size());
     }
   }
 

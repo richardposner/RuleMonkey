@@ -6596,8 +6596,33 @@ struct Engine::Impl {
           break;
         }
       }
-      if (selected < 0)
-        selected = static_cast<int>(rule_states.size()) - 1;
+      if (selected < 0) {
+        // Fallthrough: the cumulative scan sum drifted below
+        // total_propensity (delta-updated) by FP roundoff and the draw
+        // landed in the gap.  The previous fallback "pick the last rule"
+        // could land on a propensity-zero rule and waste an event (or
+        // worse, fire a degenerate rule with zero propensity if its
+        // selection logic happened to return a valid match).  Walk the
+        // rule list backwards and pick the last rule with positive
+        // propensity — that is the rule the small-FP draw would have
+        // selected with infinite-precision arithmetic.
+        for (int ri = static_cast<int>(rule_states.size()) - 1; ri >= 0; --ri) {
+          if (rule_states[ri].propensity > 0) {
+            selected = ri;
+            break;
+          }
+        }
+        // No active rule at all — the earlier total_propensity <= 0
+        // guard above should have caught this, so reaching here means
+        // the running total has positive bookkeeping but every per-rule
+        // propensity is 0.  Force a re-baseline + abort the event loop
+        // on the next iteration rather than dereferencing an invalid
+        // selection.
+        if (selected < 0) {
+          recompute_total_propensity();
+          continue;
+        }
+      }
 
       // Select reactants and fire
       auto t0 = std::chrono::steady_clock::now();

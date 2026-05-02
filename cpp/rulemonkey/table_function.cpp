@@ -59,22 +59,32 @@ TableFunction TableFunction::from_file(const std::string& name, const std::strin
 }
 
 double TableFunction::evaluate(double x) const {
-  // Clamp at boundaries
+  // Boundary semantics match BNG Network3 (`bng2/Network3/src/model/tfun.cpp`):
+  // out-of-range x clamps to the nearest endpoint y, not 0 (NFsim's TFUN
+  // returns 0 for x < xs.front() because its CompositeFunction lazily advances
+  // an internal cursor — that is implementation detail of NFsim's streaming
+  // counter, not a BNG-spec semantic).  Authors who want zero-before-table
+  // behavior must place an explicit (xs[0], 0) leading sample.
   if (x <= xs_.front())
     return ys_.front();
   if (x >= xs_.back())
     return ys_.back();
 
-  // Binary search for interval
+  // Binary search for the interval [xs[i], xs[i+1]) containing x.
   auto it = std::upper_bound(xs_.begin(), xs_.end(), x);
   size_t i = static_cast<size_t>(it - xs_.begin()) - 1;
 
   if (method_ == TfunMethod::Step) {
-    // Left-continuous step function
+    // Step interpolation: f(x) = ys[i] for x in [xs[i], xs[i+1]).  This is
+    // a RIGHT-continuous step function — at the breakpoint x = xs[i+1] the
+    // value jumps to ys[i+1] (lim_{t→xs[i+1]+} f(t) = f(xs[i+1]) = ys[i+1]).
+    // BNG Network3's `Tfun::stepInterpolate` mislabels this as "left-
+    // continuous" in its comment but implements identical semantics; we
+    // match BNG's behavior exactly and keep the terminology accurate here.
     return ys_[i];
   }
 
-  // Linear interpolation
+  // Linear interpolation between (xs[i], ys[i]) and (xs[i+1], ys[i+1]).
   double x0 = xs_[i], x1 = xs_[i + 1];
   double y0 = ys_[i], y1 = ys_[i + 1];
   double t = (x - x0) / (x1 - x0);

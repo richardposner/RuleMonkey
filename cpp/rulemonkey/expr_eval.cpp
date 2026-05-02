@@ -584,6 +584,23 @@ template <class LookupFn> static double evaluate_impl(const AstNode& node, Looku
       return (l <= r) ? 1.0 : 0.0; // <=
     case 'g':
       return (l >= r) ? 1.0 : 0.0; // >=
+    // == and != on doubles use bit-exact comparison, matching NFsim's
+    // muParser-backed FuncFactory (which exposes the muParser default
+    // operator==).  Two consequences callers must understand:
+    //   (a) `if(x == 1.0, …)` after FP arithmetic that "should" land on
+    //       1.0 (e.g. `x = 0.1 + 0.2`) will compare false because the
+    //       result is 0.30000000000000004, not 0.3.  Authors must avoid
+    //       == on derived values; use tolerance windows in BNGL itself
+    //       (`if(x > 0.99 && x < 1.01, …)`) where exact equality cannot
+    //       be guaranteed.
+    //   (b) Two identical literal expressions evaluated via the same
+    //       AST will compare equal because they produce bit-identical
+    //       double results — the parse-once / lower-once pipeline does
+    //       not introduce path-dependent rounding.
+    // We deliberately do NOT switch to `std::abs(l-r) <= eps * std::max(...)`
+    // — that is a behavior change versus NFsim and would silently shift
+    // results for any model that depends on integer counts compared
+    // exactly (a common pattern in hand-authored BNGL).
     case '=':
       return (l == r) ? 1.0 : 0.0; // ==
     case '!':
