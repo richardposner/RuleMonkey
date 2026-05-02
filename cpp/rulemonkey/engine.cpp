@@ -2668,6 +2668,31 @@ struct Engine::Impl {
   std::vector<int> eval_gf_main_slot; // [func_idx] -> slot
   std::vector<int> eval_gf_tfun_slot; // [func_idx] -> slot, -1 if not tfun
 
+  // Stale-flag short-circuit for update_eval_vars.  `eval_vars_gen` is
+  // bumped whenever the inputs to the rate-law layout change
+  // (current_time advances, obs_values is mutated by compute_observables
+  // / incremental_update_observables / compute_rate_dependent_observables).
+  // `eval_vars_seen_gen` records the last gen the cached `eval_vars_flat`
+  // was refreshed against; update_eval_vars short-circuits when the two
+  // match.  Within one event's incremental_update there are typically
+  // many evaluate_rate calls — pre-#17 they each rebuilt the full table
+  // from scratch.  Parameters are hoisted out of the refresh loop
+  // (init_eval_layout writes them once) so they don't participate.
+  uint64_t eval_vars_gen = 1;
+  uint64_t eval_vars_seen_gen = 0;
+
+  // Slot index for each LOCAL function, precomputed once so
+  // evaluate_local_rate can save/restore its overrides without
+  // walking model.functions on every per-mol call.
+  std::vector<int> eval_local_fn_slots;
+
+  // Save buffers used by evaluate_local_rate to restore the global
+  // eval_vars_flat view after per-mol overrides.  Member-scoped so
+  // we don't allocate on every per-mid call (size is stable once
+  // local_obs_indices and eval_local_fn_slots are populated).
+  std::vector<double> eval_local_obs_save_;
+  std::vector<double> eval_local_fn_save_;
+
   // pool is initialized from `model` (the just-copied snapshot), not
   // from `m` — declaration order guarantees `model` is constructed
   // before `pool`, so AgentPool::model_ references the engine's own
@@ -2718,6 +2743,23 @@ struct Engine::Impl {
     for (auto& gf : model.functions) {
       if (gf.ast)
         expr::lower_variables(*gf.ast, eval_layout_index);
+    }
+
+    // Parameters are constant for the lifetime of the engine
+    // (set_param is rejected during an active session and rebuilds the
+    // engine on the next run), so write them into eval_vars_flat once
+    // here instead of re-reading model.parameters on every rate eval.
+    for (int i = 0; i < static_cast<int>(model.parameter_names_ordered.size()); ++i) {
+      auto& name = model.parameter_names_ordered[i];
+      auto it = model.parameters.find(name);
+      eval_vars_flat[i] = (it != model.parameters.end()) ? it->second : 0.0;
+    }
+
+    eval_local_fn_slots.clear();
+    for (int i = 0; i < static_cast<int>(model.functions.size()); ++i) {
+      auto& gf = model.functions[i];
+      if (gf.is_local() && gf.ast)
+        eval_local_fn_slots.push_back(i);
     }
   }
 
@@ -3470,18 +3512,23 @@ struct Engine::Impl {
   }
 
   // Refresh the flat variable layout against the current model state.
-  // Writes each variable to its fixed slot (set by init_eval_layout)
-  // so that subsequent expr::evaluate(ast, eval_vars_flat) calls read
-  // by index.  Function evaluation order matches the engine's internal
-  // declaration order, which BNG2 emits in dependency order — earlier
-  // functions are settled before later ones reference them.
+  // Short-circuits when the cached layout is already up to date for
+  // the current generation — within a single event's
+  // incremental_update there are typically many evaluate_rate calls
+  // and the global state doesn't change between them, so all but the
+  // first are no-ops.  Parameters are NOT refreshed here: they're
+  // constant for the lifetime of the engine and were written into
+  // eval_vars_flat once by init_eval_layout.
+  //
+  // Function evaluation order matches the engine's internal
+  // declaration order — BNG2 emits in dependency order, so earlier
+  // functions are settled before later ones reference them.  The
+  // seen-gen update is deferred to AFTER the loop so a recursive
+  // call (TFUN counter source = Function) still does a full rebuild
+  // and sees later function values written, matching prior behavior.
   void update_eval_vars() {
-    // Parameters
-    for (int i = 0; i < static_cast<int>(model.parameter_names_ordered.size()); ++i) {
-      auto& name = model.parameter_names_ordered[i];
-      auto it = model.parameters.find(name);
-      eval_vars_flat[i] = (it != model.parameters.end()) ? it->second : 0.0;
-    }
+    if (eval_vars_seen_gen == eval_vars_gen)
+      return;
 
     eval_vars_flat[eval_time_slot] = current_time;
 
@@ -3505,6 +3552,8 @@ struct Engine::Impl {
         }
       }
     }
+
+    eval_vars_seen_gen = eval_vars_gen;
   }
 
   // --- Observable evaluation ---
@@ -3515,6 +3564,7 @@ struct Engine::Impl {
   // in sync incrementally and must not be overwritten here.  Untracked
   // obs fall through to the existing full-walk evaluator.
   void compute_observables(bool skip_tracked = false) {
+    ++eval_vars_gen; // obs_values about to change → invalidate cached eval_vars_flat
     obs_values.resize(model.observables.size(), 0.0);
     if constexpr (kRecordAtProfile) {
       if (rap_profile_.obs.size() != model.observables.size()) {
@@ -3627,6 +3677,7 @@ struct Engine::Impl {
 
   // Compute only rate-dependent observables (after each SSA event).
   void compute_rate_dependent_observables() {
+    ++eval_vars_gen;
     obs_values.resize(model.observables.size(), 0.0);
     for (int oi = 0; oi < static_cast<int>(model.observables.size()); ++oi) {
       if (model.observables[oi].rate_dependent)
@@ -3891,6 +3942,7 @@ struct Engine::Impl {
   void incremental_update_observables(const std::unordered_set<int>& affected) {
     if (incr_tracked_obs_indices.empty())
       return;
+    ++eval_vars_gen;
 
     using oip_clock = std::chrono::steady_clock;
     bool oip_sampled = false;
@@ -4331,6 +4383,24 @@ struct Engine::Impl {
 
     bool per_molecule = rule.rate_law.local_arg_is_molecule;
 
+    // Save global values for the slots we are about to perturb.  A
+    // follow-up rate eval (next rule in incremental_update, or this
+    // rule's own next per-mol iteration) would otherwise see this
+    // mol's per-mol overrides — and update_eval_vars's stale-flag
+    // short-circuit means it can't re-read the global state from
+    // model state.  Restoring keeps `eval_vars_flat` consistent with
+    // `eval_vars_gen` so the cache survives the local-rate excursion.
+    //
+    // Buffer sizes are stable across calls (local_obs_indices and
+    // eval_local_fn_slots are precomputed at engine init), so the
+    // resize() is a no-op after the first call.
+    eval_local_obs_save_.resize(local_obs_indices.size());
+    for (size_t k = 0; k < local_obs_indices.size(); ++k)
+      eval_local_obs_save_[k] = eval_vars_flat[eval_obs_slot[local_obs_indices[k]]];
+    eval_local_fn_save_.resize(eval_local_fn_slots.size());
+    for (size_t k = 0; k < eval_local_fn_slots.size(); ++k)
+      eval_local_fn_save_[k] = eval_vars_flat[eval_gf_main_slot[eval_local_fn_slots[k]]];
+
     // Override observable slots with local evaluations at mol_id,
     // using precomputed local_obs_indices (avoids set rebuild + linear scan).
     for (int oi : local_obs_indices) {
@@ -4338,24 +4408,32 @@ struct Engine::Impl {
       eval_vars_flat[eval_obs_slot[oi]] = evaluate_observable_on(obs, mol_id, !per_molecule);
     }
 
-    // Re-evaluate all local functions with updated local observable values.
-    // Functions are stored in dependency order (leaves first), so sequential
-    // evaluation resolves the chain correctly.
-    for (int i = 0; i < static_cast<int>(model.functions.size()); ++i) {
+    // Re-evaluate local functions only.  Functions are stored in
+    // dependency order so sequential evaluation resolves the chain
+    // correctly.  Global functions were already settled by the
+    // top-of-call update_eval_vars and DO NOT depend on local
+    // observables (BNG2 emits local arg references only inside
+    // is_local() functions).
+    for (int i : eval_local_fn_slots) {
       auto& gf = model.functions[i];
-      if (gf.is_local() && gf.ast) {
-        try {
-          eval_vars_flat[eval_gf_main_slot[i]] = expr::evaluate(*gf.ast, eval_vars_flat);
-        } catch (...) {
-          eval_vars_flat[eval_gf_main_slot[i]] = 0.0;
-        }
+      try {
+        eval_vars_flat[eval_gf_main_slot[i]] = expr::evaluate(*gf.ast, eval_vars_flat);
+      } catch (...) {
+        eval_vars_flat[eval_gf_main_slot[i]] = 0.0;
       }
     }
 
     auto fit = model.function_index.find(rule.rate_law.function_name);
-    if (fit != model.function_index.end())
-      return eval_vars_flat[eval_gf_main_slot[fit->second]];
-    return 0.0;
+    double result =
+        (fit != model.function_index.end()) ? eval_vars_flat[eval_gf_main_slot[fit->second]] : 0.0;
+
+    // Restore the global view we cached on entry.
+    for (size_t k = 0; k < local_obs_indices.size(); ++k)
+      eval_vars_flat[eval_obs_slot[local_obs_indices[k]]] = eval_local_obs_save_[k];
+    for (size_t k = 0; k < eval_local_fn_slots.size(); ++k)
+      eval_vars_flat[eval_gf_main_slot[eval_local_fn_slots[k]]] = eval_local_fn_save_[k];
+
+    return result;
   }
 
   // --- Incremental update after reaction firing ---
@@ -6509,6 +6587,7 @@ struct Engine::Impl {
       }
 
       current_time = next_time;
+      ++eval_vars_gen; // time advanced → invalidate cached eval_vars_flat
 
       // Select reaction
       double u2 = uniform() * total_propensity;
