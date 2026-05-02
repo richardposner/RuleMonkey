@@ -95,8 +95,9 @@ endif()
 # regressions that observable-trajectory parity tests miss.  Off by default
 # (the perf hit is ~2x); cmake --preset asan turns it on.
 #
-# Linux-only by intent: macOS asan is workable but UBSan diagnostics are
-# noisier and the CI matrix reserves macOS for the build-clean smoke test.
+# Both Linux and macOS are exercised in CI (the asan job's matrix).  The
+# sanitizer flags themselves are platform-neutral; the CI step sets
+# ASAN_OPTIONS / UBSAN_OPTIONS to keep diagnostic output uniform.
 # Applied after rm_driver is declared so both library and CLI get the flags.
 # ---------------------------------------------------------------------------
 option(RULEMONKEY_ENABLE_ASAN "Build with AddressSanitizer + UBSan" OFF)

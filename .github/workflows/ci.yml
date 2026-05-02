@@ -33,13 +33,19 @@ jobs:
         run: ctest --preset release
 
   asan:
-    # AddressSanitizer + UBSan run of the unit-test suite on Linux.  This is
-    # the correctness gate for memory / pointer / index / signed-overflow
-    # bugs that observable-trajectory parity tests in feature_coverage cannot
-    # see (e.g., a use-after-free in pool reuse that happens to land on
-    # zeroed memory).  Linux-only — macOS sanitizer support is workable but
-    # diagnostic quality varies across runner images.
-    runs-on: ubuntu-latest
+    # AddressSanitizer + UBSan run of the unit-test suite.  This is the
+    # correctness gate for memory / pointer / index / signed-overflow
+    # bugs that observable-trajectory parity tests in feature_coverage
+    # cannot see (e.g., a use-after-free in pool reuse that happens to
+    # land on zeroed memory).  Both Linux (libstdc++ + clang asan) and
+    # macOS (libc++ + AppleClang asan) are exercised, since std-lib
+    # divergence is exactly the kind of thing that hides UB on one
+    # platform and reveals it on the other.
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - uses: actions/checkout@v4
@@ -54,7 +60,10 @@ jobs:
         run: cmake --build --preset asan
 
       - name: Test (asan)
-        run: ctest --preset asan
+        # UBSAN_OPTIONS=print_stacktrace=1 surfaces the call site, not
+        # just the diagnostic line — required to triage macOS UBSan
+        # findings, which historically lacked symbolized traces.
+        run: UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 ASAN_OPTIONS=detect_leaks=0 ctest --preset asan
 
   feature_coverage:
     # Runs the full feature_coverage benchmark on every push / PR.  ctest
