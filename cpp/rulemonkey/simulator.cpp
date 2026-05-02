@@ -50,6 +50,30 @@ std::string to_lower(std::string s) {
 // XML parser
 // ===========================================================================
 
+// Append the UTF-8 encoding of a Unicode code point to `out`.  Used by
+// decode_xml_entities for `&#NNN;` and `&#xHH;` numeric character refs.
+// Throws on values outside the valid Unicode range or on surrogate halves.
+void append_utf8(std::string& out, uint32_t cp) {
+  if (cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF))
+    throw std::runtime_error("XML: numeric entity out of range or surrogate half: U+" +
+                             std::to_string(cp));
+  if (cp < 0x80) {
+    out.push_back(static_cast<char>(cp));
+  } else if (cp < 0x800) {
+    out.push_back(static_cast<char>(0xC0 | (cp >> 6)));
+    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+  } else if (cp < 0x10000) {
+    out.push_back(static_cast<char>(0xE0 | (cp >> 12)));
+    out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+  } else {
+    out.push_back(static_cast<char>(0xF0 | (cp >> 18)));
+    out.push_back(static_cast<char>(0x80 | ((cp >> 12) & 0x3F)));
+    out.push_back(static_cast<char>(0x80 | ((cp >> 6) & 0x3F)));
+    out.push_back(static_cast<char>(0x80 | (cp & 0x3F)));
+  }
+}
+
 std::string decode_xml_entities(std::string_view input) {
   std::string out;
   out.reserve(input.size());
@@ -74,7 +98,38 @@ std::string decode_xml_entities(std::string_view input) {
       out.push_back('\'');
     else if (ent == "quot")
       out.push_back('"');
-    else
+    else if (!ent.empty() && ent[0] == '#') {
+      // Numeric character reference: &#NNN; (decimal) or &#xHH; (hex).
+      // BNG2 doesn't currently emit these, but third-party XML
+      // pipelines do (e.g. SBML output from non-BNG tools), so the
+      // parser may as well handle them rather than throwing.
+      if (ent.size() < 2)
+        throw std::runtime_error("XML: empty numeric entity '&;'");
+      uint32_t cp = 0;
+      bool hex = (ent[1] == 'x' || ent[1] == 'X');
+      auto digits = ent.substr(hex ? 2 : 1);
+      if (digits.empty())
+        throw std::runtime_error("XML: empty numeric entity '&" + std::string(ent) + ";'");
+      for (char c : digits) {
+        uint32_t d = 0;
+        if (c >= '0' && c <= '9')
+          d = static_cast<uint32_t>(c - '0');
+        else if (hex && c >= 'a' && c <= 'f')
+          d = 10 + static_cast<uint32_t>(c - 'a');
+        else if (hex && c >= 'A' && c <= 'F')
+          d = 10 + static_cast<uint32_t>(c - 'A');
+        else
+          throw std::runtime_error("XML: malformed numeric entity '&" + std::string(ent) + ";'");
+        // Multiply-and-add with overflow guard so a pathological 32-digit
+        // hex entity can't silently wrap.
+        uint64_t next = static_cast<uint64_t>(cp) * (hex ? 16ULL : 10ULL) + d;
+        if (next > 0x10FFFF)
+          throw std::runtime_error("XML: numeric entity out of Unicode range: '&" +
+                                   std::string(ent) + ";'");
+        cp = static_cast<uint32_t>(next);
+      }
+      append_utf8(out, cp);
+    } else
       throw std::runtime_error("XML: unsupported entity '&" + std::string(ent) + ";'");
     i = sc + 1;
   }
@@ -415,6 +470,24 @@ Pattern parse_pattern(const XmlNode& pat_node, const Model& model,
           c1.bond_label = label;
           c2.bond_constraint = BondConstraint::BoundTo;
           c2.bond_label = label;
+        } else {
+          // One or both bond endpoints reference a site ID that isn't in
+          // the current pattern's id_to_flat map.  Previously silent —
+          // a typo or a dangling cross-pattern reference would drop the
+          // bond and the pattern would match too freely.  Warn loudly so
+          // model authors can see what was lost; we still don't throw,
+          // since BNG2 is the authoritative XML emitter and may emit
+          // shapes we haven't catalogued (the warning surfaces both
+          // genuine bugs and false positives for the same eyeball pass).
+          auto bond_id = opt_attr(bn, "id");
+          std::fprintf(stderr,
+                       "Warning: parse_pattern dropped bond '%s' (site1='%s', site2='%s'): "
+                       "%s%s%s did not resolve in the current pattern's component map. "
+                       "Pattern will match without this bond constraint.\n",
+                       bond_id.c_str(), s1.c_str(), s2.c_str(),
+                       it1 == id_to_flat->end() ? "site1" : "",
+                       (it1 == id_to_flat->end() && it2 == id_to_flat->end()) ? " and " : "",
+                       it2 == id_to_flat->end() ? "site2" : "");
         }
       }
     }

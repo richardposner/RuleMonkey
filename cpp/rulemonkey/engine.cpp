@@ -2897,7 +2897,15 @@ struct Engine::Impl {
 
   void init_species() {
     for (auto& si : model.initial_species) {
-      int count = static_cast<int>(si.concentration); // truncate toward zero
+      // Round-to-nearest-int (was: static_cast<int> truncate-toward-zero).
+      // Truncation silently dropped 1 molecule when a derived parameter
+      // cascade produced 999.99999... due to FP rounding (e.g. `100 *
+      // 9.9999999999`); std::lround makes "interpret concentration as a
+      // count" the explicit semantic.  All current parity-test models
+      // use integer-valued concentrations where both behaviors agree.
+      int count = static_cast<int>(std::lround(si.concentration));
+      if (count < 0)
+        count = 0;
       for (int n = 0; n < count; ++n) {
         // Create molecules for this species instance
         std::vector<int> mol_ids;
@@ -6460,9 +6468,24 @@ struct Engine::Impl {
           affected.insert(new_mid);
         }
       } else if (delta < 0) {
-        int n_delete = -delta;
-        for (int k = 0; k < n_delete && k < static_cast<int>(matching.size()); ++k) {
-          int mid = matching[matching.size() - 1 - k];
+        // Delete uniform-random members of `matching` (was: tail-delete by
+        // index).  The previous tail-delete was harmless because Fixed
+        // species are scoped to singletons so all matches are interchangeable
+        // (they participate in no other rule's reactant pattern), but the
+        // intent of "remove excess copies" is "uniformly at random" — pin
+        // that down explicitly so a future Fixed-species extension that
+        // distinguishes among the matches doesn't silently pick the
+        // last-added molecule.  Partial Fisher–Yates: shuffle the first
+        // `n_delete` entries to the front, then delete those.
+        int n_delete = std::min(-delta, static_cast<int>(matching.size()));
+        for (int k = 0; k < n_delete; ++k) {
+          std::uniform_int_distribution<int> dist(k, static_cast<int>(matching.size()) - 1);
+          int j = dist(rng);
+          if (j != k)
+            std::swap(matching[k], matching[j]);
+        }
+        for (int k = 0; k < n_delete; ++k) {
+          int mid = matching[k];
           affected.erase(mid);
           pool.delete_molecule(mid);
         }
@@ -6499,6 +6522,16 @@ struct Engine::Impl {
 
     int next_sample = 0;
 
+    // Tolerance for "is this sample at the current logical time?" The
+    // historical absolute 1e-15 was wrong-scale at extreme `t_end`:
+    // a t_end of 1e6 has FP grid spacing ≈ 1.16e-10 between adjacent
+    // doubles, so 1e-15 is below the resolution of `current_time` and
+    // a sample exactly at t_end could miss its bucket.  Use a relative
+    // tolerance (max(1e-15, 1e-12 * |t_end|)) so the check tracks the
+    // representable spacing of the time grid at any scale.  Computed
+    // once outside the SSA loop because t_end doesn't change mid-run.
+    const double t_eps = std::max(1e-15, 1e-12 * std::fabs(ts.t_end));
+
     auto wall_t0 = std::chrono::steady_clock::now();
 
     // Record initial state if needed
@@ -6527,7 +6560,7 @@ struct Engine::Impl {
 
     // Record samples up to current time
     while (next_sample < static_cast<int>(sample_times.size()) &&
-           sample_times[next_sample] <= current_time + 1e-15) {
+           sample_times[next_sample] <= current_time + t_eps) {
       record_at(sample_times[next_sample]);
       ++next_sample;
     }
