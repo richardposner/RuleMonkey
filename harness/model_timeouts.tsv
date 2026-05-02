@@ -1,0 +1,13 @@
+# Per-model timeout overrides (seconds). Used by dev/skills/benchmark_full.py
+# when a model's runtime is bounded by sample-time output rather than by
+# the SSA loop and so the default (max(60, 50*nfsim_time)) doesn't fit.
+#
+# A_plus_B_rings: n_steps=10000 means record_at is called 10000 times, each
+# evaluating all Species observables over ~3000 molecules. Engine loop is
+# <1s but total wall time is ~4min due to O(n_steps × n_mols) Species
+# observable recomputation — pre-existing performance issue.
+#model	seconds
+A_plus_B_rings	300
+AN	300
+ANx	300
+rm_tlbr_rings	300

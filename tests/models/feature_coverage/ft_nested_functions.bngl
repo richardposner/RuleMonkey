@@ -1,0 +1,42 @@
+# Feature: nested / multi-reference global functions in rate laws
+# Tests: one function calling another function; chained dependency in ListOfFunctions
+# Tier: base
+# Expected: phosphorylation rate modulated by a nested observable-dependent term
+# invariant: conserved S_total = 200
+
+begin model
+begin parameters
+    S_tot  200
+    k0     0.05
+    K      30.0
+end parameters
+
+begin molecule types
+    S(p~U~P)
+end molecule types
+
+begin seed species
+    S(p~U)  S_tot
+end seed species
+
+begin observables
+    Molecules  S_U       S(p~U)
+    Molecules  S_P       S(p~P)
+    Molecules  S_total   S()
+end observables
+
+begin functions
+    frac_P()    = S_P/(S_U + S_P + 1)
+    modulator() = 1.0 + 2.0 * frac_P()
+    phos_rate() = k0 * modulator()
+end functions
+
+begin reaction rules
+    S(p~U) -> S(p~P)  phos_rate()
+    S(p~P) -> S(p~U)  k0
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>100,n_steps=>100})
+end actions

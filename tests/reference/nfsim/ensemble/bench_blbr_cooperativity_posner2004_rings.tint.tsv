@@ -1,0 +1,5 @@
+observable	I_mean	I_std	n_reps
+Obs_L_tot	18060	0	100
+Obs_R_l1_bound	1978.42	38.3574	100
+Obs_R_l2_bound	1983.05	39.6346	100
+Obs_R_free	5279.83	48.047	100

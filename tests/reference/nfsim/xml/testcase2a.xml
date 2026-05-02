@@ -1,0 +1,3189 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created by BioNetGen 2.9.3  -->
+<sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
+  <model id="testcase2a">
+    <ListOfParameters>
+      <Parameter id="t_end" type="Constant" value="1000" expr="1000"/>
+      <Parameter id="n_steps" type="Constant" value="1000" expr="1000"/>
+      <Parameter id="Fx" type="Constant" value="1" expr="1.0"/>
+      <Parameter id="Lig_tot" type="Constant" value="4200" expr="4200/Fx"/>
+      <Parameter id="Rec_tot" type="Constant" value="300" expr="300/Fx"/>
+      <Parameter id="kp1" type="Constant" value="3e-7" expr="Fx*3.0e-07"/>
+      <Parameter id="km1" type="Constant" value="0.01" expr="0.01"/>
+      <Parameter id="kp2" type="Constant" value="0.003" expr="Fx*3.0e-03"/>
+      <Parameter id="km2" type="Constant" value="0.01" expr="0.01"/>
+    </ListOfParameters>
+    <ListOfMoleculeTypes>
+      <MoleculeType id="L">
+        <ListOfComponentTypes>
+          <ComponentType id="r"/>
+          <ComponentType id="r"/>
+          <ComponentType id="r"/>
+        </ListOfComponentTypes>
+      </MoleculeType>
+      <MoleculeType id="R">
+        <ListOfComponentTypes>
+          <ComponentType id="l"/>
+          <ComponentType id="l"/>
+        </ListOfComponentTypes>
+      </MoleculeType>
+    </ListOfMoleculeTypes>
+    <ListOfCompartments>
+    </ListOfCompartments>
+    <ListOfSpecies>
+      <Species id="S1"  concentration="Lig_tot" name="L(r,r,r)">
+        <ListOfMolecules>
+          <Molecule id="S1_M1" name="L">
+            <ListOfComponents>
+              <Component id="S1_M1_C1" name="r" numberOfBonds="0"/>
+              <Component id="S1_M1_C2" name="r" numberOfBonds="0"/>
+              <Component id="S1_M1_C3" name="r" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+      </Species>
+      <Species id="S2"  concentration="Rec_tot" name="R(l,l)">
+        <ListOfMolecules>
+          <Molecule id="S2_M1" name="R">
+            <ListOfComponents>
+              <Component id="S2_M1_C1" name="l" numberOfBonds="0"/>
+              <Component id="S2_M1_C2" name="l" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+      </Species>
+    </ListOfSpecies>
+    <ListOfReactionRules>
+      <ReactionRule id="RR1" name="_R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR1_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP1_M1" name="L">
+                <ListOfComponents>
+                  <Component id="RR1_RP1_M1_C1" name="r" numberOfBonds="0"/>
+                  <Component id="RR1_RP1_M1_C2" name="r" numberOfBonds="0"/>
+                  <Component id="RR1_RP1_M1_C3" name="r" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+          <ReactantPattern id="RR1_RP2">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP2_M1" name="R">
+                <ListOfComponents>
+                  <Component id="RR1_RP2_M1_C1" name="l" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR1_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP1_M1" name="L">
+                <ListOfComponents>
+                  <Component id="RR1_PP1_M1_C1" name="r" numberOfBonds="1"/>
+                  <Component id="RR1_PP1_M1_C2" name="r" numberOfBonds="0"/>
+                  <Component id="RR1_PP1_M1_C3" name="r" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR1_PP1_M2" name="R">
+                <ListOfComponents>
+                  <Component id="RR1_PP1_M2_C1" name="l" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR1_PP1_B1" site1="RR1_PP1_M1_C1" site2="RR1_PP1_M2_C1"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR1_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="kp1"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR1_RP1_M1" targetID="RR1_PP1_M1"/>
+          <MapItem sourceID="RR1_RP1_M1_C1" targetID="RR1_PP1_M1_C1"/>
+          <MapItem sourceID="RR1_RP1_M1_C2" targetID="RR1_PP1_M1_C2"/>
+          <MapItem sourceID="RR1_RP1_M1_C3" targetID="RR1_PP1_M1_C3"/>
+          <MapItem sourceID="RR1_RP2_M1" targetID="RR1_PP1_M2"/>
+          <MapItem sourceID="RR1_RP2_M1_C1" targetID="RR1_PP1_M2_C1"/>
+        </Map>
+        <ListOfOperations>
+          <AddBond site1="RR1_RP1_M1_C1" site2="RR1_RP2_M1_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR2" name="_reverse__R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR2_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_RP1_M1" name="L">
+                <ListOfComponents>
+                  <Component id="RR2_RP1_M1_C1" name="r" numberOfBonds="1"/>
+                  <Component id="RR2_RP1_M1_C2" name="r" numberOfBonds="0"/>
+                  <Component id="RR2_RP1_M1_C3" name="r" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR2_RP1_M2" name="R">
+                <ListOfComponents>
+                  <Component id="RR2_RP1_M2_C1" name="l" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR2_RP1_B1" site1="RR2_RP1_M1_C1" site2="RR2_RP1_M2_C1"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR2_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_PP1_M1" name="L">
+                <ListOfComponents>
+                  <Component id="RR2_PP1_M1_C1" name="r" numberOfBonds="0"/>
+                  <Component id="RR2_PP1_M1_C2" name="r" numberOfBonds="0"/>
+                  <Component id="RR2_PP1_M1_C3" name="r" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+          <ProductPattern id="RR2_PP2">
+            <ListOfMolecules>
+              <Molecule id="RR2_PP2_M1" name="R">
+                <ListOfComponents>
+                  <Component id="RR2_PP2_M1_C1" name="l" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR2_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="km1"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR2_RP1_M1" targetID="RR2_PP1_M1"/>
+          <MapItem sourceID="RR2_RP1_M1_C1" targetID="RR2_PP1_M1_C1"/>
+          <MapItem sourceID="RR2_RP1_M1_C2" targetID="RR2_PP1_M1_C2"/>
+          <MapItem sourceID="RR2_RP1_M1_C3" targetID="RR2_PP1_M1_C3"/>
+          <MapItem sourceID="RR2_RP1_M2" targetID="RR2_PP2_M1"/>
+          <MapItem sourceID="RR2_RP1_M2_C1" targetID="RR2_PP2_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <DeleteBond site1="RR2_RP1_M1_C1" site2="RR2_RP1_M2_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR3" name="_R2" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR3_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR3_RP1_M1" name="L">
+                <ListOfComponents>
+                  <Component id="RR3_RP1_M1_C1" name="r" numberOfBonds="0"/>
+                  <Component id="RR3_RP1_M1_C2" name="r" numberOfBonds="0"/>
+                  <Component id="RR3_RP1_M1_C3" name="r" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+          <ReactantPattern id="RR3_RP2">
+            <ListOfMolecules>
+              <Molecule id="RR3_RP2_M1" name="R">
+                <ListOfComponents>
+                  <Component id="RR3_RP2_M1_C1" name="l" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR3_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR3_PP1_M1" name="L">
+                <ListOfComponents>
+                  <Component id="RR3_PP1_M1_C1" name="r" numberOfBonds="1"/>
+                  <Component id="RR3_PP1_M1_C2" name="r" numberOfBonds="0"/>
+                  <Component id="RR3_PP1_M1_C3" name="r" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR3_PP1_M2" name="R">
+                <ListOfComponents>
+                  <Component id="RR3_PP1_M2_C1" name="l" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR3_PP1_B1" site1="RR3_PP1_M1_C1" site2="RR3_PP1_M2_C1"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR3_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="kp2"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR3_RP1_M1" targetID="RR3_PP1_M1"/>
+          <MapItem sourceID="RR3_RP1_M1_C1" targetID="RR3_PP1_M1_C1"/>
+          <MapItem sourceID="RR3_RP1_M1_C2" targetID="RR3_PP1_M1_C2"/>
+          <MapItem sourceID="RR3_RP1_M1_C3" targetID="RR3_PP1_M1_C3"/>
+          <MapItem sourceID="RR3_RP2_M1" targetID="RR3_PP1_M2"/>
+          <MapItem sourceID="RR3_RP2_M1_C1" targetID="RR3_PP1_M2_C1"/>
+        </Map>
+        <ListOfOperations>
+          <AddBond site1="RR3_RP1_M1_C1" site2="RR3_RP2_M1_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR4" name="_reverse__R2" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR4_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR4_RP1_M1" name="L">
+                <ListOfComponents>
+                  <Component id="RR4_RP1_M1_C1" name="r" numberOfBonds="1"/>
+                  <Component id="RR4_RP1_M1_C2" name="r" numberOfBonds="0"/>
+                  <Component id="RR4_RP1_M1_C3" name="r" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR4_RP1_M2" name="R">
+                <ListOfComponents>
+                  <Component id="RR4_RP1_M2_C1" name="l" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR4_RP1_B1" site1="RR4_RP1_M1_C1" site2="RR4_RP1_M2_C1"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR4_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR4_PP1_M1" name="L">
+                <ListOfComponents>
+                  <Component id="RR4_PP1_M1_C1" name="r" numberOfBonds="0"/>
+                  <Component id="RR4_PP1_M1_C2" name="r" numberOfBonds="0"/>
+                  <Component id="RR4_PP1_M1_C3" name="r" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+          <ProductPattern id="RR4_PP2">
+            <ListOfMolecules>
+              <Molecule id="RR4_PP2_M1" name="R">
+                <ListOfComponents>
+                  <Component id="RR4_PP2_M1_C1" name="l" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR4_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="km2"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR4_RP1_M1" targetID="RR4_PP1_M1"/>
+          <MapItem sourceID="RR4_RP1_M1_C1" targetID="RR4_PP1_M1_C1"/>
+          <MapItem sourceID="RR4_RP1_M1_C2" targetID="RR4_PP1_M1_C2"/>
+          <MapItem sourceID="RR4_RP1_M1_C3" targetID="RR4_PP1_M1_C3"/>
+          <MapItem sourceID="RR4_RP1_M2" targetID="RR4_PP2_M1"/>
+          <MapItem sourceID="RR4_RP1_M2_C1" targetID="RR4_PP2_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <DeleteBond site1="RR4_RP1_M1_C1" site2="RR4_RP1_M2_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR5" name="_R3" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR5_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR5_RP1_M1" name="L">
+                <ListOfComponents>
+                  <Component id="RR5_RP1_M1_C1" name="r" numberOfBonds="0"/>
+                  <Component id="RR5_RP1_M1_C2" name="r" numberOfBonds="+"/>
+                  <Component id="RR5_RP1_M1_C3" name="r" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+          <ReactantPattern id="RR5_RP2">
+            <ListOfMolecules>
+              <Molecule id="RR5_RP2_M1" name="R">
+                <ListOfComponents>
+                  <Component id="RR5_RP2_M1_C1" name="l" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR5_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR5_PP1_M1" name="L">
+                <ListOfComponents>
+                  <Component id="RR5_PP1_M1_C1" name="r" numberOfBonds="1"/>
+                  <Component id="RR5_PP1_M1_C2" name="r" numberOfBonds="+"/>
+                  <Component id="RR5_PP1_M1_C3" name="r" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR5_PP1_M2" name="R">
+                <ListOfComponents>
+                  <Component id="RR5_PP1_M2_C1" name="l" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR5_PP1_B1" site1="RR5_PP1_M1_C1" site2="RR5_PP1_M2_C1"/>
+            </ListOfBonds>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR5_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="kp2"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR5_RP1_M1" targetID="RR5_PP1_M1"/>
+          <MapItem sourceID="RR5_RP1_M1_C1" targetID="RR5_PP1_M1_C1"/>
+          <MapItem sourceID="RR5_RP1_M1_C2" targetID="RR5_PP1_M1_C2"/>
+          <MapItem sourceID="RR5_RP1_M1_C3" targetID="RR5_PP1_M1_C3"/>
+          <MapItem sourceID="RR5_RP2_M1" targetID="RR5_PP1_M2"/>
+          <MapItem sourceID="RR5_RP2_M1_C1" targetID="RR5_PP1_M2_C1"/>
+        </Map>
+        <ListOfOperations>
+          <AddBond site1="RR5_RP1_M1_C1" site2="RR5_RP2_M1_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR6" name="_reverse__R3" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR6_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR6_RP1_M1" name="L">
+                <ListOfComponents>
+                  <Component id="RR6_RP1_M1_C1" name="r" numberOfBonds="1"/>
+                  <Component id="RR6_RP1_M1_C2" name="r" numberOfBonds="+"/>
+                  <Component id="RR6_RP1_M1_C3" name="r" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="RR6_RP1_M2" name="R">
+                <ListOfComponents>
+                  <Component id="RR6_RP1_M2_C1" name="l" numberOfBonds="1"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="RR6_RP1_B1" site1="RR6_RP1_M1_C1" site2="RR6_RP1_M2_C1"/>
+            </ListOfBonds>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR6_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR6_PP1_M1" name="L">
+                <ListOfComponents>
+                  <Component id="RR6_PP1_M1_C1" name="r" numberOfBonds="0"/>
+                  <Component id="RR6_PP1_M1_C2" name="r" numberOfBonds="+"/>
+                  <Component id="RR6_PP1_M1_C3" name="r" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+          <ProductPattern id="RR6_PP2">
+            <ListOfMolecules>
+              <Molecule id="RR6_PP2_M1" name="R">
+                <ListOfComponents>
+                  <Component id="RR6_PP2_M1_C1" name="l" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR6_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="km2"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR6_RP1_M1" targetID="RR6_PP1_M1"/>
+          <MapItem sourceID="RR6_RP1_M1_C1" targetID="RR6_PP1_M1_C1"/>
+          <MapItem sourceID="RR6_RP1_M1_C2" targetID="RR6_PP1_M1_C2"/>
+          <MapItem sourceID="RR6_RP1_M1_C3" targetID="RR6_PP1_M1_C3"/>
+          <MapItem sourceID="RR6_RP1_M2" targetID="RR6_PP2_M1"/>
+          <MapItem sourceID="RR6_RP1_M2_C1" targetID="RR6_PP2_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <DeleteBond site1="RR6_RP1_M1_C1" site2="RR6_RP1_M2_C1"/>
+        </ListOfOperations>
+      </ReactionRule>
+    </ListOfReactionRules>
+    <ListOfObservables>
+      <Observable id="O1" name="Ligfree_1" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O1_P1" matchOnce="1">
+            <ListOfMolecules>
+              <Molecule id="O1_P1_M1" name="L">
+                <ListOfComponents>
+                  <Component id="O1_P1_M1_C1" name="r" numberOfBonds="0"/>
+                  <Component id="O1_P1_M1_C2" name="r" numberOfBonds="0"/>
+                  <Component id="O1_P1_M1_C3" name="r" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O2" name="Ligbnd1_1" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O2_P1" matchOnce="1">
+            <ListOfMolecules>
+              <Molecule id="O2_P1_M1" name="L">
+                <ListOfComponents>
+                  <Component id="O2_P1_M1_C1" name="r" numberOfBonds="+"/>
+                  <Component id="O2_P1_M1_C2" name="r" numberOfBonds="0"/>
+                  <Component id="O2_P1_M1_C3" name="r" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O3" name="Ligbnd2_1" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O3_P1" matchOnce="1">
+            <ListOfMolecules>
+              <Molecule id="O3_P1_M1" name="L">
+                <ListOfComponents>
+                  <Component id="O3_P1_M1_C1" name="r" numberOfBonds="+"/>
+                  <Component id="O3_P1_M1_C2" name="r" numberOfBonds="+"/>
+                  <Component id="O3_P1_M1_C3" name="r" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O4" name="Ligbnd3_1" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O4_P1">
+            <ListOfMolecules>
+              <Molecule id="O4_P1_M1" name="L">
+                <ListOfComponents>
+                  <Component id="O4_P1_M1_C1" name="r" numberOfBonds="+"/>
+                  <Component id="O4_P1_M1_C2" name="r" numberOfBonds="+"/>
+                  <Component id="O4_P1_M1_C3" name="r" numberOfBonds="+"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O5" name="Size_1" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O5_P1" relation="==" quantity="1">
+            <ListOfMolecules>
+              <Molecule id="O5_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O6" name="Size_2" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O6_P1" relation="==" quantity="2">
+            <ListOfMolecules>
+              <Molecule id="O6_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O7" name="Size_3" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O7_P1" relation="==" quantity="3">
+            <ListOfMolecules>
+              <Molecule id="O7_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O8" name="Size_4" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O8_P1" relation="==" quantity="4">
+            <ListOfMolecules>
+              <Molecule id="O8_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O9" name="Size_5" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O9_P1" relation="==" quantity="5">
+            <ListOfMolecules>
+              <Molecule id="O9_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O10" name="Size_6" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O10_P1" relation="==" quantity="6">
+            <ListOfMolecules>
+              <Molecule id="O10_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O11" name="Size_7" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O11_P1" relation="==" quantity="7">
+            <ListOfMolecules>
+              <Molecule id="O11_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O12" name="Size_8" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O12_P1" relation="==" quantity="8">
+            <ListOfMolecules>
+              <Molecule id="O12_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O13" name="Size_9" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O13_P1" relation="==" quantity="9">
+            <ListOfMolecules>
+              <Molecule id="O13_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O14" name="Size_10" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O14_P1" relation="==" quantity="10">
+            <ListOfMolecules>
+              <Molecule id="O14_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O15" name="Size_11" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O15_P1" relation="==" quantity="11">
+            <ListOfMolecules>
+              <Molecule id="O15_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O16" name="Size_12" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O16_P1" relation="==" quantity="12">
+            <ListOfMolecules>
+              <Molecule id="O16_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O17" name="Size_13" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O17_P1" relation="==" quantity="13">
+            <ListOfMolecules>
+              <Molecule id="O17_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O18" name="Size_14" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O18_P1" relation="==" quantity="14">
+            <ListOfMolecules>
+              <Molecule id="O18_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O19" name="Size_15" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O19_P1" relation="==" quantity="15">
+            <ListOfMolecules>
+              <Molecule id="O19_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O20" name="Size_16" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O20_P1" relation="==" quantity="16">
+            <ListOfMolecules>
+              <Molecule id="O20_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O21" name="Size_17" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O21_P1" relation="==" quantity="17">
+            <ListOfMolecules>
+              <Molecule id="O21_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O22" name="Size_18" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O22_P1" relation="==" quantity="18">
+            <ListOfMolecules>
+              <Molecule id="O22_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O23" name="Size_19" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O23_P1" relation="==" quantity="19">
+            <ListOfMolecules>
+              <Molecule id="O23_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O24" name="Size_20" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O24_P1" relation="==" quantity="20">
+            <ListOfMolecules>
+              <Molecule id="O24_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O25" name="Size_21" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O25_P1" relation="==" quantity="21">
+            <ListOfMolecules>
+              <Molecule id="O25_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O26" name="Size_22" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O26_P1" relation="==" quantity="22">
+            <ListOfMolecules>
+              <Molecule id="O26_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O27" name="Size_23" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O27_P1" relation="==" quantity="23">
+            <ListOfMolecules>
+              <Molecule id="O27_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O28" name="Size_24" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O28_P1" relation="==" quantity="24">
+            <ListOfMolecules>
+              <Molecule id="O28_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O29" name="Size_25" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O29_P1" relation="==" quantity="25">
+            <ListOfMolecules>
+              <Molecule id="O29_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O30" name="Size_26" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O30_P1" relation="==" quantity="26">
+            <ListOfMolecules>
+              <Molecule id="O30_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O31" name="Size_27" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O31_P1" relation="==" quantity="27">
+            <ListOfMolecules>
+              <Molecule id="O31_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O32" name="Size_28" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O32_P1" relation="==" quantity="28">
+            <ListOfMolecules>
+              <Molecule id="O32_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O33" name="Size_29" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O33_P1" relation="==" quantity="29">
+            <ListOfMolecules>
+              <Molecule id="O33_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O34" name="Size_30" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O34_P1" relation="==" quantity="30">
+            <ListOfMolecules>
+              <Molecule id="O34_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O35" name="Size_31" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O35_P1" relation="==" quantity="31">
+            <ListOfMolecules>
+              <Molecule id="O35_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O36" name="Size_32" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O36_P1" relation="==" quantity="32">
+            <ListOfMolecules>
+              <Molecule id="O36_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O37" name="Size_33" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O37_P1" relation="==" quantity="33">
+            <ListOfMolecules>
+              <Molecule id="O37_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O38" name="Size_34" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O38_P1" relation="==" quantity="34">
+            <ListOfMolecules>
+              <Molecule id="O38_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O39" name="Size_35" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O39_P1" relation="==" quantity="35">
+            <ListOfMolecules>
+              <Molecule id="O39_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O40" name="Size_36" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O40_P1" relation="==" quantity="36">
+            <ListOfMolecules>
+              <Molecule id="O40_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O41" name="Size_37" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O41_P1" relation="==" quantity="37">
+            <ListOfMolecules>
+              <Molecule id="O41_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O42" name="Size_38" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O42_P1" relation="==" quantity="38">
+            <ListOfMolecules>
+              <Molecule id="O42_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O43" name="Size_39" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O43_P1" relation="==" quantity="39">
+            <ListOfMolecules>
+              <Molecule id="O43_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O44" name="Size_40" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O44_P1" relation="==" quantity="40">
+            <ListOfMolecules>
+              <Molecule id="O44_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O45" name="Size_41" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O45_P1" relation="==" quantity="41">
+            <ListOfMolecules>
+              <Molecule id="O45_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O46" name="Size_42" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O46_P1" relation="==" quantity="42">
+            <ListOfMolecules>
+              <Molecule id="O46_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O47" name="Size_43" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O47_P1" relation="==" quantity="43">
+            <ListOfMolecules>
+              <Molecule id="O47_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O48" name="Size_44" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O48_P1" relation="==" quantity="44">
+            <ListOfMolecules>
+              <Molecule id="O48_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O49" name="Size_45" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O49_P1" relation="==" quantity="45">
+            <ListOfMolecules>
+              <Molecule id="O49_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O50" name="Size_46" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O50_P1" relation="==" quantity="46">
+            <ListOfMolecules>
+              <Molecule id="O50_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O51" name="Size_47" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O51_P1" relation="==" quantity="47">
+            <ListOfMolecules>
+              <Molecule id="O51_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O52" name="Size_48" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O52_P1" relation="==" quantity="48">
+            <ListOfMolecules>
+              <Molecule id="O52_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O53" name="Size_49" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O53_P1" relation="==" quantity="49">
+            <ListOfMolecules>
+              <Molecule id="O53_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O54" name="Size_50" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O54_P1" relation="==" quantity="50">
+            <ListOfMolecules>
+              <Molecule id="O54_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O55" name="Size_51" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O55_P1" relation="==" quantity="51">
+            <ListOfMolecules>
+              <Molecule id="O55_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O56" name="Size_52" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O56_P1" relation="==" quantity="52">
+            <ListOfMolecules>
+              <Molecule id="O56_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O57" name="Size_53" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O57_P1" relation="==" quantity="53">
+            <ListOfMolecules>
+              <Molecule id="O57_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O58" name="Size_54" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O58_P1" relation="==" quantity="54">
+            <ListOfMolecules>
+              <Molecule id="O58_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O59" name="Size_55" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O59_P1" relation="==" quantity="55">
+            <ListOfMolecules>
+              <Molecule id="O59_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O60" name="Size_56" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O60_P1" relation="==" quantity="56">
+            <ListOfMolecules>
+              <Molecule id="O60_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O61" name="Size_57" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O61_P1" relation="==" quantity="57">
+            <ListOfMolecules>
+              <Molecule id="O61_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O62" name="Size_58" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O62_P1" relation="==" quantity="58">
+            <ListOfMolecules>
+              <Molecule id="O62_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O63" name="Size_59" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O63_P1" relation="==" quantity="59">
+            <ListOfMolecules>
+              <Molecule id="O63_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O64" name="Size_60" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O64_P1" relation="==" quantity="60">
+            <ListOfMolecules>
+              <Molecule id="O64_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O65" name="Size_61" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O65_P1" relation="==" quantity="61">
+            <ListOfMolecules>
+              <Molecule id="O65_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O66" name="Size_62" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O66_P1" relation="==" quantity="62">
+            <ListOfMolecules>
+              <Molecule id="O66_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O67" name="Size_63" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O67_P1" relation="==" quantity="63">
+            <ListOfMolecules>
+              <Molecule id="O67_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O68" name="Size_64" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O68_P1" relation="==" quantity="64">
+            <ListOfMolecules>
+              <Molecule id="O68_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O69" name="Size_65" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O69_P1" relation="==" quantity="65">
+            <ListOfMolecules>
+              <Molecule id="O69_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O70" name="Size_66" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O70_P1" relation="==" quantity="66">
+            <ListOfMolecules>
+              <Molecule id="O70_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O71" name="Size_67" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O71_P1" relation="==" quantity="67">
+            <ListOfMolecules>
+              <Molecule id="O71_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O72" name="Size_68" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O72_P1" relation="==" quantity="68">
+            <ListOfMolecules>
+              <Molecule id="O72_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O73" name="Size_69" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O73_P1" relation="==" quantity="69">
+            <ListOfMolecules>
+              <Molecule id="O73_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O74" name="Size_70" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O74_P1" relation="==" quantity="70">
+            <ListOfMolecules>
+              <Molecule id="O74_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O75" name="Size_71" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O75_P1" relation="==" quantity="71">
+            <ListOfMolecules>
+              <Molecule id="O75_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O76" name="Size_72" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O76_P1" relation="==" quantity="72">
+            <ListOfMolecules>
+              <Molecule id="O76_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O77" name="Size_73" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O77_P1" relation="==" quantity="73">
+            <ListOfMolecules>
+              <Molecule id="O77_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O78" name="Size_74" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O78_P1" relation="==" quantity="74">
+            <ListOfMolecules>
+              <Molecule id="O78_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O79" name="Size_75" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O79_P1" relation="==" quantity="75">
+            <ListOfMolecules>
+              <Molecule id="O79_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O80" name="Size_76" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O80_P1" relation="==" quantity="76">
+            <ListOfMolecules>
+              <Molecule id="O80_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O81" name="Size_77" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O81_P1" relation="==" quantity="77">
+            <ListOfMolecules>
+              <Molecule id="O81_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O82" name="Size_78" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O82_P1" relation="==" quantity="78">
+            <ListOfMolecules>
+              <Molecule id="O82_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O83" name="Size_79" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O83_P1" relation="==" quantity="79">
+            <ListOfMolecules>
+              <Molecule id="O83_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O84" name="Size_80" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O84_P1" relation="==" quantity="80">
+            <ListOfMolecules>
+              <Molecule id="O84_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O85" name="Size_81" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O85_P1" relation="==" quantity="81">
+            <ListOfMolecules>
+              <Molecule id="O85_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O86" name="Size_82" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O86_P1" relation="==" quantity="82">
+            <ListOfMolecules>
+              <Molecule id="O86_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O87" name="Size_83" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O87_P1" relation="==" quantity="83">
+            <ListOfMolecules>
+              <Molecule id="O87_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O88" name="Size_84" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O88_P1" relation="==" quantity="84">
+            <ListOfMolecules>
+              <Molecule id="O88_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O89" name="Size_85" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O89_P1" relation="==" quantity="85">
+            <ListOfMolecules>
+              <Molecule id="O89_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O90" name="Size_86" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O90_P1" relation="==" quantity="86">
+            <ListOfMolecules>
+              <Molecule id="O90_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O91" name="Size_87" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O91_P1" relation="==" quantity="87">
+            <ListOfMolecules>
+              <Molecule id="O91_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O92" name="Size_88" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O92_P1" relation="==" quantity="88">
+            <ListOfMolecules>
+              <Molecule id="O92_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O93" name="Size_89" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O93_P1" relation="==" quantity="89">
+            <ListOfMolecules>
+              <Molecule id="O93_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O94" name="Size_90" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O94_P1" relation="==" quantity="90">
+            <ListOfMolecules>
+              <Molecule id="O94_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O95" name="Size_91" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O95_P1" relation="==" quantity="91">
+            <ListOfMolecules>
+              <Molecule id="O95_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O96" name="Size_92" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O96_P1" relation="==" quantity="92">
+            <ListOfMolecules>
+              <Molecule id="O96_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O97" name="Size_93" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O97_P1" relation="==" quantity="93">
+            <ListOfMolecules>
+              <Molecule id="O97_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O98" name="Size_94" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O98_P1" relation="==" quantity="94">
+            <ListOfMolecules>
+              <Molecule id="O98_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O99" name="Size_95" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O99_P1" relation="==" quantity="95">
+            <ListOfMolecules>
+              <Molecule id="O99_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O100" name="Size_96" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O100_P1" relation="==" quantity="96">
+            <ListOfMolecules>
+              <Molecule id="O100_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O101" name="Size_97" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O101_P1" relation="==" quantity="97">
+            <ListOfMolecules>
+              <Molecule id="O101_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O102" name="Size_98" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O102_P1" relation="==" quantity="98">
+            <ListOfMolecules>
+              <Molecule id="O102_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O103" name="Size_99" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O103_P1" relation="==" quantity="99">
+            <ListOfMolecules>
+              <Molecule id="O103_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O104" name="Size_100" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O104_P1" relation="==" quantity="100">
+            <ListOfMolecules>
+              <Molecule id="O104_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O105" name="Size_101" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O105_P1" relation="==" quantity="101">
+            <ListOfMolecules>
+              <Molecule id="O105_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O106" name="Size_102" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O106_P1" relation="==" quantity="102">
+            <ListOfMolecules>
+              <Molecule id="O106_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O107" name="Size_103" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O107_P1" relation="==" quantity="103">
+            <ListOfMolecules>
+              <Molecule id="O107_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O108" name="Size_104" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O108_P1" relation="==" quantity="104">
+            <ListOfMolecules>
+              <Molecule id="O108_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O109" name="Size_105" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O109_P1" relation="==" quantity="105">
+            <ListOfMolecules>
+              <Molecule id="O109_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O110" name="Size_106" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O110_P1" relation="==" quantity="106">
+            <ListOfMolecules>
+              <Molecule id="O110_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O111" name="Size_107" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O111_P1" relation="==" quantity="107">
+            <ListOfMolecules>
+              <Molecule id="O111_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O112" name="Size_108" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O112_P1" relation="==" quantity="108">
+            <ListOfMolecules>
+              <Molecule id="O112_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O113" name="Size_109" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O113_P1" relation="==" quantity="109">
+            <ListOfMolecules>
+              <Molecule id="O113_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O114" name="Size_110" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O114_P1" relation="==" quantity="110">
+            <ListOfMolecules>
+              <Molecule id="O114_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O115" name="Size_111" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O115_P1" relation="==" quantity="111">
+            <ListOfMolecules>
+              <Molecule id="O115_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O116" name="Size_112" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O116_P1" relation="==" quantity="112">
+            <ListOfMolecules>
+              <Molecule id="O116_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O117" name="Size_113" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O117_P1" relation="==" quantity="113">
+            <ListOfMolecules>
+              <Molecule id="O117_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O118" name="Size_114" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O118_P1" relation="==" quantity="114">
+            <ListOfMolecules>
+              <Molecule id="O118_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O119" name="Size_115" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O119_P1" relation="==" quantity="115">
+            <ListOfMolecules>
+              <Molecule id="O119_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O120" name="Size_116" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O120_P1" relation="==" quantity="116">
+            <ListOfMolecules>
+              <Molecule id="O120_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O121" name="Size_117" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O121_P1" relation="==" quantity="117">
+            <ListOfMolecules>
+              <Molecule id="O121_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O122" name="Size_118" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O122_P1" relation="==" quantity="118">
+            <ListOfMolecules>
+              <Molecule id="O122_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O123" name="Size_119" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O123_P1" relation="==" quantity="119">
+            <ListOfMolecules>
+              <Molecule id="O123_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O124" name="Size_120" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O124_P1" relation="==" quantity="120">
+            <ListOfMolecules>
+              <Molecule id="O124_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O125" name="Size_121" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O125_P1" relation="==" quantity="121">
+            <ListOfMolecules>
+              <Molecule id="O125_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O126" name="Size_122" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O126_P1" relation="==" quantity="122">
+            <ListOfMolecules>
+              <Molecule id="O126_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O127" name="Size_123" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O127_P1" relation="==" quantity="123">
+            <ListOfMolecules>
+              <Molecule id="O127_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O128" name="Size_124" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O128_P1" relation="==" quantity="124">
+            <ListOfMolecules>
+              <Molecule id="O128_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O129" name="Size_125" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O129_P1" relation="==" quantity="125">
+            <ListOfMolecules>
+              <Molecule id="O129_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O130" name="Size_126" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O130_P1" relation="==" quantity="126">
+            <ListOfMolecules>
+              <Molecule id="O130_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O131" name="Size_127" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O131_P1" relation="==" quantity="127">
+            <ListOfMolecules>
+              <Molecule id="O131_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O132" name="Size_128" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O132_P1" relation="==" quantity="128">
+            <ListOfMolecules>
+              <Molecule id="O132_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O133" name="Size_129" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O133_P1" relation="==" quantity="129">
+            <ListOfMolecules>
+              <Molecule id="O133_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O134" name="Size_130" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O134_P1" relation="==" quantity="130">
+            <ListOfMolecules>
+              <Molecule id="O134_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O135" name="Size_131" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O135_P1" relation="==" quantity="131">
+            <ListOfMolecules>
+              <Molecule id="O135_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O136" name="Size_132" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O136_P1" relation="==" quantity="132">
+            <ListOfMolecules>
+              <Molecule id="O136_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O137" name="Size_133" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O137_P1" relation="==" quantity="133">
+            <ListOfMolecules>
+              <Molecule id="O137_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O138" name="Size_134" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O138_P1" relation="==" quantity="134">
+            <ListOfMolecules>
+              <Molecule id="O138_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O139" name="Size_135" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O139_P1" relation="==" quantity="135">
+            <ListOfMolecules>
+              <Molecule id="O139_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O140" name="Size_136" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O140_P1" relation="==" quantity="136">
+            <ListOfMolecules>
+              <Molecule id="O140_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O141" name="Size_137" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O141_P1" relation="==" quantity="137">
+            <ListOfMolecules>
+              <Molecule id="O141_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O142" name="Size_138" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O142_P1" relation="==" quantity="138">
+            <ListOfMolecules>
+              <Molecule id="O142_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O143" name="Size_139" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O143_P1" relation="==" quantity="139">
+            <ListOfMolecules>
+              <Molecule id="O143_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O144" name="Size_140" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O144_P1" relation="==" quantity="140">
+            <ListOfMolecules>
+              <Molecule id="O144_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O145" name="Size_141" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O145_P1" relation="==" quantity="141">
+            <ListOfMolecules>
+              <Molecule id="O145_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O146" name="Size_142" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O146_P1" relation="==" quantity="142">
+            <ListOfMolecules>
+              <Molecule id="O146_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O147" name="Size_143" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O147_P1" relation="==" quantity="143">
+            <ListOfMolecules>
+              <Molecule id="O147_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O148" name="Size_144" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O148_P1" relation="==" quantity="144">
+            <ListOfMolecules>
+              <Molecule id="O148_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O149" name="Size_145" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O149_P1" relation="==" quantity="145">
+            <ListOfMolecules>
+              <Molecule id="O149_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O150" name="Size_146" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O150_P1" relation="==" quantity="146">
+            <ListOfMolecules>
+              <Molecule id="O150_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O151" name="Size_147" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O151_P1" relation="==" quantity="147">
+            <ListOfMolecules>
+              <Molecule id="O151_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O152" name="Size_148" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O152_P1" relation="==" quantity="148">
+            <ListOfMolecules>
+              <Molecule id="O152_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O153" name="Size_149" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O153_P1" relation="==" quantity="149">
+            <ListOfMolecules>
+              <Molecule id="O153_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O154" name="Size_150" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O154_P1" relation="==" quantity="150">
+            <ListOfMolecules>
+              <Molecule id="O154_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O155" name="Size_151" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O155_P1" relation="==" quantity="151">
+            <ListOfMolecules>
+              <Molecule id="O155_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O156" name="Size_152" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O156_P1" relation="==" quantity="152">
+            <ListOfMolecules>
+              <Molecule id="O156_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O157" name="Size_153" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O157_P1" relation="==" quantity="153">
+            <ListOfMolecules>
+              <Molecule id="O157_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O158" name="Size_154" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O158_P1" relation="==" quantity="154">
+            <ListOfMolecules>
+              <Molecule id="O158_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O159" name="Size_155" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O159_P1" relation="==" quantity="155">
+            <ListOfMolecules>
+              <Molecule id="O159_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O160" name="Size_156" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O160_P1" relation="==" quantity="156">
+            <ListOfMolecules>
+              <Molecule id="O160_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O161" name="Size_157" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O161_P1" relation="==" quantity="157">
+            <ListOfMolecules>
+              <Molecule id="O161_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O162" name="Size_158" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O162_P1" relation="==" quantity="158">
+            <ListOfMolecules>
+              <Molecule id="O162_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O163" name="Size_159" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O163_P1" relation="==" quantity="159">
+            <ListOfMolecules>
+              <Molecule id="O163_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O164" name="Size_160" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O164_P1" relation="==" quantity="160">
+            <ListOfMolecules>
+              <Molecule id="O164_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O165" name="Size_161" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O165_P1" relation="==" quantity="161">
+            <ListOfMolecules>
+              <Molecule id="O165_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O166" name="Size_162" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O166_P1" relation="==" quantity="162">
+            <ListOfMolecules>
+              <Molecule id="O166_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O167" name="Size_163" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O167_P1" relation="==" quantity="163">
+            <ListOfMolecules>
+              <Molecule id="O167_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O168" name="Size_164" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O168_P1" relation="==" quantity="164">
+            <ListOfMolecules>
+              <Molecule id="O168_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O169" name="Size_165" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O169_P1" relation="==" quantity="165">
+            <ListOfMolecules>
+              <Molecule id="O169_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O170" name="Size_166" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O170_P1" relation="==" quantity="166">
+            <ListOfMolecules>
+              <Molecule id="O170_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O171" name="Size_167" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O171_P1" relation="==" quantity="167">
+            <ListOfMolecules>
+              <Molecule id="O171_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O172" name="Size_168" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O172_P1" relation="==" quantity="168">
+            <ListOfMolecules>
+              <Molecule id="O172_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O173" name="Size_169" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O173_P1" relation="==" quantity="169">
+            <ListOfMolecules>
+              <Molecule id="O173_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O174" name="Size_170" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O174_P1" relation="==" quantity="170">
+            <ListOfMolecules>
+              <Molecule id="O174_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O175" name="Size_171" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O175_P1" relation="==" quantity="171">
+            <ListOfMolecules>
+              <Molecule id="O175_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O176" name="Size_172" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O176_P1" relation="==" quantity="172">
+            <ListOfMolecules>
+              <Molecule id="O176_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O177" name="Size_173" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O177_P1" relation="==" quantity="173">
+            <ListOfMolecules>
+              <Molecule id="O177_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O178" name="Size_174" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O178_P1" relation="==" quantity="174">
+            <ListOfMolecules>
+              <Molecule id="O178_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O179" name="Size_175" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O179_P1" relation="==" quantity="175">
+            <ListOfMolecules>
+              <Molecule id="O179_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O180" name="Size_176" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O180_P1" relation="==" quantity="176">
+            <ListOfMolecules>
+              <Molecule id="O180_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O181" name="Size_177" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O181_P1" relation="==" quantity="177">
+            <ListOfMolecules>
+              <Molecule id="O181_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O182" name="Size_178" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O182_P1" relation="==" quantity="178">
+            <ListOfMolecules>
+              <Molecule id="O182_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O183" name="Size_179" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O183_P1" relation="==" quantity="179">
+            <ListOfMolecules>
+              <Molecule id="O183_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O184" name="Size_180" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O184_P1" relation="==" quantity="180">
+            <ListOfMolecules>
+              <Molecule id="O184_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O185" name="Size_181" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O185_P1" relation="==" quantity="181">
+            <ListOfMolecules>
+              <Molecule id="O185_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O186" name="Size_182" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O186_P1" relation="==" quantity="182">
+            <ListOfMolecules>
+              <Molecule id="O186_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O187" name="Size_183" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O187_P1" relation="==" quantity="183">
+            <ListOfMolecules>
+              <Molecule id="O187_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O188" name="Size_184" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O188_P1" relation="==" quantity="184">
+            <ListOfMolecules>
+              <Molecule id="O188_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O189" name="Size_185" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O189_P1" relation="==" quantity="185">
+            <ListOfMolecules>
+              <Molecule id="O189_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O190" name="Size_186" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O190_P1" relation="==" quantity="186">
+            <ListOfMolecules>
+              <Molecule id="O190_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O191" name="Size_187" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O191_P1" relation="==" quantity="187">
+            <ListOfMolecules>
+              <Molecule id="O191_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O192" name="Size_188" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O192_P1" relation="==" quantity="188">
+            <ListOfMolecules>
+              <Molecule id="O192_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O193" name="Size_189" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O193_P1" relation="==" quantity="189">
+            <ListOfMolecules>
+              <Molecule id="O193_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O194" name="Size_190" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O194_P1" relation="==" quantity="190">
+            <ListOfMolecules>
+              <Molecule id="O194_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O195" name="Size_191" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O195_P1" relation="==" quantity="191">
+            <ListOfMolecules>
+              <Molecule id="O195_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O196" name="Size_192" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O196_P1" relation="==" quantity="192">
+            <ListOfMolecules>
+              <Molecule id="O196_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O197" name="Size_193" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O197_P1" relation="==" quantity="193">
+            <ListOfMolecules>
+              <Molecule id="O197_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O198" name="Size_194" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O198_P1" relation="==" quantity="194">
+            <ListOfMolecules>
+              <Molecule id="O198_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O199" name="Size_195" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O199_P1" relation="==" quantity="195">
+            <ListOfMolecules>
+              <Molecule id="O199_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O200" name="Size_196" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O200_P1" relation="==" quantity="196">
+            <ListOfMolecules>
+              <Molecule id="O200_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O201" name="Size_197" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O201_P1" relation="==" quantity="197">
+            <ListOfMolecules>
+              <Molecule id="O201_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O202" name="Size_198" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O202_P1" relation="==" quantity="198">
+            <ListOfMolecules>
+              <Molecule id="O202_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O203" name="Size_199" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O203_P1" relation="==" quantity="199">
+            <ListOfMolecules>
+              <Molecule id="O203_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O204" name="Size_200" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O204_P1" relation="==" quantity="200">
+            <ListOfMolecules>
+              <Molecule id="O204_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O205" name="Size_201" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O205_P1" relation="==" quantity="201">
+            <ListOfMolecules>
+              <Molecule id="O205_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O206" name="Size_202" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O206_P1" relation="==" quantity="202">
+            <ListOfMolecules>
+              <Molecule id="O206_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O207" name="Size_203" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O207_P1" relation="==" quantity="203">
+            <ListOfMolecules>
+              <Molecule id="O207_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O208" name="Size_204" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O208_P1" relation="==" quantity="204">
+            <ListOfMolecules>
+              <Molecule id="O208_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O209" name="Size_205" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O209_P1" relation="==" quantity="205">
+            <ListOfMolecules>
+              <Molecule id="O209_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O210" name="Size_206" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O210_P1" relation="==" quantity="206">
+            <ListOfMolecules>
+              <Molecule id="O210_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O211" name="Size_207" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O211_P1" relation="==" quantity="207">
+            <ListOfMolecules>
+              <Molecule id="O211_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O212" name="Size_208" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O212_P1" relation="==" quantity="208">
+            <ListOfMolecules>
+              <Molecule id="O212_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O213" name="Size_209" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O213_P1" relation="==" quantity="209">
+            <ListOfMolecules>
+              <Molecule id="O213_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O214" name="Size_210" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O214_P1" relation="==" quantity="210">
+            <ListOfMolecules>
+              <Molecule id="O214_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O215" name="Size_211" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O215_P1" relation="==" quantity="211">
+            <ListOfMolecules>
+              <Molecule id="O215_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O216" name="Size_212" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O216_P1" relation="==" quantity="212">
+            <ListOfMolecules>
+              <Molecule id="O216_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O217" name="Size_213" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O217_P1" relation="==" quantity="213">
+            <ListOfMolecules>
+              <Molecule id="O217_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O218" name="Size_214" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O218_P1" relation="==" quantity="214">
+            <ListOfMolecules>
+              <Molecule id="O218_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O219" name="Size_215" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O219_P1" relation="==" quantity="215">
+            <ListOfMolecules>
+              <Molecule id="O219_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O220" name="Size_216" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O220_P1" relation="==" quantity="216">
+            <ListOfMolecules>
+              <Molecule id="O220_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O221" name="Size_217" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O221_P1" relation="==" quantity="217">
+            <ListOfMolecules>
+              <Molecule id="O221_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O222" name="Size_218" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O222_P1" relation="==" quantity="218">
+            <ListOfMolecules>
+              <Molecule id="O222_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O223" name="Size_219" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O223_P1" relation="==" quantity="219">
+            <ListOfMolecules>
+              <Molecule id="O223_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O224" name="Size_220" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O224_P1" relation="==" quantity="220">
+            <ListOfMolecules>
+              <Molecule id="O224_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O225" name="Size_221" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O225_P1" relation="==" quantity="221">
+            <ListOfMolecules>
+              <Molecule id="O225_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O226" name="Size_222" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O226_P1" relation="==" quantity="222">
+            <ListOfMolecules>
+              <Molecule id="O226_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O227" name="Size_223" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O227_P1" relation="==" quantity="223">
+            <ListOfMolecules>
+              <Molecule id="O227_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O228" name="Size_224" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O228_P1" relation="==" quantity="224">
+            <ListOfMolecules>
+              <Molecule id="O228_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O229" name="Size_225" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O229_P1" relation="==" quantity="225">
+            <ListOfMolecules>
+              <Molecule id="O229_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O230" name="Size_226" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O230_P1" relation="==" quantity="226">
+            <ListOfMolecules>
+              <Molecule id="O230_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O231" name="Size_227" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O231_P1" relation="==" quantity="227">
+            <ListOfMolecules>
+              <Molecule id="O231_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O232" name="Size_228" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O232_P1" relation="==" quantity="228">
+            <ListOfMolecules>
+              <Molecule id="O232_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O233" name="Size_229" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O233_P1" relation="==" quantity="229">
+            <ListOfMolecules>
+              <Molecule id="O233_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O234" name="Size_230" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O234_P1" relation="==" quantity="230">
+            <ListOfMolecules>
+              <Molecule id="O234_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O235" name="Size_231" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O235_P1" relation="==" quantity="231">
+            <ListOfMolecules>
+              <Molecule id="O235_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O236" name="Size_232" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O236_P1" relation="==" quantity="232">
+            <ListOfMolecules>
+              <Molecule id="O236_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O237" name="Size_233" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O237_P1" relation="==" quantity="233">
+            <ListOfMolecules>
+              <Molecule id="O237_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O238" name="Size_234" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O238_P1" relation="==" quantity="234">
+            <ListOfMolecules>
+              <Molecule id="O238_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O239" name="Size_235" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O239_P1" relation="==" quantity="235">
+            <ListOfMolecules>
+              <Molecule id="O239_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O240" name="Size_236" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O240_P1" relation="==" quantity="236">
+            <ListOfMolecules>
+              <Molecule id="O240_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O241" name="Size_237" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O241_P1" relation="==" quantity="237">
+            <ListOfMolecules>
+              <Molecule id="O241_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O242" name="Size_238" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O242_P1" relation="==" quantity="238">
+            <ListOfMolecules>
+              <Molecule id="O242_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O243" name="Size_239" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O243_P1" relation="==" quantity="239">
+            <ListOfMolecules>
+              <Molecule id="O243_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O244" name="Size_240" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O244_P1" relation="==" quantity="240">
+            <ListOfMolecules>
+              <Molecule id="O244_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O245" name="Size_241" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O245_P1" relation="==" quantity="241">
+            <ListOfMolecules>
+              <Molecule id="O245_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O246" name="Size_242" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O246_P1" relation="==" quantity="242">
+            <ListOfMolecules>
+              <Molecule id="O246_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O247" name="Size_243" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O247_P1" relation="==" quantity="243">
+            <ListOfMolecules>
+              <Molecule id="O247_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O248" name="Size_244" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O248_P1" relation="==" quantity="244">
+            <ListOfMolecules>
+              <Molecule id="O248_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O249" name="Size_245" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O249_P1" relation="==" quantity="245">
+            <ListOfMolecules>
+              <Molecule id="O249_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O250" name="Size_246" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O250_P1" relation="==" quantity="246">
+            <ListOfMolecules>
+              <Molecule id="O250_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O251" name="Size_247" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O251_P1" relation="==" quantity="247">
+            <ListOfMolecules>
+              <Molecule id="O251_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O252" name="Size_248" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O252_P1" relation="==" quantity="248">
+            <ListOfMolecules>
+              <Molecule id="O252_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O253" name="Size_249" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O253_P1" relation="==" quantity="249">
+            <ListOfMolecules>
+              <Molecule id="O253_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O254" name="Size_250" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O254_P1" relation="==" quantity="250">
+            <ListOfMolecules>
+              <Molecule id="O254_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O255" name="Size_251" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O255_P1" relation="==" quantity="251">
+            <ListOfMolecules>
+              <Molecule id="O255_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O256" name="Size_252" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O256_P1" relation="==" quantity="252">
+            <ListOfMolecules>
+              <Molecule id="O256_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O257" name="Size_253" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O257_P1" relation="==" quantity="253">
+            <ListOfMolecules>
+              <Molecule id="O257_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O258" name="Size_254" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O258_P1" relation="==" quantity="254">
+            <ListOfMolecules>
+              <Molecule id="O258_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O259" name="Size_255" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O259_P1" relation="==" quantity="255">
+            <ListOfMolecules>
+              <Molecule id="O259_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O260" name="Size_256" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O260_P1" relation="==" quantity="256">
+            <ListOfMolecules>
+              <Molecule id="O260_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O261" name="Size_257" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O261_P1" relation="==" quantity="257">
+            <ListOfMolecules>
+              <Molecule id="O261_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O262" name="Size_258" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O262_P1" relation="==" quantity="258">
+            <ListOfMolecules>
+              <Molecule id="O262_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O263" name="Size_259" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O263_P1" relation="==" quantity="259">
+            <ListOfMolecules>
+              <Molecule id="O263_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O264" name="Size_260" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O264_P1" relation="==" quantity="260">
+            <ListOfMolecules>
+              <Molecule id="O264_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O265" name="Size_261" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O265_P1" relation="==" quantity="261">
+            <ListOfMolecules>
+              <Molecule id="O265_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O266" name="Size_262" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O266_P1" relation="==" quantity="262">
+            <ListOfMolecules>
+              <Molecule id="O266_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O267" name="Size_263" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O267_P1" relation="==" quantity="263">
+            <ListOfMolecules>
+              <Molecule id="O267_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O268" name="Size_264" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O268_P1" relation="==" quantity="264">
+            <ListOfMolecules>
+              <Molecule id="O268_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O269" name="Size_265" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O269_P1" relation="==" quantity="265">
+            <ListOfMolecules>
+              <Molecule id="O269_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O270" name="Size_266" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O270_P1" relation="==" quantity="266">
+            <ListOfMolecules>
+              <Molecule id="O270_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O271" name="Size_267" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O271_P1" relation="==" quantity="267">
+            <ListOfMolecules>
+              <Molecule id="O271_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O272" name="Size_268" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O272_P1" relation="==" quantity="268">
+            <ListOfMolecules>
+              <Molecule id="O272_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O273" name="Size_269" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O273_P1" relation="==" quantity="269">
+            <ListOfMolecules>
+              <Molecule id="O273_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O274" name="Size_270" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O274_P1" relation="==" quantity="270">
+            <ListOfMolecules>
+              <Molecule id="O274_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O275" name="Size_271" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O275_P1" relation="==" quantity="271">
+            <ListOfMolecules>
+              <Molecule id="O275_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O276" name="Size_272" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O276_P1" relation="==" quantity="272">
+            <ListOfMolecules>
+              <Molecule id="O276_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O277" name="Size_273" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O277_P1" relation="==" quantity="273">
+            <ListOfMolecules>
+              <Molecule id="O277_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O278" name="Size_274" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O278_P1" relation="==" quantity="274">
+            <ListOfMolecules>
+              <Molecule id="O278_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O279" name="Size_275" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O279_P1" relation="==" quantity="275">
+            <ListOfMolecules>
+              <Molecule id="O279_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O280" name="Size_276" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O280_P1" relation="==" quantity="276">
+            <ListOfMolecules>
+              <Molecule id="O280_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O281" name="Size_277" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O281_P1" relation="==" quantity="277">
+            <ListOfMolecules>
+              <Molecule id="O281_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O282" name="Size_278" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O282_P1" relation="==" quantity="278">
+            <ListOfMolecules>
+              <Molecule id="O282_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O283" name="Size_279" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O283_P1" relation="==" quantity="279">
+            <ListOfMolecules>
+              <Molecule id="O283_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O284" name="Size_280" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O284_P1" relation="==" quantity="280">
+            <ListOfMolecules>
+              <Molecule id="O284_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O285" name="Size_281" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O285_P1" relation="==" quantity="281">
+            <ListOfMolecules>
+              <Molecule id="O285_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O286" name="Size_282" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O286_P1" relation="==" quantity="282">
+            <ListOfMolecules>
+              <Molecule id="O286_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O287" name="Size_283" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O287_P1" relation="==" quantity="283">
+            <ListOfMolecules>
+              <Molecule id="O287_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O288" name="Size_284" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O288_P1" relation="==" quantity="284">
+            <ListOfMolecules>
+              <Molecule id="O288_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O289" name="Size_285" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O289_P1" relation="==" quantity="285">
+            <ListOfMolecules>
+              <Molecule id="O289_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O290" name="Size_286" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O290_P1" relation="==" quantity="286">
+            <ListOfMolecules>
+              <Molecule id="O290_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O291" name="Size_287" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O291_P1" relation="==" quantity="287">
+            <ListOfMolecules>
+              <Molecule id="O291_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O292" name="Size_288" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O292_P1" relation="==" quantity="288">
+            <ListOfMolecules>
+              <Molecule id="O292_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O293" name="Size_289" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O293_P1" relation="==" quantity="289">
+            <ListOfMolecules>
+              <Molecule id="O293_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O294" name="Size_290" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O294_P1" relation="==" quantity="290">
+            <ListOfMolecules>
+              <Molecule id="O294_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O295" name="Size_291" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O295_P1" relation="==" quantity="291">
+            <ListOfMolecules>
+              <Molecule id="O295_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O296" name="Size_292" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O296_P1" relation="==" quantity="292">
+            <ListOfMolecules>
+              <Molecule id="O296_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O297" name="Size_293" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O297_P1" relation="==" quantity="293">
+            <ListOfMolecules>
+              <Molecule id="O297_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O298" name="Size_294" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O298_P1" relation="==" quantity="294">
+            <ListOfMolecules>
+              <Molecule id="O298_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O299" name="Size_295" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O299_P1" relation="==" quantity="295">
+            <ListOfMolecules>
+              <Molecule id="O299_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O300" name="Size_296" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O300_P1" relation="==" quantity="296">
+            <ListOfMolecules>
+              <Molecule id="O300_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O301" name="Size_297" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O301_P1" relation="==" quantity="297">
+            <ListOfMolecules>
+              <Molecule id="O301_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O302" name="Size_298" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O302_P1" relation="==" quantity="298">
+            <ListOfMolecules>
+              <Molecule id="O302_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O303" name="Size_299" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O303_P1" relation="==" quantity="299">
+            <ListOfMolecules>
+              <Molecule id="O303_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O304" name="Size_300" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O304_P1" relation="==" quantity="300">
+            <ListOfMolecules>
+              <Molecule id="O304_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+    </ListOfObservables>
+    <ListOfFunctions>
+    </ListOfFunctions>
+  </model>
+</sbml>

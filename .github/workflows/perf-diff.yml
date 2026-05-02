@@ -1,0 +1,88 @@
+name: perf-diff
+
+# Per-PR wall-time comparison between the PR branch and its base.  Runs
+# the feature_coverage benchmark on both refs on the same runner (so
+# hardware variance is controlled), diffs per-model wall-time, and
+# uploads the result as an artifact.  Not a hard gate — shared GitHub
+# runners are noisy enough that single-model deltas of 30% can come
+# from neighbour-VM contention.  The artifact exists so the reviewer
+# can spot correlated slowdowns across many models, which is the real
+# regression signal.
+#
+# Wall budget: ~10-12 min (BNG download once, RM build twice, full
+# benchmark twice at --reps 5).  Runs only on pull_request to avoid
+# spending the budget on every push to a topic branch.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  perf_diff:
+    runs-on: ubuntu-latest
+
+    env:
+      BNG_VERSION: "2.9.3"
+
+    steps:
+      - name: Checkout PR HEAD with full history
+        uses: actions/checkout@v4
+        with:
+          # Need history for the base ref + a clean checkout we can
+          # `git checkout` between later.
+          fetch-depth: 0
+
+      - name: Install Ninja
+        uses: seanmiddleditch/gha-setup-ninja@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Download BioNetGen + NFsim (Linux)
+        run: |
+          set -euo pipefail
+          curl -fsSL -o /tmp/bng.tgz \
+            "https://github.com/RuleWorld/bionetgen/releases/download/BioNetGen-${BNG_VERSION}/BioNetGen-${BNG_VERSION}-linux.tar.gz"
+          tar -xzf /tmp/bng.tgz -C /tmp/
+          BNG_DIR="/tmp/BioNetGen-${BNG_VERSION}"
+          echo "BNG2=${BNG_DIR}/BNG2.pl"       >> "$GITHUB_ENV"
+          echo "NFSIM_BIN=${BNG_DIR}/bin/NFsim" >> "$GITHUB_ENV"
+
+      - name: Benchmark base (${{ github.base_ref }})
+        run: |
+          set -euo pipefail
+          git checkout "origin/${{ github.base_ref }}"
+          cmake --preset release
+          cmake --build --preset release
+          python3 harness/benchmark_feature_coverage.py --reps 5
+          cp build/release/feature_coverage_report.md /tmp/base_report.md \
+            || cp build/feature_coverage_report.md /tmp/base_report.md
+
+      - name: Benchmark PR HEAD
+        run: |
+          set -euo pipefail
+          git checkout "${{ github.event.pull_request.head.sha }}"
+          rm -rf build/release
+          cmake --preset release
+          cmake --build --preset release
+          python3 harness/benchmark_feature_coverage.py --reps 5
+          cp build/release/feature_coverage_report.md /tmp/head_report.md \
+            || cp build/feature_coverage_report.md /tmp/head_report.md
+
+      - name: Diff wall-time
+        run: |
+          python3 harness/perf_diff.py /tmp/base_report.md /tmp/head_report.md \
+            | tee /tmp/perf_diff.txt
+
+      - name: Upload diff artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-diff
+          path: |
+            /tmp/perf_diff.txt
+            /tmp/base_report.md
+            /tmp/head_report.md
+          if-no-files-found: warn

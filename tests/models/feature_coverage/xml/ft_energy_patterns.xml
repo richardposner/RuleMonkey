@@ -1,0 +1,327 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created by BioNetGen 2.9.3  -->
+<sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
+  <model id="ft_energy_patterns">
+    <ListOfParameters>
+      <Parameter id="Gf_active" type="Constant" value="0.5" expr="0.5"/>
+      <Parameter id="Gf_mismatch" type="Constant" value="0.8" expr="0.8"/>
+      <Parameter id="Eact" type="Constant" value="1" expr="1.0"/>
+      <Parameter id="phi" type="Constant" value="0.5" expr="0.5"/>
+    </ListOfParameters>
+    <ListOfMoleculeTypes>
+      <MoleculeType id="M">
+        <ListOfComponentTypes>
+          <ComponentType id="l"/>
+          <ComponentType id="r"/>
+          <ComponentType id="st">
+            <ListOfAllowedStates>
+              <AllowedState id="off"/>
+              <AllowedState id="on"/>
+            </ListOfAllowedStates>
+          </ComponentType>
+        </ListOfComponentTypes>
+      </MoleculeType>
+    </ListOfMoleculeTypes>
+    <ListOfCompartments>
+    </ListOfCompartments>
+    <ListOfSpecies>
+      <Species id="S1"  concentration="1" name="M(l!1,r,st~off).M(l!2,r!3,st~off).M(l!3,r!1,st~off).M(l,r!2,st~off)">
+        <ListOfMolecules>
+          <Molecule id="S1_M1" name="M">
+            <ListOfComponents>
+              <Component id="S1_M1_C1" name="l" numberOfBonds="1"/>
+              <Component id="S1_M1_C2" name="r" numberOfBonds="0"/>
+              <Component id="S1_M1_C3" name="st" state="off" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M2" name="M">
+            <ListOfComponents>
+              <Component id="S1_M2_C1" name="l" numberOfBonds="1"/>
+              <Component id="S1_M2_C2" name="r" numberOfBonds="1"/>
+              <Component id="S1_M2_C3" name="st" state="off" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M3" name="M">
+            <ListOfComponents>
+              <Component id="S1_M3_C1" name="l" numberOfBonds="1"/>
+              <Component id="S1_M3_C2" name="r" numberOfBonds="1"/>
+              <Component id="S1_M3_C3" name="st" state="off" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M4" name="M">
+            <ListOfComponents>
+              <Component id="S1_M4_C1" name="l" numberOfBonds="0"/>
+              <Component id="S1_M4_C2" name="r" numberOfBonds="1"/>
+              <Component id="S1_M4_C3" name="st" state="off" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S1_B1" site1="S1_M1_C1" site2="S1_M3_C2"/>
+          <Bond id="S1_B2" site1="S1_M2_C1" site2="S1_M4_C2"/>
+          <Bond id="S1_B3" site1="S1_M2_C2" site2="S1_M3_C1"/>
+        </ListOfBonds>
+      </Species>
+    </ListOfSpecies>
+    <ListOfReactionRules>
+      <ReactionRule id="RR1" name="_R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR1_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP1_M1" name="M" label="x">
+                <ListOfComponents>
+                  <Component id="RR1_RP1_M1_C1" name="st" state="off" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR1_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP1_M1" name="M" label="x">
+                <ListOfComponents>
+                  <Component id="RR1_PP1_M1_C1" name="st" state="on" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR1_RateLaw" type="Function" name="_rateLaw1" totalrate="0">
+          <ListOfArguments>
+            <Argument id="x" type="ObjectReference" value="RR1_RP1_M1"/>
+          </ListOfArguments>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR1_RP1_M1" targetID="RR1_PP1_M1"/>
+          <MapItem sourceID="RR1_RP1_M1_C1" targetID="RR1_PP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR1_RP1_M1_C1" finalState="on"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR2" name="_reverse__R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR2_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_RP1_M1" name="M" label="x">
+                <ListOfComponents>
+                  <Component id="RR2_RP1_M1_C1" name="st" state="on" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR2_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_PP1_M1" name="M" label="x">
+                <ListOfComponents>
+                  <Component id="RR2_PP1_M1_C1" name="st" state="off" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR2_RateLaw" type="Function" name="_rateLaw2" totalrate="0">
+          <ListOfArguments>
+            <Argument id="x" type="ObjectReference" value="RR2_RP1_M1"/>
+          </ListOfArguments>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR2_RP1_M1" targetID="RR2_PP1_M1"/>
+          <MapItem sourceID="RR2_RP1_M1_C1" targetID="RR2_PP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR2_RP1_M1_C1" finalState="off"/>
+        </ListOfOperations>
+      </ReactionRule>
+    </ListOfReactionRules>
+    <ListOfObservables>
+      <Observable id="O1" name="M_on" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O1_P1">
+            <ListOfMolecules>
+              <Molecule id="O1_P1_M1" name="M">
+                <ListOfComponents>
+                  <Component id="O1_P1_M1_C1" name="st" state="on" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O2" name="M_off" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O2_P1">
+            <ListOfMolecules>
+              <Molecule id="O2_P1_M1" name="M">
+                <ListOfComponents>
+                  <Component id="O2_P1_M1_C1" name="st" state="off" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O3" name="M_total" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O3_P1">
+            <ListOfMolecules>
+              <Molecule id="O3_P1_M1" name="M"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O4" name="Mismatch" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O4_P1">
+            <ListOfMolecules>
+              <Molecule id="O4_P1_M1" name="M">
+                <ListOfComponents>
+                  <Component id="O4_P1_M1_C1" name="r" numberOfBonds="1"/>
+                  <Component id="O4_P1_M1_C2" name="st" state="on" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O4_P1_M2" name="M">
+                <ListOfComponents>
+                  <Component id="O4_P1_M2_C1" name="l" numberOfBonds="1"/>
+                  <Component id="O4_P1_M2_C2" name="st" state="off" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="O4_P1_B1" site1="O4_P1_M1_C1" site2="O4_P1_M2_C1"/>
+            </ListOfBonds>
+          </Pattern>
+          <Pattern id="O4_P2">
+            <ListOfMolecules>
+              <Molecule id="O4_P2_M1" name="M">
+                <ListOfComponents>
+                  <Component id="O4_P2_M1_C1" name="r" numberOfBonds="1"/>
+                  <Component id="O4_P2_M1_C2" name="st" state="off" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+              <Molecule id="O4_P2_M2" name="M">
+                <ListOfComponents>
+                  <Component id="O4_P2_M2_C1" name="l" numberOfBonds="1"/>
+                  <Component id="O4_P2_M2_C2" name="st" state="on" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+            <ListOfBonds>
+              <Bond id="O4_P2_B1" site1="O4_P2_M1_C1" site2="O4_P2_M2_C1"/>
+            </ListOfBonds>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+    </ListOfObservables>
+    <ListOfFunctions>
+      <Function id="flipOn">
+        <ListOfArguments>
+          <Argument id="z"/>
+        </ListOfArguments>
+        <ListOfReferences>
+          <Reference name="Eact" type="Constant"/>
+          <Reference name="Gf_active" type="Constant"/>
+          <Reference name="Gf_mismatch" type="Constant"/>
+          <Reference name="phi" type="Constant"/>
+          <Reference name="z" type="Local"/>
+          <Reference name="M_off" type="Observable"/>
+          <Reference name="M_on" type="Observable"/>
+        </ListOfReferences>
+        <Expression> exp((-(((Eact+(phi*Gf_active))+((phi*M_off(z))*Gf_mismatch))+(((phi-1)*M_on(z))*Gf_mismatch)))) </Expression>
+      </Function>
+      <Function id="flipOff">
+        <ListOfArguments>
+          <Argument id="z"/>
+        </ListOfArguments>
+        <ListOfReferences>
+          <Reference name="Eact" type="Constant"/>
+          <Reference name="Gf_active" type="Constant"/>
+          <Reference name="Gf_mismatch" type="Constant"/>
+          <Reference name="phi" type="Constant"/>
+          <Reference name="z" type="Local"/>
+          <Reference name="M_off" type="Observable"/>
+          <Reference name="M_on" type="Observable"/>
+        </ListOfReferences>
+        <Expression> exp((-(((Eact+((phi-1)*Gf_active))+((phi*M_on(z))*Gf_mismatch))+(((phi-1)*M_off(z))*Gf_mismatch)))) </Expression>
+      </Function>
+      <Function id="_rateLaw1">
+        <ListOfArguments>
+          <Argument id="x"/>
+        </ListOfArguments>
+        <ListOfReferences>
+          <Reference name="flipOn" type="Function"/>
+          <Reference name="x" type="Local"/>
+        </ListOfReferences>
+        <Expression> flipOn(x) </Expression>
+      </Function>
+      <Function id="_rateLaw2">
+        <ListOfArguments>
+          <Argument id="x"/>
+        </ListOfArguments>
+        <ListOfReferences>
+          <Reference name="flipOff" type="Function"/>
+          <Reference name="x" type="Local"/>
+        </ListOfReferences>
+        <Expression> flipOff(x) </Expression>
+      </Function>
+    </ListOfFunctions>
+    <ListOfEnergyPatterns>
+      <EnergyPattern id="EP1" pattern="M(st~on)" expression="Gf_active">
+        <Pattern id="EP1_P1">
+          <ListOfMolecules>
+            <Molecule id="EP1_P1_M1" name="M">
+              <ListOfComponents>
+                <Component id="EP1_P1_M1_C1" name="st" state="on" numberOfBonds="0"/>
+              </ListOfComponents>
+            </Molecule>
+          </ListOfMolecules>
+        </Pattern>
+      </EnergyPattern>
+      <EnergyPattern id="EP2" pattern="M(r!1,st~on).M(l!1,st~off)" expression="Gf_mismatch">
+        <Pattern id="EP2_P1">
+          <ListOfMolecules>
+            <Molecule id="EP2_P1_M1" name="M">
+              <ListOfComponents>
+                <Component id="EP2_P1_M1_C1" name="r" numberOfBonds="1"/>
+                <Component id="EP2_P1_M1_C2" name="st" state="on" numberOfBonds="0"/>
+              </ListOfComponents>
+            </Molecule>
+            <Molecule id="EP2_P1_M2" name="M">
+              <ListOfComponents>
+                <Component id="EP2_P1_M2_C1" name="l" numberOfBonds="1"/>
+                <Component id="EP2_P1_M2_C2" name="st" state="off" numberOfBonds="0"/>
+              </ListOfComponents>
+            </Molecule>
+          </ListOfMolecules>
+          <ListOfBonds>
+            <Bond id="EP2_P1_B1" site1="EP2_P1_M1_C1" site2="EP2_P1_M2_C1"/>
+          </ListOfBonds>
+        </Pattern>
+      </EnergyPattern>
+      <EnergyPattern id="EP3" pattern="M(r!1,st~off).M(l!1,st~on)" expression="Gf_mismatch">
+        <Pattern id="EP3_P1">
+          <ListOfMolecules>
+            <Molecule id="EP3_P1_M1" name="M">
+              <ListOfComponents>
+                <Component id="EP3_P1_M1_C1" name="r" numberOfBonds="1"/>
+                <Component id="EP3_P1_M1_C2" name="st" state="off" numberOfBonds="0"/>
+              </ListOfComponents>
+            </Molecule>
+            <Molecule id="EP3_P1_M2" name="M">
+              <ListOfComponents>
+                <Component id="EP3_P1_M2_C1" name="l" numberOfBonds="1"/>
+                <Component id="EP3_P1_M2_C2" name="st" state="on" numberOfBonds="0"/>
+              </ListOfComponents>
+            </Molecule>
+          </ListOfMolecules>
+          <ListOfBonds>
+            <Bond id="EP3_P1_B1" site1="EP3_P1_M1_C1" site2="EP3_P1_M2_C1"/>
+          </ListOfBonds>
+        </Pattern>
+      </EnergyPattern>
+    </ListOfEnergyPatterns>
+  </model>
+</sbml>

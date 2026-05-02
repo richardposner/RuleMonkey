@@ -1,0 +1,443 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created by BioNetGen 2.9.3  -->
+<sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
+  <model id="oscSystem">
+    <ListOfParameters>
+      <Parameter id="Kd" type="Constant" value="25" expr="25"/>
+      <Parameter id="slope" type="Constant" value="-0.0391" expr="-0.0391"/>
+      <Parameter id="b" type="Constant" value="1.4775" expr="1.4775"/>
+      <Parameter id="minProt" type="Constant" value="12" expr="12"/>
+      <Parameter id="maxProt" type="Constant" value="38" expr="38"/>
+      <Parameter id="n" type="Constant" value="4" expr="4"/>
+      <Parameter id="kTranscription" type="Constant" value="10000" expr="10000"/>
+      <Parameter id="kTranslation" type="Constant" value="0.1" expr="0.1"/>
+      <Parameter id="kExport" type="Constant" value="0.2" expr="0.2"/>
+      <Parameter id="kImport" type="Constant" value="0.1" expr="0.1"/>
+      <Parameter id="kDegRNAcyt" type="Constant" value="0.2" expr="0.2"/>
+      <Parameter id="kDegRNAnuc" type="Constant" value="10" expr="10"/>
+      <Parameter id="kDegProtCyt" type="Constant" value="0.1" expr="0.1"/>
+      <Parameter id="kDegProtNuc" type="Constant" value="8" expr="8"/>
+      <Parameter id="Km" type="Constant" value="10" expr="10"/>
+    </ListOfParameters>
+    <ListOfMoleculeTypes>
+      <MoleculeType id="DNA"/>
+      <MoleculeType id="Prot">
+        <ListOfComponentTypes>
+          <ComponentType id="loc">
+            <ListOfAllowedStates>
+              <AllowedState id="NUCLEUS"/>
+              <AllowedState id="CYTOSOL"/>
+            </ListOfAllowedStates>
+          </ComponentType>
+        </ListOfComponentTypes>
+      </MoleculeType>
+      <MoleculeType id="Trash"/>
+      <MoleculeType id="mRNA">
+        <ListOfComponentTypes>
+          <ComponentType id="loc">
+            <ListOfAllowedStates>
+              <AllowedState id="NUCLEUS"/>
+              <AllowedState id="CYTOSOL"/>
+            </ListOfAllowedStates>
+          </ComponentType>
+        </ListOfComponentTypes>
+      </MoleculeType>
+    </ListOfMoleculeTypes>
+    <ListOfCompartments>
+    </ListOfCompartments>
+    <ListOfSpecies>
+      <Species id="S1"  concentration="2" name="DNA()">
+        <ListOfMolecules>
+          <Molecule id="S1_M1" name="DNA"/>
+        </ListOfMolecules>
+      </Species>
+    </ListOfSpecies>
+    <ListOfReactionRules>
+      <ReactionRule id="RR1" name="_R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR1_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP1_M1" name="DNA"/>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR1_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP1_M1" name="DNA"/>
+            </ListOfMolecules>
+          </ProductPattern>
+          <ProductPattern id="RR1_PP2">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP2_M1" name="mRNA">
+                <ListOfComponents>
+                  <Component id="RR1_PP2_M1_C1" name="loc" state="NUCLEUS" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR1_RateLaw" type="Function" name="_rateLaw1" totalrate="1">
+          <ListOfArguments>
+          </ListOfArguments>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR1_RP1_M1" targetID="RR1_PP1_M1"/>
+        </Map>
+        <ListOfOperations>
+          <Add id="RR1_PP2_M1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR2" name="_R2" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR2_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_RP1_M1" name="mRNA">
+                <ListOfComponents>
+                  <Component id="RR2_RP1_M1_C1" name="loc" state="NUCLEUS" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR2_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_PP1_M1" name="mRNA">
+                <ListOfComponents>
+                  <Component id="RR2_PP1_M1_C1" name="loc" state="CYTOSOL" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR2_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="kExport"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR2_RP1_M1" targetID="RR2_PP1_M1"/>
+          <MapItem sourceID="RR2_RP1_M1_C1" targetID="RR2_PP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR2_RP1_M1_C1" finalState="CYTOSOL"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR3" name="_R3" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR3_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR3_RP1_M1" name="mRNA">
+                <ListOfComponents>
+                  <Component id="RR3_RP1_M1_C1" name="loc" state="CYTOSOL" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR3_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR3_PP1_M1" name="mRNA">
+                <ListOfComponents>
+                  <Component id="RR3_PP1_M1_C1" name="loc" state="CYTOSOL" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+          <ProductPattern id="RR3_PP2">
+            <ListOfMolecules>
+              <Molecule id="RR3_PP2_M1" name="Prot">
+                <ListOfComponents>
+                  <Component id="RR3_PP2_M1_C1" name="loc" state="CYTOSOL" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR3_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="kTranslation"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR3_RP1_M1" targetID="RR3_PP1_M1"/>
+          <MapItem sourceID="RR3_RP1_M1_C1" targetID="RR3_PP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <Add id="RR3_PP2_M1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR4" name="_R4" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR4_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR4_RP1_M1" name="Prot">
+                <ListOfComponents>
+                  <Component id="RR4_RP1_M1_C1" name="loc" state="CYTOSOL" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR4_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR4_PP1_M1" name="Prot">
+                <ListOfComponents>
+                  <Component id="RR4_PP1_M1_C1" name="loc" state="NUCLEUS" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR4_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="kImport"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR4_RP1_M1" targetID="RR4_PP1_M1"/>
+          <MapItem sourceID="RR4_RP1_M1_C1" targetID="RR4_PP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR4_RP1_M1_C1" finalState="NUCLEUS"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR5" name="_R5" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR5_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR5_RP1_M1" name="mRNA">
+                <ListOfComponents>
+                  <Component id="RR5_RP1_M1_C1" name="loc" state="CYTOSOL" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR5_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR5_PP1_M1" name="Trash"/>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR5_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="kDegRNAcyt"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR5_RP1_M1"/>
+          <MapItem sourceID="RR5_RP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <Add id="RR5_PP1_M1"/>
+          <Delete id="RR5_RP1" DeleteMolecules="0"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR6" name="_R6" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR6_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR6_RP1_M1" name="mRNA">
+                <ListOfComponents>
+                  <Component id="RR6_RP1_M1_C1" name="loc" state="NUCLEUS" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR6_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR6_PP1_M1" name="Trash"/>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR6_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="kDegRNAnuc"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR6_RP1_M1"/>
+          <MapItem sourceID="RR6_RP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <Add id="RR6_PP1_M1"/>
+          <Delete id="RR6_RP1" DeleteMolecules="0"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR7" name="_R7" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR7_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR7_RP1_M1" name="Prot">
+                <ListOfComponents>
+                  <Component id="RR7_RP1_M1_C1" name="loc" state="CYTOSOL" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR7_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR7_PP1_M1" name="Trash"/>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR7_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="kDegProtCyt"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR7_RP1_M1"/>
+          <MapItem sourceID="RR7_RP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <Add id="RR7_PP1_M1"/>
+          <Delete id="RR7_RP1" DeleteMolecules="0"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR8" name="_R8" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR8_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR8_RP1_M1" name="Prot">
+                <ListOfComponents>
+                  <Component id="RR8_RP1_M1_C1" name="loc" state="NUCLEUS" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR8_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR8_PP1_M1" name="Trash"/>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR8_RateLaw" type="Function" name="_rateLaw2" totalrate="1">
+          <ListOfArguments>
+          </ListOfArguments>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR8_RP1_M1"/>
+          <MapItem sourceID="RR8_RP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <Add id="RR8_PP1_M1"/>
+          <Delete id="RR8_RP1" DeleteMolecules="0"/>
+        </ListOfOperations>
+      </ReactionRule>
+    </ListOfReactionRules>
+    <ListOfObservables>
+      <Observable id="O1" name="NucProt" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O1_P1">
+            <ListOfMolecules>
+              <Molecule id="O1_P1_M1" name="Prot">
+                <ListOfComponents>
+                  <Component id="O1_P1_M1_C1" name="loc" state="NUCLEUS" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O2" name="CytProt" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O2_P1">
+            <ListOfMolecules>
+              <Molecule id="O2_P1_M1" name="Prot">
+                <ListOfComponents>
+                  <Component id="O2_P1_M1_C1" name="loc" state="CYTOSOL" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O3" name="NucRNA" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O3_P1">
+            <ListOfMolecules>
+              <Molecule id="O3_P1_M1" name="mRNA">
+                <ListOfComponents>
+                  <Component id="O3_P1_M1_C1" name="loc" state="NUCLEUS" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O4" name="CytRNA" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O4_P1">
+            <ListOfMolecules>
+              <Molecule id="O4_P1_M1" name="mRNA">
+                <ListOfComponents>
+                  <Component id="O4_P1_M1_C1" name="loc" state="CYTOSOL" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+    </ListOfObservables>
+    <ListOfFunctions>
+      <Function id="BooleanFunction">
+        <ListOfReferences>
+          <Reference name="Kd" type="Constant"/>
+          <Reference name="NucProt" type="Observable"/>
+        </ListOfReferences>
+        <Expression> if((NucProt&gt;=Kd),0,1) </Expression>
+      </Function>
+      <Function id="LinearFunction">
+        <ListOfReferences>
+          <Reference name="b" type="Constant"/>
+          <Reference name="maxProt" type="Constant"/>
+          <Reference name="minProt" type="Constant"/>
+          <Reference name="slope" type="Constant"/>
+          <Reference name="NucProt" type="Observable"/>
+        </ListOfReferences>
+        <Expression> if((NucProt&lt;=minProt),1,if((NucProt&gt;=maxProt),0,((slope*NucProt)+b))) </Expression>
+      </Function>
+      <Function id="HillFunction">
+        <ListOfReferences>
+          <Reference name="Kd" type="Constant"/>
+          <Reference name="n" type="Constant"/>
+          <Reference name="NucProt" type="Observable"/>
+        </ListOfReferences>
+        <Expression> (Kd^n)/((Kd^n)+(NucProt^n)) </Expression>
+      </Function>
+      <Function id="DegFunction">
+        <ListOfReferences>
+          <Reference name="Km" type="Constant"/>
+          <Reference name="NucProt" type="Observable"/>
+        </ListOfReferences>
+        <Expression> NucProt/(Km+NucProt) </Expression>
+      </Function>
+      <Function id="_rateLaw1">
+        <ListOfReferences>
+          <Reference name="kTranscription" type="Constant"/>
+          <Reference name="BooleanFunction" type="Function"/>
+        </ListOfReferences>
+        <Expression> kTranscription*BooleanFunction() </Expression>
+      </Function>
+      <Function id="_rateLaw2">
+        <ListOfReferences>
+          <Reference name="kDegProtNuc" type="Constant"/>
+          <Reference name="DegFunction" type="Function"/>
+        </ListOfReferences>
+        <Expression> kDegProtNuc*DegFunction() </Expression>
+      </Function>
+    </ListOfFunctions>
+  </model>
+</sbml>

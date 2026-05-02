@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created by BioNetGen 2.9.3  -->
+<sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
+  <model id="ft_nested_functions">
+    <ListOfParameters>
+      <Parameter id="S_tot" type="Constant" value="200" expr="200"/>
+      <Parameter id="k0" type="Constant" value="0.05" expr="0.05"/>
+      <Parameter id="K" type="Constant" value="30" expr="30.0"/>
+    </ListOfParameters>
+    <ListOfMoleculeTypes>
+      <MoleculeType id="S">
+        <ListOfComponentTypes>
+          <ComponentType id="p">
+            <ListOfAllowedStates>
+              <AllowedState id="U"/>
+              <AllowedState id="P"/>
+            </ListOfAllowedStates>
+          </ComponentType>
+        </ListOfComponentTypes>
+      </MoleculeType>
+    </ListOfMoleculeTypes>
+    <ListOfCompartments>
+    </ListOfCompartments>
+    <ListOfSpecies>
+      <Species id="S1"  concentration="S_tot" name="S(p~U)">
+        <ListOfMolecules>
+          <Molecule id="S1_M1" name="S">
+            <ListOfComponents>
+              <Component id="S1_M1_C1" name="p" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+      </Species>
+    </ListOfSpecies>
+    <ListOfReactionRules>
+      <ReactionRule id="RR1" name="_R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR1_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP1_M1" name="S">
+                <ListOfComponents>
+                  <Component id="RR1_RP1_M1_C1" name="p" state="U" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR1_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP1_M1" name="S">
+                <ListOfComponents>
+                  <Component id="RR1_PP1_M1_C1" name="p" state="P" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR1_RateLaw" type="Function" name="phos_rate" totalrate="0">
+          <ListOfArguments>
+          </ListOfArguments>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR1_RP1_M1" targetID="RR1_PP1_M1"/>
+          <MapItem sourceID="RR1_RP1_M1_C1" targetID="RR1_PP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR1_RP1_M1_C1" finalState="P"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR2" name="_R2" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR2_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_RP1_M1" name="S">
+                <ListOfComponents>
+                  <Component id="RR2_RP1_M1_C1" name="p" state="P" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR2_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_PP1_M1" name="S">
+                <ListOfComponents>
+                  <Component id="RR2_PP1_M1_C1" name="p" state="U" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR2_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="k0"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR2_RP1_M1" targetID="RR2_PP1_M1"/>
+          <MapItem sourceID="RR2_RP1_M1_C1" targetID="RR2_PP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR2_RP1_M1_C1" finalState="U"/>
+        </ListOfOperations>
+      </ReactionRule>
+    </ListOfReactionRules>
+    <ListOfObservables>
+      <Observable id="O1" name="S_U" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O1_P1">
+            <ListOfMolecules>
+              <Molecule id="O1_P1_M1" name="S">
+                <ListOfComponents>
+                  <Component id="O1_P1_M1_C1" name="p" state="U" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O2" name="S_P" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O2_P1">
+            <ListOfMolecules>
+              <Molecule id="O2_P1_M1" name="S">
+                <ListOfComponents>
+                  <Component id="O2_P1_M1_C1" name="p" state="P" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O3" name="S_total" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O3_P1">
+            <ListOfMolecules>
+              <Molecule id="O3_P1_M1" name="S"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+    </ListOfObservables>
+    <ListOfFunctions>
+      <Function id="frac_P">
+        <ListOfReferences>
+          <Reference name="S_P" type="Observable"/>
+          <Reference name="S_U" type="Observable"/>
+        </ListOfReferences>
+        <Expression> S_P/((S_U+S_P)+1) </Expression>
+      </Function>
+      <Function id="modulator">
+        <ListOfReferences>
+          <Reference name="frac_P" type="Function"/>
+        </ListOfReferences>
+        <Expression> 1.0+(2.0*frac_P()) </Expression>
+      </Function>
+      <Function id="phos_rate">
+        <ListOfReferences>
+          <Reference name="k0" type="Constant"/>
+          <Reference name="modulator" type="Function"/>
+        </ListOfReferences>
+        <Expression> k0*modulator() </Expression>
+      </Function>
+    </ListOfFunctions>
+  </model>
+</sbml>

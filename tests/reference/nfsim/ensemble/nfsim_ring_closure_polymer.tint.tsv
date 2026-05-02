@@ -1,0 +1,4 @@
+observable	I_mean	I_std	n_reps
+Monomers	13.0575	0.64804	100
+Linear_Dimers	0.42375	0.458469	100
+Cyclic_Dimers	21.08	41.6261	100

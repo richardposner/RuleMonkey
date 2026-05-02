@@ -1,0 +1,114 @@
+# Quickstart
+
+The shortest path from a BNGL model to RuleMonkey trajectories.
+
+## 1. Build
+
+```bash
+cmake --preset release
+cmake --build --preset release
+ctest --preset release         # smoke + set_param + save/load tests, ~2s
+```
+
+Requires CMake ≥ 3.25, a C++17 compiler, and Ninja. The driver lands at
+`build/release/rm_driver`.
+
+## 2. Generate XML from BNGL
+
+RuleMonkey reads BioNetGen-XML, not raw BNGL.  Use BNG2.pl's
+`writeXML()` action to emit it:
+
+```bash
+# my_model.bngl ends with: writeXML();
+BNG2.pl my_model.bngl
+# produces my_model.xml in the cwd
+```
+
+(BNG2.pl ships with [BioNetGen](https://bionetgen.org/).  This repo
+does not vendor it; the `BNG2` env var lets the harness scripts find
+your local install.)
+
+## 3. Run
+
+```bash
+build/release/rm_driver my_model.xml <t_end> <n_steps> [seed]
+```
+
+- `t_end` — final simulation time, in BNGL time units.
+- `n_steps` — number of sampling intervals.  The output has
+  `n_steps + 1` rows (sample at `t_start`, `t_start + dt`, …,
+  `t_end`).
+- `seed` — optional uint64 RNG seed (default 42).
+
+`stdout` is `.gdat`-format trajectory data;  `stderr` is the wall-
+clock CPU time in seconds.  See [`gdat_format.md`](gdat_format.md)
+for the output spec.
+
+```bash
+# example: 10 time units, 100 sample intervals, seed 7
+build/release/rm_driver my_model.xml 10 100 7 > traj.gdat
+```
+
+### Strict BNGL semantics (default)
+
+`rm_driver` enables `block_same_complex_binding` by default, matching
+NFsim's `-bscb` flag.  Pass `-no-bscb` for parity with NFsim runs that
+omitted `-bscb`.  See [`model_semantics.md`](model_semantics.md).
+
+### State save / restore
+
+Continuation across runs (e.g. equilibrate, then perturb, then
+continue) goes through `--save-state` / `--load-state`; the file
+includes a schema fingerprint that is verified at load time, so a
+state file cannot accidentally be loaded against the wrong XML.
+
+```bash
+build/release/rm_driver model.xml 100 100 --save-state ckpt.bin
+build/release/rm_driver model.xml 200 100 --load-state ckpt.bin --t-start 100
+```
+
+## 4. Read the output
+
+Every row begins with the time column; the rest are observables, in
+the order declared in the BNGL `begin observables` block.
+
+```python
+# minimal Python reader
+import csv
+with open("traj.gdat") as f:
+    headers = f.readline().lstrip("#").strip().split("\t")  # ['time', 'A', 'B', ...]
+    rows = [list(map(float, line.split("\t"))) for line in f if line.strip()]
+```
+
+For richer parsing, see [`gdat_format.md`](gdat_format.md).
+
+## 5. Embed instead of shelling out
+
+If you're driving RuleMonkey from C++ (for example, from BNGsim), use
+the in-process API instead — no subprocess, no XML serialisation
+back through the file system:
+
+```cpp
+#include <rulemonkey/simulator.hpp>
+
+rulemonkey::RuleMonkeySimulator sim("my_model.xml");
+sim.set_param("kf", 0.5);                    // optional override
+auto r = sim.run({0.0, 10.0, 100}, /*seed=*/7);
+// r.observable_data[obs_idx][t_idx] is the value
+```
+
+See [`examples/embed.cpp`](../examples/embed.cpp) for a complete
+compilable example, and [`include/rulemonkey/simulator.hpp`](../include/rulemonkey/simulator.hpp)
+for the full contract.
+
+## What's next
+
+- [`model_semantics.md`](model_semantics.md) — what BNGL features RM
+  supports, and the Tier-0 refusals.
+- [`gdat_format.md`](gdat_format.md) — output format spec.
+- [`troubleshooting.md`](troubleshooting.md) — common errors and
+  fixes.
+- [`test_corpora.md`](test_corpora.md) — the three test suites and
+  how to run them.
+- [`timing_comparison.md`](timing_comparison.md) — RM vs NFsim wall
+  time on 173 models.

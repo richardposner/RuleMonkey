@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.direnv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.uv-cache/
+.pre-commit-cache/
+.coverage
+htmlcov/
+.ipynb_checkpoints/
+
+# Build outputs
+build/
+dist/
+*.o
+*.so
+*.dylib
+*.dll
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+compile_commands.json
+
+# Local env overrides
+.envrc.local
+
+# Development scratch — sprint plans, draft issues, exploratory notes.
+# `docs/` is for proper documentation; ephemera goes here so git
+# history isn't polluted.
+dev/
+
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Replicate ensembles (regenerated; do not track)
+tests/reference/*/replicates/
+
+# basicmodels harness BNG2 cache (regenerated on demand)
+tests/models/nfsim_basicmodels/_cache/

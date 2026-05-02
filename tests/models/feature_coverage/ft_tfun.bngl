@@ -1,0 +1,59 @@
+# Feature: tfun('file.tfun', counter) — table-function rate law (BNG dev syntax)
+# Tests:  BNG2 emits a Function with type="TFUN" and a __TFUN_VAL__
+#         sentinel reference; RM loads the .tfun file (relative to the
+#         BNGL/XML directory), interpolates linearly between data
+#         points keyed by the named counter, and substitutes the
+#         interpolated value into the function's expression.
+#         Verifies a real RM bug fixed 2026-04-29: the sentinel
+#         substitution mis-spelled the placeholder, so any TFUN-typed
+#         rule aborted with "unresolved variable '__TFUN__VAL__'".
+# Note:   needs the BNG dev branch (`fix-tfun-has-tfuns-reset` or its
+#         successor) — BNG 2.9.3 stable parses TFUN but cannot ODE-
+#         simulate it.  Set BNG2=$HOME/Code/bionetgen/bng2/BNG2.pl
+#         when generating the ODE reference.
+# Tier:   base
+# Counter: A_n (Molecules observable counting A() instances).
+# Rate table (rates.tfun, in this directory):
+#         A_n=0   → prod_rate=2.0
+#         A_n=10  → prod_rate=1.0
+#         A_n=20  → prod_rate=0.5
+#         A_n=50  → prod_rate=0.1
+# Expected: production starts fast (rate≈2) and slows as A_n grows;
+#         degradation at fixed rate 0.05 dominates once A_n is large
+#         enough that interpolated rate × Src ≈ k_death × A_n.
+
+begin model
+begin parameters
+    Src_tot  5
+    k_death  0.05
+end parameters
+
+begin molecule types
+    Src()
+    A()
+    Trash()
+end molecule types
+
+begin seed species
+    Src()      Src_tot
+    A()        0
+    $Trash()   0
+end seed species
+
+begin observables
+    Molecules  A_n   A()
+end observables
+
+begin functions
+    prod_rate() = tfun('rates.tfun', A_n)
+end functions
+
+begin reaction rules
+    Src() -> Src() + A()  prod_rate()
+    A()   -> Trash()       k_death
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>40,n_steps=>80})
+end actions
