@@ -5081,7 +5081,7 @@ struct Engine::Impl {
             auto rng_after_fast = rng;
 
             rng = rng_before;
-            auto gen = select_multi_mol_unimolecular(rule, mol_id, seed_a);
+            auto gen = select_multi_mol_unimolecular(rule, rs.pat_adj_a, mol_id, seed_a);
             auto rng_after_gen = rng;
 
             bool rng_ok = (rng_after_fast == rng_after_gen);
@@ -5113,7 +5113,7 @@ struct Engine::Impl {
             full_match = select_2mol_1bond_fc_match(rule, rs, mol_id);
           }
         } else {
-          full_match = select_multi_mol_unimolecular(rule, mol_id, seed_a);
+          full_match = select_multi_mol_unimolecular(rule, rs.pat_adj_a, mol_id, seed_a);
         }
         if constexpr (kSelectReactantsProfile) {
           if (uni_path == SrProfile::kPathUniMultiFm) {
@@ -5253,8 +5253,8 @@ struct Engine::Impl {
       if (end_a - seed_a > 1) {
         if constexpr (kSelectReactantsProfile)
           sr_profile_.bimol_resolve_calls++;
-        if (!resolve_pattern_context(rule.reactant_pattern, seed_a, end_a, seed_a, mol_a,
-                                     embs_a[ei_a], match)) {
+        if (!resolve_pattern_context(rule.reactant_pattern, rs.pat_adj_a, seed_a, end_a, seed_a,
+                                     mol_a, embs_a[ei_a], match)) {
           match.mol_ids.clear(); // null event — context mismatch
           if constexpr (kSelectReactantsProfile)
             sr_profile_.bimol_resolve_failures++;
@@ -5265,8 +5265,8 @@ struct Engine::Impl {
       if (end_b - seed_b > 1) {
         if constexpr (kSelectReactantsProfile)
           sr_profile_.bimol_resolve_calls++;
-        if (!resolve_pattern_context(rule.reactant_pattern, seed_b, end_b, seed_b, mol_b,
-                                     embs_b[ei_b], match)) {
+        if (!resolve_pattern_context(rule.reactant_pattern, rs.pat_adj_b, seed_b, end_b, seed_b,
+                                     mol_b, embs_b[ei_b], match)) {
           match.mol_ids.clear(); // null event — context mismatch
           if constexpr (kSelectReactantsProfile)
             sr_profile_.bimol_resolve_failures++;
@@ -5518,46 +5518,16 @@ struct Engine::Impl {
   // bonds within [pat_start, pat_end) to discover the other molecules.
   // Fills match.mol_ids and match.comp_ids for the resolved molecules.
   // Returns false if the BFS fails (molecule not found or type mismatch).
-  bool resolve_pattern_context(const Pattern& pat, int pat_start, int pat_end, int seed_pat_idx,
-                               int seed_mol_id, const std::vector<int>& seed_comp_map,
-                               ReactionMatch& match) {
+  bool resolve_pattern_context(const Pattern& pat, const PatternAdj& pa, int pat_start, int pat_end,
+                               int seed_pat_idx, int seed_mol_id,
+                               const std::vector<int>& seed_comp_map, ReactionMatch& match) {
 
     int n_pat_mols = static_cast<int>(pat.molecules.size());
 
-    // Build bond adjacency restricted to [pat_start, pat_end)
-    struct BondInfo {
-      int mol_a, local_a, mol_b, local_b;
-    };
-    std::vector<BondInfo> bond_infos;
-    for (auto& bond : pat.bonds) {
-      BondInfo bi{-1, -1, -1, -1};
-      int base = 0;
-      for (int mi = 0; mi < n_pat_mols; ++mi) {
-        int nc = static_cast<int>(pat.molecules[mi].components.size());
-        if (bond.comp_flat_a >= base && bond.comp_flat_a < base + nc) {
-          bi.mol_a = mi;
-          bi.local_a = bond.comp_flat_a - base;
-        }
-        if (bond.comp_flat_b >= base && bond.comp_flat_b < base + nc) {
-          bi.mol_b = mi;
-          bi.local_b = bond.comp_flat_b - base;
-        }
-        base += nc;
-      }
-      // Only include bonds between molecules in [pat_start, pat_end)
-      if (bi.mol_a >= pat_start && bi.mol_a < pat_end && bi.mol_b >= pat_start &&
-          bi.mol_b < pat_end)
-        bond_infos.push_back(bi);
-    }
-
-    struct AdjEntry {
-      int other_mol, my_local, other_local;
-    };
-    std::vector<std::vector<AdjEntry>> adj(n_pat_mols);
-    for (auto& bi : bond_infos) {
-      adj[bi.mol_a].push_back({bi.mol_b, bi.local_a, bi.local_b});
-      adj[bi.mol_b].push_back({bi.mol_a, bi.local_b, bi.local_a});
-    }
+    // Bond adjacency restricted to [pat_start, pat_end) is pre-computed in
+    // pa (rs.pat_adj_a/_b), built at init via build_pattern_adjacency with
+    // the same range.  Reuse it instead of rebuilding per call.
+    auto& adj = pa.adj;
 
     // BFS from seed
     std::vector<int> mol_assignments(n_pat_mols, -1);
@@ -5841,45 +5811,17 @@ struct Engine::Impl {
   // Given the seed molecule (seed_mol_id at pattern position seed_a),
   // follow bonds in the pattern to discover the other molecules.
   // Reuses the same BFS logic as count_multi_molecule_embeddings.
-  ReactionMatch select_multi_mol_unimolecular(const Rule& rule, int seed_mol_id, int seed_a) {
+  ReactionMatch select_multi_mol_unimolecular(const Rule& rule, const PatternAdj& pa,
+                                              int seed_mol_id, int seed_a) {
     auto& pat = rule.reactant_pattern;
     int n_pat_mols = static_cast<int>(pat.molecules.size());
     ReactionMatch match;
 
-    // Build bond adjacency (same as in count_multi_molecule_embeddings)
-    struct BondInfo {
-      int mol_a, local_a, mol_b, local_b;
-    };
-    std::vector<BondInfo> bond_infos;
-    for (auto& bond : pat.bonds) {
-      BondInfo bi{-1, -1, -1, -1};
-      int base = 0;
-      for (int mi = 0; mi < n_pat_mols; ++mi) {
-        int nc = static_cast<int>(pat.molecules[mi].components.size());
-        if (bond.comp_flat_a >= base && bond.comp_flat_a < base + nc) {
-          bi.mol_a = mi;
-          bi.local_a = bond.comp_flat_a - base;
-        }
-        if (bond.comp_flat_b >= base && bond.comp_flat_b < base + nc) {
-          bi.mol_b = mi;
-          bi.local_b = bond.comp_flat_b - base;
-        }
-        base += nc;
-      }
-      bond_infos.push_back(bi);
-    }
-
-    struct AdjEntry {
-      int bond_idx, other_mol, my_local, other_local;
-    };
-    std::vector<std::vector<AdjEntry>> adj(n_pat_mols);
-    for (int bi_idx = 0; bi_idx < static_cast<int>(bond_infos.size()); ++bi_idx) {
-      auto& bi = bond_infos[bi_idx];
-      if (bi.mol_a >= 0 && bi.mol_b >= 0) {
-        adj[bi.mol_a].push_back({bi_idx, bi.mol_b, bi.local_a, bi.local_b});
-        adj[bi.mol_b].push_back({bi_idx, bi.mol_a, bi.local_b, bi.local_a});
-      }
-    }
+    // Bond adjacency for the (entire-pattern) reactant A is pre-computed in
+    // pa (= rs.pat_adj_a, built at init via build_pattern_adjacency over the
+    // full unimolecular pattern range).  Reuse it instead of rebuilding per
+    // call.
+    auto& adj = pa.adj;
 
     // Get embeddings of seed pattern molecule into seed_mol_id
     std::vector<std::vector<int>> seed_embs;
@@ -6019,18 +5961,31 @@ struct Engine::Impl {
         int cx = pool.complex_of(seed_mol_id);
         auto cx_members = pool.molecules_in_complex(cx);
 
-        // Collect all valid complete assignments, then pick one at random.
-        struct Assignment {
-          std::vector<int> mols;
-          std::vector<std::vector<int>> cmaps;
-        };
-        std::vector<Assignment> valid_assignments;
+        // Reservoir sampling (k=1) instead of materializing every valid
+        // complete assignment and picking one at the end.  Maintains a
+        // single chosen snapshot; on the n-th valid assignment, replace
+        // chosen with probability 1/n.  Equivalent to the prior uniform
+        // pick over the full enumeration, without the O(N) memory and
+        // per-assignment vector copies.
+        //
+        // The std::function-wrapped recursion is rewritten as a
+        // self-passing auto lambda so the compiler can inline through the
+        // recursive call (same pattern as #14's count_embeddings_single
+        // rewrite — std::function went via vtable + heap alloc per call).
+        int n_valid = 0;
+        std::vector<int> chosen_mols;
+        std::vector<std::vector<int>> chosen_cmaps;
 
-        std::function<void(int)> assign_unassigned = [&](int ui) {
+        auto assign_unassigned = [&](auto& self, int ui) -> void {
           if (ui == static_cast<int>(unassigned.size())) {
             if (all_distinct_molecules(mol_assignments, 0, n_pat_mols) &&
-                check_pattern_bonds(pool, pat, mol_assignments, comp_maps))
-              valid_assignments.push_back({mol_assignments, comp_maps});
+                check_pattern_bonds(pool, pat, mol_assignments, comp_maps)) {
+              ++n_valid;
+              if (n_valid == 1 || uniform() * n_valid < 1.0) {
+                chosen_mols = mol_assignments;
+                chosen_cmaps = comp_maps;
+              }
+            }
             return;
           }
           int pat_mi = unassigned[ui];
@@ -6055,23 +6010,19 @@ struct Engine::Impl {
             for (auto& emb : cand_embs) {
               mol_assignments[pat_mi] = cand;
               comp_maps[pat_mi] = emb;
-              assign_unassigned(ui + 1);
+              self(self, ui + 1);
             }
             mol_assignments[pat_mi] = -1;
             comp_maps[pat_mi].clear();
           }
         };
-        assign_unassigned(0);
+        assign_unassigned(assign_unassigned, 0);
 
-        if (valid_assignments.empty())
+        if (n_valid == 0)
           return match;
 
-        // Pick one uniformly at random
-        int pick = static_cast<int>(uniform() * valid_assignments.size());
-        if (pick >= static_cast<int>(valid_assignments.size()))
-          pick = static_cast<int>(valid_assignments.size()) - 1;
-        mol_assignments = std::move(valid_assignments[pick].mols);
-        comp_maps = std::move(valid_assignments[pick].cmaps);
+        mol_assignments = std::move(chosen_mols);
+        comp_maps = std::move(chosen_cmaps);
       } else {
         // All assigned via BFS — check distinctness
         if (!all_distinct_molecules(mol_assignments, 0, n_pat_mols))
