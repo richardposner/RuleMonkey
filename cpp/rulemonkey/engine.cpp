@@ -768,7 +768,10 @@ static int count_embeddings_single(const AgentPool& pool, int mol_id, const Patt
   std::vector<int> assignment(n_pat, -1);
   std::vector<bool> used(mol.comp_ids.size(), false);
 
-  std::function<void(int)> enumerate = [&](int pi) {
+  // Lambda recursion via explicit self-pass — avoids the std::function vtable
+  // dispatch + heap alloc on every recursive call.  This routine is on the
+  // hot path of propensity update and observable evaluation.
+  auto enumerate = [&](auto& self, int pi) -> void {
     if (pi == n_pat) {
       // Valid assignment found
       if (all_assignments)
@@ -781,12 +784,12 @@ static int count_embeddings_single(const AgentPool& pool, int mol_id, const Patt
         continue;
       assignment[pi] = ci;
       used[ci] = true;
-      enumerate(pi + 1);
+      self(self, pi + 1);
       used[ci] = false;
     }
   };
 
-  enumerate(0);
+  enumerate(enumerate, 0);
 
   // Deduplicate by reacting-component targets if requested.
   // Two embeddings that send all `reacting_local` pattern components to the
@@ -813,7 +816,7 @@ static int count_embeddings_single(const AgentPool& pool, int mol_id, const Patt
     std::vector<int> tmp(n_pat, -1);
     std::vector<bool> tmp_used(mol.comp_ids.size(), false);
     int deduped_count = 0;
-    std::function<void(int)> enumerate2 = [&](int pi) {
+    auto enumerate2 = [&](auto& self, int pi) -> void {
       if (pi == n_pat) {
         std::vector<int> key;
         key.reserve(reacting_local->size());
@@ -830,11 +833,11 @@ static int count_embeddings_single(const AgentPool& pool, int mol_id, const Patt
           continue;
         tmp[pi] = ci;
         tmp_used[ci] = true;
-        enumerate2(pi + 1);
+        self(self, pi + 1);
         tmp_used[ci] = false;
       }
     };
-    enumerate2(0);
+    enumerate2(enumerate2, 0);
     count = deduped_count;
   }
 
