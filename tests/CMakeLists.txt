@@ -87,3 +87,18 @@ target_link_libraries(table_function_test PRIVATE rulemonkey)
 target_include_directories(table_function_test PRIVATE ${CMAKE_SOURCE_DIR}/cpp/rulemonkey)
 
 add_test(NAME table_function_test COMMAND table_function_test)
+
+# Error-path regression: pins down that the documented public-API
+# error surfaces (missing file, malformed XML, unknown set_param,
+# mutators called while a session is active) throw std::runtime_error
+# rather than silently failing or crashing.  Uses a tmp file path
+# under the build dir for the malformed-XML case.
+add_executable(error_paths_test cpp/error_paths_test.cpp)
+target_link_libraries(error_paths_test PRIVATE rulemonkey)
+
+add_test(
+    NAME error_paths_test
+    COMMAND error_paths_test
+        ${CMAKE_SOURCE_DIR}/tests/reference/nfsim/xml/A_plus_A.xml
+        ${CMAKE_CURRENT_BINARY_DIR}/error_paths_malformed.xml
+)
