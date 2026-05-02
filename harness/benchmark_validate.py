@@ -213,7 +213,20 @@ def validate_model(model, t_end, n_steps, n_reps=1, timeout=DEFAULT_TIMEOUT):
                 # ensemble had zero variance (all 100 runs agreed).  Score
                 # as |delta| directly — a single molecule (delta=1) scores
                 # 1.0, well under any failure threshold.
-                z = abs(rm_val - nf_val)
+                #
+                # Hard-fail when the delta is large enough that "RM sees
+                # the species at all" is itself a parity violation: a
+                # 1000-molecule model with NFsim's 100-rep ensemble at
+                # zero variance is a deterministic-in-the-limit count;
+                # an RM delta of 6 (let alone 50) is a real disagreement
+                # and used to silently pass with z = 6.0 < threshold.
+                # Inflate the z-score by a large multiplier so the
+                # tz_max verdict trips well above any plausible per-
+                # model T threshold.
+                if abs(rm_val - nf_val) > 0.5:
+                    z = 1e6 + abs(rm_val - nf_val)
+                else:
+                    z = abs(rm_val - nf_val)
 
             if obs_name not in obs_results or z > obs_results[obs_name]:
                 obs_results[obs_name] = z

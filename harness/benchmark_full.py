@@ -39,6 +39,7 @@ Tier membership is defined inline in the SMOKE_MODELS / GUARD_MODELS
 lists below — those are the canonical source.
 """
 
+import bisect
 import csv
 import math
 import os
@@ -498,19 +499,41 @@ def analyze_correctness(model, all_reps, n_reps, nf_row=None):
                 col_map[ri] = ni
                 break
 
-    # NF time -> row index
-    nf_time_idx = {round(row[0], 6): i for i, row in enumerate(nf_mean)}
+    # Match RM time points to NF reference times by absolute tolerance
+    # `1e-9 * t_end` (with a floor so t_end ≈ 0 doesn't degenerate to an
+    # exact-equality match).  Previously the matcher used `round(t, 6)`,
+    # which silently drops samples whose time has drifted past the 6th
+    # decimal — a real concern for long-t_end models where doubles
+    # accumulate drift below 1ppm.  Each RM row maps to at most one NF
+    # row index; rows beyond the tolerance window are skipped, not
+    # bucketed against the wrong reference time.
+    nf_times_sorted = [row[0] for row in nf_mean]
+    t_end = nf_times_sorted[-1] if nf_times_sorted else 1.0
+    time_tol = max(1e-9 * abs(t_end), 1e-12)
 
-    # Collect per-timepoint, per-observable values across reps
-    # obs_data[obs_name][time_idx] = list of RM values across reps
+    def find_nf_idx(rm_t):
+        pos = bisect.bisect_left(nf_times_sorted, rm_t)
+        best_idx = None
+        best_d = time_tol
+        for c in (pos - 1, pos):
+            if 0 <= c < len(nf_times_sorted):
+                d = abs(nf_times_sorted[c] - rm_t)
+                if d <= best_d:
+                    best_d = d
+                    best_idx = c
+        return best_idx
+
+    # Collect per-timepoint, per-observable values across reps.  Time
+    # bucket key is the matched NF row index (canonical), not the RM
+    # time, so reps with slight FP drift still aggregate cleanly.
     obs_data = {}
     time_points = []
 
-    # Use first rep to get time grid
+    # Use first rep to identify the matched NF rows.
     for rm_row in all_reps[0][1]:
-        rm_t = round(rm_row[0], 6)
-        if rm_t in nf_time_idx:
-            time_points.append(rm_t)
+        nf_idx = find_nf_idx(rm_row[0])
+        if nf_idx is not None:
+            time_points.append(nf_idx)
 
     for rm_ci, nf_ci in col_map.items():
         if rm_ci == 0 or nf_ci == 0:
@@ -523,14 +546,15 @@ def analyze_correctness(model, all_reps, n_reps, nf_row=None):
     # Collect values
     for rep_headers, rep_rows, _, _ in all_reps:
         for rm_row in rep_rows:
-            rm_t = round(rm_row[0], 6)
-            if rm_t not in nf_time_idx:
+            nf_idx = find_nf_idx(rm_row[0])
+            if nf_idx is None:
                 continue
             for rm_ci, nf_ci in col_map.items():
                 if rm_ci == 0 or nf_ci == 0:
                     continue
                 obs_name = rm_headers[rm_ci]
-                obs_data[obs_name][rm_t].append(rm_row[rm_ci])
+                if nf_idx in obs_data[obs_name]:
+                    obs_data[obs_name][nf_idx].append(rm_row[rm_ci])
 
     # Compute z_mean and std_ratio
     max_z_mean = 0
@@ -544,7 +568,9 @@ def analyze_correctness(model, all_reps, n_reps, nf_row=None):
             if len(rm_vals) < 1:
                 continue
             n_compared += 1
-            nf_idx = nf_time_idx[tp]
+            # `tp` is already the NF row index (canonicalised by
+            # find_nf_idx in the RM→NF matching loop above).
+            nf_idx = tp
 
             nf_ci = None
             for rm_ci, nc in col_map.items():
@@ -598,9 +624,10 @@ def analyze_correctness(model, all_reps, n_reps, nf_row=None):
         tz_reason = "no-tint"
     else:
         # Per-rep integrals: {obs_name: [I_rep0, I_rep1, ...]}
-        # Use the RM time grid (from the first rep) and filter to time points
-        # that also appear in the NF time grid, matching the primary metric.
-        tp_sorted = sorted(time_points)
+        # Iterate over the matched NF row indices (canonical time grid)
+        # and back out the corresponding NF times for trapezoidal weighting.
+        tp_sorted = sorted(set(time_points))
+        tp_times_sorted = [nf_times_sorted[idx] for idx in tp_sorted]
         # trapezoidal weights on sorted time grid
         if len(tp_sorted) < 2:
             tz_max = None
@@ -626,10 +653,16 @@ def analyze_correctness(model, all_reps, n_reps, nf_row=None):
             dropped_per_obs = {obs: 0 for obs in per_rep_I}
 
             for rep_headers, rep_rows, _, _ in all_reps:
-                # Build time -> values map for this rep
+                # Build NF-row-index -> values map for this rep, using
+                # the same tolerance matcher as the primary metric so a
+                # rep whose times have drifted under 1e-9*t_end still
+                # aggregates against the canonical NF grid (instead of
+                # falling out of `t2v` and being silently dropped).
                 t2v = {}
                 for rm_row in rep_rows:
-                    t2v[round(rm_row[0], 6)] = rm_row
+                    nf_idx = find_nf_idx(rm_row[0])
+                    if nf_idx is not None:
+                        t2v[nf_idx] = rm_row
 
                 # Integrate each observable on the shared time grid
                 for rm_ci, _nf_ci in col_map.items():
@@ -638,7 +671,7 @@ def analyze_correctness(model, all_reps, n_reps, nf_row=None):
                     obs_name = rm_headers[rm_ci]
                     if obs_name not in per_rep_I:
                         continue
-                    # gather values at tp_sorted
+                    # gather values at tp_sorted (NF row indices)
                     vals = []
                     ok = True
                     for tp in tp_sorted:
@@ -649,10 +682,10 @@ def analyze_correctness(model, all_reps, n_reps, nf_row=None):
                     if not ok:
                         dropped_per_obs[obs_name] += 1
                         continue
-                    # trapezoidal integral
+                    # trapezoidal integral over the matched NF time grid
                     I = 0.0
                     for i in range(len(tp_sorted) - 1):
-                        dt = tp_sorted[i + 1] - tp_sorted[i]
+                        dt = tp_times_sorted[i + 1] - tp_times_sorted[i]
                         I += 0.5 * (vals[i] + vals[i + 1]) * dt
                     per_rep_I[obs_name].append(I)
 
@@ -828,6 +861,24 @@ def main():
         idx = args.index("--output")
         output_path = args[idx + 1]
         args = args[:idx] + args[idx + 2 :]
+
+    no_verify_manifest = "--no-verify-manifest" in args
+    if no_verify_manifest:
+        args.remove("--no-verify-manifest")
+    write_manifest_after = "--write-manifest" in args
+    if write_manifest_after:
+        args.remove("--write-manifest")
+
+    # Reference-tree integrity gate.  REF_DIR is a frozen vendored
+    # corpus (mean/std/replicates/sim_params); a hand-edited TSV could
+    # silently shift the parity verdict, and the harness has no other
+    # mechanism to detect that.  --no-verify-manifest exists for
+    # bootstrapping a new ref tree (paired with --write-manifest).
+    if not no_verify_manifest:
+        sys.path.insert(0, SCRIPT_DIR)
+        import _ref_manifest as ref_manifest
+
+        ref_manifest.enforce_or_warn(REF_DIR, strict=True, label="benchmark_full")
 
     sim_params = load_sim_params()
     nfsim_times = load_nfsim_wall_times()
@@ -1049,6 +1100,13 @@ def main():
     print("-" * 105)
     print(f"PASS: {n_pass}  FAIL: {n_fail}  TIMEOUT: {n_timeout}  SKIP: {n_skip}")
     print(f"\nReport written to: {output_path}")
+
+    if write_manifest_after:
+        sys.path.insert(0, SCRIPT_DIR)
+        import _ref_manifest as ref_manifest
+
+        manifest_path = ref_manifest.write_manifest(REF_DIR)
+        print(f"Reference manifest written to: {manifest_path}")
 
 
 if __name__ == "__main__":

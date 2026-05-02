@@ -1164,7 +1164,29 @@ def main():
     parser.add_argument(
         "--force-refs", action="store_true", help="Regenerate reference data even if it exists"
     )
+    parser.add_argument(
+        "--no-verify-manifest",
+        action="store_true",
+        help="Skip MANIFEST.tsv hash verification of the reference tree (default: verify and "
+        "abort on mismatch).  Use when bootstrapping refs for a new model or when manifest "
+        "drift is intentional and the new state will be regenerated this run.",
+    )
     args = parser.parse_args()
+
+    # Verify reference tree integrity before any RM/NFsim work.  In
+    # generate-refs mode the tree is about to be (re)written, so the
+    # check is downgraded to a soft warn (the new state replaces the
+    # old, and the manifest is rewritten at end of run).  Same for
+    # --force-refs.  In all other modes the manifest acts as a
+    # commit-time integrity gate against silent reference drift.
+    sys.path.insert(0, SCRIPT_DIR)
+    import _ref_manifest as ref_manifest
+
+    will_regen = args.generate_refs or args.force_refs
+    if not args.no_verify_manifest:
+        ref_manifest.enforce_or_warn(
+            REF_DIR, strict=not will_regen, label="benchmark_feature_coverage"
+        )
 
     # Discover models
     all_models = discover_models()
@@ -1214,6 +1236,15 @@ def main():
         ssa_reps=args.ssa_reps,
         full_mode=args.full,
     )
+
+    # If we just regenerated references (full or per-model), refresh
+    # the MANIFEST.tsv so subsequent validate-only runs have a fresh
+    # integrity baseline to compare against.  Tied to the same flag
+    # that gates regeneration so a default validate run never
+    # rewrites the manifest.
+    if will_regen:
+        manifest_path = ref_manifest.write_manifest(REF_DIR)
+        print(f"Reference manifest written to {manifest_path}")
 
     # Write report
     write_report(results, args.output)
