@@ -51,3 +51,17 @@ add_test(
         ${CMAKE_SOURCE_DIR}/tests/reference/nfsim/xml/A_plus_A.xml
         ${CMAKE_SOURCE_DIR}/tests/models/feature_coverage/xml/ft_mm_ratelaw.xml
 )
+
+# Public-API coverage: surface-area regressions on getters and behavioral
+# methods that aren't otherwise exercised by the parity tests.  Pins down
+# step_to / has_session / get_observable_values / parameter_names /
+# observable_names / xml_path / method / unsupported_features and the
+# behavioral effect of set_block_same_complex_binding / set_molecule_limit.
+add_executable(api_coverage_test cpp/api_coverage_test.cpp)
+target_link_libraries(api_coverage_test PRIVATE rulemonkey)
+
+add_test(
+    NAME api_coverage_test
+    COMMAND api_coverage_test
+        ${CMAKE_SOURCE_DIR}/tests/reference/nfsim/xml/A_plus_A.xml
+)

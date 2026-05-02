@@ -11,7 +11,9 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "" FORCE)
 endif()
 
-if(APPLE)
+option(RM_UNIVERSAL_BINARY
+    "On macOS, build a universal arm64+x86_64 binary (~2x build time)" OFF)
+if(APPLE AND RM_UNIVERSAL_BINARY)
     set(CMAKE_OSX_ARCHITECTURES "arm64;x86_64" CACHE STRING "Universal binary")
 endif()
 

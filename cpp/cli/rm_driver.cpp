@@ -22,8 +22,42 @@
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
+#include <stdexcept>
 #include <string>
+
+namespace {
+
+double parse_double(const char* arg, const char* name) {
+  try {
+    return std::stod(arg);
+  } catch (const std::exception& e) {
+    throw std::runtime_error(std::string("rm_driver: ") + name +
+                             " requires a numeric value, got '" + arg + "' (" + e.what() + ")");
+  }
+}
+
+int parse_int(const char* arg, const char* name) {
+  try {
+    return std::stoi(arg);
+  } catch (const std::exception& e) {
+    throw std::runtime_error(std::string("rm_driver: ") + name + " requires an integer, got '" +
+                             arg + "' (" + e.what() + ")");
+  }
+}
+
+std::uint64_t parse_uint64(const char* arg, const char* name) {
+  try {
+    return std::stoull(arg);
+  } catch (const std::exception& e) {
+    throw std::runtime_error(std::string("rm_driver: ") + name +
+                             " requires a non-negative integer, got '" + arg + "' (" + e.what() +
+                             ")");
+  }
+}
+
+} // namespace
 
 int main(int argc, char* argv[]) {
   if (argc < 4) {
@@ -33,56 +67,69 @@ int main(int argc, char* argv[]) {
     return 1;
   }
 
-  std::string xml_path = argv[1];
-  double t_end = std::stod(argv[2]);
-  int n_steps = std::stoi(argv[3]);
-  if (n_steps < 1) {
-    std::cerr << "ERROR: n_steps must be >= 1 (got " << n_steps
-              << ").  Output is `n_steps + 1` sample rows from t_start to t_end;\n"
-                 "       use a positive integer.  See docs/gdat_format.md.\n";
-    return 1;
-  }
-  uint64_t seed = 42;
-  bool bscb = true; // strict BNGL semantics by default
-  bool ignore_unsupported = false;
-  std::string save_state_path;
-  std::string load_state_path;
-  double t_start = 0.0;
-  bool t_start_set = false;
-
-  // Parse remaining args: seed (positional) and flags
-  for (int i = 4; i < argc; ++i) {
-    if (std::strcmp(argv[i], "-no-bscb") == 0) {
-      bscb = false;
-    } else if (std::strcmp(argv[i], "-bscb") == 0) {
-      bscb = true;
-    } else if (std::strcmp(argv[i], "--ignore-unsupported") == 0) {
-      ignore_unsupported = true;
-    } else if (std::strcmp(argv[i], "--save-state") == 0) {
-      if (++i >= argc) {
-        std::cerr << "--save-state requires a path\n";
-        return 1;
-      }
-      save_state_path = argv[i];
-    } else if (std::strcmp(argv[i], "--load-state") == 0) {
-      if (++i >= argc) {
-        std::cerr << "--load-state requires a path\n";
-        return 1;
-      }
-      load_state_path = argv[i];
-    } else if (std::strcmp(argv[i], "--t-start") == 0) {
-      if (++i >= argc) {
-        std::cerr << "--t-start requires a value\n";
-        return 1;
-      }
-      t_start = std::stod(argv[i]);
-      t_start_set = true;
-    } else {
-      seed = std::stoull(argv[i]);
-    }
-  }
-
   try {
+    std::string xml_path = argv[1];
+    double t_end = parse_double(argv[2], "t_end");
+    int n_steps = parse_int(argv[3], "n_steps");
+    if (n_steps < 1) {
+      std::cerr << "ERROR: n_steps must be >= 1 (got " << n_steps
+                << ").  Output is `n_steps + 1` sample rows from t_start to t_end;\n"
+                   "       use a positive integer.  See docs/gdat_format.md.\n";
+      return 1;
+    }
+    uint64_t seed = 42;
+    bool bscb = true; // strict BNGL semantics by default
+    bool ignore_unsupported = false;
+    bool seed_set = false;
+    std::string save_state_path;
+    std::string load_state_path;
+    double t_start = 0.0;
+    bool t_start_set = false;
+
+    // Parse remaining args: seed (positional, may appear at most once) and
+    // flags (named).  Reject unknown `--*` / `-*` flags up front so a typo
+    // (e.g. `--seed 7`) is not silently parsed as the seed positional via
+    // `std::stoull` and crash with an opaque "stoull: no conversion".
+    for (int i = 4; i < argc; ++i) {
+      if (std::strcmp(argv[i], "-no-bscb") == 0) {
+        bscb = false;
+      } else if (std::strcmp(argv[i], "-bscb") == 0) {
+        bscb = true;
+      } else if (std::strcmp(argv[i], "--ignore-unsupported") == 0) {
+        ignore_unsupported = true;
+      } else if (std::strcmp(argv[i], "--save-state") == 0) {
+        if (++i >= argc) {
+          std::cerr << "--save-state requires a path\n";
+          return 1;
+        }
+        save_state_path = argv[i];
+      } else if (std::strcmp(argv[i], "--load-state") == 0) {
+        if (++i >= argc) {
+          std::cerr << "--load-state requires a path\n";
+          return 1;
+        }
+        load_state_path = argv[i];
+      } else if (std::strcmp(argv[i], "--t-start") == 0) {
+        if (++i >= argc) {
+          std::cerr << "--t-start requires a value\n";
+          return 1;
+        }
+        t_start = parse_double(argv[i], "--t-start");
+        t_start_set = true;
+      } else if (argv[i][0] == '-') {
+        std::cerr << "rm_driver: unknown flag '" << argv[i]
+                  << "'.  See usage above for the supported set.\n";
+        return 1;
+      } else if (!seed_set) {
+        seed = parse_uint64(argv[i], "seed");
+        seed_set = true;
+      } else {
+        std::cerr << "rm_driver: unexpected positional argument '" << argv[i]
+                  << "' (seed already provided).\n";
+        return 1;
+      }
+    }
+
     rulemonkey::RuleMonkeySimulator sim(xml_path);
     sim.set_block_same_complex_binding(bscb);
 
@@ -147,7 +194,12 @@ int main(int argc, char* argv[]) {
       std::cout << "\t" << name;
     std::cout << "\n";
 
-    // Output data
+    // Round-trip-precise doubles in the .gdat output: 17 decimal digits
+    // is the IEEE-754 binary64 round-trip threshold.  Default ostream
+    // precision is 6 (silently lossy) — downstream parity checks that
+    // diff RM .gdat against NFsim .gdat would otherwise read fuzzed
+    // values and could hide drift below the 1e-6 mark.
+    std::cout << std::setprecision(17);
     for (size_t t = 0; t < result.n_times(); ++t) {
       std::cout << result.time[t];
       for (size_t o = 0; o < result.n_observables(); ++o)
