@@ -51,7 +51,7 @@ cpp/rulemonkey/      Core engine sources
 cpp/cli/             rm_driver CLI
 include/rulemonkey/  Public C++ API headers
 tests/
-  cpp/               Compiled smoke tests
+  cpp/               C++ unit tests (smoke, set_param, save/load, homodimer rate, public API)
   models/            BNGL test corpora (feature_coverage, real-world, basicModels)
   reference/         Gold-standard reference trajectories from NFsim and earlier RM
 harness/             Python benchmarking + validation drivers
@@ -124,9 +124,12 @@ CMake snippets for both consumption modes).
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — FAQ covering
   unsupported features, `set_param` gotchas, save/load schema
   fingerprints, and the `-bscb` default difference vs NFsim.
-- [`docs/test_corpora.md`](docs/test_corpora.md) — the three test
-  suites (`feature_coverage`, `corpus`, `nfsim_basicmodels`),
-  what each catches, and how to run them.
+- [`docs/test_corpora.md`](docs/test_corpora.md) — the three BNGL
+  parity suites (`feature_coverage`, `corpus`, `nfsim_basicmodels`),
+  what each catches, and how to run them.  Separate from the C++
+  unit tests in `tests/cpp/`, which run via `ctest --preset release`
+  and pin down internal API contracts (set_param, save/load,
+  homodimer rate vs CME, public-surface coverage).
 - [`docs/timing_comparison.md`](docs/timing_comparison.md) — a
   173-model RM-vs-NFsim wall-time comparison with a "where does
   each engine win?" breakdown.
