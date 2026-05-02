@@ -26,6 +26,10 @@
 #include <unordered_set>
 #include <vector>
 
+#if defined(_MSC_VER)
+#include <intrin.h>
+#endif
+
 // Dev-time profiler infrastructure (gates, profile struct definitions,
 // end-of-run report bodies) lives in engine_profile.hpp; the eight
 // profile struct *instances* are per-Engine members on Engine::Impl /
@@ -2145,11 +2149,30 @@ struct FenwickTree {
     return s;
   }
 
+  // Largest power of 2 <= x.  Requires x > 0.  Portable bit_floor
+  // (std::bit_floor is C++20 and we target C++17).
+  static int highest_pow2(int x) {
+#if defined(__GNUC__) || defined(__clang__)
+    return 1 << (31 - __builtin_clz(static_cast<unsigned int>(x)));
+#elif defined(_MSC_VER)
+    unsigned long idx;
+    _BitScanReverse(&idx, static_cast<unsigned long>(x));
+    return 1 << idx;
+#else
+    int pw = 1;
+    while ((pw << 1) > 0 && (pw << 1) <= x)
+      pw <<= 1;
+    return pw;
+#endif
+  }
+
   // Find smallest 0-based index where prefix sum > target.
   // Uses O(log N) bit-descent.
   int find(double target) const {
+    if (n == 0)
+      return 0;
     int pos = 0;
-    for (int pw = 1 << (31 - __builtin_clz(n)); pw > 0; pw >>= 1) {
+    for (int pw = highest_pow2(n); pw > 0; pw >>= 1) {
       if (pos + pw <= n && tree[pos + pw] <= target) {
         pos += pw;
         target -= tree[pos];
