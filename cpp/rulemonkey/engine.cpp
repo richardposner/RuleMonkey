@@ -2769,6 +2769,35 @@ struct Engine::Impl {
     return dist(rng);
   }
 
+  // --- Total propensity (delta-updated) ---
+  //
+  // total_propensity is maintained as a running sum: every write to a
+  // rule's propensity goes through set_rule_propensity, which credits the
+  // delta to total_propensity.  This replaces the per-event O(R) sum at
+  // the top of the SSA loop.  Periodic re-baseline (every K events, plus
+  // a defensive re-sum on suspected absorbing-state fall-through) bounds
+  // accumulated FP drift.
+  static constexpr int64_t kPropensityRebaselineInterval = 4096;
+  int64_t events_since_propensity_rebaseline = 0;
+
+  inline void set_rule_propensity(RuleState& rs, double new_value) {
+    if (new_value < 0)
+      new_value = 0;
+    total_propensity += new_value - rs.propensity;
+    rs.propensity = new_value;
+  }
+  inline void set_rule_propensity(int ri, double new_value) {
+    set_rule_propensity(rule_states[ri], new_value);
+  }
+
+  inline void recompute_total_propensity() {
+    double s = 0;
+    for (auto& rs : rule_states)
+      s += rs.propensity;
+    total_propensity = s;
+    events_since_propensity_rebaseline = 0;
+  }
+
   // --- State save / restore ---
 
   void save_state_to(const std::string& path) const {
@@ -3255,6 +3284,13 @@ struct Engine::Impl {
       }
       local_obs_indices.assign(idx_set.begin(), idx_set.end());
     }
+
+    // Establish a clean baseline for the delta-updated total_propensity.
+    // The per-rule rescans above already credited each rs.propensity to
+    // total_propensity via set_rule_propensity, but a fresh sum here makes
+    // the post-init invariant unambiguous (and absorbs any prior stale
+    // total left over from a re-init).
+    recompute_total_propensity();
   }
 
   void rescan_all_molecules_for_rule(int rule_idx) {
@@ -3279,9 +3315,9 @@ struct Engine::Impl {
       // Synthesis rule (molecularity=0): propensity is just the rate
       if (rule.molecularity == 0) {
         double rate = evaluate_rate(rule);
-        rs.propensity = std::max(rate, 0.0);
+        set_rule_propensity(rs, rate);
       } else {
-        rs.propensity = 0;
+        set_rule_propensity(rs, 0);
       }
       return;
     }
@@ -3406,6 +3442,7 @@ struct Engine::Impl {
 
     // Compute propensity
     rs.has_local_rates = rule.rate_law.is_local;
+    double new_propensity;
     if (rs.has_local_rates && rule.molecularity <= 1) {
       // Local-rate rule: propensity = sum of per-molecule (count_a * local_rate)
       rs.local_propensity_total = 0;
@@ -3429,13 +3466,12 @@ struct Engine::Impl {
         }
         rs.local_propensity_total += md.local_propensity;
       }
-      rs.propensity = rs.local_propensity_total;
+      new_propensity = rs.local_propensity_total;
     } else {
       double rate = evaluate_rate(rule);
-      rs.propensity = compute_propensity(rs, rule, rate);
+      new_propensity = compute_propensity(rs, rule, rate);
     }
-    if (rs.propensity < 0)
-      rs.propensity = 0;
+    set_rule_propensity(rs, new_propensity);
 
     // P1 cache: after a full rescan every PerMolRuleData entry in rs.mol_data
     // reflects the current pool state, so all entries — including the
@@ -4585,7 +4621,7 @@ struct Engine::Impl {
         // Synthesis rule: recompute propensity if rate is dynamic
         if (rule.molecularity == 0 && rule.rate_law.is_dynamic) {
           double rate = evaluate_rate(rule);
-          rs.propensity = std::max(rate, 0.0);
+          set_rule_propensity(rs, rate);
         }
         if constexpr (kIncrUpdateProfile)
           incr_profile_.rules_skipped_needed++;
@@ -4911,14 +4947,14 @@ struct Engine::Impl {
       // inflated total_est 50%).
       if constexpr (kIncrUpdateProfile)
         incr_profile_.propensity_recomputes++;
+      double new_propensity;
       if (rs.has_local_rates) {
-        rs.propensity = rs.local_propensity_total;
+        new_propensity = rs.local_propensity_total;
       } else {
         double rate = evaluate_rate(rule);
-        rs.propensity = compute_propensity(rs, rule, rate);
+        new_propensity = compute_propensity(rs, rule, rate);
       }
-      if (rs.propensity < 0)
-        rs.propensity = 0;
+      set_rule_propensity(rs, new_propensity);
     }
 
     if constexpr (kIncrUpdateProfile) {
@@ -6547,18 +6583,27 @@ struct Engine::Impl {
 
     // Main SSA loop
     while (current_time < ts.t_end) {
-      // Compute total propensity
-      total_propensity = 0;
-      for (auto& rs : rule_states)
-        total_propensity += rs.propensity;
+      // total_propensity is delta-updated by set_rule_propensity at every
+      // rs.propensity write; periodically re-baseline to flush accumulated
+      // FP drift (per-event delta sums + and - cancelations slowly bias the
+      // running total relative to a fresh sum).
+      if (++events_since_propensity_rebaseline >= kPropensityRebaselineInterval)
+        recompute_total_propensity();
 
       if (total_propensity <= 0) {
-        // Absorbing state — record remaining samples at current values
-        while (next_sample < static_cast<int>(sample_times.size())) {
-          record_at(sample_times[next_sample]);
-          ++next_sample;
+        // Defensive re-baseline: a long sequence of +/- updates can drive
+        // the running total to zero through FP cancellation while real
+        // propensity remains positive.  Re-sum and re-check before
+        // declaring the absorbing state.
+        recompute_total_propensity();
+        if (total_propensity <= 0) {
+          // Absorbing state — record remaining samples at current values
+          while (next_sample < static_cast<int>(sample_times.size())) {
+            record_at(sample_times[next_sample]);
+            ++next_sample;
+          }
+          break;
         }
-        break;
       }
 
       // Save RNG state before drawing dt so that state save/restore
@@ -7103,6 +7148,12 @@ void Engine::add_molecules(const std::string& type_name, int count) {
     if (needed[ri])
       impl_->rescan_all_molecules_for_rule(ri);
   }
+
+  // Re-baseline total_propensity after the partial rescan so the running
+  // sum reflects the new per-rule propensities exactly (set_rule_propensity
+  // credited deltas already, but a fresh sum is cheap and avoids drift on
+  // long sequences of add_molecules calls).
+  impl_->recompute_total_propensity();
 
   // Re-seed the incremental observable tracker.  Without this, the
   // kSpeciesIncrObs delta-update path keeps applying offsets relative
