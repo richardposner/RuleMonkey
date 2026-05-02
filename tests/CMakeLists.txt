@@ -65,3 +65,25 @@ add_test(
     COMMAND api_coverage_test
         ${CMAKE_SOURCE_DIR}/tests/reference/nfsim/xml/A_plus_A.xml
 )
+
+# Direct unit tests for the BNGL math expression parser/evaluator.  Pin
+# down review #1 (unary minus precedence), #2 (&& / || short-circuit),
+# and #6 (== / != bit-exact) at the parse-and-evaluate level so a
+# regression surfaces here as a one-line miscompare instead of a
+# trajectory drift on some incidental BNGL parity model.  Needs PRIVATE
+# access to cpp/rulemonkey/expr_eval.hpp (not part of the public API).
+add_executable(expr_eval_test cpp/expr_eval_test.cpp)
+target_link_libraries(expr_eval_test PRIVATE rulemonkey)
+target_include_directories(expr_eval_test PRIVATE ${CMAKE_SOURCE_DIR}/cpp/rulemonkey)
+
+add_test(NAME expr_eval_test COMMAND expr_eval_test)
+
+# Direct unit tests for TableFunction (TFUN) interpolation.  Pin down
+# review #7 (step is right-continuous, matches BNG Network3) along with
+# linear interp + boundary clamp + ctor validation.  Same private-header
+# access pattern as expr_eval_test.
+add_executable(table_function_test cpp/table_function_test.cpp)
+target_link_libraries(table_function_test PRIVATE rulemonkey)
+target_include_directories(table_function_test PRIVATE ${CMAKE_SOURCE_DIR}/cpp/rulemonkey)
+
+add_test(NAME table_function_test COMMAND table_function_test)
