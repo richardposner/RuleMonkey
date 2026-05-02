@@ -122,7 +122,7 @@ std::string decode_xml_entities(std::string_view input) {
           throw std::runtime_error("XML: malformed numeric entity '&" + std::string(ent) + ";'");
         // Multiply-and-add with overflow guard so a pathological 32-digit
         // hex entity can't silently wrap.
-        uint64_t next = static_cast<uint64_t>(cp) * (hex ? 16ULL : 10ULL) + d;
+        uint64_t next = (static_cast<uint64_t>(cp) * (hex ? 16ULL : 10ULL)) + d;
         if (next > 0x10FFFF)
           throw std::runtime_error("XML: numeric entity out of Unicode range: '&" +
                                    std::string(ent) + ";'");
@@ -601,7 +601,7 @@ Model load_model(const std::string& xml_path,
             model.parameters[name] = resolved;
             changed = true;
           }
-        } catch (...) {
+        } catch (...) { // NOLINT(bugprone-empty-catch)
           // leave as-is — still a forward reference
         }
       }
@@ -675,11 +675,17 @@ Model load_model(const std::string& xml_path,
             // natural ordering.  Numeric states sort by value; others by string.
             std::sort(comp.allowed_states.begin(), comp.allowed_states.end(),
                       [](const std::string& a, const std::string& b) {
-                        // Try numeric comparison first
+                        // Try numeric comparison first.  clang-analyzer's
+                        // path-sensitive checker occasionally flags
+                        // `a.c_str()` / `b.c_str()` here as
+                        // use-after-move via std::sort's swap path,
+                        // but the comparator only reads the operands.
                         char* ea = nullptr;
                         char* eb = nullptr;
+                        // NOLINTBEGIN(clang-analyzer-cplusplus.Move)
                         long va = std::strtol(a.c_str(), &ea, 10);
                         long vb = std::strtol(b.c_str(), &eb, 10);
+                        // NOLINTEND(clang-analyzer-cplusplus.Move)
                         bool a_num = (ea != a.c_str() && *ea == '\0');
                         bool b_num = (eb != b.c_str() && *eb == '\0');
                         if (a_num && b_num)
@@ -920,7 +926,6 @@ Model load_model(const std::string& xml_path,
         auto method = parse_tfun_method(opt_attr(fn, "method"));
 
         auto file_attr = trim(opt_attr(fn, "file"));
-        auto mode_attr = to_lower(trim(opt_attr(fn, "mode")));
         auto x_attr = opt_attr(fn, "xData");
         auto y_attr = opt_attr(fn, "yData");
 
@@ -937,6 +942,10 @@ Model load_model(const std::string& xml_path,
           auto candidate2 = (xml_dir / ".." / file_attr).lexically_normal();
           std::string tfun_path;
           std::error_code ec;
+          // The two assignment targets look textually similar but
+          // resolve to distinct paths (xml_dir/<file> vs xml_dir/../<file>);
+          // the chain isn't a clone.
+          // NOLINTNEXTLINE(bugprone-branch-clone)
           if (std::filesystem::exists(candidate1, ec)) {
             tfun_path = candidate1.string();
           } else if (std::filesystem::exists(candidate2, ec)) {
@@ -977,7 +986,7 @@ Model load_model(const std::string& xml_path,
           }
           try {
             gf.ast = expr::parse(et);
-          } catch (...) {
+          } catch (...) { // NOLINT(bugprone-empty-catch)
             // Pure TFUN — just use value directly
           }
         }
@@ -1057,8 +1066,8 @@ Model load_model(const std::string& xml_path,
 
           // Also adjust bond flat indices
           int comp_offset = rule.reactant_pattern.flat_comp_count();
-          for (auto& m : sub.molecules)
-            rule.reactant_pattern.molecules.push_back(std::move(m));
+          for (auto& mol : sub.molecules)
+            rule.reactant_pattern.molecules.push_back(std::move(mol));
           for (auto& b : sub.bonds) {
             b.comp_flat_a += comp_offset;
             b.comp_flat_b += comp_offset;
@@ -1090,8 +1099,8 @@ Model load_model(const std::string& xml_path,
           for (auto& [id, pos] : sub_id_map)
             product_id_map[id] = {pos.first + mol_offset, pos.second};
           int comp_offset = rule.product_pattern.flat_comp_count();
-          for (auto& m : sub.molecules)
-            rule.product_pattern.molecules.push_back(std::move(m));
+          for (auto& mol : sub.molecules)
+            rule.product_pattern.molecules.push_back(std::move(mol));
           for (auto& b : sub.bonds) {
             b.comp_flat_a += comp_offset;
             b.comp_flat_b += comp_offset;
@@ -1224,8 +1233,7 @@ Model load_model(const std::string& xml_path,
               op.add_product_mol_idx = pit->second.first;
               auto& prod_mol = rule.product_pattern.molecules[pit->second.first];
               op.add_spec.type_index = prod_mol.type_index;
-              for (int ci = 0; ci < static_cast<int>(prod_mol.components.size()); ++ci) {
-                auto& pc = prod_mol.components[ci];
+              for (auto& pc : prod_mol.components) {
                 if (!pc.required_state.empty() && pc.required_state_index >= 0)
                   op.add_spec.comp_states.emplace_back(pc.comp_type_index, pc.required_state_index);
               }
@@ -1524,7 +1532,9 @@ bool any_rule_has_attr(const XmlNode& model_node, const std::string& attr_name) 
   auto* rr_list = find_child(model_node, "ListOfReactionRules");
   if (!rr_list)
     return false;
-  for (auto& rr : rr_list->children) {
+  // The continue-then-test loop reads more clearly than std::any_of with
+  // a multi-condition lambda predicate.  NOLINT(readability-use-anyofallof)
+  for (auto& rr : rr_list->children) { // NOLINT(readability-use-anyofallof)
     if (rr.name != "ReactionRule")
       continue;
     auto it = rr.attributes.find(attr_name);
@@ -1539,7 +1549,9 @@ bool any_has_move_connected(const XmlNode& node) {
   auto it = node.attributes.find("MoveConnected");
   if (it != node.attributes.end() && it->second == "1")
     return true;
-  for (auto& child : node.children) {
+  // Recursive descent — std::any_of with a recursive lambda is awkward
+  // and hides the call site.  NOLINT(readability-use-anyofallof)
+  for (auto& child : node.children) { // NOLINT(readability-use-anyofallof)
     if (any_has_move_connected(child))
       return true;
   }
@@ -1819,7 +1831,7 @@ struct RuleMonkeySimulator::Impl {
             model.parameters[name] = resolved;
             changed = true;
           }
-        } catch (...) {
+        } catch (...) { // NOLINT(bugprone-empty-catch)
           // resolution failure leaves the prior value in place
         }
       }

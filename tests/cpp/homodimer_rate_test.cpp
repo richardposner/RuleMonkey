@@ -73,7 +73,8 @@ double homodimer_terminal_mean(const std::string& xml, double a_tot, double kp, 
     sim.set_param("A_tot", a_tot);
     sim.set_param("kp", kp);
     sim.set_param("km", km);
-    auto r = sim.run({0.0, t_end, 2}, /*seed=*/static_cast<std::uint64_t>(1000 + rep));
+    auto r =
+        sim.run({0.0, t_end, 2}, /*seed=*/std::uint64_t{1000} + static_cast<std::uint64_t>(rep));
     sum += final_value(r, "AA_1");
   }
   return sum / n_reps;
@@ -86,7 +87,7 @@ double cme_mean(int a_tot, double kp, double km) {
   std::vector<double> pi(kmax + 1, 0.0);
   pi[0] = 1.0;
   for (int k = 0; k < kmax; ++k) {
-    int free_a = a_tot - 2 * k;
+    int free_a = a_tot - (2 * k);
     double fwd = kp * free_a * (free_a - 1) / 2.0;
     double rev = km * (k + 1);
     pi[k + 1] = pi[k] * fwd / rev;

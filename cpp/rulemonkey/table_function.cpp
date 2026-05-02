@@ -50,12 +50,14 @@ TableFunction TableFunction::from_file(const std::string& name, const std::strin
     std::istringstream iss(line);
     double x, y;
     if (!(iss >> x >> y))
+      // Error path; one-time allocation cost is irrelevant.
+      // NOLINTNEXTLINE(performance-inefficient-string-concatenation)
       throw std::runtime_error("tfun '" + name + "': malformed data line: " + line);
     xs.push_back(x);
     ys.push_back(y);
   }
 
-  return TableFunction(name, std::move(xs), std::move(ys), counter_name, method);
+  return {name, std::move(xs), std::move(ys), counter_name, method};
 }
 
 double TableFunction::evaluate(double x) const {
@@ -88,7 +90,7 @@ double TableFunction::evaluate(double x) const {
   double x0 = xs_[i], x1 = xs_[i + 1];
   double y0 = ys_[i], y1 = ys_[i + 1];
   double t = (x - x0) / (x1 - x0);
-  return y0 + t * (y1 - y0);
+  return y0 + (t * (y1 - y0));
 }
 
 } // namespace rulemonkey

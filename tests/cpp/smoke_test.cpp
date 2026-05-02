@@ -7,7 +7,7 @@
 namespace {
 [[noreturn]] void fail(const std::string& msg) {
   std::cerr << "FAIL: " << msg << "\n";
-  std::exit(1);
+  std::exit(1); // NOLINT(concurrency-mt-unsafe)
 }
 } // namespace
 

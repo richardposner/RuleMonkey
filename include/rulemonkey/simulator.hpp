@@ -46,7 +46,7 @@ public:
   // method, TimeSpec, overrides, molecule limit, and seed are reproducible
   // within the same runtime build. Prior successful or failed runs do not
   // mutate reusable simulator state.
-  Result run(const TimeSpec& times, std::uint64_t seed = 42);
+  Result run(const TimeSpec& ts, std::uint64_t seed = 42);
 
   // Creates or resets a live session from the parsed model plus the current
   // stored parameter overrides and molecule limit.

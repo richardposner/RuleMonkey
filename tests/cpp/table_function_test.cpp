@@ -129,7 +129,7 @@ void test_constructor_validation() {
       fn();
     } catch (const std::runtime_error&) {
       return true;
-    } catch (...) {
+    } catch (...) { // NOLINT(bugprone-empty-catch)
     }
     return false;
   };

@@ -140,7 +140,7 @@ void test_add_molecules_session(const std::string& xml) {
   int aa_idx_seg1 = idx_of(seg1, "AA_1");
   double a1_pre = seg1.observable_data[a1_idx_seg1].back();
   double aa_pre = seg1.observable_data[aa_idx_seg1].back();
-  double total_pre = a1_pre + 2.0 * aa_pre;
+  double total_pre = a1_pre + (2.0 * aa_pre);
   check(std::abs(total_pre - 1000.0) < 1e-9,
         "pre-add mass conservation: A_1 + 2*AA_1 should equal 1000 (got " +
             std::to_string(total_pre) + ")");
@@ -156,14 +156,14 @@ void test_add_molecules_session(const std::string& xml) {
   int aa_idx_seg2 = idx_of(seg2, "AA_1");
   double a1_post0 = seg2.observable_data[a1_idx_seg2].front();
   double aa_post0 = seg2.observable_data[aa_idx_seg2].front();
-  double total_post0 = a1_post0 + 2.0 * aa_post0;
+  double total_post0 = a1_post0 + (2.0 * aa_post0);
   check(std::abs(total_post0 - 1500.0) < 1e-9,
         "post-add mass conservation at segment start: should be 1500 (got " +
             std::to_string(total_post0) + ")");
 
   double a1_end = seg2.observable_data[a1_idx_seg2].back();
   double aa_end = seg2.observable_data[aa_idx_seg2].back();
-  double total_end = a1_end + 2.0 * aa_end;
+  double total_end = a1_end + (2.0 * aa_end);
   check(std::abs(total_end - 1500.0) < 1e-9,
         "post-add mass conservation at segment end: should be 1500 (got " +
             std::to_string(total_end) + ")");
@@ -180,7 +180,7 @@ void test_session_active_throws(const std::string& xml) {
       fn();
     } catch (const std::runtime_error&) {
       return true;
-    } catch (...) {
+    } catch (...) { // NOLINT(bugprone-empty-catch)
     }
     return false;
   };
