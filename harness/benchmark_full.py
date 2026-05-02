@@ -39,6 +39,7 @@ Tier membership is defined inline in the SMOKE_MODELS / GUARD_MODELS
 lists below — those are the canonical source.
 """
 
+import csv
 import math
 import os
 import re
@@ -189,19 +190,25 @@ TIER_MODELS = {
 
 
 def load_sim_params():
+    """Load (t_end, n_steps, rm_flags) per model from PARAMS.
+
+    Reads by column name so the nfsim and basicmodels corpora — which
+    have different column orders for `nfsim_flags` — both work.
+    """
     params = {}
     with open(PARAMS) as f:
-        for line in f:
-            parts = line.strip().split("\t")
-            if parts[0].startswith("#") or parts[0] == "model":
+        reader = csv.DictReader(f, delimiter="\t")
+        # nfsim corpus prefixes the header row with '#' — strip it so
+        # the column is reachable by the canonical name.
+        if reader.fieldnames and reader.fieldnames[0].startswith("#"):
+            reader.fieldnames[0] = reader.fieldnames[0].lstrip("#")
+        for row in reader:
+            model = (row.get("model") or "").strip()
+            if not model or model.startswith("#"):
                 continue
-            if len(parts) >= 4:
-                flags = parts[5].strip() if len(parts) >= 6 else ""
-                # Extract RM-relevant flags from NFsim flags
-                rm_flags = []
-                if "-bscb" in flags:
-                    rm_flags.append("-bscb")
-                params[parts[0]] = (parts[2], parts[3], rm_flags)
+            flags = (row.get("nfsim_flags") or "").strip()
+            rm_flags = ["-bscb"] if "-bscb" in flags else []
+            params[model] = (row["t_end"], row["n_steps"], rm_flags)
     return params
 
 
