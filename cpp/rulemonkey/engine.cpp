@@ -2185,12 +2185,6 @@ struct RuleState {
   double a_only_total = 0;
   double b_only_total = 0;
   double ab_both_total = 0;
-  // Σ ab_both(m)² over molecules.  Tracked only for `same_components` rules
-  // so the homodimer propensity formula can deflate `ab²/2` to the analytic
-  // `(ab² − ab_sq)/2`, removing the null-event self-pair waste that the
-  // sampler previously paid via unconditional `mol_a == mol_b` rejection.
-  // Other rules leave it at 0 and skip the bookkeeping.
-  double ab_both_sq_total = 0;
   double propensity = 0;
   bool has_local_rates = false;        // rule uses local functions
   double local_propensity_total = 0.0; // sum of per-mol local_propensity
@@ -2304,19 +2298,14 @@ static double compute_propensity(const RuleState& rs, const Rule& rule, double r
     return (a_eff * b_eff) * rate * rule.symmetry_factor;
   } else {
     // Homodimer (A+A, same type and same bond-target component).  The
-    // analytic propensity is `Σ_{m1<m2} ab(m1)·ab(m2) · k`, which equals
-    // `(ab² − Σ ab(m)²) / 2 · k` — i.e., the ordered self-pair contribution
-    // `Σ ab(m)²` is subtracted before halving.  We track `ab_both_sq_total`
-    // (the sum of squares) incrementally so this deflated form is exact and
-    // the bimolecular sampler does NOT need to null-event self-pairs; it
-    // retries until `mol_a != mol_b` instead, saving SSA cycles at small N.
-    // Symmetry_factor=0.5 emitted by BNG2 is already implicit in the /2 —
-    // don't multiply it in (would be a double 0.5).
+    // ordered-count form `ab*ab/2` becomes unordered N(N-1)/2 after the
+    // sampler rejects mol_a==mol_b at 1/N rate.  Symmetry_factor=0.5
+    // emitted by BNG2 is already implicit in the /2 — don't multiply
+    // it in (would be a double 0.5).
     double ao = rs.a_only_total / ca;
     double bo = rs.b_only_total / cb;
     double ab = rs.ab_both_total / ca; // ab_both counted from A perspective
-    double ab_sq = rs.ab_both_sq_total / (ca * ca);
-    return (ao * b_eff + ab * bo + (ab * ab - ab_sq) / 2.0) * rate;
+    return (ao * b_eff + ab * bo + ab * ab / 2.0) * rate;
   }
 }
 
@@ -3144,7 +3133,6 @@ struct Engine::Impl {
     rs.a_only_total = 0;
     rs.b_only_total = 0;
     rs.ab_both_total = 0;
-    rs.ab_both_sq_total = 0;
 
     // Seed molecule for reactant pattern A
     int seed_a = (rule.reactant_pattern_starts.size() > 0) ? rule.reactant_pattern_starts[0] : 0;
@@ -3228,8 +3216,6 @@ struct Engine::Impl {
         rs.a_only_total += md.a_only;
         rs.b_only_total += md.b_only;
         rs.ab_both_total += md.ab_both;
-        if (rule.same_components)
-          rs.ab_both_sq_total += md.ab_both * md.ab_both;
         scanned.insert(mid);
       }
       // Also scan type B molecules not already scanned
@@ -4522,8 +4508,6 @@ struct Engine::Impl {
         rs.a_only_total -= old.a_only;
         rs.b_only_total -= old.b_only;
         rs.ab_both_total -= old.ab_both;
-        if (rule.same_components)
-          rs.ab_both_sq_total -= old.ab_both * old.ab_both;
         if (rs.has_local_rates)
           rs.local_propensity_total -= old.local_propensity;
 
@@ -4658,8 +4642,6 @@ struct Engine::Impl {
         rs.a_only_total += nd.a_only;
         rs.b_only_total += nd.b_only;
         rs.ab_both_total += nd.ab_both;
-        if (rule.same_components)
-          rs.ab_both_sq_total += nd.ab_both * nd.ab_both;
         if (rs.has_local_rates)
           rs.local_propensity_total += nd.local_propensity;
 
@@ -4932,57 +4914,19 @@ struct Engine::Impl {
       auto& pm_a = rule.reactant_pattern.molecules[seed_a];
       auto& pm_b = rule.reactant_pattern.molecules[seed_b];
 
-      // For `same_components` rules (homodimer A+A on the same component),
-      // the propensity formula is deflated by Σ ab(m)² so the realized rate
-      // equals the analytic `Σ_{m1<m2} ab(m1)·ab(m2) · k`.  That requires the
-      // sampler's accepted (mol_a, mol_b) distribution to be conditional on
-      // `mol_a != mol_b` — equivalently, retry the full pair draw until
-      // distinct.  A retry cap protects against pathological weight imbalance
-      // (e.g., one mol carries ≫99% of the count) where retries could otherwise
-      // dominate; on hitting the cap we fall back to a null event, which is
-      // statistically indistinguishable from the cap-extending limit.
-      //
-      // For non-same_components rules the historical `mol_a == mol_b` null
-      // event stays — its propensity is the inflated form and rejection rate
-      // matches it exactly.
-      int mol_a = -1, mol_b = -1;
-      if (rule.same_components) {
-        constexpr int kMaxRetries = 64;
-        bool got_distinct = false;
-        for (int retry = 0; retry < kMaxRetries; ++retry) {
-          mol_a = sample_molecule_weighted(pm_a.type_index, rs, true);
-          mol_b = sample_molecule_weighted(pm_b.type_index, rs, false);
-          if (mol_a < 0 || mol_b < 0)
-            break;
-          if (mol_a != mol_b) {
-            got_distinct = true;
-            break;
-          }
-          if constexpr (kSelectReactantsProfile)
-            sr_profile_.bimol_same_mol_rejects++;
-        }
-        if (mol_a < 0 || mol_b < 0) {
-          sr_finish(SrProfile::kPathBimol, /*outcome=*/0);
-          return match;
-        }
-        if (!got_distinct) {
-          sr_finish(SrProfile::kPathBimol, /*outcome=*/1);
-          return match;
-        }
-      } else {
-        mol_a = sample_molecule_weighted(pm_a.type_index, rs, true);
-        mol_b = sample_molecule_weighted(pm_b.type_index, rs, false);
-        if (mol_a < 0 || mol_b < 0) {
-          sr_finish(SrProfile::kPathBimol, /*outcome=*/0);
-          return match;
-        }
-        // Reject if both reactants are the same molecule (always invalid).
-        if (mol_a == mol_b) {
-          if constexpr (kSelectReactantsProfile)
-            sr_profile_.bimol_same_mol_rejects++;
-          sr_finish(SrProfile::kPathBimol, /*outcome=*/1);
-          return match;
-        }
+      int mol_a = sample_molecule_weighted(pm_a.type_index, rs, true);
+      int mol_b = sample_molecule_weighted(pm_b.type_index, rs, false);
+      if (mol_a < 0 || mol_b < 0) {
+        sr_finish(SrProfile::kPathBimol, /*outcome=*/0);
+        return match;
+      }
+
+      // Reject if both reactants are the same molecule (always invalid).
+      if (mol_a == mol_b) {
+        if constexpr (kSelectReactantsProfile)
+          sr_profile_.bimol_same_mol_rejects++;
+        sr_finish(SrProfile::kPathBimol, /*outcome=*/1);
+        return match;
       }
 
       // When block_same_complex_binding is set (NFsim's -bscb flag),

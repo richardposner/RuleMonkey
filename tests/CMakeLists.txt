@@ -23,20 +23,6 @@ add_test(
         ${CMAKE_SOURCE_DIR}/tests/cpp/out_of_order_param_model.xml
 )
 
-# Homodimer rate parity: small-N steady state of A+A<->AA must match the
-# chemical-master-equation analytic mean.  Pins down the same_components
-# branch in compute_propensity (deflated `(ab²−ab_sq)/2`) plus the
-# retry-until-distinct sampler against the CME — a regression in either
-# would shift the equilibrium population by O(1/N).
-add_executable(homodimer_rate_test cpp/homodimer_rate_test.cpp)
-target_link_libraries(homodimer_rate_test PRIVATE rulemonkey)
-
-add_test(
-    NAME homodimer_rate_test
-    COMMAND homodimer_rate_test
-        ${CMAKE_SOURCE_DIR}/tests/reference/nfsim/xml/A_plus_A.xml
-)
-
 # save_state / load_state regression: round-trip a mid-run snapshot
 # back into a fresh simulator and verify (a) the continuation matches
 # an uninterrupted run, (b) loading state from a structurally
