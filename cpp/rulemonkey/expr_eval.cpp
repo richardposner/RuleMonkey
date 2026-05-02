@@ -19,9 +19,67 @@ std::unique_ptr<AstNode> AstNode::clone() const {
   c->literal = literal;
   c->name = name;
   c->op = op;
+  c->var_index = var_index;
+  c->builtin_kind = builtin_kind;
   for (auto& ch : children)
     c->children.push_back(ch->clone());
   return c;
+}
+
+// Map a function-call name to its BuiltinKind, or `None` if the name
+// is not a recognized builtin.  Called once per FunctionCall node at
+// parse time so the evaluator never has to compare strings.
+static BuiltinKind classify_builtin(std::string_view name) {
+  // 1-arg
+  if (name == "log" || name == "ln")
+    return BuiltinKind::Ln; // log/ln share semantics
+  if (name == "log10")
+    return BuiltinKind::Log10;
+  if (name == "log2")
+    return BuiltinKind::Log2;
+  if (name == "exp")
+    return BuiltinKind::Exp;
+  if (name == "sqrt")
+    return BuiltinKind::Sqrt;
+  if (name == "abs")
+    return BuiltinKind::Abs;
+  if (name == "floor")
+    return BuiltinKind::Floor;
+  if (name == "ceil")
+    return BuiltinKind::Ceil;
+  if (name == "round")
+    return BuiltinKind::Round;
+  if (name == "sin")
+    return BuiltinKind::Sin;
+  if (name == "cos")
+    return BuiltinKind::Cos;
+  if (name == "tan")
+    return BuiltinKind::Tan;
+  if (name == "asin")
+    return BuiltinKind::Asin;
+  if (name == "acos")
+    return BuiltinKind::Acos;
+  if (name == "atan")
+    return BuiltinKind::Atan;
+  if (name == "sinh")
+    return BuiltinKind::Sinh;
+  if (name == "cosh")
+    return BuiltinKind::Cosh;
+  if (name == "tanh")
+    return BuiltinKind::Tanh;
+  // 2-arg
+  if (name == "min")
+    return BuiltinKind::Min;
+  if (name == "max")
+    return BuiltinKind::Max;
+  if (name == "pow")
+    return BuiltinKind::Pow;
+  if (name == "atan2")
+    return BuiltinKind::Atan2;
+  // 3-arg ternary
+  if (name == "if")
+    return BuiltinKind::If;
+  return BuiltinKind::None;
 }
 
 // ---------------------------------------------------------------------------
@@ -311,6 +369,7 @@ private:
         auto node = std::make_unique<AstNode>();
         node->type = NodeType::FunctionCall;
         node->name = name;
+        node->builtin_kind = classify_builtin(name);
 
         if (cur_.type != TokType::RParen) {
           node->children.push_back(parse_or());
@@ -377,132 +436,135 @@ std::unique_ptr<AstNode> parse(const std::string& text) {
 // Evaluator
 // ---------------------------------------------------------------------------
 
-// Returns std::nullopt when (name, arity) does not match a known builtin
-// signature; otherwise returns the computed value (which may itself be
-// NaN — log(-1), pow(-2, 0.5), acos(2), atan2(0,0), etc.).
+// Builtin dispatch keyed on `BuiltinKind` — set once at parse time by
+// `classify_builtin`.  Returns std::nullopt when the kind has no
+// signature for the given arity (which is a user error: `if(x, y)`
+// was almost certainly meant as the 3-arg ternary, not as `if`
+// shadowed by a global function).  Result may itself be NaN — that's
+// the well-defined IEEE-754 result for out-of-domain input
+// (pow(-2, 0.5), acos(2), log(-1), …) and is propagated as-is.
 //
-// Returning std::optional rather than NaN-as-sentinel matters for
-// builtins that legitimately produce NaN on out-of-domain input
-// (pow / log10 / log2 / acos / asin / atan2 / etc.); the prior code
-// kept an ad-hoc allowlist {log, ln, sqrt} and silently fell through
-// to variable lookup for any other NaN result, which surfaced as a
-// confusing "unknown function 'pow'" error instead of returning NaN.
-static std::optional<double> eval_builtin(const std::string& name,
+// Templated on `EvalChild` so both the map evaluator (legacy, used by
+// the simulator parameter cascade) and the indexed evaluator (engine
+// per-event hot path) share the same dispatch chain.
+template <class EvalChild>
+static std::optional<double> eval_builtin(BuiltinKind kind,
                                           const std::vector<std::unique_ptr<AstNode>>& args,
-                                          const VariableMap& vars) {
+                                          EvalChild eval_child) {
   auto n = args.size();
 
-  // 1-arg functions
+  // 3-arg ternary: lazy-evaluate — the branch not taken must not run
+  // (e.g., `if(x>0, 1/x, 0)` must not divide by zero when x==0).
+  if (kind == BuiltinKind::If && n == 3) {
+    double cond = eval_child(*args[0]);
+    return (cond != 0.0) ? eval_child(*args[1]) : eval_child(*args[2]);
+  }
+
   if (n == 1) {
-    double a = evaluate(*args[0], vars);
-    if (name == "log" || name == "ln")
+    double a = eval_child(*args[0]);
+    switch (kind) {
+    case BuiltinKind::Ln:
       return std::log(a);
-    if (name == "log10")
+    case BuiltinKind::Log10:
       return std::log10(a);
-    if (name == "log2")
+    case BuiltinKind::Log2:
       return std::log2(a);
-    if (name == "exp")
+    case BuiltinKind::Exp:
       return std::exp(a);
-    if (name == "sqrt")
+    case BuiltinKind::Sqrt:
       return std::sqrt(a);
-    if (name == "abs")
+    case BuiltinKind::Abs:
       return std::fabs(a);
-    if (name == "floor")
+    case BuiltinKind::Floor:
       return std::floor(a);
-    if (name == "ceil")
+    case BuiltinKind::Ceil:
       return std::ceil(a);
-    if (name == "round")
+    case BuiltinKind::Round:
       return std::round(a);
-    if (name == "sin")
+    case BuiltinKind::Sin:
       return std::sin(a);
-    if (name == "cos")
+    case BuiltinKind::Cos:
       return std::cos(a);
-    if (name == "tan")
+    case BuiltinKind::Tan:
       return std::tan(a);
-    if (name == "asin")
+    case BuiltinKind::Asin:
       return std::asin(a);
-    if (name == "acos")
+    case BuiltinKind::Acos:
       return std::acos(a);
-    if (name == "atan")
+    case BuiltinKind::Atan:
       return std::atan(a);
-    if (name == "sinh")
+    case BuiltinKind::Sinh:
       return std::sinh(a);
-    if (name == "cosh")
+    case BuiltinKind::Cosh:
       return std::cosh(a);
-    if (name == "tanh")
+    case BuiltinKind::Tanh:
       return std::tanh(a);
+    default:
+      break;
+    }
   }
 
-  // 2-arg functions
   if (n == 2) {
-    double a = evaluate(*args[0], vars);
-    double b = evaluate(*args[1], vars);
-    if (name == "min")
+    double a = eval_child(*args[0]);
+    double b = eval_child(*args[1]);
+    switch (kind) {
+    case BuiltinKind::Min:
       return std::fmin(a, b);
-    if (name == "max")
+    case BuiltinKind::Max:
       return std::fmax(a, b);
-    if (name == "pow")
+    case BuiltinKind::Pow:
       return std::pow(a, b);
-    if (name == "atan2")
+    case BuiltinKind::Atan2:
       return std::atan2(a, b);
+    default:
+      break;
+    }
   }
 
-  // if(cond, then, else) — lazy evaluation
-  if (name == "if" && n == 3) {
-    double cond = evaluate(*args[0], vars);
-    return (cond != 0.0) ? evaluate(*args[1], vars) : evaluate(*args[2], vars);
-  }
-
-  return std::nullopt; // (name, arity) did not match any builtin signature
+  return std::nullopt;
 }
 
-static bool is_builtin(const std::string& name) {
-  static const std::vector<std::string> names = {"log",  "ln",    "log10", "log2",  "exp",   "sqrt",
-                                                 "abs",  "floor", "ceil",  "round", "sin",   "cos",
-                                                 "tan",  "asin",  "acos",  "atan",  "sinh",  "cosh",
-                                                 "tanh", "min",   "max",   "pow",   "atan2", "if"};
-  return std::find(names.begin(), names.end(), name) != names.end();
-}
-
-double evaluate(const AstNode& node, const VariableMap& vars) {
+// Templated evaluator core.  `lookup_var(node)` is the only piece
+// that differs between the map and indexed overloads — for Variable
+// nodes it returns the variable's current value (or throws on
+// unresolved); for non-builtin FunctionCall nodes we treat `f()` as
+// the value of the variable `f` (this is how BNG global functions
+// are referenced — the caller arranges the var lookup to return the
+// function's evaluated value).
+template <class LookupFn> static double evaluate_impl(const AstNode& node, LookupFn lookup_var) {
   switch (node.type) {
   case NodeType::Literal:
     return node.literal;
 
-  case NodeType::Variable: {
-    auto it = vars.find(node.name);
-    if (it == vars.end())
-      throw std::runtime_error("expr_eval: unresolved variable '" + node.name + "'");
-    return it->second;
-  }
+  case NodeType::Variable:
+    return lookup_var(node);
 
   case NodeType::UnaryNeg:
-    return -evaluate(*node.children[0], vars);
+    return -evaluate_impl(*node.children[0], lookup_var);
 
   case NodeType::BinaryOp: {
-    // Short-circuit `&&` and `||` BEFORE evaluating the RHS — `if(x>0 && 1/x>1, ...)`
-    // must not divide by zero when x==0, and a NaN injected from the unreachable
-    // branch silently poisons rate-law evaluation downstream.  Falsy is `0.0` here
-    // (the comparison ops above produce 0.0/1.0); any non-zero LHS short-circuits
-    // `||` to 1.0, any zero LHS short-circuits `&&` to 0.0.  We coerce the RHS the
-    // same way (truthy → 1.0) so the result is always 0.0/1.0 regardless of which
-    // side decided it.
+    // Short-circuit `&&` and `||` BEFORE evaluating the RHS —
+    // `if(x>0 && 1/x>1, ...)` must not divide by zero when x==0,
+    // and a NaN injected from the unreachable branch silently
+    // poisons rate-law evaluation downstream.  Comparison ops
+    // produce 0.0/1.0; we coerce the RHS the same way so the
+    // result is always 0.0/1.0 regardless of which side decided.
     if (node.op == '&') {
-      double l = evaluate(*node.children[0], vars);
+      double l = evaluate_impl(*node.children[0], lookup_var);
       if (l == 0.0)
         return 0.0;
-      double r = evaluate(*node.children[1], vars);
+      double r = evaluate_impl(*node.children[1], lookup_var);
       return (r != 0.0) ? 1.0 : 0.0;
     }
     if (node.op == '|') {
-      double l = evaluate(*node.children[0], vars);
+      double l = evaluate_impl(*node.children[0], lookup_var);
       if (l != 0.0)
         return 1.0;
-      double r = evaluate(*node.children[1], vars);
+      double r = evaluate_impl(*node.children[1], lookup_var);
       return (r != 0.0) ? 1.0 : 0.0;
     }
-    double l = evaluate(*node.children[0], vars);
-    double r = evaluate(*node.children[1], vars);
+    double l = evaluate_impl(*node.children[0], lookup_var);
+    double r = evaluate_impl(*node.children[1], lookup_var);
     switch (node.op) {
     case '+':
       return l + r;
@@ -532,35 +594,60 @@ double evaluate(const AstNode& node, const VariableMap& vars) {
   }
 
   case NodeType::FunctionCall: {
-    // Builtin: dispatch on (name, arity).  A signature match returns
-    // whatever the math function produced — including NaN, which is
-    // the well-defined IEEE-754 result for out-of-domain input
-    // (pow(-2, 0.5), acos(2), log(-1), …).  Wrong arity for a known
-    // builtin is a user error, not a fall-through to variable lookup
-    // — `if(x, y)` was almost certainly meant as the 3-arg ternary,
-    // not as `if` shadowed by a global function.
-    if (is_builtin(node.name)) {
-      auto result = eval_builtin(node.name, node.children, vars);
+    if (node.builtin_kind != BuiltinKind::None) {
+      auto result =
+          eval_builtin(node.builtin_kind, node.children, [&lookup_var](const AstNode& c) -> double {
+            return evaluate_impl(c, lookup_var);
+          });
       if (result)
         return *result;
       throw std::runtime_error("expr_eval: builtin '" + node.name + "' called with " +
                                std::to_string(node.children.size()) +
                                " argument(s); no matching signature");
     }
-
-    // Non-builtin name used as a function call: support BNG global
-    // functions referenced via the variable map.  We treat `f()` as
-    // the value of the variable `f`; the caller is responsible for
-    // arranging that map.
-    auto it = vars.find(node.name);
-    if (it != vars.end())
-      return it->second;
-
-    throw std::runtime_error("expr_eval: unknown function '" + node.name + "' with " +
-                             std::to_string(node.children.size()) + " arguments");
+    // Non-builtin: BNG global function reference.
+    return lookup_var(node);
   }
   }
   throw std::runtime_error("expr_eval: unknown node type");
+}
+
+double evaluate(const AstNode& node, const VariableMap& vars) {
+  return evaluate_impl(node, [&vars](const AstNode& n) -> double {
+    auto it = vars.find(n.name);
+    if (it == vars.end()) {
+      if (n.type == NodeType::FunctionCall) {
+        throw std::runtime_error("expr_eval: unknown function '" + n.name + "' with " +
+                                 std::to_string(n.children.size()) + " arguments");
+      }
+      throw std::runtime_error("expr_eval: unresolved variable '" + n.name + "'");
+    }
+    return it->second;
+  });
+}
+
+double evaluate(const AstNode& node, const std::vector<double>& vars_flat) {
+  return evaluate_impl(node, [&vars_flat](const AstNode& n) -> double {
+    int idx = n.var_index;
+    if (idx < 0 || static_cast<size_t>(idx) >= vars_flat.size()) {
+      if (n.type == NodeType::FunctionCall) {
+        throw std::runtime_error("expr_eval: unknown function '" + n.name + "' with " +
+                                 std::to_string(n.children.size()) + " arguments");
+      }
+      throw std::runtime_error("expr_eval: unresolved variable '" + n.name + "'");
+    }
+    return vars_flat[idx];
+  });
+}
+
+void lower_variables(AstNode& node, const std::unordered_map<std::string, int>& index_of) {
+  if (node.type == NodeType::Variable ||
+      (node.type == NodeType::FunctionCall && node.builtin_kind == BuiltinKind::None)) {
+    auto it = index_of.find(node.name);
+    node.var_index = (it != index_of.end()) ? it->second : -1;
+  }
+  for (auto& ch : node.children)
+    lower_variables(*ch, index_of);
 }
 
 // ---------------------------------------------------------------------------
@@ -573,7 +660,7 @@ void collect_variables(const AstNode& node, std::vector<std::string>& out) {
       out.push_back(node.name);
     return;
   }
-  if (node.type == NodeType::FunctionCall && !is_builtin(node.name)) {
+  if (node.type == NodeType::FunctionCall && node.builtin_kind == BuiltinKind::None) {
     // Non-builtin function call — the function name is a dependency
     if (std::find(out.begin(), out.end(), node.name) == out.end())
       out.push_back(node.name);

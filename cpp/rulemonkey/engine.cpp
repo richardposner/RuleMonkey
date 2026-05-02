@@ -2654,15 +2654,72 @@ struct Engine::Impl {
   CountMultiProfile cm_profile_;
   CmmFcProfile cmm_fc_profile_;
 
-  // Dynamic rate evaluation state
-  expr::VariableMap eval_vars;
+  // Dynamic rate evaluation state.  `eval_vars_flat` holds variable
+  // values in a fixed layout — params, then time, then observables,
+  // then function values (with an extra slot per tfun function for
+  // the `__tfun_NAME__` magic name).  All function ASTs are lowered
+  // against `eval_layout_index` once at engine construction so per-
+  // event evaluation reads `eval_vars_flat[var_index]` instead of
+  // doing a string hash lookup against an unordered_map.
+  std::vector<double> eval_vars_flat;
+  std::unordered_map<std::string, int> eval_layout_index;
+  int eval_time_slot = -1;
+  std::vector<int> eval_obs_slot;     // [obs_idx] -> slot
+  std::vector<int> eval_gf_main_slot; // [func_idx] -> slot
+  std::vector<int> eval_gf_tfun_slot; // [func_idx] -> slot, -1 if not tfun
 
   // pool is initialized from `model` (the just-copied snapshot), not
   // from `m` — declaration order guarantees `model` is constructed
   // before `pool`, so AgentPool::model_ references the engine's own
   // copy and outlives the input reference.
   Impl(const Model& m, uint64_t seed, int mol_limit)
-      : model(m), pool(model), molecule_limit(mol_limit), rng(seed) {}
+      : model(m), pool(model), molecule_limit(mol_limit), rng(seed) {
+    init_eval_layout();
+  }
+
+  // Build the flat variable layout for rate-law evaluation and lower
+  // every function AST against it.  Idempotent at engine construction:
+  // we own the model copy, so mutating shared_ptr<AstNode> children
+  // affects only this engine's view.  The simulator never re-evaluates
+  // function ASTs (it only resolves parameter expressions, on a
+  // separate cache — see resolve_cached in simulator.cpp), so no
+  // outside caller depends on the un-lowered shape.
+  void init_eval_layout() {
+    eval_layout_index.clear();
+    int next = 0;
+
+    for (auto& name : model.parameter_names_ordered)
+      eval_layout_index[name] = next++;
+
+    eval_time_slot = next++;
+    eval_layout_index["time"] = eval_time_slot;
+    eval_layout_index["t"] = eval_time_slot;
+
+    eval_obs_slot.assign(model.observables.size(), -1);
+    for (int i = 0; i < static_cast<int>(model.observables.size()); ++i) {
+      eval_obs_slot[i] = next;
+      eval_layout_index[model.observables[i].name] = next++;
+    }
+
+    eval_gf_main_slot.assign(model.functions.size(), -1);
+    eval_gf_tfun_slot.assign(model.functions.size(), -1);
+    for (int i = 0; i < static_cast<int>(model.functions.size()); ++i) {
+      auto& gf = model.functions[i];
+      eval_gf_main_slot[i] = next;
+      eval_layout_index[gf.name] = next++;
+      if (gf.is_tfun) {
+        eval_gf_tfun_slot[i] = next;
+        eval_layout_index["__tfun_" + gf.name + "__"] = next++;
+      }
+    }
+
+    eval_vars_flat.assign(next, 0.0);
+
+    for (auto& gf : model.functions) {
+      if (gf.ast)
+        expr::lower_variables(*gf.ast, eval_layout_index);
+    }
+  }
 
   // Uniform [0, 1)
   double uniform() {
@@ -3353,29 +3410,33 @@ struct Engine::Impl {
     if (!rule.rate_law.is_dynamic)
       return rule.rate_law.rate_value;
 
-    // Build variable map for expression evaluation
     update_eval_vars();
 
     if (!rule.rate_law.function_name.empty()) {
       auto fit = model.function_index.find(rule.rate_law.function_name);
       if (fit != model.function_index.end()) {
-        auto& gf = model.functions[fit->second];
+        int gi = fit->second;
+        auto& gf = model.functions[gi];
         if (gf.is_tfun && gf.tfun) {
           double ctr_val = get_tfun_counter_value(gf);
           double tfun_val = gf.tfun->evaluate(ctr_val);
           if (gf.ast) {
-            eval_vars["__tfun_" + gf.name + "__"] = tfun_val;
-            return expr::evaluate(*gf.ast, eval_vars);
+            // Patch the magic __tfun_NAME__ slot for this rule's
+            // own tfun result (update_eval_vars wrote it from the
+            // function's own counter, but BNG2 emits the rate-law
+            // wrapper expecting it pre-patched on each call).
+            eval_vars_flat[eval_gf_tfun_slot[gi]] = tfun_val;
+            return expr::evaluate(*gf.ast, eval_vars_flat);
           }
           return tfun_val;
         }
         if (gf.ast)
-          return expr::evaluate(*gf.ast, eval_vars);
+          return expr::evaluate(*gf.ast, eval_vars_flat);
       }
     }
 
     if (rule.rate_law.rate_ast)
-      return expr::evaluate(*rule.rate_law.rate_ast, eval_vars);
+      return expr::evaluate(*rule.rate_law.rate_ast, eval_vars_flat);
 
     return rule.rate_law.rate_value;
   }
@@ -3399,7 +3460,7 @@ struct Engine::Impl {
       auto fit = model.function_index.find(gf.tfun_counter_name);
       if (fit != model.function_index.end() && model.functions[fit->second].ast) {
         update_eval_vars();
-        return expr::evaluate(*model.functions[fit->second].ast, eval_vars);
+        return expr::evaluate(*model.functions[fit->second].ast, eval_vars_flat);
       }
       return 0.0;
     }
@@ -3408,31 +3469,39 @@ struct Engine::Impl {
     }
   }
 
+  // Refresh the flat variable layout against the current model state.
+  // Writes each variable to its fixed slot (set by init_eval_layout)
+  // so that subsequent expr::evaluate(ast, eval_vars_flat) calls read
+  // by index.  Function evaluation order matches the engine's internal
+  // declaration order, which BNG2 emits in dependency order — earlier
+  // functions are settled before later ones reference them.
   void update_eval_vars() {
-    eval_vars.clear();
     // Parameters
-    for (auto& [name, val] : model.parameters)
-      eval_vars[name] = val;
-    // Time
-    eval_vars["time"] = current_time;
-    eval_vars["t"] = current_time;
-    // Observables
-    for (int i = 0; i < static_cast<int>(model.observables.size()); ++i) {
-      if (i < static_cast<int>(obs_values.size()))
-        eval_vars[model.observables[i].name] = obs_values[i];
+    for (int i = 0; i < static_cast<int>(model.parameter_names_ordered.size()); ++i) {
+      auto& name = model.parameter_names_ordered[i];
+      auto it = model.parameters.find(name);
+      eval_vars_flat[i] = (it != model.parameters.end()) ? it->second : 0.0;
     }
-    // Global functions (non-TFUN)
-    for (auto& gf : model.functions) {
-      if (gf.is_tfun) {
+
+    eval_vars_flat[eval_time_slot] = current_time;
+
+    for (int i = 0; i < static_cast<int>(model.observables.size()); ++i) {
+      eval_vars_flat[eval_obs_slot[i]] =
+          (i < static_cast<int>(obs_values.size())) ? obs_values[i] : 0.0;
+    }
+
+    for (int i = 0; i < static_cast<int>(model.functions.size()); ++i) {
+      auto& gf = model.functions[i];
+      if (gf.is_tfun && gf.tfun) {
         double ctr = get_tfun_counter_value(gf);
         double val = gf.tfun->evaluate(ctr);
-        eval_vars[gf.name] = val;
-        eval_vars["__tfun_" + gf.name + "__"] = val;
+        eval_vars_flat[eval_gf_main_slot[i]] = val;
+        eval_vars_flat[eval_gf_tfun_slot[i]] = val;
       } else if (gf.ast) {
         try {
-          eval_vars[gf.name] = expr::evaluate(*gf.ast, eval_vars);
+          eval_vars_flat[eval_gf_main_slot[i]] = expr::evaluate(*gf.ast, eval_vars_flat);
         } catch (...) {
-          eval_vars[gf.name] = 0.0;
+          eval_vars_flat[eval_gf_main_slot[i]] = 0.0;
         }
       }
     }
@@ -4262,30 +4331,30 @@ struct Engine::Impl {
 
     bool per_molecule = rule.rate_law.local_arg_is_molecule;
 
-    // Override observable values with local evaluations at mol_id,
+    // Override observable slots with local evaluations at mol_id,
     // using precomputed local_obs_indices (avoids set rebuild + linear scan).
     for (int oi : local_obs_indices) {
       auto& obs = model.observables[oi];
-      eval_vars[obs.name] = evaluate_observable_on(obs, mol_id, !per_molecule);
+      eval_vars_flat[eval_obs_slot[oi]] = evaluate_observable_on(obs, mol_id, !per_molecule);
     }
 
     // Re-evaluate all local functions with updated local observable values.
     // Functions are stored in dependency order (leaves first), so sequential
     // evaluation resolves the chain correctly.
-    for (auto& gf : model.functions) {
+    for (int i = 0; i < static_cast<int>(model.functions.size()); ++i) {
+      auto& gf = model.functions[i];
       if (gf.is_local() && gf.ast) {
         try {
-          eval_vars[gf.name] = expr::evaluate(*gf.ast, eval_vars);
+          eval_vars_flat[eval_gf_main_slot[i]] = expr::evaluate(*gf.ast, eval_vars_flat);
         } catch (...) {
-          eval_vars[gf.name] = 0.0;
+          eval_vars_flat[eval_gf_main_slot[i]] = 0.0;
         }
       }
     }
 
-    // Return the rule's function value
     auto fit = model.function_index.find(rule.rate_law.function_name);
     if (fit != model.function_index.end())
-      return eval_vars[model.functions[fit->second].name];
+      return eval_vars_flat[eval_gf_main_slot[fit->second]];
     return 0.0;
   }
 
