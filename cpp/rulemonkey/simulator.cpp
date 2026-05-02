@@ -286,39 +286,30 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node);
 // BNG XML → Model parsing
 // ===========================================================================
 
-// Try to resolve a string as a double, else look up in parameters.
+// Resolve a parameter-derived numeric expression with a lazy AST cache.
 //
-// `std::stod` is lenient — it parses a leading numeric prefix and returns
-// without complaint when garbage follows ("2*B" → 2.0, "3.14foo" → 3.14).
-// That silently mis-parses any expression starting with a digit and
-// short-circuits the expression-evaluation path.  Use the `pos` out-param
-// to require the entire string be consumed by the numeric parse before
-// accepting a literal-number resolution.
-double resolve_value(const std::string& s, const std::unordered_map<std::string, double>& params) {
+// `s` is the symbolic source captured from XML.  `ast` is in/out: on the
+// first call it is parsed and stored, and on every subsequent call the
+// parse is skipped and `expr::evaluate` runs against the live `params`
+// map.  Callers that re-resolve the same expression repeatedly
+// (parameter cascade, apply_overrides) thus pay parse cost once.
+//
+// `expr::parse` already produces the right node shape for the trivial
+// inputs the legacy resolve_value short-circuited: a pure-numeric string
+// becomes a Literal node (evaluator returns immediately) and a bare
+// param name becomes a Variable node (evaluator does one hash lookup).
+// `expr::VariableMap` is a typedef of `std::unordered_map<std::string,
+// double>` so `params` is passed by const reference — no per-call copy.
+//
+// ASTs are immutable; only the values they reference change.  set_param
+// mutates `params` but does NOT invalidate the cache.
+double resolve_cached(const std::string& s, std::shared_ptr<expr::AstNode>& ast,
+                      const std::unordered_map<std::string, double>& params) {
   if (s.empty())
     return 0.0;
-  try {
-    std::size_t pos = 0;
-    double v = std::stod(s, &pos);
-    // Allow trailing whitespace but nothing else: a literal must be the
-    // whole token, not a prefix.
-    while (pos < s.size() && std::isspace(static_cast<unsigned char>(s[pos])))
-      ++pos;
-    if (pos == s.size())
-      return v;
-  } catch (...) {
-  }
-  auto it = params.find(s);
-  if (it != params.end())
-    return it->second;
-  // Try expression evaluation with params as variables
-  try {
-    auto ast = expr::parse(s);
-    expr::VariableMap vm(params.begin(), params.end());
-    return expr::evaluate(*ast, vm);
-  } catch (...) {
-  }
-  throw std::runtime_error("Cannot resolve value '" + s + "'");
+  if (!ast)
+    ast = expr::parse(s);
+  return expr::evaluate(*ast, params);
 }
 
 // Parse a pattern (reactant, product, or observable) from XML.
@@ -509,7 +500,7 @@ Model load_model(const std::string& xml_path,
       auto val_str = need_attr(pn, "value");
       double val;
       try {
-        val = resolve_value(val_str, model.parameters);
+        val = resolve_cached(val_str, model.parameter_asts[id], model.parameters);
       } catch (...) {
         val = 0.0; // forward reference — will be resolved later
       }
@@ -530,7 +521,7 @@ Model load_model(const std::string& xml_path,
       for (auto& name : model.parameter_names_ordered) {
         const auto& val_str = model.parameter_exprs[name];
         try {
-          double resolved = resolve_value(val_str, model.parameters);
+          double resolved = resolve_cached(val_str, model.parameter_asts[name], model.parameters);
           if (resolved != model.parameters[name]) {
             model.parameters[name] = resolved;
             changed = true;
@@ -613,8 +604,8 @@ Model load_model(const std::string& xml_path,
       auto conc_str = opt_attr(spn, "concentration");
       if (conc_str.empty())
         conc_str = opt_attr(spn, "count");
-      si.concentration = resolve_value(conc_str, model.parameters);
       si.concentration_expr = conc_str;
+      si.concentration = resolve_cached(conc_str, si.concentration_ast, model.parameters);
 
       // Map XML IDs to (mol_idx, comp_idx) within this species
       std::unordered_map<std::string, std::pair<int, int>> id_map;
@@ -1215,8 +1206,9 @@ Model load_model(const std::string& xml_path,
               if (rcn.name != "RateConstant")
                 continue;
               auto val = need_attr(rcn, "value");
-              rule.rate_law.rate_value = resolve_value(val, model.parameters);
               rule.rate_law.rate_expr = val;
+              rule.rate_law.rate_value =
+                  resolve_cached(val, rule.rate_law.rate_value_ast, model.parameters);
               break;
             }
           }
@@ -1260,13 +1252,14 @@ Model load_model(const std::string& xml_path,
               if (rcn.name != "RateConstant")
                 continue;
               auto val = need_attr(rcn, "value");
-              double v = resolve_value(val, model.parameters);
               if (idx == 0) {
-                rule.rate_law.mm_kcat = v;
                 rule.rate_law.mm_kcat_expr = val;
+                rule.rate_law.mm_kcat =
+                    resolve_cached(val, rule.rate_law.mm_kcat_ast, model.parameters);
               } else if (idx == 1) {
-                rule.rate_law.mm_Km = v;
                 rule.rate_law.mm_Km_expr = val;
+                rule.rate_law.mm_Km =
+                    resolve_cached(val, rule.rate_law.mm_Km_ast, model.parameters);
               }
               ++idx;
             }
@@ -1711,7 +1704,8 @@ struct RuleMonkeySimulator::Impl {
         if (eit == model.parameter_exprs.end())
           continue;
         try {
-          double resolved = resolve_value(eit->second, model.parameters);
+          double resolved =
+              resolve_cached(eit->second, model.parameter_asts[name], model.parameters);
           if (resolved != model.parameters[name]) {
             model.parameters[name] = resolved;
             changed = true;
@@ -1741,12 +1735,12 @@ struct RuleMonkeySimulator::Impl {
     for (auto& rule : model.rules) {
       auto& rl = rule.rate_law;
       if (rl.type == RateLawType::Ele && !rl.rate_expr.empty())
-        rl.rate_value = resolve_value(rl.rate_expr, model.parameters);
+        rl.rate_value = resolve_cached(rl.rate_expr, rl.rate_value_ast, model.parameters);
       else if (rl.type == RateLawType::MM) {
         if (!rl.mm_kcat_expr.empty())
-          rl.mm_kcat = resolve_value(rl.mm_kcat_expr, model.parameters);
+          rl.mm_kcat = resolve_cached(rl.mm_kcat_expr, rl.mm_kcat_ast, model.parameters);
         if (!rl.mm_Km_expr.empty())
-          rl.mm_Km = resolve_value(rl.mm_Km_expr, model.parameters);
+          rl.mm_Km = resolve_cached(rl.mm_Km_expr, rl.mm_Km_ast, model.parameters);
       }
     }
 
@@ -1756,7 +1750,8 @@ struct RuleMonkeySimulator::Impl {
     // parse, so refresh it here from the (possibly re-resolved) source.
     for (auto& si : model.initial_species) {
       if (!si.concentration_expr.empty())
-        si.concentration = resolve_value(si.concentration_expr, model.parameters);
+        si.concentration =
+            resolve_cached(si.concentration_expr, si.concentration_ast, model.parameters);
     }
     for (auto& fs : model.fixed_species) {
       if (fs.source_init_idx >= 0 &&
