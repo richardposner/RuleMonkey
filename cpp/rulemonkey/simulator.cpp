@@ -1727,6 +1727,15 @@ struct RuleMonkeySimulator::Impl {
   void apply_overrides() {
     sync_parameters();
 
+    // No overrides → no re-resolution to do.  `load_model`'s parse-time
+    // cascade already resolved every Ele/MM rate value and initial-species
+    // concentration against `base_parameters`, and `base_parameters ==
+    // model.parameters` when `param_overrides.empty()` (sync_parameters is
+    // called from set_param / clear_param_overrides to maintain that
+    // invariant), so the walk below would just rewrite the same values.
+    if (param_overrides.empty())
+      return;
+
     // Ele/MM rate values are baked from `model.parameters` at parse time.
     // Re-resolve them here so set_param overrides actually reach Engine
     // (which reads `rate_value` / `mm_kcat` / `mm_Km` directly for the
