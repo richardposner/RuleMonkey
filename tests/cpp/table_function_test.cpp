@@ -49,8 +49,8 @@ bool eq(double a, double b, double eps = 1e-12) { return std::abs(a - b) <= eps;
 // ---------------------------------------------------------------------------
 void test_step_right_continuous() {
   // Three breakpoints at 1.0 / 2.0 / 3.0 with values 10 / 20 / 30.
-  rulemonkey::TableFunction tfun("step_test", {1.0, 2.0, 3.0}, {10.0, 20.0, 30.0}, "t",
-                                 rulemonkey::TfunMethod::Step);
+  rulemonkey::TableFunction const tfun("step_test", {1.0, 2.0, 3.0}, {10.0, 20.0, 30.0}, "t",
+                                       rulemonkey::TfunMethod::Step);
 
   // At each breakpoint exactly: value is the y-value of the interval STARTING
   // here.  At xs[i+1] (=2.0), f == ys[i+1] (=20).  This is the right-
@@ -70,8 +70,8 @@ void test_step_right_continuous() {
 // Linear interpolation: f(midpoint) = average of endpoint y values.
 // ---------------------------------------------------------------------------
 void test_linear_interpolation() {
-  rulemonkey::TableFunction tfun("lin_test", {0.0, 1.0, 2.0}, {0.0, 10.0, 30.0}, "t",
-                                 rulemonkey::TfunMethod::Linear);
+  rulemonkey::TableFunction const tfun("lin_test", {0.0, 1.0, 2.0}, {0.0, 10.0, 30.0}, "t",
+                                       rulemonkey::TfunMethod::Linear);
 
   // Exact breakpoints
   check(eq(tfun.evaluate(0.0), 0.0), "linear: f(xs[0]) = ys[0]");
@@ -93,10 +93,10 @@ void test_linear_interpolation() {
 // sample (different convention), but RM and BNG agree on "clamp."
 // ---------------------------------------------------------------------------
 void test_boundary_clamp() {
-  rulemonkey::TableFunction lin("lin_clamp", {1.0, 2.0, 3.0}, {10.0, 20.0, 30.0}, "t",
-                                rulemonkey::TfunMethod::Linear);
-  rulemonkey::TableFunction step("step_clamp", {1.0, 2.0, 3.0}, {10.0, 20.0, 30.0}, "t",
-                                 rulemonkey::TfunMethod::Step);
+  rulemonkey::TableFunction const lin("lin_clamp", {1.0, 2.0, 3.0}, {10.0, 20.0, 30.0}, "t",
+                                      rulemonkey::TfunMethod::Linear);
+  rulemonkey::TableFunction const step("step_clamp", {1.0, 2.0, 3.0}, {10.0, 20.0, 30.0}, "t",
+                                       rulemonkey::TfunMethod::Step);
 
   // Below xs.front() — clamp to ys.front()
   check(eq(lin.evaluate(0.5), 10.0), "linear: f(below xs.front()) clamps to ys.front()");
@@ -153,7 +153,7 @@ void test_constructor_validation() {
         "ctor: xs must be strictly increasing (no duplicates)");
 
   // Sanity: the minimal valid table.
-  rulemonkey::TableFunction ok("ok", {0.0, 1.0}, {0.0, 1.0}, "t");
+  rulemonkey::TableFunction const ok("ok", {0.0, 1.0}, {0.0, 1.0}, "t");
   check(eq(ok.evaluate(0.5), 0.5), "minimal 2-point linear table interpolates");
 }
 

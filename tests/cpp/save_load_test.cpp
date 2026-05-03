@@ -53,8 +53,8 @@ void test_round_trip(const std::string& xml) {
   // Reference: one uninterrupted run from 0..t_end.
   rulemonkey::RuleMonkeySimulator ref(xml);
   ref.set_block_same_complex_binding(true);
-  rulemonkey::Result ref_full = ref.run({0.0, t_end, n_pts}, seed);
-  double ref_aa_end = final_obs(ref_full, "AA_1");
+  rulemonkey::Result const ref_full = ref.run({0.0, t_end, n_pts}, seed);
+  double const ref_aa_end = final_obs(ref_full, "AA_1");
 
   // Split run: 0..t_mid → save → fresh sim → load → t_mid..t_end.
   auto tmp = std::filesystem::temp_directory_path() / "rm_save_load_test.bin";
@@ -70,10 +70,10 @@ void test_round_trip(const std::string& xml) {
   rulemonkey::RuleMonkeySimulator s2(xml);
   s2.set_block_same_complex_binding(true);
   s2.load_state(tmp.string());
-  rulemonkey::Result tail = s2.simulate(t_mid, t_end, 6);
+  rulemonkey::Result const tail = s2.simulate(t_mid, t_end, 6);
   std::filesystem::remove(tmp);
 
-  double split_aa_end = final_obs(tail, "AA_1");
+  double const split_aa_end = final_obs(tail, "AA_1");
   check(ref_aa_end == split_aa_end,
         "save/load round-trip: continuation final AA_1 should match uninterrupted run "
         "(ref=" +

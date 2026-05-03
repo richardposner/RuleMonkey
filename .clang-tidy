@@ -78,10 +78,7 @@ Checks: >
 
 # Categories below have been driven to zero on the current tree.
 # Listing them as errors keeps any regression from sneaking back in
-# (the hook will fail the commit, not just print a warning).  The
-# remaining backlog — misc-const-correctness (~610 hits) — is
-# intentionally NOT listed; it remains advisory until a future
-# cleanup pass.
+# (the hook will fail the commit, not just print a warning).
 WarningsAsErrors: >
   bugprone-*,
   clang-analyzer-*,
@@ -91,8 +88,7 @@ WarningsAsErrors: >
   modernize-*,
   performance-*,
   portability-*,
-  readability-*,
-  -misc-const-correctness
+  readability-*
 
 HeaderFilterRegex: '(include|cpp)/rulemonkey/.*\.(hpp|h)$'
 

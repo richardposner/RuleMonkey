@@ -106,11 +106,11 @@ std::string decode_xml_entities(std::string_view input) {
       if (ent.size() < 2)
         throw std::runtime_error("XML: empty numeric entity '&;'");
       uint32_t cp = 0;
-      bool hex = (ent[1] == 'x' || ent[1] == 'X');
+      bool const hex = (ent[1] == 'x' || ent[1] == 'X');
       auto digits = ent.substr(hex ? 2 : 1);
       if (digits.empty())
         throw std::runtime_error("XML: empty numeric entity '&" + std::string(ent) + ";'");
-      for (char c : digits) {
+      for (char const c : digits) {
         uint32_t d = 0;
         if (c >= '0' && c <= '9')
           d = static_cast<uint32_t>(c - '0');
@@ -122,7 +122,7 @@ std::string decode_xml_entities(std::string_view input) {
           throw std::runtime_error("XML: malformed numeric entity '&" + std::string(ent) + ";'");
         // Multiply-and-add with overflow guard so a pathological 32-digit
         // hex entity can't silently wrap.
-        uint64_t next = (static_cast<uint64_t>(cp) * (hex ? 16ULL : 10ULL)) + d;
+        uint64_t const next = (static_cast<uint64_t>(cp) * (hex ? 16ULL : 10ULL)) + d;
         if (next > 0x10FFFF)
           throw std::runtime_error("XML: numeric entity out of Unicode range: '&" +
                                    std::string(ent) + ";'");
@@ -223,7 +223,7 @@ private:
   std::string parse_attr_val() {
     if (done())
       fail("expected attribute value");
-    char q = src_[pos_];
+    char const q = src_[pos_];
     if (q != '"' && q != '\'')
       fail("attribute value must be quoted");
     ++pos_;
@@ -426,8 +426,8 @@ Pattern parse_pattern(const XmlNode& pat_node, const Model& model,
           // Register xml_id -> flat index
           auto comp_id = opt_attr(cn, "id");
           if (id_to_flat && !comp_id.empty()) {
-            int mol_idx = static_cast<int>(pat.molecules.size());
-            int comp_idx = static_cast<int>(pm.components.size());
+            int const mol_idx = static_cast<int>(pat.molecules.size());
+            int const comp_idx = static_cast<int>(pm.components.size());
             (*id_to_flat)[comp_id] = {mol_idx, comp_idx};
           }
 
@@ -437,7 +437,7 @@ Pattern parse_pattern(const XmlNode& pat_node, const Model& model,
 
       // Register molecule xml_id
       if (id_to_flat) {
-        int mol_idx = static_cast<int>(pat.molecules.size());
+        int const mol_idx = static_cast<int>(pat.molecules.size());
         (*id_to_flat)[pm.xml_id] = {mol_idx, -1};
       }
 
@@ -465,7 +465,7 @@ Pattern parse_pattern(const XmlNode& pat_node, const Model& model,
           // Mark components as BoundTo
           auto& c1 = pat.molecules[it1->second.first].components[it1->second.second];
           auto& c2 = pat.molecules[it2->second.first].components[it2->second.second];
-          int label = static_cast<int>(pat.bonds.size()) - 1;
+          int const label = static_cast<int>(pat.bonds.size()) - 1;
           c1.bond_constraint = BondConstraint::BoundTo;
           c1.bond_label = label;
           c2.bond_constraint = BondConstraint::BoundTo;
@@ -547,7 +547,7 @@ Model load_model(const std::string& xml_path,
   in.close();
 
   XmlParser parser(std::move(xml_text));
-  XmlNode root = parser.parse_document();
+  XmlNode const root = parser.parse_document();
 
   // Navigate to <model>
   const XmlNode* model_node = nullptr;
@@ -596,7 +596,8 @@ Model load_model(const std::string& xml_path,
       for (auto& name : model.parameter_names_ordered) {
         const auto& val_str = model.parameter_exprs[name];
         try {
-          double resolved = resolve_cached(val_str, model.parameter_asts[name], model.parameters);
+          double const resolved =
+              resolve_cached(val_str, model.parameter_asts[name], model.parameters);
           if (resolved != model.parameters[name]) {
             model.parameters[name] = resolved;
             changed = true;
@@ -683,11 +684,11 @@ Model load_model(const std::string& xml_path,
                         char* ea = nullptr;
                         char* eb = nullptr;
                         // NOLINTBEGIN(clang-analyzer-cplusplus.Move)
-                        long va = std::strtol(a.c_str(), &ea, 10);
-                        long vb = std::strtol(b.c_str(), &eb, 10);
+                        long const va = std::strtol(a.c_str(), &ea, 10);
+                        long const vb = std::strtol(b.c_str(), &eb, 10);
                         // NOLINTEND(clang-analyzer-cplusplus.Move)
-                        bool a_num = (ea != a.c_str() && *ea == '\0');
-                        bool b_num = (eb != b.c_str() && *eb == '\0');
+                        bool const a_num = (ea != a.c_str() && *ea == '\0');
+                        bool const b_num = (eb != b.c_str() && *eb == '\0');
                         if (a_num && b_num)
                           return va < vb;
                         if (a_num)
@@ -734,7 +735,7 @@ Model load_model(const std::string& xml_path,
           sim.type_index = model.mol_type_index(sim.type_name);
 
           auto mol_xml_id = need_attr(mn, "id");
-          int mol_idx = static_cast<int>(si.molecules.size());
+          int const mol_idx = static_cast<int>(si.molecules.size());
           id_map[mol_xml_id] = {mol_idx, -1};
 
           auto* cl = find_child(mn, "ListOfComponents");
@@ -746,7 +747,7 @@ Model load_model(const std::string& xml_path,
               auto cstate = opt_attr(cn, "state");
               auto comp_xml_id = opt_attr(cn, "id");
 
-              int comp_idx = static_cast<int>(sim.comp_states.size());
+              int const comp_idx = static_cast<int>(sim.comp_states.size());
               if (!comp_xml_id.empty())
                 id_map[comp_xml_id] = {mol_idx, comp_idx};
 
@@ -792,10 +793,10 @@ Model load_model(const std::string& xml_path,
       // warnings; we silently skip building the descriptor here so
       // --ignore-unsupported can degrade to a no-replenish fallback
       // (loud wrong rather than Tier-0 refused).
-      int init_idx = static_cast<int>(model.initial_species.size());
-      bool is_fixed = (opt_attr(spn, "Fixed") == "1");
+      int const init_idx = static_cast<int>(model.initial_species.size());
+      bool const is_fixed = (opt_attr(spn, "Fixed") == "1");
       if (is_fixed && si.molecules.size() == 1 && si.bonds.empty()) {
-        int mt_idx = si.molecules[0].type_index;
+        int const mt_idx = si.molecules[0].type_index;
         bool duplicate = false;
         for (auto& existing : model.fixed_species) {
           if (existing.mol_type_idx == mt_idx) {
@@ -831,10 +832,10 @@ Model load_model(const std::string& xml_path,
           }();
           for (size_t i = 0; i < si.molecules[0].comp_states.size(); ++i) {
             const auto& [cname, cstate] = si.molecules[0].comp_states[i];
-            int actual_ci = cmap_fs[i];
+            int const actual_ci = cmap_fs[i];
             if (actual_ci < 0 || cstate.empty())
               continue;
-            int sidx = mtype.state_index(actual_ci, cstate);
+            int const sidx = mtype.state_index(actual_ci, cstate);
             if (sidx >= 0)
               fs.required_comp_state[actual_ci] = sidx;
           }
@@ -1045,7 +1046,7 @@ Model load_model(const std::string& xml_path,
         for (auto& rpn : rp_list->children) {
           if (rpn.name != "ReactantPattern")
             continue;
-          int mol_offset = static_cast<int>(rule.reactant_pattern.molecules.size());
+          int const mol_offset = static_cast<int>(rule.reactant_pattern.molecules.size());
           rule.reactant_pattern_starts.push_back(mol_offset);
 
           // Register ReactantPattern ID → first molecule in this pattern
@@ -1065,7 +1066,7 @@ Model load_model(const std::string& xml_path,
             reactant_id_map[id] = {pos.first + mol_offset, pos.second};
 
           // Also adjust bond flat indices
-          int comp_offset = rule.reactant_pattern.flat_comp_count();
+          int const comp_offset = rule.reactant_pattern.flat_comp_count();
           for (auto& mol : sub.molecules)
             rule.reactant_pattern.molecules.push_back(std::move(mol));
           for (auto& b : sub.bonds) {
@@ -1092,13 +1093,13 @@ Model load_model(const std::string& xml_path,
           if (!pp_id.empty())
             pp_id_list.push_back(pp_id);
           ++rule.n_product_patterns;
-          int mol_offset = static_cast<int>(rule.product_pattern.molecules.size());
+          int const mol_offset = static_cast<int>(rule.product_pattern.molecules.size());
           rule.product_pattern_starts.push_back(mol_offset);
           std::unordered_map<std::string, std::pair<int, int>> sub_id_map;
           auto sub = parse_pattern(ppn, model, &sub_id_map);
           for (auto& [id, pos] : sub_id_map)
             product_id_map[id] = {pos.first + mol_offset, pos.second};
-          int comp_offset = rule.product_pattern.flat_comp_count();
+          int const comp_offset = rule.product_pattern.flat_comp_count();
           for (auto& mol : sub.molecules)
             rule.product_pattern.molecules.push_back(std::move(mol));
           for (auto& b : sub.bonds) {
@@ -1111,7 +1112,7 @@ Model load_model(const std::string& xml_path,
 
       // Map: reactant -> product component mapping
       auto* map_node = find_child(rrn, "Map");
-      int n_rcomp = rule.reactant_pattern.flat_comp_count();
+      int const n_rcomp = rule.reactant_pattern.flat_comp_count();
       rule.reactant_to_product_map.assign(n_rcomp, -1);
       if (map_node) {
         for (auto& mi : map_node->children) {
@@ -1125,9 +1126,10 @@ Model load_model(const std::string& xml_path,
           auto tit = product_id_map.find(tgt);
           if (sit != reactant_id_map.end() && tit != product_id_map.end()) {
             if (sit->second.second >= 0 && tit->second.second >= 0) {
-              int src_flat =
+              int const src_flat =
                   rule.reactant_pattern.flat_index(sit->second.first, sit->second.second);
-              int tgt_flat = rule.product_pattern.flat_index(tit->second.first, tit->second.second);
+              int const tgt_flat =
+                  rule.product_pattern.flat_index(tit->second.first, tit->second.second);
               if (src_flat >= 0 && src_flat < n_rcomp)
                 rule.reactant_to_product_map[src_flat] = tgt_flat;
             }
@@ -1390,11 +1392,12 @@ Model load_model(const std::string& xml_path,
           if (op.type == OpType::AddBond && op.comp_flat_a >= 0 && op.comp_flat_b >= 0) {
             // Walk reactant-pattern molecules to find which one each
             // bond endpoint lives in.
-            int flat_a = op.comp_flat_a, flat_b = op.comp_flat_b;
+            int const flat_a = op.comp_flat_a, flat_b = op.comp_flat_b;
             int mol_a = -1, local_a = -1, mol_b = -1, local_b = -1;
             int running = 0;
             for (int mi = 0; mi < static_cast<int>(rule.reactant_pattern.molecules.size()); ++mi) {
-              int nc = static_cast<int>(rule.reactant_pattern.molecules[mi].components.size());
+              int const nc =
+                  static_cast<int>(rule.reactant_pattern.molecules[mi].components.size());
               if (flat_a >= running && flat_a < running + nc) {
                 mol_a = mi;
                 local_a = flat_a - running;
@@ -1480,7 +1483,7 @@ Model load_model(const std::string& xml_path,
     std::unordered_set<std::string> rate_vars;
     std::vector<std::string> worklist(seeds.begin(), seeds.end());
     while (!worklist.empty()) {
-      std::string name = std::move(worklist.back());
+      std::string const name = std::move(worklist.back());
       worklist.pop_back();
       if (!rate_vars.insert(name).second)
         continue; // already visited
@@ -1658,10 +1661,11 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
                                "rewrite as a single Function that multiplies the two factors."}}) {
     auto rule_id = first_rule_with_ratelaw_type(model_node, type_name);
     if (!rule_id.empty()) {
-      std::string msg = "Rate law type '" + std::string(type_name) + "' on rule '" + rule_id +
-                        "' — RM does not implement it; the rule would silently "
-                        "have zero propensity. " +
-                        advice + " Pass --ignore-unsupported to run anyway (rule will not fire).";
+      std::string const msg = "Rate law type '" + std::string(type_name) + "' on rule '" + rule_id +
+                              "' — RM does not implement it; the rule would silently "
+                              "have zero propensity. " +
+                              advice +
+                              " Pass --ignore-unsupported to run anyway (rule will not fire).";
       warnings.push_back({Severity::Error, "RateLaw@type=" + std::string(type_name), msg});
     }
   }
@@ -1681,7 +1685,7 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
         continue;
       auto it = mt.attributes.find("population");
       if (it != mt.attributes.end() && it->second == "1") {
-        std::string mt_name = opt_attr(mt, "id");
+        std::string const mt_name = opt_attr(mt, "id");
         warnings.push_back({Severity::Error, "MoleculeType@population",
                             "MoleculeType '" + mt_name +
                                 "' declared with `population` keyword — RM does not "
@@ -1731,25 +1735,25 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
       }
 
       if (n_mol != 1 || n_bond != 0) {
-        std::string msg = "Fixed species '" + sp_name +
-                          "' is multi-molecule or bonded (mols=" + std::to_string(n_mol) +
-                          ", bonds=" + std::to_string(n_bond) +
-                          ") — RM currently "
-                          "supports only single-molecule Fixed species with no bonds. Pass "
-                          "--ignore-unsupported to run with Fixed enforcement DISABLED "
-                          "(this species would behave as if the `$` were absent, which "
-                          "silently diverges from BNG2 ODE semantics).";
+        std::string const msg = "Fixed species '" + sp_name +
+                                "' is multi-molecule or bonded (mols=" + std::to_string(n_mol) +
+                                ", bonds=" + std::to_string(n_bond) +
+                                ") — RM currently "
+                                "supports only single-molecule Fixed species with no bonds. Pass "
+                                "--ignore-unsupported to run with Fixed enforcement DISABLED "
+                                "(this species would behave as if the `$` were absent, which "
+                                "silently diverges from BNG2 ODE semantics).";
         warnings.push_back({Severity::Error, "Species@Fixed", msg});
         continue;
       }
       if (++fixed_type_counts[mol_type_name] > 1) {
-        std::string msg = "Multiple Fixed species declared for "
-                          "MoleculeType '" +
-                          mol_type_name +
-                          "' — RM currently allows at "
-                          "most one Fixed species per MoleculeType to avoid "
-                          "matching overlap. Pass --ignore-unsupported to run with "
-                          "Fixed enforcement DISABLED for the duplicate declarations.";
+        std::string const msg = "Multiple Fixed species declared for "
+                                "MoleculeType '" +
+                                mol_type_name +
+                                "' — RM currently allows at "
+                                "most one Fixed species per MoleculeType to avoid "
+                                "matching overlap. Pass --ignore-unsupported to run with "
+                                "Fixed enforcement DISABLED for the duplicate declarations.";
         warnings.push_back({Severity::Error, "Species@Fixed", msg});
       }
     }
@@ -1825,7 +1829,7 @@ struct RuleMonkeySimulator::Impl {
         if (eit == model.parameter_exprs.end())
           continue;
         try {
-          double resolved =
+          double const resolved =
               resolve_cached(eit->second, model.parameter_asts[name], model.parameters);
           if (resolved != model.parameters[name]) {
             model.parameters[name] = resolved;

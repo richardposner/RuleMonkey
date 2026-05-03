@@ -56,7 +56,7 @@ int idx_of(const rulemonkey::Result& r, const std::string& name) {
 }
 
 double final_value(const rulemonkey::Result& r, const std::string& name) {
-  int i = idx_of(r, name);
+  int const i = idx_of(r, name);
   if (i < 0)
     throw std::runtime_error("observable not found: " + name);
   return r.observable_data[i].back();
@@ -83,17 +83,17 @@ double homodimer_terminal_mean(const std::string& xml, double a_tot, double kp, 
 // CME stationary distribution for A(a) + A(a) <-> A(a!1).A(a!1).
 // Returns mean of k = N_AA at steady state.
 double cme_mean(int a_tot, double kp, double km) {
-  int kmax = a_tot / 2;
+  int const kmax = a_tot / 2;
   std::vector<double> pi(kmax + 1, 0.0);
   pi[0] = 1.0;
   for (int k = 0; k < kmax; ++k) {
-    int free_a = a_tot - (2 * k);
-    double fwd = kp * free_a * (free_a - 1) / 2.0;
-    double rev = km * (k + 1);
+    int const free_a = a_tot - (2 * k);
+    double const fwd = kp * free_a * (free_a - 1) / 2.0;
+    double const rev = km * (k + 1);
     pi[k + 1] = pi[k] * fwd / rev;
   }
   double Z = 0.0;
-  for (double p : pi)
+  for (double const p : pi)
     Z += p;
   double mean = 0.0;
   for (int k = 0; k <= kmax; ++k)
@@ -112,9 +112,9 @@ void test_small_n_homodimer(const std::string& xml) {
   constexpr int n_reps = 200;
   constexpr double t_end = 200.0;
 
-  double analytic = cme_mean(a_tot, kp, km);
-  double empirical = homodimer_terminal_mean(xml, a_tot, kp, km, t_end, n_reps);
-  double diff = std::fabs(empirical - analytic);
+  double const analytic = cme_mean(a_tot, kp, km);
+  double const empirical = homodimer_terminal_mean(xml, a_tot, kp, km, t_end, n_reps);
+  double const diff = std::fabs(empirical - analytic);
 
   // Tolerance: 4σ on the standard error of the mean for n_reps=200.
   // var(k) ≈ 0.703 (computed once for K=1, A=8), so SE = sqrt(0.703/200)
@@ -140,9 +140,9 @@ void test_minimal_pair_homodimer(const std::string& xml) {
   constexpr int n_reps = 200;
   constexpr double t_end = 100.0;
 
-  double analytic = cme_mean(a_tot, kp, km);
-  double empirical = homodimer_terminal_mean(xml, a_tot, kp, km, t_end, n_reps);
-  double diff = std::fabs(empirical - analytic);
+  double const analytic = cme_mean(a_tot, kp, km);
+  double const empirical = homodimer_terminal_mean(xml, a_tot, kp, km, t_end, n_reps);
+  double const diff = std::fabs(empirical - analytic);
   constexpr double tol = 0.20;
 
   std::fprintf(stderr,
@@ -159,7 +159,7 @@ int main(int argc, char* argv[]) {
     std::fprintf(stderr, "Usage: homodimer_rate_test <A_plus_A.xml>\n");
     return 2;
   }
-  std::string xml = argv[1];
+  std::string const xml = argv[1];
   try {
     test_minimal_pair_homodimer(xml);
     test_small_n_homodimer(xml);

@@ -81,32 +81,32 @@ void test_unary_minus_vs_power() {
 // logical ops in the evaluator before generic both-sides eval.
 // ---------------------------------------------------------------------------
 void test_short_circuit_and_or() {
-  rulemonkey::expr::VariableMap vars{{"x", 0.0}};
+  rulemonkey::expr::VariableMap const vars{{"x", 0.0}};
 
   // && short-circuit: false-and-divbyzero must NOT evaluate the RHS.
   // The if-branch is selected by the AND's value (false → else branch = 0).
   // If the && evaluated both sides eagerly, 1/0 → +inf → +inf > 1 → 1, but
   // worse, in earlier RM 0/0 paths could surface NaN that propagated.
   // Either way, the SAFE behavior is "result = 0, no NaN, no exception".
-  double r1 = eval("if(x > 0 && 1/x > 1, 99, 0)", vars);
+  double const r1 = eval("if(x > 0 && 1/x > 1, 99, 0)", vars);
   check(r1 == 0.0, "&& short-circuit: x=0 must give 0 (not NaN, not 99)");
   check(!std::isnan(r1), "&& short-circuit: result must not be NaN");
 
   // || short-circuit: true-or-divbyzero must NOT evaluate the RHS.
-  rulemonkey::expr::VariableMap vars_true{{"x", 1.0}};
-  double r2 = eval("if(x > 0 || 1/0 > 1, 99, 0)", vars_true);
+  rulemonkey::expr::VariableMap const vars_true{{"x", 1.0}};
+  double const r2 = eval("if(x > 0 || 1/0 > 1, 99, 0)", vars_true);
   check(r2 == 99.0, "|| short-circuit: x=1 must give 99 without evaluating 1/0");
   check(!std::isnan(r2), "|| short-circuit: result must not be NaN");
 
   // Sanity: when the LHS does NOT short-circuit, the RHS is evaluated
   // and contributes to the truth value (no surprise here).
-  rulemonkey::expr::VariableMap v_pos{{"x", 0.5}};
-  double r3 = eval("if(x > 0 && 1/x > 1, 99, 0)", v_pos);
+  rulemonkey::expr::VariableMap const v_pos{{"x", 0.5}};
+  double const r3 = eval("if(x > 0 && 1/x > 1, 99, 0)", v_pos);
   // 1/0.5 = 2, 2 > 1 is true, x > 0 is true → AND true → 99
   check(r3 == 99.0, "&& with both sides truthy: result is the then-branch");
 
   // The same shape with || should also work — both true.
-  double r4 = eval("if(x > 0 || 1/x > 1, 99, 0)", v_pos);
+  double const r4 = eval("if(x > 0 || 1/x > 1, 99, 0)", v_pos);
   check(r4 == 99.0, "|| with both sides truthy: result is the then-branch");
 }
 
@@ -129,7 +129,7 @@ void test_double_equality_exact() {
   check(eval("0.1 + 0.2 != 0.3") == 1.0, "and the != complement must be TRUE");
 
   // Variables that hold the same value compare equal.
-  rulemonkey::expr::VariableMap vars{{"a", 7.5}, {"b", 7.5}, {"c", 7.50001}};
+  rulemonkey::expr::VariableMap const vars{{"a", 7.5}, {"b", 7.5}, {"c", 7.50001}};
   check(eval("a == b", vars) == 1.0, "vars with identical bits compare equal");
   check(eval("a == c", vars) == 0.0, "vars off by 1e-5 compare unequal");
 
@@ -177,7 +177,7 @@ void test_unresolved_variable() {
   check(throws_runtime_error("missing_var + 1"),
         "evaluate against an empty VariableMap on a Variable node throws");
 
-  rulemonkey::expr::VariableMap vars{{"a", 5.0}};
+  rulemonkey::expr::VariableMap const vars{{"a", 5.0}};
   check(eval("a + 1", vars) == 6.0, "known variable resolves");
   check(throws_runtime_error("a + b", vars),
         "partially-known expression throws on the unknown half");

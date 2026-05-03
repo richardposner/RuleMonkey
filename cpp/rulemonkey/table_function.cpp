@@ -74,7 +74,7 @@ double TableFunction::evaluate(double x) const {
 
   // Binary search for the interval [xs[i], xs[i+1]) containing x.
   auto it = std::upper_bound(xs_.begin(), xs_.end(), x);
-  size_t i = static_cast<size_t>(it - xs_.begin()) - 1;
+  size_t const i = static_cast<size_t>(it - xs_.begin()) - 1;
 
   if (method_ == TfunMethod::Step) {
     // Step interpolation: f(x) = ys[i] for x in [xs[i], xs[i+1]).  This is
@@ -87,9 +87,9 @@ double TableFunction::evaluate(double x) const {
   }
 
   // Linear interpolation between (xs[i], ys[i]) and (xs[i+1], ys[i+1]).
-  double x0 = xs_[i], x1 = xs_[i + 1];
-  double y0 = ys_[i], y1 = ys_[i + 1];
-  double t = (x - x0) / (x1 - x0);
+  double const x0 = xs_[i], x1 = xs_[i + 1];
+  double const y0 = ys_[i], y1 = ys_[i + 1];
+  double const t = (x - x0) / (x1 - x0);
   return y0 + (t * (y1 - y0));
 }
 

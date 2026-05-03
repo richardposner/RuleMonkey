@@ -105,7 +105,7 @@ public:
     if (pos_ >= src_.size())
       return {TokType::End, "", 0};
 
-    char ch = src_[pos_];
+    char const ch = src_[pos_];
 
     if (ch == '(') {
       ++pos_;
@@ -126,7 +126,7 @@ public:
       ++pos_;
       // Two-char operators: <=, >=, ==, !=, &&, ||
       if (pos_ < src_.size()) {
-        char next = src_[pos_];
+        char const next = src_[pos_];
         if ((ch == '<' && next == '=') || (ch == '>' && next == '=') ||
             (ch == '=' && next == '=') || (ch == '!' && next == '=')) {
           op += next;
@@ -177,8 +177,8 @@ private:
       while (pos_ < src_.size() && std::isdigit(src_[pos_]))
         ++pos_;
     }
-    std::string s(src_.substr(start, pos_ - start));
-    double val = std::stod(s);
+    std::string const s(src_.substr(start, pos_ - start));
+    double const val = std::stod(s);
     return {TokType::Number, s, val};
   }
 
@@ -186,7 +186,7 @@ private:
     auto start = pos_;
     while (pos_ < src_.size() && (std::isalnum(src_[pos_]) || src_[pos_] == '_'))
       ++pos_;
-    std::string s(src_.substr(start, pos_ - start));
+    std::string const s(src_.substr(start, pos_ - start));
     return {TokType::Ident, s, 0};
   }
 
@@ -278,7 +278,7 @@ private:
   std::unique_ptr<AstNode> parse_add_sub() {
     auto left = parse_mul_div();
     while (cur_.type == TokType::Op && (cur_.text == "+" || cur_.text == "-")) {
-      char op = cur_.text[0];
+      char const op = cur_.text[0];
       advance();
       auto right = parse_mul_div();
       auto node = std::make_unique<AstNode>();
@@ -295,7 +295,7 @@ private:
   std::unique_ptr<AstNode> parse_mul_div() {
     auto left = parse_power();
     while (cur_.type == TokType::Op && (cur_.text == "*" || cur_.text == "/")) {
-      char op = cur_.text[0];
+      char const op = cur_.text[0];
       advance();
       auto right = parse_power();
       auto node = std::make_unique<AstNode>();
@@ -362,7 +362,7 @@ private:
     }
 
     if (cur_.type == TokType::Ident) {
-      std::string name = cur_.text;
+      std::string const name = cur_.text;
       advance();
 
       // Check for function call: ident(...)
@@ -462,12 +462,12 @@ std::optional<double> eval_builtin(BuiltinKind kind,
   // 3-arg ternary: lazy-evaluate — the branch not taken must not run
   // (e.g., `if(x>0, 1/x, 0)` must not divide by zero when x==0).
   if (kind == BuiltinKind::If && n == 3) {
-    double cond = eval_child(*args[0]);
+    double const cond = eval_child(*args[0]);
     return (cond != 0.0) ? eval_child(*args[1]) : eval_child(*args[2]);
   }
 
   if (n == 1) {
-    double a = eval_child(*args[0]);
+    double const a = eval_child(*args[0]);
     switch (kind) {
     case BuiltinKind::Ln:
       return std::log(a);
@@ -511,8 +511,8 @@ std::optional<double> eval_builtin(BuiltinKind kind,
   }
 
   if (n == 2) {
-    double a = eval_child(*args[0]);
-    double b = eval_child(*args[1]);
+    double const a = eval_child(*args[0]);
+    double const b = eval_child(*args[1]);
     switch (kind) {
     case BuiltinKind::Min:
       return std::fmin(a, b);
@@ -556,21 +556,21 @@ template <class LookupFn> double evaluate_impl(const AstNode& node, LookupFn loo
     // produce 0.0/1.0; we coerce the RHS the same way so the
     // result is always 0.0/1.0 regardless of which side decided.
     if (node.op == '&') {
-      double l = evaluate_impl(*node.children[0], lookup_var);
+      double const l = evaluate_impl(*node.children[0], lookup_var);
       if (l == 0.0)
         return 0.0;
-      double r = evaluate_impl(*node.children[1], lookup_var);
+      double const r = evaluate_impl(*node.children[1], lookup_var);
       return (r != 0.0) ? 1.0 : 0.0;
     }
     if (node.op == '|') {
-      double l = evaluate_impl(*node.children[0], lookup_var);
+      double const l = evaluate_impl(*node.children[0], lookup_var);
       if (l != 0.0)
         return 1.0;
-      double r = evaluate_impl(*node.children[1], lookup_var);
+      double const r = evaluate_impl(*node.children[1], lookup_var);
       return (r != 0.0) ? 1.0 : 0.0;
     }
-    double l = evaluate_impl(*node.children[0], lookup_var);
-    double r = evaluate_impl(*node.children[1], lookup_var);
+    double const l = evaluate_impl(*node.children[0], lookup_var);
+    double const r = evaluate_impl(*node.children[1], lookup_var);
     switch (node.op) {
     case '+':
       return l + r;
@@ -653,7 +653,7 @@ double evaluate(const AstNode& node, const VariableMap& vars) {
 
 double evaluate(const AstNode& node, const std::vector<double>& vars_flat) {
   return evaluate_impl(node, [&vars_flat](const AstNode& n) -> double {
-    int idx = n.var_index;
+    int const idx = n.var_index;
     if (idx < 0 || static_cast<size_t>(idx) >= vars_flat.size()) {
       if (n.type == NodeType::FunctionCall) {
         throw std::runtime_error("expr_eval: unknown function '" + n.name + "' with " +

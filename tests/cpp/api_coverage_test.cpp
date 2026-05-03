@@ -44,12 +44,12 @@ int idx_of(const rulemonkey::Result& r, const std::string& name) {
 // must report the configured runtime method even when the constructor
 // defaulted it.
 void test_constructor_metadata(const std::string& xml) {
-  rulemonkey::RuleMonkeySimulator sim(xml);
+  rulemonkey::RuleMonkeySimulator const sim(xml);
   check(sim.xml_path() == xml, "xml_path() should return the constructor's input string");
   check(sim.method() == rulemonkey::Method::NfExact,
         "method() should default to NfExact when constructor omits the second arg");
 
-  rulemonkey::RuleMonkeySimulator sim2(xml, rulemonkey::Method::NfExact);
+  rulemonkey::RuleMonkeySimulator const sim2(xml, rulemonkey::Method::NfExact);
   check(sim2.method() == rulemonkey::Method::NfExact,
         "method() should report the explicit NfExact pass-through");
 }
@@ -82,7 +82,7 @@ void test_metadata_ordering(const std::string& xml) {
 // unsupported_features() on a clean model must return an empty vector;
 // its very presence is the contract.
 void test_unsupported_features_accessor(const std::string& xml) {
-  rulemonkey::RuleMonkeySimulator sim(xml);
+  rulemonkey::RuleMonkeySimulator const sim(xml);
   const auto& uf = sim.unsupported_features();
   check(uf.empty(), "unsupported_features() should be empty for a clean A_plus_A model "
                     "(non-empty would indicate XML import surfaced a Warn/Error)");
@@ -118,7 +118,7 @@ void test_step_to(const std::string& xml) {
   sim.initialize(/*seed=*/1);
 
   sim.step_to(2.0);
-  double now = sim.current_time();
+  double const now = sim.current_time();
   check(now >= 2.0, "current_time() should be at least step_to target");
 
   // simulate from the post-step_to time should succeed.
@@ -142,7 +142,7 @@ void test_get_observable_values(const std::string& xml) {
   auto names = sim.observable_names();
   auto a1_it = std::find(names.begin(), names.end(), "A_1");
   if (a1_it != names.end()) {
-    size_t idx = static_cast<size_t>(a1_it - names.begin());
+    size_t const idx = static_cast<size_t>(a1_it - names.begin());
     check(std::abs(vals[idx] - 1000.0) < 1e-9, "A_1 observable should be 1000 at session start");
   }
 

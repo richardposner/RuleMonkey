@@ -56,7 +56,9 @@ template <typename F> bool throws_runtime_error(F&& fn, const std::string& tag) 
 void test_missing_file() {
   // Path that cannot exist.  The simulator should refuse to construct.
   check(throws_runtime_error(
-            []() { rulemonkey::RuleMonkeySimulator sim("/nonexistent/path/__no_such_xml__.xml"); },
+            []() {
+              rulemonkey::RuleMonkeySimulator const sim("/nonexistent/path/__no_such_xml__.xml");
+            },
             "missing_file"),
         "constructor must throw runtime_error on missing file");
 }
@@ -68,7 +70,7 @@ void test_malformed_xml(const std::string& tmp_path) {
     std::ofstream f(tmp_path);
     f << "this is not xml { not even close }\n";
   }
-  check(throws_runtime_error([&]() { rulemonkey::RuleMonkeySimulator sim(tmp_path); },
+  check(throws_runtime_error([&]() { rulemonkey::RuleMonkeySimulator const sim(tmp_path); },
                              "malformed_xml"),
         "constructor must throw runtime_error on malformed XML");
   std::remove(tmp_path.c_str());

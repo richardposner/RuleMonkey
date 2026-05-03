@@ -46,14 +46,14 @@ int idx_of(const rulemonkey::Result& r, const std::string& name) {
 }
 
 double final_value(const rulemonkey::Result& r, const std::string& name) {
-  int i = idx_of(r, name);
+  int const i = idx_of(r, name);
   if (i < 0)
     throw std::runtime_error("observable not found: " + name);
   return r.observable_data[i].back();
 }
 
 double initial_value(const rulemonkey::Result& r, const std::string& name) {
-  int i = idx_of(r, name);
+  int const i = idx_of(r, name);
   if (i < 0)
     throw std::runtime_error("observable not found: " + name);
   return r.observable_data[i].front();
@@ -136,11 +136,11 @@ void test_add_molecules_session(const std::string& xml) {
 
   // Equilibrate at the default A_tot=1000 for a beat.
   auto seg1 = sim.simulate(0.0, 5.0, 6);
-  int a1_idx_seg1 = idx_of(seg1, "A_1");
-  int aa_idx_seg1 = idx_of(seg1, "AA_1");
-  double a1_pre = seg1.observable_data[a1_idx_seg1].back();
-  double aa_pre = seg1.observable_data[aa_idx_seg1].back();
-  double total_pre = a1_pre + (2.0 * aa_pre);
+  int const a1_idx_seg1 = idx_of(seg1, "A_1");
+  int const aa_idx_seg1 = idx_of(seg1, "AA_1");
+  double const a1_pre = seg1.observable_data[a1_idx_seg1].back();
+  double const aa_pre = seg1.observable_data[aa_idx_seg1].back();
+  double const total_pre = a1_pre + (2.0 * aa_pre);
   check(std::abs(total_pre - 1000.0) < 1e-9,
         "pre-add mass conservation: A_1 + 2*AA_1 should equal 1000 (got " +
             std::to_string(total_pre) + ")");
@@ -152,18 +152,18 @@ void test_add_molecules_session(const std::string& xml) {
 
   // Continue.  Total mass should jump by exactly 500 and remain conserved.
   auto seg2 = sim.simulate(5.0, 10.0, 6);
-  int a1_idx_seg2 = idx_of(seg2, "A_1");
-  int aa_idx_seg2 = idx_of(seg2, "AA_1");
-  double a1_post0 = seg2.observable_data[a1_idx_seg2].front();
-  double aa_post0 = seg2.observable_data[aa_idx_seg2].front();
-  double total_post0 = a1_post0 + (2.0 * aa_post0);
+  int const a1_idx_seg2 = idx_of(seg2, "A_1");
+  int const aa_idx_seg2 = idx_of(seg2, "AA_1");
+  double const a1_post0 = seg2.observable_data[a1_idx_seg2].front();
+  double const aa_post0 = seg2.observable_data[aa_idx_seg2].front();
+  double const total_post0 = a1_post0 + (2.0 * aa_post0);
   check(std::abs(total_post0 - 1500.0) < 1e-9,
         "post-add mass conservation at segment start: should be 1500 (got " +
             std::to_string(total_post0) + ")");
 
-  double a1_end = seg2.observable_data[a1_idx_seg2].back();
-  double aa_end = seg2.observable_data[aa_idx_seg2].back();
-  double total_end = a1_end + (2.0 * aa_end);
+  double const a1_end = seg2.observable_data[a1_idx_seg2].back();
+  double const aa_end = seg2.observable_data[aa_idx_seg2].back();
+  double const total_end = a1_end + (2.0 * aa_end);
   check(std::abs(total_end - 1500.0) < 1e-9,
         "post-add mass conservation at segment end: should be 1500 (got " +
             std::to_string(total_end) + ")");
@@ -267,7 +267,7 @@ void test_setparam_rejects_unknown_name(const std::string& xml) {
 //   - kp    = kp_base * kp_mult  (derived, drives forward propensity)
 void test_derived_parameter_cascade(const std::string& xml) {
   // Sanity: the parsed defaults match the fixture's hand-written values.
-  rulemonkey::RuleMonkeySimulator probe(xml);
+  rulemonkey::RuleMonkeySimulator const probe(xml);
   check(probe.get_parameter("A_tot") == 500.0,
         "fixture sanity: parsed A_tot should be A_base*A_factor = 500");
   check(probe.get_parameter("kp") == 0.001,
@@ -332,7 +332,7 @@ void test_simulate_t_start_validation(const std::string& xml) {
   auto r = sim.simulate(0.0, 1.0, 2);
   check(r.n_times() == 3, "simulate(0, 1, 2) at fresh session should produce 3 samples");
 
-  double now = sim.current_time();
+  double const now = sim.current_time();
   check(now >= 1.0, "current_time should advance to at least t_end after simulate");
 
   // Backwards is rejected.

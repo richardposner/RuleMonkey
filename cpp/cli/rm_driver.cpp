@@ -68,9 +68,9 @@ int main(int argc, char* argv[]) {
   }
 
   try {
-    std::string xml_path = argv[1];
-    double t_end = parse_double(argv[2], "t_end");
-    int n_steps = parse_int(argv[3], "n_steps");
+    std::string const xml_path = argv[1];
+    double const t_end = parse_double(argv[2], "t_end");
+    int const n_steps = parse_int(argv[3], "n_steps");
     if (n_steps < 1) {
       std::cerr << "ERROR: n_steps must be >= 1 (got " << n_steps
                 << ").  Output is `n_steps + 1` sample rows from t_start to t_end;\n"
@@ -151,7 +151,7 @@ int main(int argc, char* argv[]) {
     auto t0 = std::chrono::high_resolution_clock::now();
 
     rulemonkey::Result result;
-    bool use_session = !save_state_path.empty() || !load_state_path.empty();
+    bool const use_session = !save_state_path.empty() || !load_state_path.empty();
 
     if (use_session) {
       // Session mode: needed for save/load state
@@ -185,7 +185,7 @@ int main(int argc, char* argv[]) {
     }
 
     auto t1 = std::chrono::high_resolution_clock::now();
-    double cpu_s = std::chrono::duration<double>(t1 - t0).count();
+    double const cpu_s = std::chrono::duration<double>(t1 - t0).count();
 
     // Output header
     std::cout << "#";

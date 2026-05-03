@@ -73,7 +73,7 @@ uint64_t compute_schema_fingerprint(const Model& model) {
   constexpr uint64_t kPrime = 1099511628211ULL;
   uint64_t h = kOffset;
   auto absorb = [&](std::string_view s) {
-    for (unsigned char c : s) {
+    for (unsigned char const c : s) {
       h ^= c;
       h *= kPrime;
     }
@@ -171,7 +171,7 @@ public:
     }
 
     // New molecule gets its own complex
-    int cx = next_complex_id_++;
+    int const cx = next_complex_id_++;
     mol.complex_id = cx;
     complex_members_[cx] = {mol_id};
 
@@ -186,7 +186,7 @@ public:
       return;
 
     // Unbind all bonds
-    for (int cid : mol.comp_ids) {
+    for (int const cid : mol.comp_ids) {
       if (components_[cid].bond_partner >= 0)
         remove_bond(cid);
     }
@@ -207,7 +207,7 @@ public:
     tlist.erase(std::remove(tlist.begin(), tlist.end(), mol_id), tlist.end());
 
     // Free component slots
-    for (int cid : mol.comp_ids) {
+    for (int const cid : mol.comp_ids) {
       components_[cid] = ComponentInstance{};
       comp_to_mol_[cid] = -1;
       free_comp_ids_.push_back(cid);
@@ -224,10 +224,10 @@ public:
     components_[comp_a].bond_partner = comp_b;
     components_[comp_b].bond_partner = comp_a;
 
-    int mol_a = comp_to_mol_[comp_a];
-    int mol_b = comp_to_mol_[comp_b];
-    int cx_a = molecules_[mol_a].complex_id;
-    int cx_b = molecules_[mol_b].complex_id;
+    int const mol_a = comp_to_mol_[comp_a];
+    int const mol_b = comp_to_mol_[comp_b];
+    int const cx_a = molecules_[mol_a].complex_id;
+    int const cx_b = molecules_[mol_b].complex_id;
 
     if (cx_a != cx_b) {
       merge_complexes(cx_a, cx_b);
@@ -242,16 +242,16 @@ public:
   void remove_bond(int comp_a) {
     if constexpr (kRemoveBondProfile)
       remove_profile_.remove_bond_calls++;
-    int comp_b = components_[comp_a].bond_partner;
+    int const comp_b = components_[comp_a].bond_partner;
     if (comp_b < 0)
       return;
 
     components_[comp_a].bond_partner = -1;
     components_[comp_b].bond_partner = -1;
 
-    int mol_a = comp_to_mol_[comp_a];
-    int mol_b = comp_to_mol_[comp_b];
-    int old_cx = molecules_[mol_a].complex_id;
+    int const mol_a = comp_to_mol_[comp_a];
+    int const mol_b = comp_to_mol_[comp_b];
+    int const old_cx = molecules_[mol_a].complex_id;
 
     // Check if complex needs splitting
     split_complex_if_needed(mol_a, mol_b, old_cx);
@@ -312,13 +312,13 @@ public:
   // Increment / decrement state
   void increment_state(int comp_id) {
     auto& c = components_[comp_id];
-    int mol_id = comp_to_mol_[comp_id];
+    int const mol_id = comp_to_mol_[comp_id];
     auto& mtype = model_.molecule_types[molecules_[mol_id].type_index];
     // Find which component this is
     auto& mol = molecules_[mol_id];
     for (int i = 0; i < static_cast<int>(mol.comp_ids.size()); ++i) {
       if (mol.comp_ids[i] == comp_id) {
-        int max_state = static_cast<int>(mtype.components[i].allowed_states.size()) - 1;
+        int const max_state = static_cast<int>(mtype.components[i].allowed_states.size()) - 1;
         if (c.state_index < max_state)
           c.state_index++;
         return;
@@ -339,7 +339,7 @@ public:
     for (auto& m : molecules_) {
       os << m.type_index << " " << m.complex_id << " " << (m.active ? 1 : 0) << " "
          << m.comp_ids.size();
-      for (int cid : m.comp_ids)
+      for (int const cid : m.comp_ids)
         os << " " << cid;
       os << "\n";
     }
@@ -347,23 +347,23 @@ public:
     for (auto& c : components_)
       os << c.state_index << " " << c.bond_partner << "\n";
     os << comp_to_mol_.size() << "\n";
-    for (int v : comp_to_mol_)
+    for (int const v : comp_to_mol_)
       os << v << " ";
     os << "\n";
     os << complex_members_.size() << "\n";
     for (auto& [cx, members] : complex_members_) {
       os << cx << " " << members.size();
-      for (int mid : members)
+      for (int const mid : members)
         os << " " << mid;
       os << "\n";
     }
     os << next_complex_id_ << "\n";
     os << free_mol_ids_.size() << "\n";
-    for (int v : free_mol_ids_)
+    for (int const v : free_mol_ids_)
       os << v << " ";
     os << "\n";
     os << free_comp_ids_.size() << "\n";
-    for (int v : free_comp_ids_)
+    for (int const v : free_comp_ids_)
       os << v << " ";
     os << "\n";
   }
@@ -427,15 +427,15 @@ public:
       if (!m.active)
         continue;
       ++vertices[m.complex_id];
-      for (int cid : m.comp_ids) {
+      for (int const cid : m.comp_ids) {
         if (components_[cid].bond_partner >= 0)
           ++half_edges[m.complex_id];
       }
     }
     for (const auto& [cx, half] : half_edges) {
-      int edges = half / 2;
-      int verts = vertices[cx];
-      int cycles = edges - (verts - 1);
+      int const edges = half / 2;
+      int const verts = vertices[cx];
+      int const cycles = edges - (verts - 1);
       if (cycles > 0)
         cycle_bond_count_[cx] = cycles;
     }
@@ -445,7 +445,7 @@ private:
   void merge_complexes(int cx_keep, int cx_merge) {
     auto& keep = complex_members_[cx_keep];
     auto& merge = complex_members_[cx_merge];
-    for (int mid : merge) {
+    for (int const mid : merge) {
       molecules_[mid].complex_id = cx_keep;
       keep.push_back(mid);
     }
@@ -481,7 +481,7 @@ private:
 
     auto& members = complex_members_[old_cx];
     if constexpr (kRemoveBondProfile) {
-      int b = profile_size_bucket(members.size());
+      int const b = profile_size_bucket(members.size());
       remove_profile_.cx_size_all[b]++;
     }
 
@@ -507,7 +507,7 @@ private:
 
     if constexpr (kRemoveBondProfile) {
       remove_profile_.bfs_calls++;
-      int b = profile_size_bucket(members.size());
+      int const b = profile_size_bucket(members.size());
       remove_profile_.cx_size_bfs[b]++;
       auto sz = static_cast<uint64_t>(members.size());
       remove_profile_.cx_size_sum_bfs += sz;
@@ -527,16 +527,16 @@ private:
     int piece_a_half_edges = 0; // each bond counted twice (once per endpoint)
 
     while (!queue.empty()) {
-      int cur = queue.front();
+      int const cur = queue.front();
       queue.pop();
       auto& m = molecules_[cur];
       if (!m.active)
         continue;
-      for (int cid : m.comp_ids) {
-        int partner = components_[cid].bond_partner;
+      for (int const cid : m.comp_ids) {
+        int const partner = components_[cid].bond_partner;
         if (partner < 0)
           continue;
-        int neighbor = comp_to_mol_[partner];
+        int const neighbor = comp_to_mol_[partner];
         ++piece_a_half_edges;
         if (visited.insert(neighbor).second)
           queue.push(neighbor);
@@ -557,12 +557,12 @@ private:
       remove_profile_.half_edges_hist[profile_size_bucket(he)]++;
     }
 
-    int old_cycle = cycle_bond_count(old_cx);
+    int const old_cycle = cycle_bond_count(old_cx);
 
     if (visited.count(mol_b)) {
       // Still connected — removed bond was a cycle bond in the surviving
       // complex, so decrement (|edges| dropped by 1, |vertices| unchanged).
-      int new_cycle = old_cycle - 1;
+      int const new_cycle = old_cycle - 1;
       if (new_cycle > 0)
         cycle_bond_count_[old_cx] = new_cycle;
       else
@@ -593,11 +593,11 @@ private:
     // removed bond was a tree edge across the cut, so total cycles across
     // the two resulting pieces equals the pre-split cycle count.  Piece A's
     // cycles come from its (edges - vertices + 1); Piece B gets the remainder.
-    int new_cx = next_complex_id_++;
+    int const new_cx = next_complex_id_++;
     std::vector<int> new_members;
     std::vector<int> old_members;
 
-    for (int mid : members) {
+    for (int const mid : members) {
       if (visited.count(mid)) {
         old_members.push_back(mid);
       } else {
@@ -606,8 +606,8 @@ private:
       }
     }
 
-    int piece_a_edges = piece_a_half_edges / 2;
-    int piece_a_mols = static_cast<int>(visited.size());
+    int const piece_a_edges = piece_a_half_edges / 2;
+    int const piece_a_mols = static_cast<int>(visited.size());
     int piece_a_cycle = piece_a_edges - (piece_a_mols - 1);
     piece_a_cycle = std::max(piece_a_cycle, 0);
     int piece_b_cycle = old_cycle - piece_a_cycle;
@@ -717,7 +717,7 @@ int count_embeddings_single(const AgentPool& pool, int mol_id, const PatternMole
       // Check component type match
       // The actual component at position ci corresponds to mtype.components[ci]
       // The pattern component has comp_type_index (or we match by name)
-      std::string actual_name = mtype.components[ci].name;
+      std::string const actual_name = mtype.components[ci].name;
       bool name_match = false;
       if (pc.comp_type_index >= 0) {
         name_match = (ci == pc.comp_type_index) ||
@@ -737,7 +737,7 @@ int count_embeddings_single(const AgentPool& pool, int mol_id, const PatternMole
       if (!name_match)
         continue;
 
-      int comp_id = mol.comp_ids[ci];
+      int const comp_id = mol.comp_ids[ci];
       auto& comp = pool.component(comp_id);
 
       // Check state constraint
@@ -793,7 +793,7 @@ int count_embeddings_single(const AgentPool& pool, int mol_id, const PatternMole
       ++count;
       return;
     }
-    for (int ci : candidates[pi]) {
+    for (int const ci : candidates[pi]) {
       if (used[ci])
         continue;
       assignment[pi] = ci;
@@ -815,7 +815,7 @@ int count_embeddings_single(const AgentPool& pool, int mol_id, const PatternMole
     for (auto& emb : *all_assignments) {
       std::vector<int> key;
       key.reserve(reacting_local->size());
-      for (int rci : *reacting_local) {
+      for (int const rci : *reacting_local) {
         if (rci >= 0 && rci < static_cast<int>(emb.size()))
           key.push_back(emb[rci]);
       }
@@ -834,7 +834,7 @@ int count_embeddings_single(const AgentPool& pool, int mol_id, const PatternMole
       if (pi == n_pat) {
         std::vector<int> key;
         key.reserve(reacting_local->size());
-        for (int rci : *reacting_local) {
+        for (int const rci : *reacting_local) {
           if (rci >= 0 && rci < n_pat)
             key.push_back(tmp[rci]);
         }
@@ -842,7 +842,7 @@ int count_embeddings_single(const AgentPool& pool, int mol_id, const PatternMole
           ++deduped_count;
         return;
       }
-      for (int ci : candidates[pi]) {
+      for (int const ci : candidates[pi]) {
         if (tmp_used[ci])
           continue;
         tmp[pi] = ci;
@@ -869,11 +869,11 @@ bool check_pattern_bonds(
 
   for (auto& bond : pat.bonds) {
     // Find which pattern molecule and local comp each flat index belongs to
-    int flat_a = bond.comp_flat_a, flat_b = bond.comp_flat_b;
+    int const flat_a = bond.comp_flat_a, flat_b = bond.comp_flat_b;
     int base = 0;
     int mol_idx_a = -1, local_a = -1, mol_idx_b = -1, local_b = -1;
     for (int mi = 0; mi < static_cast<int>(pat.molecules.size()); ++mi) {
-      int nc = static_cast<int>(pat.molecules[mi].components.size());
+      int const nc = static_cast<int>(pat.molecules[mi].components.size());
       if (flat_a >= base && flat_a < base + nc) {
         mol_idx_a = mi;
         local_a = flat_a - base;
@@ -888,8 +888,8 @@ bool check_pattern_bonds(
     if (mol_idx_a < 0 || mol_idx_b < 0 || local_a < 0 || local_b < 0)
       return false;
 
-    int actual_mol_a = mol_assignments[mol_idx_a];
-    int actual_mol_b = mol_assignments[mol_idx_b];
+    int const actual_mol_a = mol_assignments[mol_idx_a];
+    int const actual_mol_b = mol_assignments[mol_idx_b];
     if (actual_mol_a < 0 || actual_mol_b < 0)
       return false;
 
@@ -900,11 +900,11 @@ bool check_pattern_bonds(
         local_b >= static_cast<int>(comp_maps[mol_idx_b].size()))
       return false;
 
-    int actual_comp_local_a = comp_maps[mol_idx_a][local_a];
-    int actual_comp_local_b = comp_maps[mol_idx_b][local_b];
+    int const actual_comp_local_a = comp_maps[mol_idx_a][local_a];
+    int const actual_comp_local_b = comp_maps[mol_idx_b][local_b];
 
-    int actual_comp_id_a = pool.molecule(actual_mol_a).comp_ids[actual_comp_local_a];
-    int actual_comp_id_b = pool.molecule(actual_mol_b).comp_ids[actual_comp_local_b];
+    int const actual_comp_id_a = pool.molecule(actual_mol_a).comp_ids[actual_comp_local_a];
+    int const actual_comp_id_b = pool.molecule(actual_mol_b).comp_ids[actual_comp_local_b];
 
     if (pool.component(actual_comp_id_a).bond_partner != actual_comp_id_b)
       return false;
@@ -949,7 +949,7 @@ int count_multi_molecule_embeddings(const AgentPool& pool, int seed_mol_id, cons
     BondInfo bi{-1, -1, -1, -1};
     int base = 0;
     for (int mi = 0; mi < n_pat_mols; ++mi) {
-      int nc = static_cast<int>(pat.molecules[mi].components.size());
+      int const nc = static_cast<int>(pat.molecules[mi].components.size());
       if (bond.comp_flat_a >= base && bond.comp_flat_a < base + nc) {
         bi.mol_a = mi;
         bi.local_a = bond.comp_flat_a - base;
@@ -1045,7 +1045,7 @@ int count_multi_molecule_embeddings(const AgentPool& pool, int seed_mol_id, cons
 
         // Disconnected components: enumerate over molecules in the seed's
         // complex (matches the original assign_unassigned behavior).
-        int cx = pool.complex_of(seed_mol_id);
+        int const cx = pool.complex_of(seed_mol_id);
         auto cx_members = pool.molecules_in_complex(cx);
 
         int sub = 0;
@@ -1056,9 +1056,9 @@ int count_multi_molecule_embeddings(const AgentPool& pool, int seed_mol_id, cons
               ++sub;
             return;
           }
-          int pat_mi = unassigned[ui];
+          int const pat_mi = unassigned[ui];
           auto& target_pm = pat.molecules[pat_mi];
-          for (int cand : cx_members) {
+          for (int const cand : cx_members) {
             if (!pool.molecule(cand).active)
               continue;
             if (pool.molecule(cand).type_index != target_pm.type_index)
@@ -1089,18 +1089,18 @@ int count_multi_molecule_embeddings(const AgentPool& pool, int seed_mol_id, cons
       }
 
       // Walk the bond from via_pat to find the actual partner molecule.
-      int via_actual = mol_assignments[via_pat];
+      int const via_actual = mol_assignments[via_pat];
       auto& via_cm = comp_maps[via_pat];
       if (via_ae->my_local >= static_cast<int>(via_cm.size()))
         return 0;
-      int my_actual_local = via_cm[via_ae->my_local];
-      int my_actual_comp_id = pool.molecule(via_actual).comp_ids[my_actual_local];
-      int partner_comp_id = pool.component(my_actual_comp_id).bond_partner;
+      int const my_actual_local = via_cm[via_ae->my_local];
+      int const my_actual_comp_id = pool.molecule(via_actual).comp_ids[my_actual_local];
+      int const partner_comp_id = pool.component(my_actual_comp_id).bond_partner;
       if (partner_comp_id < 0)
         return 0;
-      int partner_mol_id = pool.mol_of_comp(partner_comp_id);
+      int const partner_mol_id = pool.mol_of_comp(partner_comp_id);
 
-      int next_pat = via_ae->other_mol;
+      int const next_pat = via_ae->other_mol;
       auto& other_pm = pat.molecules[next_pat];
       auto& partner_mol = pool.molecule(partner_mol_id);
       if (partner_mol.type_index != other_pm.type_index)
@@ -1153,7 +1153,7 @@ struct PatternAdj {
 };
 // Build pre-computed adjacency for a sub-range of a pattern.
 PatternAdj build_pattern_adjacency(const Pattern& pat, int pat_start, int pat_end) {
-  int n_pat_mols = static_cast<int>(pat.molecules.size());
+  int const n_pat_mols = static_cast<int>(pat.molecules.size());
   PatternAdj result;
   result.adj.resize(n_pat_mols);
 
@@ -1161,7 +1161,7 @@ PatternAdj build_pattern_adjacency(const Pattern& pat, int pat_start, int pat_en
     int mol_a = -1, local_a = -1, mol_b = -1, local_b = -1;
     int base = 0;
     for (int mi = 0; mi < n_pat_mols; ++mi) {
-      int nc = static_cast<int>(pat.molecules[mi].components.size());
+      int const nc = static_cast<int>(pat.molecules[mi].components.size());
       if (bond.comp_flat_a >= base && bond.comp_flat_a < base + nc) {
         mol_a = mi;
         local_a = bond.comp_flat_a - base;
@@ -1286,7 +1286,7 @@ bool build_fastmatch_slot(const Pattern& pat, int pat_start, int pat_end, int se
   }
 
   auto& ae = pa.adj[seed_pat_idx][0];
-  int other_pat = ae.other_mol;
+  int const other_pat = ae.other_mol;
   if (other_pat < pat_start || other_pat >= pat_end) {
     set_reason("partner_oob");
     return false;
@@ -1359,12 +1359,12 @@ bool build_fastmatch_slot(const Pattern& pat, int pat_start, int pat_end, int se
                         std::vector<FastMatchSlot::CompCheck>& out_non_bond,
                         std::vector<int>& out_pat_ci_locals) -> bool {
     auto sym_label = [&](const char* s) -> std::string { return std::string(side_tag) + "_" + s; };
-    int n_type_comps = static_cast<int>(mt.components.size());
+    int const n_type_comps = static_cast<int>(mt.components.size());
     out_bond_candidates.clear();
     out_bond_state_req = -1;
     out_bond_bond_req = 0;
 
-    int K = static_cast<int>(pm.components.size());
+    int const K = static_cast<int>(pm.components.size());
     if (sym && K != 1) {
       set_reason(sym_label("sym_K_gt_1"));
       return false;
@@ -1504,7 +1504,7 @@ inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id, const Fas
         fm.partner_bond_candidates.size(), fc_prof->fc_partner_bond_candidates_max);
     fc_prof->fc_partner_non_bond_checks_max =
         std::max(pnbc, fc_prof->fc_partner_non_bond_checks_max);
-    int pnbc_bucket = pnbc >= 6 ? 6 : static_cast<int>(pnbc);
+    int const pnbc_bucket = pnbc >= 6 ? 6 : static_cast<int>(pnbc);
     fc_prof->fc_partner_non_bond_checks_hist[pnbc_bucket]++;
     if ((fc_prof->fc_calls % kCmmFcProfileSampleEvery) == 0) {
       fc_sampled = true;
@@ -1543,7 +1543,7 @@ inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id, const Fas
     phase_stop(0);
     return 0;
   }
-  int n_seed = static_cast<int>(seed.comp_ids.size());
+  int const n_seed = static_cast<int>(seed.comp_ids.size());
 
   // Non-endpoint checks on seed: each targets a unique mol-type-local (only
   // populated for non-symmetric sides with K>1).
@@ -1575,7 +1575,7 @@ inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id, const Fas
   phase_stop(0);
 
   int total = 0;
-  for (int seed_ci : fm.seed_bond_candidates) {
+  for (int const seed_ci : fm.seed_bond_candidates) {
     if constexpr (kCmmFcProfile)
       fc_prof->fc_candidate_iters++;
 
@@ -1587,7 +1587,7 @@ inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id, const Fas
       phase_stop(1);
       continue;
     }
-    int seed_bond_cid = seed.comp_ids[seed_ci];
+    int const seed_bond_cid = seed.comp_ids[seed_ci];
     const auto& sc = pool.component(seed_bond_cid);
     if (fm.seed_bond_state_req >= 0 && sc.state_index != fm.seed_bond_state_req) {
       if constexpr (kCmmFcProfile)
@@ -1608,7 +1608,7 @@ inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id, const Fas
       continue;
     }
     // Bond tracing requires a partner regardless of pat bond_req.
-    int partner_cid = sc.bond_partner;
+    int const partner_cid = sc.bond_partner;
     if (partner_cid < 0) {
       if constexpr (kCmmFcProfile)
         fc_prof->fc_candidate_bond_rejects++;
@@ -1616,7 +1616,7 @@ inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id, const Fas
       continue;
     }
 
-    int partner_mol_id = pool.mol_of_comp(partner_cid);
+    int const partner_mol_id = pool.mol_of_comp(partner_cid);
     if (partner_mol_id == seed_mol_id) {
       if constexpr (kCmmFcProfile)
         fc_prof->fc_candidate_self_bond++;
@@ -1641,7 +1641,7 @@ inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id, const Fas
     // ---- Phase 2: partner local scan (find partner_cid's local idx) ----
     phase_start(2);
     int plocal = -1;
-    int n_partner = static_cast<int>(partner.comp_ids.size());
+    int const n_partner = static_cast<int>(partner.comp_ids.size());
     for (int k = 0; k < n_partner; ++k) {
       if (partner.comp_ids[k] == partner_cid) {
         plocal = k;
@@ -1659,7 +1659,7 @@ inline int count_2mol_1bond_fc(const AgentPool& pool, int seed_mol_id, const Fas
     // ---- Phase 3: plocal_ok scan + partner bond-endpoint state check ----
     phase_start(3);
     bool plocal_ok = false;
-    for (int x : fm.partner_bond_candidates)
+    for (int const x : fm.partner_bond_candidates)
       if (x == plocal) {
         plocal_ok = true;
         break;
@@ -1830,7 +1830,7 @@ int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, const P
   }
 
   if constexpr (kCountMultiProfile) {
-    int npm = pat_end - pat_start;
+    int const npm = pat_end - pat_start;
     cm_prof->n_pat_mols_sum += static_cast<uint64_t>(npm);
     cm_prof->n_pat_mols_hist[cm_bucket(static_cast<uint64_t>(npm))]++;
   }
@@ -1860,7 +1860,7 @@ int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, const P
     return 0;
   }
 
-  int n_pat_mols = static_cast<int>(pat.molecules.size());
+  int const n_pat_mols = static_cast<int>(pat.molecules.size());
   int total_count = 0;
   uint64_t bfs_visited_this_call = 0;
   bool entered_disjoint = false;
@@ -1876,28 +1876,28 @@ int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, const P
     bool valid = true;
 
     while (!bfs_queue.empty() && valid) {
-      int cur_pat = bfs_queue.front();
+      int const cur_pat = bfs_queue.front();
       bfs_queue.pop();
       if constexpr (kCountMultiProfile)
         bfs_visited_this_call++;
-      int cur_actual = mol_assignments[cur_pat];
+      int const cur_actual = mol_assignments[cur_pat];
       auto& cur_comp_map = comp_maps[cur_pat];
 
       for (auto& ae : pa.adj[cur_pat]) {
-        int other_pat = ae.other_mol;
+        int const other_pat = ae.other_mol;
 
         // Follow the bond from the current molecule
         if (ae.my_local >= static_cast<int>(cur_comp_map.size())) {
           valid = false;
           break;
         }
-        int my_actual_comp_id = pool.molecule(cur_actual).comp_ids[cur_comp_map[ae.my_local]];
-        int partner_comp_id = pool.component(my_actual_comp_id).bond_partner;
+        int const my_actual_comp_id = pool.molecule(cur_actual).comp_ids[cur_comp_map[ae.my_local]];
+        int const partner_comp_id = pool.component(my_actual_comp_id).bond_partner;
         if (partner_comp_id < 0) {
           valid = false;
           break;
         }
-        int partner_mol_id = pool.mol_of_comp(partner_comp_id);
+        int const partner_mol_id = pool.mol_of_comp(partner_comp_id);
 
         if (mol_assignments[other_pat] >= 0) {
           // Already assigned — validate molecule and component consistency
@@ -1910,8 +1910,8 @@ int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, const P
             valid = false;
             break;
           }
-          int expected_local = other_comp_map[ae.other_local];
-          int expected_comp_id = pool.molecule(partner_mol_id).comp_ids[expected_local];
+          int const expected_local = other_comp_map[ae.other_local];
+          int const expected_comp_id = pool.molecule(partner_mol_id).comp_ids[expected_local];
           if (expected_comp_id != partner_comp_id) {
             valid = false;
             break;
@@ -1978,7 +1978,7 @@ int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, const P
       if (!unassigned.empty()) {
         if constexpr (kCountMultiProfile)
           entered_disjoint = true;
-        int cx = pool.complex_of(seed_mol_id);
+        int const cx = pool.complex_of(seed_mol_id);
         auto cx_members = pool.molecules_in_complex(cx);
 
         std::function<void(int)> assign_unassigned = [&](int ui) {
@@ -1988,9 +1988,9 @@ int count_multi_mol_fast_generic(const AgentPool& pool, int seed_mol_id, const P
               ++total_count;
             return;
           }
-          int pat_mi = unassigned[ui];
+          int const pat_mi = unassigned[ui];
           auto& target_pm = pat.molecules[pat_mi];
-          for (int cand : cx_members) {
+          for (int const cand : cx_members) {
             if (!pool.molecule(cand).active)
               continue;
             if (pool.molecule(cand).type_index != target_pm.type_index)
@@ -2059,10 +2059,11 @@ int count_multi_mol_fast(const AgentPool& pool, int seed_mol_id, const Pattern& 
   if (fm && fm->enabled) {
     if constexpr (kCountMultiProfile)
       cm_prof->fm_hits++;
-    int specialized = count_2mol_1bond_fc(pool, seed_mol_id, *fm, fc_prof);
+    int const specialized = count_2mol_1bond_fc(pool, seed_mol_id, *fm, fc_prof);
     if (kFastMatchInvariant) {
-      int generic = count_multi_mol_fast_generic(pool, seed_mol_id, pat, model, pat_start, pat_end,
-                                                 seed_pat_idx, pa, cm_prof, reacting_local);
+      int const generic =
+          count_multi_mol_fast_generic(pool, seed_mol_id, pat, model, pat_start, pat_end,
+                                       seed_pat_idx, pa, cm_prof, reacting_local);
       if (generic != specialized) {
         std::fprintf(stderr,
                      "[FastMatch mismatch] seed_mol=%d seed_type=%d partner_type=%d "
@@ -2082,7 +2083,7 @@ int count_multi_mol_fast(const AgentPool& pool, int seed_mol_id, const Pattern& 
 // of a pattern's molecule bond graph.  Used to bound the BFS expansion depth
 // in fire_rule().
 int pattern_diameter(const Pattern& pat) {
-  int n = static_cast<int>(pat.molecules.size());
+  int const n = static_cast<int>(pat.molecules.size());
   if (n <= 1)
     return 0;
 
@@ -2092,7 +2093,7 @@ int pattern_diameter(const Pattern& pat) {
     int mol_a = -1, mol_b = -1;
     int base = 0;
     for (int mi = 0; mi < n; ++mi) {
-      int nc = static_cast<int>(pat.molecules[mi].components.size());
+      int const nc = static_cast<int>(pat.molecules[mi].components.size());
       if (bond.comp_flat_a >= base && bond.comp_flat_a < base + nc)
         mol_a = mi;
       if (bond.comp_flat_b >= base && bond.comp_flat_b < base + nc)
@@ -2113,9 +2114,9 @@ int pattern_diameter(const Pattern& pat) {
     std::queue<int> q;
     q.push(start);
     while (!q.empty()) {
-      int cur = q.front();
+      int const cur = q.front();
       q.pop();
-      for (int nb : adj[cur]) {
+      for (int const nb : adj[cur]) {
         if (dist[nb] < 0) {
           dist[nb] = dist[cur] + 1;
           diameter = std::max(dist[nb], diameter);
@@ -2152,7 +2153,7 @@ struct FenwickTree {
   // Ensure capacity for index i (0-based)
   void ensure(int i) {
     if (i >= n) {
-      int new_n = std::max(i + 1, n * 2);
+      int const new_n = std::max(i + 1, n * 2);
       tree.resize(new_n + 1, 0.0);
       n = new_n;
     }
@@ -2285,8 +2286,8 @@ struct RuleState {
 // embedding_correction_a/b correct for overcounting due to permutations
 // of identical non-reacting components in the pattern.
 double compute_propensity(const RuleState& rs, const Rule& rule, double rate) {
-  double ca = rs.embedding_correction_a;
-  double cb = rs.embedding_correction_b;
+  double const ca = rs.embedding_correction_a;
+  double const cb = rs.embedding_correction_b;
 
   if (rule.molecularity == 0) {
     // Zero-order synthesis: propensity is just the rate
@@ -2303,14 +2304,14 @@ double compute_propensity(const RuleState& rs, const Rule& rule, double rate) {
   if (rule.rate_law.type == RateLawType::MM) {
     if (rule.molecularity != 2)
       return 0;
-    double S = rs.a_total / ca;
-    double E = rs.b_total / cb;
+    double const S = rs.a_total / ca;
+    double const E = rs.b_total / cb;
     if (S <= 0 || E <= 0)
       return 0;
-    double kcat = rule.rate_law.mm_kcat;
-    double Km = rule.rate_law.mm_Km;
-    double diff = S - Km - E;
-    double sFree = 0.5 * (diff + std::sqrt((diff * diff) + (4.0 * Km * S)));
+    double const kcat = rule.rate_law.mm_kcat;
+    double const Km = rule.rate_law.mm_Km;
+    double const diff = S - Km - E;
+    double const sFree = 0.5 * (diff + std::sqrt((diff * diff) + (4.0 * Km * S)));
     if (Km + sFree <= 0)
       return 0;
     return kcat * sFree * E / (Km + sFree);
@@ -2339,8 +2340,8 @@ double compute_propensity(const RuleState& rs, const Rule& rule, double rate) {
   }
 
   // Bimolecular — apply corrections to the per-pattern totals.
-  double a_eff = rs.a_total / ca;
-  double b_eff = rs.b_total / cb;
+  double const a_eff = rs.a_total / ca;
+  double const b_eff = rs.b_total / cb;
   if (!rule.same_components) {
     // Heterodimer (A+B different types, or A+A with different bond-target
     // component names).  symmetry_factor is 1 in BNGL.  After the sampler
@@ -2356,10 +2357,10 @@ double compute_propensity(const RuleState& rs, const Rule& rule, double rate) {
   // retries until `mol_a != mol_b` instead, saving SSA cycles at small N.
   // Symmetry_factor=0.5 emitted by BNG2 is already implicit in the /2 —
   // don't multiply it in (would be a double 0.5).
-  double ao = rs.a_only_total / ca;
-  double bo = rs.b_only_total / cb;
-  double ab = rs.ab_both_total / ca; // ab_both counted from A perspective
-  double ab_sq = rs.ab_both_sq_total / (ca * ca);
+  double const ao = rs.a_only_total / ca;
+  double const bo = rs.b_only_total / cb;
+  double const ab = rs.ab_both_total / ca; // ab_both counted from A perspective
+  double const ab_sq = rs.ab_both_sq_total / (ca * ca);
   return ((ao * b_eff) + (ab * bo) + (((ab * ab) - ab_sq) / 2.0)) * rate;
 }
 
@@ -2390,8 +2391,8 @@ void compute_shared_components(const AgentPool& pool, int mol_id, const Rule& ru
   // uniquely determines one binding site on the partner molecule.  We can't
   // resolve it via the seed embedding alone, but we know that each valid
   // seed match maps 1:1 to a binding site.  Use synthetic site indices.
-  bool bind_on_nonseed_a = (bind_mol_a != seed_mol_a);
-  bool bind_on_nonseed_b = (bind_mol_b != seed_mol_b);
+  bool const bind_on_nonseed_a = (bind_mol_a != seed_mol_a);
+  bool const bind_on_nonseed_b = (bind_mol_b != seed_mol_b);
 
   // Collect binding sites from A embeddings
   std::unordered_set<int> sites_a;
@@ -2432,7 +2433,7 @@ void compute_shared_components(const AgentPool& pool, int mol_id, const Rule& ru
     // All overlap: both = min(|sites_a|, |sites_b|).
     both = std::min(static_cast<double>(sites_a.size()), static_cast<double>(sites_b.size()));
   } else {
-    for (int s : sites_a)
+    for (int const s : sites_a)
       if (sites_b.count(s))
         ++both;
   }
@@ -2462,8 +2463,8 @@ BindInfo find_bind_info(const Rule& rule) {
   if (rule.reactant_pattern_starts.size() < 2)
     return bi;
 
-  int rp1_start = rule.reactant_pattern_starts[0];
-  int rp2_start = rule.reactant_pattern_starts[1];
+  int const rp1_start = rule.reactant_pattern_starts[0];
+  int const rp2_start = rule.reactant_pattern_starts[1];
 
   for (auto& op : rule.operations) {
     if (op.type != OpType::AddBond)
@@ -2472,10 +2473,10 @@ BindInfo find_bind_info(const Rule& rule) {
       continue;
 
     // Map flat indices to (mol_idx, local_comp_idx)
-    int flat_a = op.comp_flat_a, flat_b = op.comp_flat_b;
+    int const flat_a = op.comp_flat_a, flat_b = op.comp_flat_b;
     int base = 0;
     for (int mi = 0; mi < static_cast<int>(rule.reactant_pattern.molecules.size()); ++mi) {
-      int nc = static_cast<int>(rule.reactant_pattern.molecules[mi].components.size());
+      int const nc = static_cast<int>(rule.reactant_pattern.molecules[mi].components.size());
       if (flat_a >= base && flat_a < base + nc) {
         // Determine which reactant pattern this molecule belongs to
         if (mi >= rp2_start) {
@@ -2859,7 +2860,7 @@ struct Engine::Impl {
     // rather than silently producing corrupt trajectories.
     uint64_t saved_fp = 0;
     is >> std::hex >> saved_fp >> std::dec;
-    uint64_t current_fp = compute_schema_fingerprint(model);
+    uint64_t const current_fp = compute_schema_fingerprint(model);
     if (saved_fp != current_fp) {
       std::ostringstream msg;
       msg << "State file schema fingerprint mismatch: saved=" << std::hex << saved_fp
@@ -2897,7 +2898,7 @@ struct Engine::Impl {
 
     for (int ci = 0; ci < static_cast<int>(sim.comp_states.size()); ++ci) {
       auto& cname = sim.comp_states[ci].first;
-      int occurrence = name_count[cname]++;
+      int const occurrence = name_count[cname]++;
 
       int found = 0;
       for (int mi = 0; mi < static_cast<int>(mtype.components.size()); ++mi) {
@@ -2926,7 +2927,7 @@ struct Engine::Impl {
       // hard-fail catches the 1-molecule degenerate-observable
       // mismatch).  Keep the cast explicit and the truncation intent
       // documented rather than masking the FP edge case with rounding.
-      int count = static_cast<int>(si.concentration); // truncate toward zero (NFsim parity)
+      int const count = static_cast<int>(si.concentration); // truncate toward zero (NFsim parity)
       for (int n = 0; n < count; ++n) {
         // Create molecules for this species instance
         std::vector<int> mol_ids;
@@ -2934,7 +2935,7 @@ struct Engine::Impl {
         std::vector<std::vector<int>> comp_mappings;
 
         for (auto& sim : si.molecules) {
-          int mid = pool.add_molecule(sim.type_index);
+          int const mid = pool.add_molecule(sim.type_index);
           auto& mtype = model.molecule_types[sim.type_index];
           auto& mol = pool.molecule(mid);
 
@@ -2945,10 +2946,10 @@ struct Engine::Impl {
             auto& [cname, cstate] = sim.comp_states[ci];
             if (cstate.empty())
               continue;
-            int actual_ci = cmap[ci];
+            int const actual_ci = cmap[ci];
             if (actual_ci < 0)
               continue;
-            int state_idx = mtype.state_index(actual_ci, cstate);
+            int const state_idx = mtype.state_index(actual_ci, cstate);
             if (state_idx >= 0 && actual_ci < static_cast<int>(mol.comp_ids.size()))
               pool.set_state(mol.comp_ids[actual_ci], state_idx);
           }
@@ -2962,17 +2963,19 @@ struct Engine::Impl {
           if (bond.mol_a < static_cast<int>(mol_ids.size()) &&
               bond.mol_b < static_cast<int>(mol_ids.size()) && bond.comp_a >= 0 &&
               bond.comp_b >= 0) {
-            int mid_a = mol_ids[bond.mol_a];
-            int mid_b = mol_ids[bond.mol_b];
+            int const mid_a = mol_ids[bond.mol_a];
+            int const mid_b = mol_ids[bond.mol_b];
             auto& ma = pool.molecule(mid_a);
             auto& mb = pool.molecule(mid_b);
 
-            int actual_ci_a = (bond.comp_a < static_cast<int>(comp_mappings[bond.mol_a].size()))
-                                  ? comp_mappings[bond.mol_a][bond.comp_a]
-                                  : bond.comp_a;
-            int actual_ci_b = (bond.comp_b < static_cast<int>(comp_mappings[bond.mol_b].size()))
-                                  ? comp_mappings[bond.mol_b][bond.comp_b]
-                                  : bond.comp_b;
+            int const actual_ci_a =
+                (bond.comp_a < static_cast<int>(comp_mappings[bond.mol_a].size()))
+                    ? comp_mappings[bond.mol_a][bond.comp_a]
+                    : bond.comp_a;
+            int const actual_ci_b =
+                (bond.comp_b < static_cast<int>(comp_mappings[bond.mol_b].size()))
+                    ? comp_mappings[bond.mol_b][bond.comp_b]
+                    : bond.comp_b;
 
             if (actual_ci_a >= 0 && actual_ci_b >= 0 &&
                 actual_ci_a < static_cast<int>(ma.comp_ids.size()) &&
@@ -2994,7 +2997,7 @@ struct Engine::Impl {
   // embedding_correction_a / _b are kept at 1.0 throughout.
 
   void init_rule_states() {
-    int n_rules = static_cast<int>(model.rules.size());
+    int const n_rules = static_cast<int>(model.rules.size());
     rule_states.resize(n_rules);
     bind_infos.resize(n_rules);
     rule_fire_counts.assign(n_rules, 0);
@@ -3005,10 +3008,11 @@ struct Engine::Impl {
 
       // Compute embedding overcounting corrections per reactant pattern
       auto& rs = rule_states[ri];
-      int start_a = (!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0;
-      int end_a = (rule.reactant_pattern_starts.size() > 1)
-                      ? rule.reactant_pattern_starts[1]
-                      : static_cast<int>(rule.reactant_pattern.molecules.size());
+      int const start_a =
+          (!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0;
+      int const end_a = (rule.reactant_pattern_starts.size() > 1)
+                            ? rule.reactant_pattern_starts[1]
+                            : static_cast<int>(rule.reactant_pattern.molecules.size());
 
       // Collect reacting-component LOCAL indices within the seed molecules of
       // each reactant pattern.  These drive embedding deduplication in
@@ -3030,7 +3034,7 @@ struct Engine::Impl {
         }
         int flat_base = 0;
         for (int mi = 0; mi < static_cast<int>(rule.reactant_pattern.molecules.size()); ++mi) {
-          int nc = static_cast<int>(rule.reactant_pattern.molecules[mi].components.size());
+          int const nc = static_cast<int>(rule.reactant_pattern.molecules[mi].components.size());
           if (mi == start_a) {
             for (int ci = 0; ci < nc; ++ci)
               if (flat_reacting.count(flat_base + ci))
@@ -3057,9 +3061,10 @@ struct Engine::Impl {
         rs.a_mask_complete = false;
         if (start_a < static_cast<int>(rule.reactant_pattern.molecules.size())) {
           auto& pm = rule.reactant_pattern.molecules[start_a];
-          int type_idx = pm.type_index;
+          int const type_idx = pm.type_index;
           if (type_idx >= 0 && type_idx < static_cast<int>(model.molecule_types.size())) {
-            int n_type_comps = static_cast<int>(model.molecule_types[type_idx].components.size());
+            int const n_type_comps =
+                static_cast<int>(model.molecule_types[type_idx].components.size());
             if (n_type_comps <= 64) {
               rs.a_mask_complete = true;
               auto& mtype = model.molecule_types[type_idx];
@@ -3114,7 +3119,7 @@ struct Engine::Impl {
                                rs.fm_a, kSelectReactantsProfile ? &fm_reason : nullptr);
           if constexpr (kSelectReactantsProfile) {
             if (!rs.fm_a.enabled) {
-              int n_mols = end_a - start_a;
+              int const n_mols = end_a - start_a;
               int n_bonds = 0;
               for (int mi = start_a; mi < end_a; ++mi) {
                 if (mi < static_cast<int>(rs.pat_adj_a.adj.size()))
@@ -3138,7 +3143,7 @@ struct Engine::Impl {
           std::queue<int> q;
           q.push(start_a);
           while (!q.empty()) {
-            int cur = q.front();
+            int const cur = q.front();
             q.pop();
             for (auto& e : rs.pat_adj_a.adj[cur]) {
               if (e.other_mol >= start_a && e.other_mol < end_a && !reached[e.other_mol]) {
@@ -3165,8 +3170,8 @@ struct Engine::Impl {
       }
 
       if (rule.molecularity >= 2 && rule.reactant_pattern_starts.size() > 1) {
-        int start_b = rule.reactant_pattern_starts[1];
-        int end_b = static_cast<int>(rule.reactant_pattern.molecules.size());
+        int const start_b = rule.reactant_pattern_starts[1];
+        int const end_b = static_cast<int>(rule.reactant_pattern.molecules.size());
         rs.use_multi_mol_count_b = (end_b - start_b > 1);
         if (rs.use_multi_mol_count_b) {
           rs.embedding_correction_b = 1.0;
@@ -3177,7 +3182,7 @@ struct Engine::Impl {
                                  model, rs.fm_b, kSelectReactantsProfile ? &fm_reason : nullptr);
             if constexpr (kSelectReactantsProfile) {
               if (!rs.fm_b.enabled) {
-                int n_mols = end_b - start_b;
+                int const n_mols = end_b - start_b;
                 int n_bonds = 0;
                 for (int mi = start_b; mi < end_b; ++mi) {
                   if (mi < static_cast<int>(rs.pat_adj_b.adj.size()))
@@ -3199,9 +3204,10 @@ struct Engine::Impl {
         rs.b_mask_complete = false;
         if (start_b < static_cast<int>(rule.reactant_pattern.molecules.size())) {
           auto& pm = rule.reactant_pattern.molecules[start_b];
-          int type_idx = pm.type_index;
+          int const type_idx = pm.type_index;
           if (type_idx >= 0 && type_idx < static_cast<int>(model.molecule_types.size())) {
-            int n_type_comps = static_cast<int>(model.molecule_types[type_idx].components.size());
+            int const n_type_comps =
+                static_cast<int>(model.molecule_types[type_idx].components.size());
             if (n_type_comps <= 64) {
               rs.b_mask_complete = true;
               auto& mtype = model.molecule_types[type_idx];
@@ -3238,7 +3244,7 @@ struct Engine::Impl {
     }
 
     // Build type→rule index
-    int n_types = static_cast<int>(model.molecule_types.size());
+    int const n_types = static_cast<int>(model.molecule_types.size());
     type_to_rules.assign(n_types, {});
     dynamic_synthesis_rules.clear();
     dynamic_rate_rules.clear();
@@ -3254,17 +3260,18 @@ struct Engine::Impl {
       // regardless of which molecule types were directly affected.
       if (rule.rate_law.is_dynamic && !rule.rate_law.is_local)
         dynamic_rate_rules.push_back(ri);
-      int seed_a = (!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0;
+      int const seed_a =
+          (!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0;
       if (seed_a >= static_cast<int>(rule.reactant_pattern.molecules.size()))
         continue;
-      int type_a = rule.reactant_pattern.molecules[seed_a].type_index;
+      int const type_a = rule.reactant_pattern.molecules[seed_a].type_index;
       if (type_a >= 0 && type_a < n_types)
         type_to_rules[type_a].push_back(ri);
 
       if (rule.molecularity >= 2 && rule.reactant_pattern_starts.size() > 1) {
-        int seed_b = rule.reactant_pattern_starts[1];
+        int const seed_b = rule.reactant_pattern_starts[1];
         if (seed_b < static_cast<int>(rule.reactant_pattern.molecules.size())) {
-          int type_b = rule.reactant_pattern.molecules[seed_b].type_index;
+          int const type_b = rule.reactant_pattern.molecules[seed_b].type_index;
           if (type_b != type_a && type_b >= 0 && type_b < n_types)
             type_to_rules[type_b].push_back(ri);
         }
@@ -3275,7 +3282,7 @@ struct Engine::Impl {
     // Compute max pattern diameter across all rules for BFS expansion limit
     max_pattern_depth = 0;
     for (int ri = 0; ri < n_rules; ++ri) {
-      int d = pattern_diameter(model.rules[ri].reactant_pattern);
+      int const d = pattern_diameter(model.rules[ri].reactant_pattern);
       max_pattern_depth = std::max(d, max_pattern_depth);
     }
 
@@ -3326,7 +3333,7 @@ struct Engine::Impl {
     auto& rs = rule_states[rule_idx];
     auto& bi = bind_infos[rule_idx];
 
-    int pool_size = pool.molecule_count();
+    int const pool_size = pool.molecule_count();
     rs.mol_data.assign(pool_size, PerMolRuleData{});
     rs.a_total = 0;
     rs.b_total = 0;
@@ -3336,13 +3343,15 @@ struct Engine::Impl {
     rs.ab_both_sq_total = 0;
 
     // Seed molecule for reactant pattern A
-    int seed_a = (!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0;
-    int seed_b = (rule.reactant_pattern_starts.size() > 1) ? rule.reactant_pattern_starts[1] : -1;
+    int const seed_a =
+        (!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0;
+    int const seed_b =
+        (rule.reactant_pattern_starts.size() > 1) ? rule.reactant_pattern_starts[1] : -1;
 
     if (seed_a >= static_cast<int>(rule.reactant_pattern.molecules.size())) {
       // Synthesis rule (molecularity=0): propensity is just the rate
       if (rule.molecularity == 0) {
-        double rate = evaluate_rate(rule);
+        double const rate = evaluate_rate(rule);
         set_rule_propensity(rs, rate);
       } else {
         set_rule_propensity(rs, 0);
@@ -3353,7 +3362,7 @@ struct Engine::Impl {
     auto& pm_a = rule.reactant_pattern.molecules[seed_a];
 
     // Scan all molecules of the matching type
-    for (int mid : pool.molecules_of_type(pm_a.type_index)) {
+    for (int const mid : pool.molecules_of_type(pm_a.type_index)) {
       if (!pool.molecule(mid).active)
         continue;
       if (mid >= static_cast<int>(rs.mol_data.size()))
@@ -3361,9 +3370,9 @@ struct Engine::Impl {
 
       int count_a;
       if (rs.use_multi_mol_count) {
-        int end_a = (rule.reactant_pattern_starts.size() > 1)
-                        ? rule.reactant_pattern_starts[1]
-                        : static_cast<int>(rule.reactant_pattern.molecules.size());
+        int const end_a = (rule.reactant_pattern_starts.size() > 1)
+                              ? rule.reactant_pattern_starts[1]
+                              : static_cast<int>(rule.reactant_pattern.molecules.size());
         count_a = count_multi_mol_fast(pool, mid, rule.reactant_pattern, model, seed_a, end_a,
                                        seed_a, rs.pat_adj_a, &cm_profile_, &cmm_fc_profile_,
                                        &rs.fm_a, &rs.reacting_local_a);
@@ -3379,7 +3388,7 @@ struct Engine::Impl {
         seed_b < static_cast<int>(rule.reactant_pattern.molecules.size())) {
       auto& pm_b = rule.reactant_pattern.molecules[seed_b];
 
-      for (int mid : pool.molecules_of_type(pm_b.type_index)) {
+      for (int const mid : pool.molecules_of_type(pm_b.type_index)) {
         if (!pool.molecule(mid).active)
           continue;
         if (mid >= static_cast<int>(rs.mol_data.size()))
@@ -3387,7 +3396,7 @@ struct Engine::Impl {
 
         int count_b;
         if (rs.use_multi_mol_count_b) {
-          int end_b = static_cast<int>(rule.reactant_pattern.molecules.size());
+          int const end_b = static_cast<int>(rule.reactant_pattern.molecules.size());
           count_b = count_multi_mol_fast(pool, mid, rule.reactant_pattern, model, seed_b, end_b,
                                          seed_b, rs.pat_adj_b, &cm_profile_, &cmm_fc_profile_,
                                          &rs.fm_b, &rs.reacting_local_b);
@@ -3401,7 +3410,7 @@ struct Engine::Impl {
       // Compute shared components for overcounting
       // Need to scan all molecule types that could match either pattern
       std::unordered_set<int> scanned;
-      for (int mid : pool.molecules_of_type(pm_a.type_index)) {
+      for (int const mid : pool.molecules_of_type(pm_a.type_index)) {
         if (!pool.molecule(mid).active)
           continue;
         auto& md = rs.mol_data[mid];
@@ -3423,7 +3432,7 @@ struct Engine::Impl {
       }
       // Also scan type B molecules not already scanned
       if (pm_a.type_index != pm_b.type_index) {
-        for (int mid : pool.molecules_of_type(pm_b.type_index)) {
+        for (int const mid : pool.molecules_of_type(pm_b.type_index)) {
           if (scanned.count(mid) || !pool.molecule(mid).active)
             continue;
           auto& md = rs.mol_data[mid];
@@ -3442,10 +3451,10 @@ struct Engine::Impl {
     rs.fenwick_a.clear();
     rs.fenwick_b.clear();
     if (static_cast<int>(pool.molecules_of_type(pm_a.type_index).size()) > FENWICK_THRESHOLD) {
-      int cap = pool.molecule_count();
+      int const cap = pool.molecule_count();
       rs.fenwick_a.init(cap);
       rs.use_fenwick_a = true;
-      for (int mid : pool.molecules_of_type(pm_a.type_index)) {
+      for (int const mid : pool.molecules_of_type(pm_a.type_index)) {
         if (!pool.molecule(mid).active)
           continue;
         if (mid < static_cast<int>(rs.mol_data.size()) && rs.mol_data[mid].count_a > 0)
@@ -3456,10 +3465,10 @@ struct Engine::Impl {
         seed_b < static_cast<int>(rule.reactant_pattern.molecules.size())) {
       auto& pm_b_fw = rule.reactant_pattern.molecules[seed_b];
       if (static_cast<int>(pool.molecules_of_type(pm_b_fw.type_index).size()) > FENWICK_THRESHOLD) {
-        int cap = pool.molecule_count();
+        int const cap = pool.molecule_count();
         rs.fenwick_b.init(cap);
         rs.use_fenwick_b = true;
-        for (int mid : pool.molecules_of_type(pm_b_fw.type_index)) {
+        for (int const mid : pool.molecules_of_type(pm_b_fw.type_index)) {
           if (!pool.molecule(mid).active)
             continue;
           if (mid < static_cast<int>(rs.mol_data.size()) && rs.mol_data[mid].count_b > 0)
@@ -3474,10 +3483,10 @@ struct Engine::Impl {
     if (rs.has_local_rates && rule.molecularity <= 1) {
       // Local-rate rule: propensity = sum of per-molecule (count_a * local_rate)
       rs.local_propensity_total = 0;
-      int seed_a_loc =
+      int const seed_a_loc =
           (!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0;
       auto& pm_a_loc = rule.reactant_pattern.molecules[seed_a_loc];
-      for (int mid : pool.molecules_of_type(pm_a_loc.type_index)) {
+      for (int const mid : pool.molecules_of_type(pm_a_loc.type_index)) {
         if (!pool.molecule(mid).active)
           continue;
         if (mid >= static_cast<int>(rs.mol_data.size()))
@@ -3495,7 +3504,7 @@ struct Engine::Impl {
       }
       new_propensity = rs.local_propensity_total;
     } else {
-      double rate = evaluate_rate(rule);
+      double const rate = evaluate_rate(rule);
       new_propensity = compute_propensity(rs, rule, rate);
     }
     set_rule_propensity(rs, new_propensity);
@@ -3520,11 +3529,11 @@ struct Engine::Impl {
     if (!rule.rate_law.function_name.empty()) {
       auto fit = model.function_index.find(rule.rate_law.function_name);
       if (fit != model.function_index.end()) {
-        int gi = fit->second;
+        int const gi = fit->second;
         auto& gf = model.functions[gi];
         if (gf.is_tfun && gf.tfun) {
-          double ctr_val = get_tfun_counter_value(gf);
-          double tfun_val = gf.tfun->evaluate(ctr_val);
+          double const ctr_val = get_tfun_counter_value(gf);
+          double const tfun_val = gf.tfun->evaluate(ctr_val);
           if (gf.ast) {
             // Patch the magic __tfun_NAME__ slot for this rule's
             // own tfun result (update_eval_vars wrote it from the
@@ -3603,8 +3612,8 @@ struct Engine::Impl {
     for (int i = 0; i < static_cast<int>(model.functions.size()); ++i) {
       auto& gf = model.functions[i];
       if (gf.is_tfun && gf.tfun) {
-        double ctr = get_tfun_counter_value(gf);
-        double val = gf.tfun->evaluate(ctr);
+        double const ctr = get_tfun_counter_value(gf);
+        double const val = gf.tfun->evaluate(ctr);
         eval_vars_flat[eval_gf_main_slot[i]] = val;
         eval_vars_flat[eval_gf_tfun_slot[i]] = val;
       } else if (gf.ast) {
@@ -3701,21 +3710,21 @@ struct Engine::Impl {
             auto& mc_map = obs_cx_match_count[oi];
             // Print all stored cx entries
             for (auto& kv : pass_map) {
-              int cx = kv.first;
-              int stored_mc = mc_map.count(cx) ? mc_map[cx] : -1;
+              int const cx = kv.first;
+              int const stored_mc = mc_map.count(cx) ? mc_map[cx] : -1;
               auto members = pool.molecules_in_complex(cx);
               int live_total = 0;
               auto& pat = ob.patterns[0];
-              int pm_type = pat.molecules[0].type_index;
-              for (int m : members) {
+              int const pm_type = pat.molecules[0].type_index;
+              for (int const m : members) {
                 if (!pool.molecule(m).active)
                   continue;
                 if (pool.molecule(m).type_index != pm_type)
                   continue;
-                int c = count_multi_molecule_embeddings(pool, m, pat, model);
+                int const c = count_multi_molecule_embeddings(pool, m, pat, model);
                 live_total += c;
               }
-              bool live_pass = species_quantity_passes(pat, live_total);
+              bool const live_pass = species_quantity_passes(pat, live_total);
               if ((kv.second != 0) != live_pass) {
                 fprintf(stderr,
                         "  cx=%d stored_pass=%d stored_mc=%d "
@@ -3776,8 +3785,8 @@ struct Engine::Impl {
   // per-mid delta path and Species obs take the per-cx dirty-set path.
   // Rate-dependent and sample-output obs are both tracked.
   void init_incremental_observables() {
-    int n_obs = static_cast<int>(model.observables.size());
-    int n_mols = pool.molecule_count();
+    int const n_obs = static_cast<int>(model.observables.size());
+    int const n_mols = pool.molecule_count();
 
     // Reset all tracker state.
     rate_dep_obs_indices.clear();
@@ -3836,7 +3845,7 @@ struct Engine::Impl {
         // samples at Step 1's baseline).  Full-walk is the cheaper
         // path for this class of obs.
         auto& p0 = obs.patterns[0];
-        bool trivial_pat =
+        bool const trivial_pat =
             p0.molecules.size() == 1 && p0.molecules[0].components.empty() && p0.bonds.empty();
         if (trivial_pat) {
           continue; // fall back to sample-time full-walk
@@ -3869,7 +3878,7 @@ struct Engine::Impl {
     if constexpr (kObsIncrProfile) {
       obs_incr_profile_ = ObsIncrProfile{}; // reset
       obs_incr_profile_.obs.assign(n_obs, ObsIncrProfile::PerObs{});
-      for (int oi : incr_tracked_obs_indices) {
+      for (int const oi : incr_tracked_obs_indices) {
         auto& po = obs_incr_profile_.obs[oi];
         auto& ob = model.observables[oi];
         po.name = ob.name;
@@ -3891,9 +3900,9 @@ struct Engine::Impl {
     // Compute the max pattern diameter across tracked obs.  This
     // tells incremental_update_observables how far to BFS from each
     // directly-affected mid before per-mid contribs stabilise.
-    for (int oi : incr_tracked_obs_indices) {
+    for (int const oi : incr_tracked_obs_indices) {
       for (auto& pat : model.observables[oi].patterns) {
-        int d = pattern_diameter(pat);
+        int const d = pattern_diameter(pat);
         obs_max_pattern_depth = std::max(d, obs_max_pattern_depth);
       }
     }
@@ -3903,16 +3912,16 @@ struct Engine::Impl {
     // template; ineligible patterns leave fm.enabled=false and fall
     // through to the generic BFS at dispatch time.
     if constexpr (kObsFastMatch) {
-      for (int oi : incr_tracked_obs_indices) {
+      for (int const oi : incr_tracked_obs_indices) {
         auto& obs = model.observables[oi];
-        int n_pat = static_cast<int>(obs.patterns.size());
+        int const n_pat = static_cast<int>(obs.patterns.size());
         obs_pat_fm[oi].assign(n_pat, FastMatchSlot{});
         for (int pi = 0; pi < n_pat; ++pi) {
           auto& pat = obs.patterns[pi];
-          int n_pm = static_cast<int>(pat.molecules.size());
+          int const n_pm = static_cast<int>(pat.molecules.size());
           if (n_pm != 2)
             continue;
-          PatternAdj pa = build_pattern_adjacency(pat, 0, n_pm);
+          PatternAdj const pa = build_pattern_adjacency(pat, 0, n_pm);
           build_fastmatch_slot(pat, 0, n_pm, /*seed_pat_idx=*/0, pa, model, obs_pat_fm[oi][pi]);
         }
       }
@@ -3921,12 +3930,12 @@ struct Engine::Impl {
     // Seed per-mol contribs for every tracked obs.  Both paths use
     // count_multi_molecule_embeddings, which dispatches to the fast
     // single-mol path when pat.molecules.size() == 1.
-    for (int oi : incr_tracked_obs_indices) {
+    for (int const oi : incr_tracked_obs_indices) {
       obs_mol_contrib[oi].assign(n_mols, 0.0);
       auto& obs = model.observables[oi];
       for (auto& pat : obs.patterns) {
         auto& pm = pat.molecules[0];
-        for (int mid : pool.molecules_of_type(pm.type_index)) {
+        for (int const mid : pool.molecules_of_type(pm.type_index)) {
           if (!pool.molecule(mid).active)
             continue;
           obs_mol_contrib[oi][mid] +=
@@ -3940,7 +3949,7 @@ struct Engine::Impl {
     // via compute_observables(); we just need the per-cx bookkeeping to
     // be consistent with that initial obs_values.
     if (species_incr_any_tracked) {
-      for (int oi : incr_tracked_obs_indices) {
+      for (int const oi : incr_tracked_obs_indices) {
         if (!incr_obs_is_species[oi])
           continue;
         auto& obs = model.observables[oi];
@@ -3950,14 +3959,14 @@ struct Engine::Impl {
           auto& pm = pat.molecules[0];
           // Walk each live complex that contains a type-matching mol.
           std::unordered_set<int> counted_cx;
-          for (int mid : pool.molecules_of_type(pm.type_index)) {
+          for (int const mid : pool.molecules_of_type(pm.type_index)) {
             if (!pool.molecule(mid).active)
               continue;
-            int cx = pool.complex_of(mid);
+            int const cx = pool.complex_of(mid);
             if (!counted_cx.insert(cx).second)
               continue;
             int total = 0;
-            for (int m : pool.molecules_in_complex(cx)) {
+            for (int const m : pool.molecules_in_complex(cx)) {
               if (!pool.molecule(m).active)
                 continue;
               if (pool.molecule(m).type_index != pm.type_index)
@@ -3975,7 +3984,7 @@ struct Engine::Impl {
           // to evaluating with the first pattern's quantity predicate;
           // multi-pattern Species obs will be caught by the invariant
           // gate if this is ever wrong.
-          bool pass = species_quantity_passes(obs.patterns[0], kv.second);
+          bool const pass = species_quantity_passes(obs.patterns[0], kv.second);
           pass_map[kv.first] = pass ? 1 : 0;
         }
       }
@@ -4025,7 +4034,7 @@ struct Engine::Impl {
       }
     }
 
-    int n_mols = pool.molecule_count();
+    int const n_mols = pool.molecule_count();
     if (species_incr_any_tracked && static_cast<int>(species_mid_prev_cx.size()) < n_mols) {
       species_mid_prev_cx.resize(n_mols, -1);
     }
@@ -4040,24 +4049,24 @@ struct Engine::Impl {
     if (obs_max_pattern_depth > max_pattern_depth) {
       obs_expanded = affected;
       std::queue<std::pair<int, int>> bfs_q;
-      for (int mid : affected) {
+      for (int const mid : affected) {
         if (mid >= 0 && mid < n_mols && pool.molecule(mid).active)
           bfs_q.emplace(mid, 0);
       }
-      int extra = obs_max_pattern_depth; // BFS up to this depth from each seed
+      int const extra = obs_max_pattern_depth; // BFS up to this depth from each seed
       while (!bfs_q.empty()) {
         auto front = bfs_q.front();
         bfs_q.pop();
-        int mid = front.first;
-        int depth = front.second;
+        int const mid = front.first;
+        int const depth = front.second;
         if (depth >= extra)
           continue;
         auto& mol = pool.molecule(mid);
-        for (int cid : mol.comp_ids) {
-          int partner = pool.component(cid).bond_partner;
+        for (int const cid : mol.comp_ids) {
+          int const partner = pool.component(cid).bond_partner;
           if (partner < 0)
             continue;
-          int neighbor = pool.mol_of_comp(partner);
+          int const neighbor = pool.mol_of_comp(partner);
           if (pool.molecule(neighbor).active && !obs_expanded.count(neighbor)) {
             obs_expanded.insert(neighbor);
             bfs_q.emplace(neighbor, depth + 1);
@@ -4068,14 +4077,14 @@ struct Engine::Impl {
     }
     const auto& eff_affected = *affected_ptr;
 
-    for (int oi : incr_tracked_obs_indices) {
+    for (int const oi : incr_tracked_obs_indices) {
       auto& obs = model.observables[oi];
       if (static_cast<int>(obs_mol_contrib[oi].size()) < n_mols)
         obs_mol_contrib[oi].resize(n_mols, 0.0);
 
-      bool is_species = incr_obs_is_species[oi];
-      bool trivial = incr_obs_trivial[oi];
-      int trivial_type = trivial ? obs.patterns[0].molecules[0].type_index : -1;
+      bool const is_species = incr_obs_is_species[oi];
+      bool const trivial = incr_obs_trivial[oi];
+      int const trivial_type = trivial ? obs.patterns[0].molecules[0].type_index : -1;
 
       oip_clock::time_point oip_t_obs_start;
       if constexpr (kObsIncrProfile) {
@@ -4088,16 +4097,16 @@ struct Engine::Impl {
       // and aggregated at flush time per cx.  Multi-pattern Species
       // obs fall through to full-walk at init, so here obs.patterns
       // has exactly one entry for Species and 1+ entries for Molecules.
-      for (int mid : eff_affected) {
+      for (int const mid : eff_affected) {
         if (mid < 0 || mid >= n_mols)
           continue;
         auto& mol = pool.molecule(mid);
-        double old_c = obs_mol_contrib[oi][mid];
+        double const old_c = obs_mol_contrib[oi][mid];
         double new_c = 0.0;
         if (trivial) {
           new_c = (mol.active && mol.type_index == trivial_type) ? 1.0 : 0.0;
         } else if (mol.active) {
-          int n_pat = static_cast<int>(obs.patterns.size());
+          int const n_pat = static_cast<int>(obs.patterns.size());
           for (int pi = 0; pi < n_pat; ++pi) {
             auto& pat = obs.patterns[pi];
             auto& pm = pat.molecules[0];
@@ -4117,7 +4126,7 @@ struct Engine::Impl {
             if (fm) {
               c = count_2mol_1bond_fc(pool, mid, *fm, &cmm_fc_profile_);
               if constexpr (kObsFastMatchInvariant) {
-                int ref = count_multi_molecule_embeddings(pool, mid, pat, model);
+                int const ref = count_multi_molecule_embeddings(pool, mid, pat, model);
                 if (c != ref) {
                   std::fprintf(stderr,
                                "[obs_fastmatch mismatch] oi=%d pi=%d mid=%d "
@@ -4141,7 +4150,7 @@ struct Engine::Impl {
           }
         }
         if (is_species) {
-          int cx_now = mol.active ? pool.complex_of(mid) : -1;
+          int const cx_now = mol.active ? pool.complex_of(mid) : -1;
           if (cx_now >= 0) {
             obs_dirty_cx[oi].insert(cx_now);
             if constexpr (kObsIncrProfile) {
@@ -4175,14 +4184,14 @@ struct Engine::Impl {
     // themselves aren't in `affected`.  Flushing the prev cx ensures
     // its stale pass flag is reconciled from live membership.
     if (species_incr_any_tracked) {
-      for (int mid : affected) {
+      for (int const mid : affected) {
         if (mid < 0 || mid >= n_mols)
           continue;
         auto& mol = pool.molecule(mid);
-        int cx_now = mol.active ? pool.complex_of(mid) : -1;
-        int cx_prev = species_mid_prev_cx[mid];
+        int const cx_now = mol.active ? pool.complex_of(mid) : -1;
+        int const cx_prev = species_mid_prev_cx[mid];
         if (cx_prev != -1 && cx_prev != cx_now) {
-          for (int oi : incr_tracked_obs_indices) {
+          for (int const oi : incr_tracked_obs_indices) {
             if (!incr_obs_is_species[oi])
               continue;
             obs_dirty_cx[oi].insert(cx_prev);
@@ -4236,25 +4245,25 @@ struct Engine::Impl {
     if constexpr (kObsIncrProfile) {
       obs_incr_profile_.flush_dead_cx_sum += dead_cxs.size();
     }
-    for (int oi : incr_tracked_obs_indices) {
+    for (int const oi : incr_tracked_obs_indices) {
       if (!incr_obs_is_species[oi])
         continue;
       auto& obs = model.observables[oi];
       auto& pat = obs.patterns[0];
-      int pm_type = pat.molecules[0].type_index;
+      int const pm_type = pat.molecules[0].type_index;
       auto& mc_map = obs_cx_match_count[oi];
       auto& pass_map = obs_cx_passed[oi];
       auto& contribs = obs_mol_contrib[oi];
-      for (int cx : dead_cxs) {
+      for (int const cx : dead_cxs) {
         if (mc_map.count(cx))
           obs_dirty_cx[oi].insert(cx);
       }
       if constexpr (kObsIncrProfile) {
         obs_incr_profile_.flush_dirty_cx_sum += obs_dirty_cx[oi].size();
       }
-      for (int cx : obs_dirty_cx[oi]) {
+      for (int const cx : obs_dirty_cx[oi]) {
         int total = 0;
-        for (int m : pool.molecules_in_complex(cx)) {
+        for (int const m : pool.molecules_in_complex(cx)) {
           if (!pool.molecule(m).active)
             continue;
           if (pool.molecule(m).type_index != pm_type)
@@ -4262,9 +4271,9 @@ struct Engine::Impl {
           if (m >= 0 && m < static_cast<int>(contribs.size()))
             total += static_cast<int>(contribs[m]);
         }
-        bool new_pass = species_quantity_passes(pat, total);
+        bool const new_pass = species_quantity_passes(pat, total);
         auto pit = pass_map.find(cx);
-        bool old_pass = (pit != pass_map.end()) && (pit->second != 0);
+        bool const old_pass = (pit != pass_map.end()) && (pit->second != 0);
         if (new_pass != old_pass) {
           obs_values[oi] += (new_pass ? 1.0 : -1.0);
         }
@@ -4302,7 +4311,7 @@ struct Engine::Impl {
       if (pat.molecules.empty())
         continue;
       auto& pm = pat.molecules[0];
-      bool multi = pat.molecules.size() > 1;
+      bool const multi = pat.molecules.size() > 1;
 
       if (obs.type == "Molecules") {
         if constexpr (kRecordAtProfile) {
@@ -4310,7 +4319,7 @@ struct Engine::Impl {
             rap_po->molecules_branch_calls++;
         }
         // Count embeddings across all molecules of matching type
-        for (int mid : pool.molecules_of_type(pm.type_index)) {
+        for (int const mid : pool.molecules_of_type(pm.type_index)) {
           if (!pool.molecule(mid).active)
             continue;
           if constexpr (kRecordAtProfile) {
@@ -4330,10 +4339,10 @@ struct Engine::Impl {
         }
         // Species: count complexes containing a match
         std::unordered_set<int> counted_cx;
-        for (int mid : pool.molecules_of_type(pm.type_index)) {
+        for (int const mid : pool.molecules_of_type(pm.type_index)) {
           if (!pool.molecule(mid).active)
             continue;
-          int cx = pool.complex_of(mid);
+          int const cx = pool.complex_of(mid);
           if (counted_cx.count(cx)) {
             if constexpr (kRecordAtProfile) {
               if (rap_po)
@@ -4352,7 +4361,7 @@ struct Engine::Impl {
           // we need the complex-wide total, not just one molecule's count.
           int match_count = 0;
           auto cx_members = pool.molecules_in_complex(cx);
-          for (int m : cx_members) {
+          for (int const m : cx_members) {
             if constexpr (kRecordAtProfile) {
               if (rap_po)
                 rap_po->n_cx_members_walked++;
@@ -4407,13 +4416,13 @@ struct Engine::Impl {
       return 0.0;
     double total = 0;
     if (complex_wide) {
-      int cx = pool.complex_of(mol_id);
+      int const cx = pool.complex_of(mol_id);
       for (auto& pat : obs.patterns) {
         if (pat.molecules.empty())
           continue;
         auto& pm = pat.molecules[0];
-        bool multi = pat.molecules.size() > 1;
-        for (int mid : pool.molecules_in_complex(cx)) {
+        bool const multi = pat.molecules.size() > 1;
+        for (int const mid : pool.molecules_in_complex(cx)) {
           auto& mol = pool.molecule(mid);
           if (!mol.active || mol.type_index != pm.type_index)
             continue;
@@ -4428,7 +4437,7 @@ struct Engine::Impl {
         auto& pm = pat.molecules[0];
         if (pool.molecule(mol_id).type_index != pm.type_index)
           continue;
-        bool multi = pat.molecules.size() > 1;
+        bool const multi = pat.molecules.size() > 1;
         total += multi ? count_multi_molecule_embeddings(pool, mol_id, pat, model)
                        : count_embeddings_single(pool, mol_id, pm, model);
       }
@@ -4444,7 +4453,7 @@ struct Engine::Impl {
   double evaluate_local_rate(const Rule& rule, int mol_id) {
     update_eval_vars();
 
-    bool per_molecule = rule.rate_law.local_arg_is_molecule;
+    bool const per_molecule = rule.rate_law.local_arg_is_molecule;
 
     // Save global values for the slots we are about to perturb.  A
     // follow-up rate eval (next rule in incremental_update, or this
@@ -4466,7 +4475,7 @@ struct Engine::Impl {
 
     // Override observable slots with local evaluations at mol_id,
     // using precomputed local_obs_indices (avoids set rebuild + linear scan).
-    for (int oi : local_obs_indices) {
+    for (int const oi : local_obs_indices) {
       auto& obs = model.observables[oi];
       eval_vars_flat[eval_obs_slot[oi]] = evaluate_observable_on(obs, mol_id, !per_molecule);
     }
@@ -4477,7 +4486,7 @@ struct Engine::Impl {
     // top-of-call update_eval_vars and DO NOT depend on local
     // observables (BNG2 emits local arg references only inside
     // is_local() functions).
-    for (int i : eval_local_fn_slots) {
+    for (int const i : eval_local_fn_slots) {
       auto& gf = model.functions[i];
       try {
         eval_vars_flat[eval_gf_main_slot[i]] = expr::evaluate(*gf.ast, eval_vars_flat);
@@ -4487,7 +4496,7 @@ struct Engine::Impl {
     }
 
     auto fit = model.function_index.find(rule.rate_law.function_name);
-    double result =
+    double const result =
         (fit != model.function_index.end()) ? eval_vars_flat[eval_gf_main_slot[fit->second]] : 0.0;
 
     // Restore the global view we cached on entry.
@@ -4534,13 +4543,13 @@ struct Engine::Impl {
       if constexpr (kIncrUpdateProfile)
         incr_profile_.have_local_calls++;
       std::unordered_set<int> seen_cx;
-      for (int mid : affected_mols) {
+      for (int const mid : affected_mols) {
         if (mid < 0 || mid >= pool.molecule_count() || !pool.molecule(mid).active)
           continue;
-        int cx = pool.complex_of(mid);
+        int const cx = pool.complex_of(mid);
         if (!seen_cx.insert(cx).second)
           continue;
-        for (int m : pool.molecules_in_complex(cx))
+        for (int const m : pool.molecules_in_complex(cx))
           if (pool.molecule(m).active)
             expanded.insert(m);
       }
@@ -4558,19 +4567,19 @@ struct Engine::Impl {
     }
 
     // --- Type→rule index: only process rules relevant to affected types ---
-    int n_rules = static_cast<int>(model.rules.size());
-    int n_types = static_cast<int>(type_to_rules.size());
+    int const n_rules = static_cast<int>(model.rules.size());
+    int const n_types = static_cast<int>(type_to_rules.size());
     std::memset(rule_needed_buf.data(), 0, rule_needed_buf.size());
 
     // Collect unique types from affected molecules, then mark relevant rules
     {
       std::vector<char> type_seen(n_types, 0);
-      for (int mid : affected_mols) {
+      for (int const mid : affected_mols) {
         if (mid >= 0 && mid < pool.molecule_count()) {
-          int t = pool.molecule(mid).type_index;
+          int const t = pool.molecule(mid).type_index;
           if (t >= 0 && t < n_types && !type_seen[t]) {
             type_seen[t] = 1;
-            for (int ri : type_to_rules[t])
+            for (int const ri : type_to_rules[t])
               rule_needed_buf[ri] = 1;
           }
         }
@@ -4578,12 +4587,12 @@ struct Engine::Impl {
 
       // For local-rate rules, also check expanded neighbor types
       if (have_local_rules_) {
-        for (int mid : mols_for_local) {
+        for (int const mid : mols_for_local) {
           if (mid >= 0 && mid < pool.molecule_count()) {
-            int t = pool.molecule(mid).type_index;
+            int const t = pool.molecule(mid).type_index;
             if (t >= 0 && t < n_types && !type_seen[t]) {
               type_seen[t] = 1;
-              for (int ri : type_to_rules[t]) {
+              for (int const ri : type_to_rules[t]) {
                 if (rule_states[ri].has_local_rates)
                   rule_needed_buf[ri] = 1;
               }
@@ -4595,9 +4604,9 @@ struct Engine::Impl {
 
     // Dynamic rate rules always need propensity recomputation because
     // their rates depend on observables that may have changed.
-    for (int ri : dynamic_synthesis_rules)
+    for (int const ri : dynamic_synthesis_rules)
       rule_needed_buf[ri] = 1;
-    for (int ri : dynamic_rate_rules)
+    for (int const ri : dynamic_rate_rules)
       rule_needed_buf[ri] = 1;
 
     if constexpr (kIncrUpdateProfile) {
@@ -4641,13 +4650,15 @@ struct Engine::Impl {
       if constexpr (kIncrUpdateProfile)
         incr_profile_.rule_local_rate_cache_clears++;
 
-      int seed_a = (!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0;
-      int seed_b = (rule.reactant_pattern_starts.size() > 1) ? rule.reactant_pattern_starts[1] : -1;
+      int const seed_a =
+          (!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0;
+      int const seed_b =
+          (rule.reactant_pattern_starts.size() > 1) ? rule.reactant_pattern_starts[1] : -1;
 
       if (seed_a >= static_cast<int>(rule.reactant_pattern.molecules.size())) {
         // Synthesis rule: recompute propensity if rate is dynamic
         if (rule.molecularity == 0 && rule.rate_law.is_dynamic) {
-          double rate = evaluate_rate(rule);
+          double const rate = evaluate_rate(rule);
           set_rule_propensity(rs, rate);
         }
         if constexpr (kIncrUpdateProfile)
@@ -4674,7 +4685,7 @@ struct Engine::Impl {
               ? (rs.a_relevant_mask | (rule.molecularity >= 2 ? rs.b_relevant_mask : uint64_t{0}))
               : ~uint64_t{0};
 
-      for (int mid : update_set) {
+      for (int const mid : update_set) {
         // Ensure mol_data is large enough
         if (mid >= static_cast<int>(rs.mol_data.size()))
           rs.mol_data.resize(mid + 1, PerMolRuleData{});
@@ -4715,8 +4726,8 @@ struct Engine::Impl {
         // was untouched this event.
         if (rule_cacheable && old.cache_init && mid < pool.molecule_count() &&
             pool.molecule(mid).active) {
-          bool had_change = mid < static_cast<int>(event_mol_change_epoch.size()) &&
-                            event_mol_change_epoch[mid] == event_epoch;
+          bool const had_change = mid < static_cast<int>(event_mol_change_epoch.size()) &&
+                                  event_mol_change_epoch[mid] == event_epoch;
           if (!had_change) {
             if constexpr (kIncrUpdateProfile) {
               incr_profile_.cache_hits_epoch++;
@@ -4784,9 +4795,9 @@ struct Engine::Impl {
                   incr_profile_.per_rule_count_a_multi.resize(ri + 1, 0);
                 incr_profile_.per_rule_count_a_multi[ri]++;
               }
-              int end_a_inc = (rule.reactant_pattern_starts.size() > 1)
-                                  ? rule.reactant_pattern_starts[1]
-                                  : static_cast<int>(rule.reactant_pattern.molecules.size());
+              int const end_a_inc = (rule.reactant_pattern_starts.size() > 1)
+                                        ? rule.reactant_pattern_starts[1]
+                                        : static_cast<int>(rule.reactant_pattern.molecules.size());
               nd.count_a = count_multi_mol_fast(pool, mid, rule.reactant_pattern, model, seed_a,
                                                 end_a_inc, seed_a, rs.pat_adj_a, &cm_profile_,
                                                 &cmm_fc_profile_, &rs.fm_a, &rs.reacting_local_a);
@@ -4814,7 +4825,7 @@ struct Engine::Impl {
               if (rs.use_multi_mol_count_b) {
                 if constexpr (kIncrUpdateProfile)
                   incr_profile_.count_b_multi_calls++;
-                int end_b_inc = static_cast<int>(rule.reactant_pattern.molecules.size());
+                int const end_b_inc = static_cast<int>(rule.reactant_pattern.molecules.size());
                 nd.count_b = count_multi_mol_fast(pool, mid, rule.reactant_pattern, model, seed_b,
                                                   end_b_inc, seed_b, rs.pat_adj_b, &cm_profile_,
                                                   &cmm_fc_profile_, &rs.fm_b, &rs.reacting_local_b);
@@ -4864,7 +4875,7 @@ struct Engine::Impl {
               incr_profile_.local_rate_path_calls++;
             if (!rule.rate_law.local_arg_is_molecule) {
               // Pattern-level: cache per complex
-              int cx = pool.complex_of(mid);
+              int const cx = pool.complex_of(mid);
               auto cit = local_rate_cache.find(cx);
               if (cit != local_rate_cache.end()) {
                 nd.local_rate = cit->second;
@@ -4919,9 +4930,9 @@ struct Engine::Impl {
           if constexpr (kIncrUpdateProfile)
             incr_profile_.fenwick_a_updates++;
           if (mid >= rs.fenwick_a.n) {
-            int new_n = std::max(mid + 1, rs.fenwick_a.n * 2);
+            int const new_n = std::max(mid + 1, rs.fenwick_a.n * 2);
             rs.fenwick_a.init(new_n);
-            for (int m : pool.molecules_of_type(pm_a.type_index)) {
+            for (int const m : pool.molecules_of_type(pm_a.type_index)) {
               if (m < 0 || m >= pool.molecule_count() || !pool.molecule(m).active)
                 continue;
               if (m < static_cast<int>(rs.mol_data.size()) && rs.mol_data[m].count_a > 0)
@@ -4934,11 +4945,11 @@ struct Engine::Impl {
           if constexpr (kIncrUpdateProfile)
             incr_profile_.fenwick_b_updates++;
           if (mid >= rs.fenwick_b.n) {
-            int new_n = std::max(mid + 1, rs.fenwick_b.n * 2);
+            int const new_n = std::max(mid + 1, rs.fenwick_b.n * 2);
             rs.fenwick_b.init(new_n);
             if (seed_b >= 0 && seed_b < static_cast<int>(rule.reactant_pattern.molecules.size())) {
               auto& pm_b_local = rule.reactant_pattern.molecules[seed_b];
-              for (int m : pool.molecules_of_type(pm_b_local.type_index)) {
+              for (int const m : pool.molecules_of_type(pm_b_local.type_index)) {
                 if (m < 0 || m >= pool.molecule_count() || !pool.molecule(m).active)
                   continue;
                 if (m < static_cast<int>(rs.mol_data.size()) && rs.mol_data[m].count_b > 0)
@@ -4978,7 +4989,7 @@ struct Engine::Impl {
       if (rs.has_local_rates) {
         new_propensity = rs.local_propensity_total;
       } else {
-        double rate = evaluate_rate(rule);
+        double const rate = evaluate_rate(rule);
         new_propensity = compute_propensity(rs, rule, rate);
       }
       set_rule_propensity(rs, new_propensity);
@@ -5001,7 +5012,8 @@ struct Engine::Impl {
     auto& rs = rule_states[rule_idx];
     ReactionMatch match;
 
-    int seed_a = (!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0;
+    int const seed_a =
+        (!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0;
 
     // -- profile scaffolding (gated, see kSelectReactantsProfile) --
     using sr_clock = std::chrono::steady_clock;
@@ -5046,18 +5058,19 @@ struct Engine::Impl {
     if (rule.molecularity <= 1) {
       // Unimolecular: sample molecule weighted by count_a (or local_propensity)
       auto& pm_a = rule.reactant_pattern.molecules[seed_a];
-      bool is_multi_pat = rule.reactant_pattern.molecules.size() > 1;
-      int uni_path = is_multi_pat ? (rs.fm_a.enabled ? SrProfile::kPathUniMultiFm
-                                                     : SrProfile::kPathUniMultiGen)
-                                  : SrProfile::kPathUniSingle;
-      int mol_id = rs.has_local_rates ? sample_molecule_by_local_propensity(pm_a.type_index, rs)
-                                      : sample_molecule_weighted(pm_a.type_index, rs, true);
+      bool const is_multi_pat = rule.reactant_pattern.molecules.size() > 1;
+      int const uni_path = is_multi_pat ? (rs.fm_a.enabled ? SrProfile::kPathUniMultiFm
+                                                           : SrProfile::kPathUniMultiGen)
+                                        : SrProfile::kPathUniSingle;
+      int const mol_id = rs.has_local_rates
+                             ? sample_molecule_by_local_propensity(pm_a.type_index, rs)
+                             : sample_molecule_weighted(pm_a.type_index, rs, true);
       if (mol_id < 0) {
         sr_finish(uni_path, /*outcome=*/0);
         return match;
       }
 
-      bool multi_mol_pattern = is_multi_pat;
+      bool const multi_mol_pattern = is_multi_pat;
 
       if (!multi_mol_pattern) {
         // Simple single-molecule unimolecular rule
@@ -5079,14 +5092,14 @@ struct Engine::Impl {
         match.mol_ids.resize(rule.reactant_pattern.molecules.size(), -1);
         match.mol_ids[seed_a] = mol_id;
 
-        int n_flat = rule.reactant_pattern.flat_comp_count();
+        int const n_flat = rule.reactant_pattern.flat_comp_count();
         match.comp_ids.resize(n_flat, -1);
         int base = 0;
         for (int mi = 0; mi < static_cast<int>(rule.reactant_pattern.molecules.size()); ++mi) {
-          int nc = static_cast<int>(rule.reactant_pattern.molecules[mi].components.size());
+          int const nc = static_cast<int>(rule.reactant_pattern.molecules[mi].components.size());
           if (mi == seed_a) {
             for (int ci = 0; ci < nc && ci < static_cast<int>(embs[ei].size()); ++ci) {
-              int actual_local = embs[ei][ci];
+              int const actual_local = embs[ei][ci];
               match.comp_ids[base + ci] = pool.molecule(mol_id).comp_ids[actual_local];
             }
           }
@@ -5111,8 +5124,8 @@ struct Engine::Impl {
             auto gen = select_multi_mol_unimolecular(rule, rs.pat_adj_a, mol_id, seed_a);
             auto rng_after_gen = rng;
 
-            bool rng_ok = (rng_after_fast == rng_after_gen);
-            bool match_ok = (fast.mol_ids == gen.mol_ids && fast.comp_ids == gen.comp_ids);
+            bool const rng_ok = (rng_after_fast == rng_after_gen);
+            bool const match_ok = (fast.mol_ids == gen.mol_ids && fast.comp_ids == gen.comp_ids);
             if (!rng_ok || !match_ok) {
               std::fprintf(stderr,
                            "[FastSelect mismatch] rule=%d seed_mol=%d "
@@ -5165,7 +5178,7 @@ struct Engine::Impl {
 
     } else {
       // Bimolecular
-      int seed_b = rule.reactant_pattern_starts[1];
+      int const seed_b = rule.reactant_pattern_starts[1];
       auto& pm_a = rule.reactant_pattern.molecules[seed_a];
       auto& pm_b = rule.reactant_pattern.molecules[seed_b];
 
@@ -5260,11 +5273,11 @@ struct Engine::Impl {
       match.mol_ids[seed_a] = mol_a;
       match.mol_ids[seed_b] = mol_b;
 
-      int n_flat = rule.reactant_pattern.flat_comp_count();
+      int const n_flat = rule.reactant_pattern.flat_comp_count();
       match.comp_ids.resize(n_flat, -1);
       int base = 0;
       for (int mi = 0; mi < static_cast<int>(rule.reactant_pattern.molecules.size()); ++mi) {
-        int nc = static_cast<int>(rule.reactant_pattern.molecules[mi].components.size());
+        int const nc = static_cast<int>(rule.reactant_pattern.molecules[mi].components.size());
         if (mi == seed_a) {
           for (int ci = 0; ci < nc && ci < static_cast<int>(embs_a[ei_a].size()); ++ci)
             match.comp_ids[base + ci] = pool.molecule(mol_a).comp_ids[embs_a[ei_a][ci]];
@@ -5276,8 +5289,8 @@ struct Engine::Impl {
       }
 
       // Resolve non-seed molecules in multi-molecule reactant patterns
-      int end_a = seed_b; // pattern A spans [seed_a, seed_b)
-      int end_b = static_cast<int>(rule.reactant_pattern.molecules.size());
+      int const end_a = seed_b; // pattern A spans [seed_a, seed_b)
+      int const end_b = static_cast<int>(rule.reactant_pattern.molecules.size());
       if (end_a - seed_a > 1) {
         if constexpr (kSelectReactantsProfile)
           sr_profile_.bimol_resolve_calls++;
@@ -5308,10 +5321,10 @@ struct Engine::Impl {
 
     // Unimolecular success fall-through (molecularity <= 1 branch above).
     {
-      bool is_multi_pat = rule.reactant_pattern.molecules.size() > 1;
-      int uni_path = is_multi_pat ? (rs.fm_a.enabled ? SrProfile::kPathUniMultiFm
-                                                     : SrProfile::kPathUniMultiGen)
-                                  : SrProfile::kPathUniSingle;
+      bool const is_multi_pat = rule.reactant_pattern.molecules.size() > 1;
+      int const uni_path = is_multi_pat ? (rs.fm_a.enabled ? SrProfile::kPathUniMultiFm
+                                                           : SrProfile::kPathUniMultiGen)
+                                        : SrProfile::kPathUniSingle;
       sr_finish(uni_path, /*outcome=*/2);
     }
     return match;
@@ -5330,10 +5343,10 @@ struct Engine::Impl {
       // Reactant constraint: find the molecule matched for reactant pattern c.pattern_idx
       if (c.pattern_idx >= static_cast<int>(rule.reactant_pattern_starts.size()))
         continue;
-      int seed_mol_idx = rule.reactant_pattern_starts[c.pattern_idx];
+      int const seed_mol_idx = rule.reactant_pattern_starts[c.pattern_idx];
       if (seed_mol_idx >= static_cast<int>(match.mol_ids.size()))
         continue;
-      int mol_id = match.mol_ids[seed_mol_idx];
+      int const mol_id = match.mol_ids[seed_mol_idx];
       if (mol_id < 0)
         continue;
 
@@ -5341,7 +5354,7 @@ struct Engine::Impl {
       // Constraint patterns are typically single-molecule.
       bool matches = false;
       for (auto& cpm : c.pattern.molecules) {
-        int emb = count_embeddings_single(pool, mol_id, cpm, model);
+        int const emb = count_embeddings_single(pool, mol_id, cpm, model);
         if (emb > 0) {
           matches = true;
           break;
@@ -5364,7 +5377,7 @@ struct Engine::Impl {
 
       if (c.pattern_idx >= static_cast<int>(rule.product_pattern_starts.size()))
         continue;
-      int prod_mol_idx = rule.product_pattern_starts[c.pattern_idx];
+      int const prod_mol_idx = rule.product_pattern_starts[c.pattern_idx];
 
       // Find the reactant molecule that maps to this product molecule
       // by reverse-looking through reactant_to_product_map.
@@ -5380,7 +5393,7 @@ struct Engine::Impl {
           // Find which reactant molecule this flat index belongs to
           int base = 0;
           for (int mi = 0; mi < static_cast<int>(rule.reactant_pattern.molecules.size()); ++mi) {
-            int nc = static_cast<int>(rule.reactant_pattern.molecules[mi].components.size());
+            int const nc = static_cast<int>(rule.reactant_pattern.molecules[mi].components.size());
             if (ri >= base && ri < base + nc) {
               reactant_mol_idx = mi;
               break;
@@ -5393,13 +5406,13 @@ struct Engine::Impl {
 
       if (reactant_mol_idx < 0 || reactant_mol_idx >= static_cast<int>(match.mol_ids.size()))
         continue;
-      int mol_id = match.mol_ids[reactant_mol_idx];
+      int const mol_id = match.mol_ids[reactant_mol_idx];
       if (mol_id < 0)
         continue;
 
       bool matches = false;
       for (auto& cpm : c.pattern.molecules) {
-        int emb = count_embeddings_single(pool, mol_id, cpm, model);
+        int const emb = count_embeddings_single(pool, mol_id, cpm, model);
         if (emb > 0) {
           matches = true;
           break;
@@ -5426,7 +5439,7 @@ struct Engine::Impl {
     }
 
     // Use pre-computed totals from incremental bookkeeping (avoids O(N) scan)
-    double total = use_a ? rs.a_total : rs.b_total;
+    double const total = use_a ? rs.a_total : rs.b_total;
     if (total <= 0) {
       if constexpr (kSelectReactantsProfile)
         sr_profile_.sampler_empty_pool++;
@@ -5434,11 +5447,11 @@ struct Engine::Impl {
     }
 
     // O(log N) Fenwick tree sampling for large populations
-    bool use_fenwick = use_a ? rs.use_fenwick_a : rs.use_fenwick_b;
+    bool const use_fenwick = use_a ? rs.use_fenwick_a : rs.use_fenwick_b;
     if (use_fenwick) {
       auto& ft = use_a ? rs.fenwick_a : rs.fenwick_b;
-      double r = uniform() * total;
-      int mid = ft.find(r);
+      double const r = uniform() * total;
+      int const mid = ft.find(r);
       if constexpr (kFenwickInvariant) {
         // Verify mid's mol-id-ordered cumulative range contains r:
         //   prefix_before_mid <= r < prefix_through_mid
@@ -5446,7 +5459,7 @@ struct Engine::Impl {
         // the same r — both are statistically valid; this checks Fenwick's
         // bit-descent answer matches its own prefix-sum semantics.)
         double prefix_through_mid = 0.0;
-        int last_m = std::min(mid, pool.molecule_count() - 1);
+        int const last_m = std::min(mid, pool.molecule_count() - 1);
         for (int m = 0; m <= last_m; ++m) {
           if (!pool.molecule(m).active)
             continue;
@@ -5455,10 +5468,11 @@ struct Engine::Impl {
           if (m < static_cast<int>(rs.mol_data.size()))
             prefix_through_mid += use_a ? rs.mol_data[m].count_a : rs.mol_data[m].count_b;
         }
-        double mid_weight = (mid >= 0 && mid < static_cast<int>(rs.mol_data.size()))
-                                ? (use_a ? rs.mol_data[mid].count_a : rs.mol_data[mid].count_b)
-                                : 0.0;
-        double prefix_before_mid = prefix_through_mid - mid_weight;
+        double const mid_weight =
+            (mid >= 0 && mid < static_cast<int>(rs.mol_data.size()))
+                ? (use_a ? rs.mol_data[mid].count_a : rs.mol_data[mid].count_b)
+                : 0.0;
+        double const prefix_before_mid = prefix_through_mid - mid_weight;
         if (prefix_before_mid > r || r >= prefix_through_mid) {
           fprintf(stderr,
                   "[fw INVARIANT FAIL] type=%d  use_a=%d  r=%.6f  total=%.6f"
@@ -5470,9 +5484,9 @@ struct Engine::Impl {
         }
       }
       // Validate: must be active and of correct type
-      bool valid_mid = (mid >= 0 && mid < pool.molecule_count());
-      bool active = valid_mid && pool.molecule(mid).active;
-      bool type_ok = active && pool.molecule(mid).type_index == type_index;
+      bool const valid_mid = (mid >= 0 && mid < pool.molecule_count());
+      bool const active = valid_mid && pool.molecule(mid).active;
+      bool const type_ok = active && pool.molecule(mid).type_index == type_index;
       if (type_ok) {
         if constexpr (kSelectReactantsProfile)
           sr_profile_.sampler_fenwick_uses++;
@@ -5482,7 +5496,7 @@ struct Engine::Impl {
         sr_profile_.sampler_fenwick_drifts++;
         if (!valid_mid) {
           sr_profile_.sampler_drift_invalid_mid++;
-          double tree_sum = ft.sum();
+          double const tree_sum = ft.sum();
           if (r >= tree_sum) {
             sr_profile_.sampler_drift_target_eq_sum++;
             sr_profile_.sampler_drift_excess_sum += (r - tree_sum);
@@ -5502,9 +5516,9 @@ struct Engine::Impl {
       sr_profile_.sampler_linear_calls++;
 
     // O(N) linear scan fallback
-    double r = uniform() * total;
+    double const r = uniform() * total;
     double cum = 0;
-    for (int mid : mols) {
+    for (int const mid : mols) {
       if (!pool.molecule(mid).active)
         continue;
       if (mid < static_cast<int>(rs.mol_data.size())) {
@@ -5527,9 +5541,9 @@ struct Engine::Impl {
     if (rs.local_propensity_total <= 0)
       return -1;
 
-    double r = uniform() * rs.local_propensity_total;
+    double const r = uniform() * rs.local_propensity_total;
     double cum = 0;
-    for (int mid : mols) {
+    for (int const mid : mols) {
       if (!pool.molecule(mid).active)
         continue;
       if (mid < static_cast<int>(rs.mol_data.size())) {
@@ -5550,7 +5564,7 @@ struct Engine::Impl {
                                int seed_pat_idx, int seed_mol_id,
                                const std::vector<int>& seed_comp_map, ReactionMatch& match) const {
 
-    int n_pat_mols = static_cast<int>(pat.molecules.size());
+    int const n_pat_mols = static_cast<int>(pat.molecules.size());
 
     // Bond adjacency restricted to [pat_start, pat_end) is pre-computed in
     // pa (rs.pat_adj_a/_b), built at init via build_pattern_adjacency with
@@ -5567,25 +5581,25 @@ struct Engine::Impl {
     bfs_queue.push(seed_pat_idx);
 
     while (!bfs_queue.empty()) {
-      int cur_pat = bfs_queue.front();
+      int const cur_pat = bfs_queue.front();
       bfs_queue.pop();
-      int cur_actual = mol_assignments[cur_pat];
+      int const cur_actual = mol_assignments[cur_pat];
       auto& cur_comp_map = comp_maps[cur_pat];
 
       for (auto& ae : adj[cur_pat]) {
-        int other_pat = ae.other_mol;
+        int const other_pat = ae.other_mol;
         if (mol_assignments[other_pat] >= 0)
           continue; // already resolved
 
         if (ae.my_local >= static_cast<int>(cur_comp_map.size()))
           return false;
-        int my_actual_local = cur_comp_map[ae.my_local];
-        int my_actual_comp_id = pool.molecule(cur_actual).comp_ids[my_actual_local];
-        int partner_comp_id = pool.component(my_actual_comp_id).bond_partner;
+        int const my_actual_local = cur_comp_map[ae.my_local];
+        int const my_actual_comp_id = pool.molecule(cur_actual).comp_ids[my_actual_local];
+        int const partner_comp_id = pool.component(my_actual_comp_id).bond_partner;
         if (partner_comp_id < 0)
           return false;
 
-        int partner_mol_id = pool.mol_of_comp(partner_comp_id);
+        int const partner_mol_id = pool.mol_of_comp(partner_comp_id);
         auto& other_pm = pat.molecules[other_pat];
         if (pool.molecule(partner_mol_id).type_index != other_pm.type_index)
           return false;
@@ -5628,7 +5642,7 @@ struct Engine::Impl {
     // Fill match
     int base = 0;
     for (int mi = 0; mi < n_pat_mols; ++mi) {
-      int nc = static_cast<int>(pat.molecules[mi].components.size());
+      int const nc = static_cast<int>(pat.molecules[mi].components.size());
       if (mi >= pat_start && mi < pat_end && mi != seed_pat_idx) {
         match.mol_ids[mi] = mol_assignments[mi];
         auto& cmap = comp_maps[mi];
@@ -5664,7 +5678,7 @@ struct Engine::Impl {
       return match;
     if (seed.type_index != fm.seed_type)
       return match;
-    int n_seed = static_cast<int>(seed.comp_ids.size());
+    int const n_seed = static_cast<int>(seed.comp_ids.size());
 
     // Mol-level non-endpoint checks on seed (only populated on non-symmetric
     // K>1 sides).  If any fails, count_embeddings_single would return 0 and
@@ -5686,7 +5700,7 @@ struct Engine::Impl {
     // corresponds 1:1 with an entry in seed_embs.
     std::vector<int> seed_locals;
     seed_locals.reserve(fm.seed_bond_candidates.size());
-    for (int c : fm.seed_bond_candidates) {
+    for (int const c : fm.seed_bond_candidates) {
       if (c >= n_seed)
         continue;
       const auto& sc = pool.component(seed.comp_ids[c]);
@@ -5714,7 +5728,7 @@ struct Engine::Impl {
     //     if (j > i) j = i;
     //     std::swap(seed_embs[i], seed_embs[j]);
     //   }
-    int n_se = static_cast<int>(seed_locals.size());
+    int const n_se = static_cast<int>(seed_locals.size());
     for (int i = n_se - 1; i > 0; --i) {
       int j = static_cast<int>(uniform() * (i + 1));
       j = std::min(j, i);
@@ -5729,13 +5743,13 @@ struct Engine::Impl {
     int chosen_seed_local = -1;
     int partner_mol_id = -1;
     int partner_local = -1;
-    for (int seed_ci : seed_locals) {
-      int seed_cid = seed.comp_ids[seed_ci];
-      int partner_cid = pool.component(seed_cid).bond_partner;
+    for (int const seed_ci : seed_locals) {
+      int const seed_cid = seed.comp_ids[seed_ci];
+      int const partner_cid = pool.component(seed_cid).bond_partner;
       if (partner_cid < 0)
         continue;
 
-      int pmol = pool.mol_of_comp(partner_cid);
+      int const pmol = pool.mol_of_comp(partner_cid);
       if (pmol == seed_mol_id)
         continue; // distinctness from seed
       const auto& pm = pool.molecule(pmol);
@@ -5744,7 +5758,7 @@ struct Engine::Impl {
       if (pm.type_index != fm.partner_type)
         continue;
 
-      int n_partner = static_cast<int>(pm.comp_ids.size());
+      int const n_partner = static_cast<int>(pm.comp_ids.size());
       int plocal = -1;
       for (int k = 0; k < n_partner; ++k) {
         if (pm.comp_ids[k] == partner_cid) {
@@ -5756,7 +5770,7 @@ struct Engine::Impl {
         continue;
 
       bool plocal_ok = false;
-      for (int x : fm.partner_bond_candidates)
+      for (int const x : fm.partner_bond_candidates)
         if (x == plocal) {
           plocal_ok = true;
           break;
@@ -5804,12 +5818,12 @@ struct Engine::Impl {
 
     // Build ReactionMatch with the same shape as select_multi_mol_unimolecular
     // (mol_ids sized to n_pat_mols, comp_ids sized to flat count).
-    int n_pat_mols = static_cast<int>(pat.molecules.size());
+    int const n_pat_mols = static_cast<int>(pat.molecules.size());
     match.mol_ids.assign(n_pat_mols, -1);
     match.mol_ids[fm.seed_pat_idx] = seed_mol_id;
     match.mol_ids[fm.partner_pat_idx] = partner_mol_id;
 
-    int n_flat = pat.flat_comp_count();
+    int const n_flat = pat.flat_comp_count();
     match.comp_ids.assign(n_flat, -1);
 
     auto fill_side = [&](int pat_mi, int bond_pi, int chosen_local,
@@ -5817,12 +5831,12 @@ struct Engine::Impl {
       int base = 0;
       for (int mi = 0; mi < pat_mi; ++mi)
         base += static_cast<int>(pat.molecules[mi].components.size());
-      int K = static_cast<int>(pat.molecules[pat_mi].components.size());
-      int n_mol = static_cast<int>(mol.comp_ids.size());
+      int const K = static_cast<int>(pat.molecules[pat_mi].components.size());
+      int const n_mol = static_cast<int>(mol.comp_ids.size());
       for (int ci = 0; ci < K; ++ci) {
-        int local = (ci == bond_pi)
-                        ? chosen_local
-                        : (ci < static_cast<int>(ci_locals.size()) ? ci_locals[ci] : -1);
+        int const local = (ci == bond_pi)
+                              ? chosen_local
+                              : (ci < static_cast<int>(ci_locals.size()) ? ci_locals[ci] : -1);
         if (local >= 0 && local < n_mol)
           match.comp_ids[base + ci] = mol.comp_ids[local];
       }
@@ -5863,7 +5877,7 @@ struct Engine::Impl {
     // Without retrying, this produces spurious null events that systematically
     // reduce the effective unbinding rate.
     {
-      int n_se = static_cast<int>(seed_embs.size());
+      int const n_se = static_cast<int>(seed_embs.size());
       // Fisher-Yates shuffle
       for (int i = n_se - 1; i > 0; --i) {
         int j = static_cast<int>(uniform() * (i + 1));
@@ -5889,26 +5903,26 @@ struct Engine::Impl {
       bool valid = true;
 
       while (!bfs_queue.empty() && valid) {
-        int cur_pat = bfs_queue.front();
+        int const cur_pat = bfs_queue.front();
         bfs_queue.pop();
-        int cur_actual = mol_assignments[cur_pat];
+        int const cur_actual = mol_assignments[cur_pat];
         auto& cur_comp_map = comp_maps[cur_pat];
 
         for (auto& ae : adj[cur_pat]) {
-          int other_pat = ae.other_mol;
+          int const other_pat = ae.other_mol;
           if (ae.my_local >= static_cast<int>(cur_comp_map.size())) {
             valid = false;
             break;
           }
-          int my_actual_local = cur_comp_map[ae.my_local];
-          int my_actual_comp_id = pool.molecule(cur_actual).comp_ids[my_actual_local];
-          int partner_comp_id = pool.component(my_actual_comp_id).bond_partner;
+          int const my_actual_local = cur_comp_map[ae.my_local];
+          int const my_actual_comp_id = pool.molecule(cur_actual).comp_ids[my_actual_local];
+          int const partner_comp_id = pool.component(my_actual_comp_id).bond_partner;
           if (partner_comp_id < 0) {
             valid = false;
             break;
           }
 
-          int partner_mol_id = pool.mol_of_comp(partner_comp_id);
+          int const partner_mol_id = pool.mol_of_comp(partner_comp_id);
 
           if (mol_assignments[other_pat] >= 0) {
             if (mol_assignments[other_pat] != partner_mol_id) {
@@ -5920,8 +5934,8 @@ struct Engine::Impl {
               valid = false;
               break;
             }
-            int expected_local = other_comp_map[ae.other_local];
-            int expected_comp_id = pool.molecule(partner_mol_id).comp_ids[expected_local];
+            int const expected_local = other_comp_map[ae.other_local];
+            int const expected_comp_id = pool.molecule(partner_mol_id).comp_ids[expected_local];
             if (expected_comp_id != partner_comp_id) {
               valid = false;
               break;
@@ -5984,7 +5998,7 @@ struct Engine::Impl {
       }
 
       if (!unassigned.empty()) {
-        int cx = pool.complex_of(seed_mol_id);
+        int const cx = pool.complex_of(seed_mol_id);
         auto cx_members = pool.molecules_in_complex(cx);
 
         // Reservoir sampling (k=1) instead of materializing every valid
@@ -6014,9 +6028,9 @@ struct Engine::Impl {
             }
             return;
           }
-          int pat_mi = unassigned[ui];
+          int const pat_mi = unassigned[ui];
           auto& target_pm = pat.molecules[pat_mi];
-          for (int cand : cx_members) {
+          for (int const cand : cx_members) {
             if (!pool.molecule(cand).active)
               continue;
             if (pool.molecule(cand).type_index != target_pm.type_index)
@@ -6058,12 +6072,12 @@ struct Engine::Impl {
 
     // Build the match
     match.mol_ids = mol_assignments;
-    int n_flat = pat.flat_comp_count();
+    int const n_flat = pat.flat_comp_count();
     match.comp_ids.resize(n_flat, -1);
     int base = 0;
     for (int mi = 0; mi < n_pat_mols; ++mi) {
-      int nc = static_cast<int>(pat.molecules[mi].components.size());
-      int actual_mid = mol_assignments[mi];
+      int const nc = static_cast<int>(pat.molecules[mi].components.size());
+      int const actual_mid = mol_assignments[mi];
       if (actual_mid >= 0) {
         auto& cmap = comp_maps[mi];
         for (int ci = 0; ci < nc && ci < static_cast<int>(cmap.size()); ++ci) {
@@ -6109,7 +6123,7 @@ struct Engine::Impl {
       if (mid >= static_cast<int>(event_mol_change_mask.size())) {
         if constexpr (kFireRuleProfile)
           fire_profile_.ensure_mask_resizes++;
-        int new_n = std::max(mid + 1, 2 * static_cast<int>(event_mol_change_mask.size()));
+        int const new_n = std::max(mid + 1, 2 * static_cast<int>(event_mol_change_mask.size()));
         event_mol_change_mask.resize(new_n, 0);
         event_mol_change_epoch.resize(new_n, 0);
       }
@@ -6135,7 +6149,7 @@ struct Engine::Impl {
         return;
       if constexpr (kFireRuleProfile)
         fire_profile_.mark_comp_calls++;
-      int mid = pool.mol_of_comp(comp_id);
+      int const mid = pool.mol_of_comp(comp_id);
       if (mid < 0)
         return;
       auto& mol = pool.molecule(mid);
@@ -6149,7 +6163,7 @@ struct Engine::Impl {
     };
 
     // Collect initial affected molecules
-    for (int mid : match.mol_ids)
+    for (int const mid : match.mol_ids)
       if (mid >= 0)
         affected.insert(mid);
 
@@ -6166,7 +6180,7 @@ struct Engine::Impl {
     for (auto& op : rule.operations) {
       std::chrono::steady_clock::time_point prof_t_op_start;
       if constexpr (kFireRuleProfile) {
-        int idx = static_cast<int>(op.type);
+        int const idx = static_cast<int>(op.type);
         if (idx >= 0 && idx < 5)
           fire_profile_.op_calls[idx]++;
         if (prof_sampled)
@@ -6176,7 +6190,7 @@ struct Engine::Impl {
       case OpType::StateChange: {
         if (op.comp_flat < 0 || op.comp_flat >= static_cast<int>(match.comp_ids.size()))
           break;
-        int comp_id = match.comp_ids[op.comp_flat];
+        int const comp_id = match.comp_ids[op.comp_flat];
         if (comp_id < 0)
           break;
         if (op.is_increment) {
@@ -6194,10 +6208,10 @@ struct Engine::Impl {
       case OpType::DeleteBond: {
         if (op.comp_flat_a < 0 || op.comp_flat_a >= static_cast<int>(match.comp_ids.size()))
           break;
-        int comp_a = match.comp_ids[op.comp_flat_a];
+        int const comp_a = match.comp_ids[op.comp_flat_a];
         if (comp_a < 0)
           break;
-        int partner = pool.component(comp_a).bond_partner;
+        int const partner = pool.component(comp_a).bond_partner;
         if (partner >= 0) {
           affected.insert(pool.mol_of_comp(partner));
           mark_comp(partner);
@@ -6247,7 +6261,7 @@ struct Engine::Impl {
       }
 
       case OpType::AddMolecule: {
-        int new_mid = pool.add_molecule(op.add_spec.type_index);
+        int const new_mid = pool.add_molecule(op.add_spec.type_index);
         for (auto& [ci, si] : op.add_spec.comp_states) {
           auto& new_mol = pool.molecule(new_mid);
           if (ci < static_cast<int>(new_mol.comp_ids.size()))
@@ -6269,15 +6283,15 @@ struct Engine::Impl {
         if (op.delete_pattern_mol_idx < 0 ||
             op.delete_pattern_mol_idx >= static_cast<int>(match.mol_ids.size()))
           break;
-        int mid = match.mol_ids[op.delete_pattern_mol_idx];
+        int const mid = match.mol_ids[op.delete_pattern_mol_idx];
         if (mid < 0)
           break;
 
         if (op.delete_connected) {
           // Delete entire complex
-          int cx = pool.complex_of(mid);
+          int const cx = pool.complex_of(mid);
           auto members = pool.molecules_in_complex(cx); // copy
-          for (int m : members) {
+          for (int const m : members) {
             deleted_mols.push_back(m);
             affected.erase(m);
             pool.delete_molecule(m);
@@ -6287,8 +6301,8 @@ struct Engine::Impl {
           // component loses its bond — mark that component mutated so
           // the cache invalidates correctly on the neighbor.
           auto& mol = pool.molecule(mid);
-          for (int cid : mol.comp_ids) {
-            int p = pool.component(cid).bond_partner;
+          for (int const cid : mol.comp_ids) {
+            int const p = pool.component(cid).bond_partner;
             if (p >= 0) {
               affected.insert(pool.mol_of_comp(p));
               mark_comp(p);
@@ -6304,7 +6318,7 @@ struct Engine::Impl {
       if constexpr (kFireRuleProfile) {
         if (prof_sampled) {
           auto prof_t_op_end = std::chrono::steady_clock::now();
-          int idx = static_cast<int>(op.type);
+          int const idx = static_cast<int>(op.type);
           if (idx >= 0 && idx < 5)
             fire_profile_.op_ns[idx] += std::chrono::duration_cast<std::chrono::nanoseconds>(
                                             prof_t_op_end - prof_t_op_start)
@@ -6325,16 +6339,16 @@ struct Engine::Impl {
 
     // Remove deleted molecules from affected set
     std::vector<int> to_remove;
-    for (int mid : affected) {
+    for (int const mid : affected) {
       if (mid < 0 || mid >= pool.molecule_count() || !pool.molecule(mid).active)
         to_remove.push_back(mid);
     }
-    for (int mid : to_remove)
+    for (int const mid : to_remove)
       affected.erase(mid);
 
     // Re-include deleted molecules so incremental_update can zero out their
     // stale embedding counts from rule state totals (a_total, b_total, etc.)
-    for (int mid : deleted_mols)
+    for (int const mid : deleted_mols)
       if (mid >= 0 && mid < pool.molecule_count())
         affected.insert(mid);
 
@@ -6357,7 +6371,7 @@ struct Engine::Impl {
     std::unordered_set<int> expanded = affected;
     if (max_pattern_depth > 0) {
       std::queue<std::pair<int, int>> bfs_q;
-      for (int mid : affected) {
+      for (int const mid : affected) {
         if (mid >= 0 && mid < pool.molecule_count() && pool.molecule(mid).active)
           bfs_q.emplace(mid, 0);
       }
@@ -6367,11 +6381,11 @@ struct Engine::Impl {
         if (depth >= max_pattern_depth)
           continue;
         auto& mol = pool.molecule(mid);
-        for (int cid : mol.comp_ids) {
-          int partner = pool.component(cid).bond_partner;
+        for (int const cid : mol.comp_ids) {
+          int const partner = pool.component(cid).bond_partner;
           if (partner < 0)
             continue;
-          int neighbor = pool.mol_of_comp(partner);
+          int const neighbor = pool.mol_of_comp(partner);
           if (pool.molecule(neighbor).active && !expanded.count(neighbor)) {
             expanded.insert(neighbor);
             bfs_q.emplace(neighbor, depth + 1);
@@ -6431,7 +6445,7 @@ struct Engine::Impl {
       if (mid < 0)
         return;
       if (mid >= static_cast<int>(event_mol_change_mask.size())) {
-        int new_n = std::max(mid + 1, 2 * static_cast<int>(event_mol_change_mask.size()));
+        int const new_n = std::max(mid + 1, 2 * static_cast<int>(event_mol_change_mask.size()));
         event_mol_change_mask.resize(new_n, 0);
         event_mol_change_epoch.resize(new_n, 0);
       }
@@ -6441,7 +6455,7 @@ struct Engine::Impl {
 
     for (const auto& fs : model.fixed_species) {
       std::vector<int> matching;
-      for (int mid : pool.molecules_of_type(fs.mol_type_idx)) {
+      for (int const mid : pool.molecules_of_type(fs.mol_type_idx)) {
         if (mid < 0 || mid >= pool.molecule_count())
           continue;
         const auto& mol = pool.molecule(mid);
@@ -6451,14 +6465,14 @@ struct Engine::Impl {
           continue;
         bool state_ok = true;
         for (int ci = 0; ci < static_cast<int>(fs.required_comp_state.size()); ++ci) {
-          int req = fs.required_comp_state[ci];
+          int const req = fs.required_comp_state[ci];
           if (req < 0)
             continue;
           if (ci >= static_cast<int>(mol.comp_ids.size())) {
             state_ok = false;
             break;
           }
-          int actual = pool.component(mol.comp_ids[ci]).state_index;
+          int const actual = pool.component(mol.comp_ids[ci]).state_index;
           if (actual != req) {
             state_ok = false;
             break;
@@ -6469,13 +6483,13 @@ struct Engine::Impl {
         matching.push_back(mid);
       }
 
-      int delta = fs.target_count - static_cast<int>(matching.size());
+      int const delta = fs.target_count - static_cast<int>(matching.size());
       if (delta > 0) {
         for (int k = 0; k < delta; ++k) {
-          int new_mid = pool.add_molecule(fs.mol_type_idx);
+          int const new_mid = pool.add_molecule(fs.mol_type_idx);
           auto& new_mol = pool.molecule(new_mid);
           for (int ci = 0; ci < static_cast<int>(fs.required_comp_state.size()); ++ci) {
-            int req = fs.required_comp_state[ci];
+            int const req = fs.required_comp_state[ci];
             if (req < 0)
               continue;
             if (ci < static_cast<int>(new_mol.comp_ids.size()))
@@ -6494,15 +6508,15 @@ struct Engine::Impl {
         // distinguishes among the matches doesn't silently pick the
         // last-added molecule.  Partial Fisher–Yates: shuffle the first
         // `n_delete` entries to the front, then delete those.
-        int n_delete = std::min(-delta, static_cast<int>(matching.size()));
+        int const n_delete = std::min(-delta, static_cast<int>(matching.size()));
         for (int k = 0; k < n_delete; ++k) {
           std::uniform_int_distribution<int> dist(k, static_cast<int>(matching.size()) - 1);
-          int j = dist(rng);
+          int const j = dist(rng);
           if (j != k)
             std::swap(matching[k], matching[j]);
         }
         for (int k = 0; k < n_delete; ++k) {
-          int mid = matching[k];
+          int const mid = matching[k];
           affected.erase(mid);
           pool.delete_molecule(mid);
         }
@@ -6529,7 +6543,7 @@ struct Engine::Impl {
     // Compute sample times
     std::vector<double> sample_times;
     if (ts.n_points > 0) {
-      double dt = (ts.t_end - ts.t_start) / ts.n_points;
+      double const dt = (ts.t_end - ts.t_start) / ts.n_points;
       for (int i = 0; i <= ts.n_points; ++i)
         sample_times.push_back(ts.t_start + (i * dt));
     } else {
@@ -6616,8 +6630,8 @@ struct Engine::Impl {
       double u1 = uniform();
       while (u1 == 0.0)
         u1 = uniform(); // avoid log(0)
-      double dt = -std::log(u1) / total_propensity;
-      double next_time = current_time + dt;
+      double const dt = -std::log(u1) / total_propensity;
+      double const next_time = current_time + dt;
 
       // Record samples before this reaction
       while (next_sample < static_cast<int>(sample_times.size()) &&
@@ -6636,7 +6650,7 @@ struct Engine::Impl {
       ++eval_vars_gen; // time advanced → invalidate cached eval_vars_flat
 
       // Select reaction
-      double u2 = uniform() * total_propensity;
+      double const u2 = uniform() * total_propensity;
       double cum = 0;
       int selected = -1;
       for (int ri = 0; ri < static_cast<int>(rule_states.size()); ++ri) {
@@ -6711,14 +6725,14 @@ struct Engine::Impl {
               continue;
             if (op.comp_flat_a < 0 || op.comp_flat_a >= static_cast<int>(match.comp_ids.size()))
               continue;
-            int comp_a = match.comp_ids[op.comp_flat_a];
+            int const comp_a = match.comp_ids[op.comp_flat_a];
             if (comp_a < 0)
               continue;
-            int partner = pool.component(comp_a).bond_partner;
+            int const partner = pool.component(comp_a).bond_partner;
             if (partner < 0)
               continue;
-            int mol_a = pool.mol_of_comp(comp_a);
-            int mol_b = pool.mol_of_comp(partner);
+            int const mol_a = pool.mol_of_comp(comp_a);
+            int const mol_b = pool.mol_of_comp(partner);
             if (mol_a == mol_b) {
               reject = true;
               break;
@@ -6728,8 +6742,8 @@ struct Engine::Impl {
             // endpoints — the BFS below is guaranteed to fall out with
             // found_b == false.  Skip it.  With kProductMolInvariant we
             // also run the BFS and assert agreement.
-            int cx = pool.complex_of(mol_a);
-            bool tree = (pool.cycle_bond_count(cx) == 0);
+            int const cx = pool.complex_of(mol_a);
+            bool const tree = (pool.cycle_bond_count(cx) == 0);
             if (tree && !kProductMolInvariant)
               continue;
 
@@ -6741,16 +6755,16 @@ struct Engine::Impl {
             q.push(mol_a);
             bool found_b = false;
             while (!q.empty() && !found_b) {
-              int cur = q.front();
+              int const cur = q.front();
               q.pop();
               auto& mol = pool.molecule(cur);
-              for (int cid : mol.comp_ids) {
+              for (int const cid : mol.comp_ids) {
                 if (cid == comp_a || cid == partner)
                   continue; // skip broken bond
-                int p = pool.component(cid).bond_partner;
+                int const p = pool.component(cid).bond_partner;
                 if (p < 0)
                   continue;
-                int nb = pool.mol_of_comp(p);
+                int const nb = pool.mol_of_comp(p);
                 if (nb == mol_b) {
                   found_b = true;
                   break;
@@ -6808,10 +6822,10 @@ struct Engine::Impl {
               continue;
             if (op.comp_flat_a < 0 || op.comp_flat_a >= static_cast<int>(match.comp_ids.size()))
               continue;
-            int ca = match.comp_ids[op.comp_flat_a];
+            int const ca = match.comp_ids[op.comp_flat_a];
             if (ca < 0)
               continue;
-            int cb = pool.component(ca).bond_partner;
+            int const cb = pool.component(ca).bond_partner;
             if (cb < 0)
               continue;
             deleted_edges.insert({std::min(ca, cb), std::max(ca, cb)});
@@ -6830,12 +6844,12 @@ struct Engine::Impl {
             if (op.comp_flat_a >= static_cast<int>(match.comp_ids.size()) ||
                 op.comp_flat_b >= static_cast<int>(match.comp_ids.size()))
               continue;
-            int ca = match.comp_ids[op.comp_flat_a];
-            int cb = match.comp_ids[op.comp_flat_b];
+            int const ca = match.comp_ids[op.comp_flat_a];
+            int const cb = match.comp_ids[op.comp_flat_b];
             if (ca < 0 || cb < 0)
               continue;
-            int ma = pool.mol_of_comp(ca);
-            int mb = pool.mol_of_comp(cb);
+            int const ma = pool.mol_of_comp(ca);
+            int const mb = pool.mol_of_comp(cb);
             if (ma != mb)
               added_mol_edges.insert({std::min(ma, mb), std::max(ma, mb)});
           }
@@ -6848,14 +6862,14 @@ struct Engine::Impl {
               continue;
             if (op.comp_flat_a < 0 || op.comp_flat_a >= static_cast<int>(match.comp_ids.size()))
               continue;
-            int comp_a = match.comp_ids[op.comp_flat_a];
+            int const comp_a = match.comp_ids[op.comp_flat_a];
             if (comp_a < 0)
               continue;
-            int partner = pool.component(comp_a).bond_partner;
+            int const partner = pool.component(comp_a).bond_partner;
             if (partner < 0)
               continue;
-            int mol_a = pool.mol_of_comp(comp_a);
-            int mol_b = pool.mol_of_comp(partner);
+            int const mol_a = pool.mol_of_comp(comp_a);
+            int const mol_b = pool.mol_of_comp(partner);
             if (mol_a == mol_b)
               continue; // self-bond: always connected
 
@@ -6867,19 +6881,19 @@ struct Engine::Impl {
             q.push(mol_a);
             bool found_b = false;
             while (!q.empty() && !found_b) {
-              int cur = q.front();
+              int const cur = q.front();
               q.pop();
               auto& mol = pool.molecule(cur);
               // Traverse existing bonds (minus deleted ones)
-              for (int cid : mol.comp_ids) {
-                int p = pool.component(cid).bond_partner;
+              for (int const cid : mol.comp_ids) {
+                int const p = pool.component(cid).bond_partner;
                 if (p < 0)
                   continue;
                 // Skip if this bond is being deleted
-                int lo = std::min(cid, p), hi = std::max(cid, p);
+                int const lo = std::min(cid, p), hi = std::max(cid, p);
                 if (deleted_edges.count({lo, hi}))
                   continue;
-                int nb = pool.mol_of_comp(p);
+                int const nb = pool.mol_of_comp(p);
                 if (nb == mol_b) {
                   found_b = true;
                   break;
@@ -6950,13 +6964,13 @@ struct Engine::Impl {
         }
         std::unordered_set<int> cx_expanded;
         std::unordered_set<int> seen_cx;
-        for (int mid : affected) {
+        for (int const mid : affected) {
           if (mid < 0 || mid >= pool.molecule_count() || !pool.molecule(mid).active)
             continue;
-          int cx = pool.complex_of(mid);
+          int const cx = pool.complex_of(mid);
           if (!seen_cx.insert(cx).second)
             continue;
-          for (int m : pool.molecules_in_complex(cx))
+          for (int const m : pool.molecules_in_complex(cx))
             if (pool.molecule(m).active)
               cx_expanded.insert(m);
         }
@@ -7030,9 +7044,10 @@ struct Engine::Impl {
       // `total` sums the five per-phase buckets; `wall` is the true wall
       // clock for the SSA loop; `unaccounted` fills the gap (outer-loop
       // overhead + anything not covered by a phase timer).
-      double total_time = timing_sample + timing_fire + timing_obs + timing_update + timing_record;
+      double const total_time =
+          timing_sample + timing_fire + timing_obs + timing_update + timing_record;
       if (total_time > 0 || timing_wall > 0) {
-        double denom = total_time > 0 ? total_time : timing_wall;
+        double const denom = total_time > 0 ? total_time : timing_wall;
         fprintf(stderr, "[RM timing] events=%lld  null=%lld  total=%.3fs  wall=%.3fs\n",
                 static_cast<long long>(event_count), static_cast<long long>(null_event_count),
                 total_time, timing_wall);
@@ -7046,7 +7061,7 @@ struct Engine::Impl {
                 100.0 * timing_update / denom);
         fprintf(stderr, "  record_at:        %.3fs (%.1f%%)\n", timing_record,
                 100.0 * timing_record / denom);
-        double unaccounted = timing_wall - total_time;
+        double const unaccounted = timing_wall - total_time;
         if (unaccounted > 0.0005 * timing_wall) { // only show if > 0.05%
           fprintf(stderr, "  unaccounted:      %.3fs (%.1f%%)\n", unaccounted,
                   100.0 * unaccounted / timing_wall);
@@ -7054,7 +7069,7 @@ struct Engine::Impl {
       }
 
       // Per-rule fire counts and final propensities.
-      int n_rules = static_cast<int>(model.rules.size());
+      int const n_rules = static_cast<int>(model.rules.size());
       fprintf(stderr, "[RM per-rule] fire_counts and final propensities:\n");
       for (int ri = 0; ri < n_rules; ++ri) {
         auto& rule = model.rules[ri];
@@ -7130,18 +7145,18 @@ std::vector<double> Engine::get_observable_values() {
 }
 
 int Engine::get_molecule_count(const std::string& type_name) const {
-  int ti = impl_->model.mol_type_index(type_name);
+  int const ti = impl_->model.mol_type_index(type_name);
   if (ti < 0)
     return 0;
   int count = 0;
-  for (int mid : impl_->pool.molecules_of_type(ti))
+  for (int const mid : impl_->pool.molecules_of_type(ti))
     if (impl_->pool.molecule(mid).active)
       ++count;
   return count;
 }
 
 void Engine::add_molecules(const std::string& type_name, int count) {
-  int ti = impl_->model.mol_type_index(type_name);
+  int const ti = impl_->model.mol_type_index(type_name);
   if (ti < 0)
     throw std::runtime_error("Unknown molecule type '" + type_name + "'");
   for (int i = 0; i < count; ++i)
@@ -7166,12 +7181,12 @@ void Engine::add_molecules(const std::string& type_name, int count) {
   const auto& impl = *impl_;
   std::vector<char> needed(impl.model.rules.size(), 0);
   if (ti >= 0 && ti < static_cast<int>(impl.type_to_rules.size())) {
-    for (int ri : impl.type_to_rules[ti])
+    for (int const ri : impl.type_to_rules[ti])
       needed[ri] = 1;
   }
-  for (int ri : impl.dynamic_rate_rules)
+  for (int const ri : impl.dynamic_rate_rules)
     needed[ri] = 1;
-  for (int ri : impl.dynamic_synthesis_rules)
+  for (int const ri : impl.dynamic_synthesis_rules)
     needed[ri] = 1;
   for (int ri = 0; ri < static_cast<int>(impl.model.rules.size()); ++ri) {
     if (needed[ri])

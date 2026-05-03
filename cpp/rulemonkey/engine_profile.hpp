@@ -437,21 +437,21 @@ struct ObsIncrProfile {
 
 inline void report_fire_rule(const FireRuleProfile& p, double timing_fire) {
   const int K = kFireRuleProfileSampleEvery;
-  static const char* op_names[5] = {"AddBond", "DeleteBond", "StateChange", "AddMolecule",
-                                    "DeleteMolecule"};
+  static const char* const op_names[5] = {"AddBond", "DeleteBond", "StateChange", "AddMolecule",
+                                          "DeleteMolecule"};
   auto sample_to_sec = [&](uint64_t ns, uint64_t sampled) -> double {
     if (sampled == 0)
       return 0.0;
     return static_cast<double>(ns) / 1e9 * static_cast<double>(K);
   };
-  double total_est = sample_to_sec(p.total_ns, p.sampled_calls);
-  double switch_est = sample_to_sec(p.switch_ns, p.sampled_calls);
-  double cleanup_est = sample_to_sec(p.cleanup_ns, p.sampled_calls);
-  double bfs_est = sample_to_sec(p.bfs_ns, p.sampled_calls);
-  double cx_exp_est = (p.cx_exp_sampled == 0)
-                          ? 0.0
-                          : static_cast<double>(p.cx_exp_ns) / 1e9 * static_cast<double>(K);
-  double denom_fr = total_est > 0 ? total_est : 1.0;
+  double const total_est = sample_to_sec(p.total_ns, p.sampled_calls);
+  double const switch_est = sample_to_sec(p.switch_ns, p.sampled_calls);
+  double const cleanup_est = sample_to_sec(p.cleanup_ns, p.sampled_calls);
+  double const bfs_est = sample_to_sec(p.bfs_ns, p.sampled_calls);
+  double const cx_exp_est = (p.cx_exp_sampled == 0)
+                                ? 0.0
+                                : static_cast<double>(p.cx_exp_ns) / 1e9 * static_cast<double>(K);
+  double const denom_fr = total_est > 0 ? total_est : 1.0;
   std::fprintf(stderr, "[fire_rule profile] K=%d  calls=%llu  sampled=%llu\n", K,
                static_cast<unsigned long long>(p.calls),
                static_cast<unsigned long long>(p.sampled_calls));
@@ -471,7 +471,7 @@ inline void report_fire_rule(const FireRuleProfile& p, double timing_fire) {
                static_cast<unsigned long long>(p.cx_exp_sampled));
   std::fprintf(stderr, "  per-op calls:\n");
   for (int i = 0; i < 5; ++i) {
-    double op_est = sample_to_sec(p.op_ns[i], p.sampled_calls);
+    double const op_est = sample_to_sec(p.op_ns[i], p.sampled_calls);
     std::fprintf(stderr,
                  "    %-15s  calls=%llu  est_time=%.3fs (%.1f%% of "
                  "total_est)\n",
@@ -501,9 +501,9 @@ inline void report_remove_bond(const RemoveBondProfile& p) {
       return 0.0;
     return static_cast<double>(ns) / 1e9 * static_cast<double>(K);
   };
-  double total_est = est(p.total_ns);
-  double bfs_est = est(p.bfs_ns);
-  double partition_est = est(p.partition_ns);
+  double const total_est = est(p.total_ns);
+  double const bfs_est = est(p.bfs_ns);
+  double const partition_est = est(p.partition_ns);
   std::fprintf(stderr,
                "[remove_bond profile] K=%d  remove_bond_calls=%llu  "
                "split_calls=%llu  sampled=%llu\n",
@@ -535,7 +535,7 @@ inline void report_remove_bond(const RemoveBondProfile& p) {
     for (auto v : h)
       tot += v;
     std::fprintf(stderr, "  %s: total=%llu  buckets", name, static_cast<unsigned long long>(tot));
-    static const char* labels[7] = {"1", "2", "3-4", "5-8", "9-16", "17-32", "33+"};
+    static const char* const labels[7] = {"1", "2", "3-4", "5-8", "9-16", "17-32", "33+"};
     for (int i = 0; i < 7; ++i) {
       std::fprintf(stderr, "  %s=%llu", labels[i], static_cast<unsigned long long>(h[i]));
     }
@@ -545,11 +545,11 @@ inline void report_remove_bond(const RemoveBondProfile& p) {
   print_hist("cx_size_bfs  ", p.cx_size_bfs);
   print_hist("cx_size_split", p.cx_size_split);
   print_hist("half_edges   ", p.half_edges_hist);
-  double cx_avg = p.bfs_calls > 0
-                      ? static_cast<double>(p.cx_size_sum_bfs) / static_cast<double>(p.bfs_calls)
+  double const cx_avg =
+      p.bfs_calls > 0 ? static_cast<double>(p.cx_size_sum_bfs) / static_cast<double>(p.bfs_calls)
                       : 0.0;
-  double he_avg = p.bfs_calls > 0
-                      ? static_cast<double>(p.half_edges_sum) / static_cast<double>(p.bfs_calls)
+  double const he_avg =
+      p.bfs_calls > 0 ? static_cast<double>(p.half_edges_sum) / static_cast<double>(p.bfs_calls)
                       : 0.0;
   std::fprintf(stderr,
                "  bfs_cx_size: avg=%.2f max=%llu   "
@@ -571,20 +571,20 @@ inline void report_incr_update(const IncrUpdateProfile& p, double timing_update)
       return 0.0;
     return static_cast<double>(ns) / 1e9 * static_cast<double>(K) * static_cast<double>(M);
   };
-  double total_est = outer_sec(p.total_ns);
-  double expand_est = outer_sec(p.expand_ns);
-  double dispatch_est = outer_sec(p.dispatch_ns);
-  double rule_loop_est = outer_sec(p.rule_loop_ns);
-  double cache_hit_est = inner_sec(p.cache_hit_ns);
-  double subtract_est = inner_sec(p.subtract_ns);
-  double count_a_est = inner_sec(p.count_a_ns);
-  double count_b_est = inner_sec(p.count_b_ns);
-  double shared_est = inner_sec(p.shared_ns);
-  double local_rate_est = inner_sec(p.local_rate_ns);
-  double add_est = inner_sec(p.add_ns);
-  double fenwick_est = inner_sec(p.fenwick_ns);
-  double store_est = inner_sec(p.store_ns);
-  double denom = total_est > 0 ? total_est : 1.0;
+  double const total_est = outer_sec(p.total_ns);
+  double const expand_est = outer_sec(p.expand_ns);
+  double const dispatch_est = outer_sec(p.dispatch_ns);
+  double const rule_loop_est = outer_sec(p.rule_loop_ns);
+  double const cache_hit_est = inner_sec(p.cache_hit_ns);
+  double const subtract_est = inner_sec(p.subtract_ns);
+  double const count_a_est = inner_sec(p.count_a_ns);
+  double const count_b_est = inner_sec(p.count_b_ns);
+  double const shared_est = inner_sec(p.shared_ns);
+  double const local_rate_est = inner_sec(p.local_rate_ns);
+  double const add_est = inner_sec(p.add_ns);
+  double const fenwick_est = inner_sec(p.fenwick_ns);
+  double const store_est = inner_sec(p.store_ns);
+  double const denom = total_est > 0 ? total_est : 1.0;
   std::fprintf(stderr,
                "[incr_update profile] K=%d  M=%d  calls=%llu  sampled=%llu"
                "  per_mid_sampled=%llu\n",
@@ -601,8 +601,8 @@ inline void report_incr_update(const IncrUpdateProfile& p, double timing_update)
                "propensity recompute)\n",
                expand_est, 100.0 * expand_est / denom, dispatch_est, 100.0 * dispatch_est / denom,
                rule_loop_est, 100.0 * rule_loop_est / denom);
-  double inner_sum = cache_hit_est + subtract_est + count_a_est + count_b_est + shared_est +
-                     local_rate_est + add_est + fenwick_est + store_est;
+  double const inner_sum = cache_hit_est + subtract_est + count_a_est + count_b_est + shared_est +
+                           local_rate_est + add_est + fenwick_est + store_est;
   std::fprintf(stderr,
                "  inner (est of full rule_loop via ×K×M; sum=%.3fs): "
                "cache_hit=%.3fs (%.1f%%)  subtract=%.3fs (%.1f%%)  "
@@ -654,7 +654,7 @@ inline void report_incr_update(const IncrUpdateProfile& p, double timing_update)
     uint64_t tot = 0;
     for (auto v : p.rules_visited_hist)
       tot += v;
-    static const char* labels[7] = {"1", "2", "3-4", "5-8", "9-16", "17-32", "33+"};
+    static const char* const labels[7] = {"1", "2", "3-4", "5-8", "9-16", "17-32", "33+"};
     std::fprintf(stderr, "  rules_visited_hist: total=%llu  buckets",
                  static_cast<unsigned long long>(tot));
     for (int i = 0; i < 7; ++i) {
@@ -678,11 +678,11 @@ inline void report_incr_update(const IncrUpdateProfile& p, double timing_update)
     std::fprintf(stderr, "  per_rule_%s (top %d of %zu, total=%llu):\n", label, topn, idx.size(),
                  static_cast<unsigned long long>(tot));
     uint64_t cum = 0;
-    int shown = std::min<int>(topn, static_cast<int>(idx.size()));
+    int const shown = std::min<int>(topn, static_cast<int>(idx.size()));
     for (int i = 0; i < shown; ++i) {
       cum += idx[i].first;
-      double pct = tot > 0 ? 100.0 * idx[i].first / tot : 0.0;
-      double cum_pct = tot > 0 ? 100.0 * cum / tot : 0.0;
+      double const pct = tot > 0 ? 100.0 * idx[i].first / tot : 0.0;
+      double const cum_pct = tot > 0 ? 100.0 * cum / tot : 0.0;
       std::fprintf(stderr, "    RR%d: %llu (%.1f%%)  cum=%.1f%%\n", idx[i].second + 1,
                    static_cast<unsigned long long>(idx[i].first), pct, cum_pct);
     }
@@ -694,10 +694,10 @@ inline void report_incr_update(const IncrUpdateProfile& p, double timing_update)
 
 inline void report_record_at(const RecordAtProfile& p, double timing_record,
                              bool use_incremental_obs) {
-  double compute_obs_est = static_cast<double>(p.compute_obs_ns) / 1e9;
-  double record_est = static_cast<double>(p.record_ns) / 1e9;
-  double sum_est = compute_obs_est + record_est;
-  double denom = timing_record > 0 ? timing_record : 1.0;
+  double const compute_obs_est = static_cast<double>(p.compute_obs_ns) / 1e9;
+  double const record_est = static_cast<double>(p.record_ns) / 1e9;
+  double const sum_est = compute_obs_est + record_est;
+  double const denom = timing_record > 0 ? timing_record : 1.0;
   std::fprintf(stderr,
                "[record_at profile] K=1  calls=%llu  "
                "use_incremental_obs=%d\n",
@@ -709,11 +709,11 @@ inline void report_record_at(const RecordAtProfile& p, double timing_record,
                compute_obs_est, 100.0 * compute_obs_est / denom, record_est,
                100.0 * record_est / denom, timing_record > 0 ? sum_est / timing_record : 0.0);
 
-  double co_denom = compute_obs_est > 0 ? compute_obs_est : 1.0;
+  double const co_denom = compute_obs_est > 0 ? compute_obs_est : 1.0;
   std::fprintf(stderr, "  per-observable breakdown:\n");
   for (size_t i = 0; i < p.obs.size(); ++i) {
     const auto& po = p.obs[i];
-    double ev_s = static_cast<double>(po.evaluate_ns) / 1e9;
+    double const ev_s = static_cast<double>(po.evaluate_ns) / 1e9;
     std::fprintf(stderr,
                  "    [%zu] %s (type=%s pats=%d)  calls=%llu  wall=%.4fs"
                  " (%.1f%% of compute_obs)\n",
@@ -739,7 +739,7 @@ inline void report_record_at(const RecordAtProfile& p, double timing_record,
   uint64_t sum_obs_ns = 0;
   for (const auto& po : p.obs)
     sum_obs_ns += po.evaluate_ns;
-  double sum_obs_s = static_cast<double>(sum_obs_ns) / 1e9;
+  double const sum_obs_s = static_cast<double>(sum_obs_ns) / 1e9;
   std::fprintf(stderr,
                "  cross-check: Sum_per_obs_wall=%.4fs  compute_obs=%.4fs"
                "  ratio=%.3f\n",
@@ -749,11 +749,11 @@ inline void report_record_at(const RecordAtProfile& p, double timing_record,
 inline void report_obs_incr(const ObsIncrProfile& p, double timing_obs,
                             const std::vector<int>& incr_tracked_obs_indices) {
   const int K = kObsIncrProfileSampleEvery;
-  double update_est = static_cast<double>(p.update_total_ns) * K / 1e9;
-  double obs_loop_est = static_cast<double>(p.obs_loop_ns) * K / 1e9;
-  double prev_cx_loop_est = static_cast<double>(p.prev_cx_loop_ns) * K / 1e9;
-  double flush_est = static_cast<double>(p.flush_total_ns) / 1e9; // flush is full-sampled
-  double denom_obs = timing_obs > 0 ? timing_obs : 1.0;
+  double const update_est = static_cast<double>(p.update_total_ns) * K / 1e9;
+  double const obs_loop_est = static_cast<double>(p.obs_loop_ns) * K / 1e9;
+  double const prev_cx_loop_est = static_cast<double>(p.prev_cx_loop_ns) * K / 1e9;
+  double const flush_est = static_cast<double>(p.flush_total_ns) / 1e9; // flush is full-sampled
+  double const denom_obs = timing_obs > 0 ? timing_obs : 1.0;
   std::fprintf(stderr,
                "[obs_incr profile] K=%d  update_calls=%llu  sampled=%llu  "
                "flush_calls=%llu\n",
@@ -783,13 +783,13 @@ inline void report_obs_incr(const ObsIncrProfile& p, double timing_obs,
   std::fprintf(stderr, "  per-tracked-obs breakdown:\n");
   std::vector<int> order;
   order.reserve(incr_tracked_obs_indices.size());
-  for (int oi : incr_tracked_obs_indices)
+  for (int const oi : incr_tracked_obs_indices)
     order.push_back(oi);
   std::sort(order.begin(), order.end(),
             [&](int a, int b) { return p.obs[a].per_mid_ns > p.obs[b].per_mid_ns; });
-  for (int oi : order) {
+  for (int const oi : order) {
     const auto& po = p.obs[oi];
-    double ev_s = static_cast<double>(po.per_mid_ns) * K / 1e9;
+    double const ev_s = static_cast<double>(po.per_mid_ns) * K / 1e9;
     std::fprintf(stderr,
                  "    [%d] %s (type=%s pats=%d seed_t=%d)  "
                  "per_mid_calls=%llu  wall=%.4fs  deltas=%llu  "
@@ -802,7 +802,7 @@ inline void report_obs_incr(const ObsIncrProfile& p, double timing_obs,
 
   // Dedup audit: group tracked obs by pattern signature.
   std::unordered_map<std::string, std::vector<int>> by_sig;
-  for (int oi : incr_tracked_obs_indices) {
+  for (int const oi : incr_tracked_obs_indices) {
     by_sig[p.obs[oi].pat_signature].push_back(oi);
   }
   int singleton_groups = 0, multi_groups = 0, obs_in_multi = 0;
@@ -848,11 +848,11 @@ inline void report_count_multi(const CountMultiProfile& p) {
       return 0.0;
     return static_cast<double>(ns) / 1e9 * static_cast<double>(K);
   };
-  double total_est = ksec(p.total_ns);
-  double seed_emb_est = ksec(p.seed_emb_ns);
-  double bfs_est = ksec(p.bfs_ns);
-  double disjoint_est = ksec(p.disjoint_ns);
-  double denom = total_est > 0 ? total_est : 1.0;
+  double const total_est = ksec(p.total_ns);
+  double const seed_emb_est = ksec(p.seed_emb_ns);
+  double const bfs_est = ksec(p.bfs_ns);
+  double const disjoint_est = ksec(p.disjoint_ns);
+  double const denom = total_est > 0 ? total_est : 1.0;
   std::fprintf(
       stderr,
       "[count_multi profile] K=%d  calls=%llu  fm_hits=%llu (%.1f%%)"
@@ -883,23 +883,23 @@ inline void report_count_multi(const CountMultiProfile& p) {
                "  disjoint=%.3fs (%.1f%%)\n",
                total_est, seed_emb_est, 100.0 * seed_emb_est / denom, bfs_est,
                100.0 * bfs_est / denom, disjoint_est, 100.0 * disjoint_est / denom);
-  double full_sum = seed_emb_est + bfs_est + disjoint_est;
+  double const full_sum = seed_emb_est + bfs_est + disjoint_est;
   std::fprintf(stderr,
                "  sub-phase sum=%.3fs  residual vs total_est=%.3fs "
                "(should be ≈ singleton/zero-seed early returns)\n",
                full_sum, total_est - full_sum);
-  double npm_avg = p.generic_calls > p.singleton_pattern_calls
-                       ? static_cast<double>(p.n_pat_mols_sum) /
-                             static_cast<double>(p.generic_calls - p.singleton_pattern_calls)
-                       : 0.0;
-  uint64_t gen_non_singleton =
+  double const npm_avg = p.generic_calls > p.singleton_pattern_calls
+                             ? static_cast<double>(p.n_pat_mols_sum) /
+                                   static_cast<double>(p.generic_calls - p.singleton_pattern_calls)
+                             : 0.0;
+  uint64_t const gen_non_singleton =
       p.generic_calls > p.singleton_pattern_calls ? p.generic_calls - p.singleton_pattern_calls : 0;
-  double seed_avg = gen_non_singleton > 0 ? static_cast<double>(p.seed_emb_sum) /
-                                                static_cast<double>(gen_non_singleton)
-                                          : 0.0;
-  double bfs_avg = gen_non_singleton > 0 ? static_cast<double>(p.bfs_visited_sum) /
-                                               static_cast<double>(gen_non_singleton)
-                                         : 0.0;
+  double const seed_avg = gen_non_singleton > 0 ? static_cast<double>(p.seed_emb_sum) /
+                                                      static_cast<double>(gen_non_singleton)
+                                                : 0.0;
+  double const bfs_avg = gen_non_singleton > 0 ? static_cast<double>(p.bfs_visited_sum) /
+                                                     static_cast<double>(gen_non_singleton)
+                                               : 0.0;
   std::fprintf(stderr,
                "  per-call avg (non-singleton generic): n_pat_mols=%.2f (max=*)"
                "  seed_embs=%.3f (sum=%llu max=%llu)"
@@ -914,7 +914,7 @@ inline void report_count_multi(const CountMultiProfile& p) {
       tot += v;
     std::fprintf(stderr, "  %s hist: total=%llu  buckets", name,
                  static_cast<unsigned long long>(tot));
-    static const char* labels[7] = {"0-1", "2", "3-4", "5-8", "9-16", "17-32", "33+"};
+    static const char* const labels[7] = {"0-1", "2", "3-4", "5-8", "9-16", "17-32", "33+"};
     for (int i = 0; i < 7; ++i) {
       std::fprintf(stderr, "  %s=%llu", labels[i], static_cast<unsigned long long>(h[i]));
     }
@@ -932,13 +932,13 @@ inline void report_cmm_fc(const CmmFcProfile& q, const CountMultiProfile& cm) {
     return static_cast<double>(q.phase_ns[p]) / 1e9 * static_cast<double>(K) *
            static_cast<double>(R);
   };
-  double p_seed = phase_sec(0);
-  double p_ptrc = phase_sec(1);
-  double p_plsc = phase_sec(2);
-  double p_pok = phase_sec(3);
-  double p_pnbc = phase_sec(4);
-  double p_total_est = p_seed + p_ptrc + p_plsc + p_pok + p_pnbc;
-  double denom = p_total_est > 0 ? p_total_est : 1.0;
+  double const p_seed = phase_sec(0);
+  double const p_ptrc = phase_sec(1);
+  double const p_plsc = phase_sec(2);
+  double const p_pok = phase_sec(3);
+  double const p_pnbc = phase_sec(4);
+  double const p_total_est = p_seed + p_ptrc + p_plsc + p_pok + p_pnbc;
+  double const denom = p_total_est > 0 ? p_total_est : 1.0;
   std::fprintf(stderr,
                "[cmm_fc profile] K=%d  rotor=%d  fc_calls=%llu  sampled=%llu"
                "  inactive_seed=%llu  seed_type_mismatches=%llu"
@@ -984,18 +984,18 @@ inline void report_cmm_fc(const CmmFcProfile& q, const CountMultiProfile& cm) {
                static_cast<unsigned long long>(q.fc_plocal_not_ok),
                static_cast<unsigned long long>(q.fc_partner_state_rejects),
                static_cast<unsigned long long>(q.fc_partner_non_bond_rejects));
-  uint64_t rej_sum = q.fc_candidate_oob + q.fc_candidate_state_rejects +
-                     q.fc_candidate_bond_rejects + q.fc_candidate_self_bond +
-                     q.fc_partner_inactive + q.fc_partner_type_mismatches + q.fc_plocal_not_found +
-                     q.fc_plocal_not_ok + q.fc_partner_state_rejects +
-                     q.fc_partner_non_bond_rejects;
+  uint64_t const rej_sum = q.fc_candidate_oob + q.fc_candidate_state_rejects +
+                           q.fc_candidate_bond_rejects + q.fc_candidate_self_bond +
+                           q.fc_partner_inactive + q.fc_partner_type_mismatches +
+                           q.fc_plocal_not_found + q.fc_plocal_not_ok + q.fc_partner_state_rejects +
+                           q.fc_partner_non_bond_rejects;
   std::fprintf(stderr,
                "  cross-check: rej_sum+matches=%llu  iters=%llu  (must be equal)"
                "  fm_hits=%llu (from count_multi)\n",
                static_cast<unsigned long long>(rej_sum + q.fc_total_matches),
                static_cast<unsigned long long>(q.fc_candidate_iters),
                static_cast<unsigned long long>(cm.fm_hits));
-  double fc = q.fc_calls > 0 ? static_cast<double>(q.fc_calls) : 1.0;
+  double const fc = q.fc_calls > 0 ? static_cast<double>(q.fc_calls) : 1.0;
   std::fprintf(stderr,
                "  per-call means: seed_bond_cand=%.2f (max=%llu)"
                "  partner_bond_cand=%.2f (max=%llu)"
@@ -1025,16 +1025,16 @@ inline void report_cmm_fc(const CmmFcProfile& q, const CountMultiProfile& cm) {
 
 inline void report_select_reactants(const SrProfile& q, double timing_sample) {
   const int K = kSelectReactantsProfileSampleEvery;
-  static const char* path_names[SrProfile::kNPaths] = {"zero", "uni_single", "uni_multi_fm",
-                                                       "uni_multi_gen", "bimol"};
+  static const char* const path_names[SrProfile::kNPaths] = {"zero", "uni_single", "uni_multi_fm",
+                                                             "uni_multi_gen", "bimol"};
   auto path_sec = [&](int p) -> double {
     return static_cast<double>(q.path_ns[p]) / 1e9 * static_cast<double>(K);
   };
   double total_est = 0.0;
   for (int i = 0; i < SrProfile::kNPaths; ++i)
     total_est += path_sec(i);
-  double denom = total_est > 0 ? total_est : 1.0;
-  double ts_denom = timing_sample > 0 ? timing_sample : 1.0;
+  double const denom = total_est > 0 ? total_est : 1.0;
+  double const ts_denom = timing_sample > 0 ? timing_sample : 1.0;
 
   std::fprintf(stderr,
                "[sr profile] K=%d  calls=%llu  sampled=%llu"
@@ -1046,10 +1046,10 @@ inline void report_select_reactants(const SrProfile& q, double timing_sample) {
   std::fprintf(stderr, "  per-path (calls  wall  %%sel  %%est  ns/call"
                        "  success  null_no_seed  null_post):\n");
   for (int i = 0; i < SrProfile::kNPaths; ++i) {
-    double sec = path_sec(i);
-    double ns_per_call = q.path_calls[i] > 0 ? static_cast<double>(q.path_ns[i]) * K /
-                                                   static_cast<double>(q.path_calls[i])
-                                             : 0.0;
+    double const sec = path_sec(i);
+    double const ns_per_call = q.path_calls[i] > 0 ? static_cast<double>(q.path_ns[i]) * K /
+                                                         static_cast<double>(q.path_calls[i])
+                                                   : 0.0;
     std::fprintf(stderr,
                  "    %-14s  %10llu  %7.3fs  %5.1f%%  %5.1f%%  %7.1fns"
                  "  %10llu  %10llu  %10llu\n",
@@ -1080,8 +1080,8 @@ inline void report_select_reactants(const SrProfile& q, double timing_sample) {
                static_cast<unsigned long long>(q.sampler_empty_pool),
                static_cast<unsigned long long>(q.sampler_local_prop_calls));
   {
-    uint64_t d = q.sampler_fenwick_drifts;
-    double dd = d > 0 ? static_cast<double>(d) : 1.0;
+    uint64_t const d = q.sampler_fenwick_drifts;
+    double const dd = d > 0 ? static_cast<double>(d) : 1.0;
     std::fprintf(stderr,
                  "  drift breakdown: invalid_mid=%llu (%.1f%%)"
                  "  inactive_mol=%llu (%.1f%%)"
@@ -1093,17 +1093,18 @@ inline void report_select_reactants(const SrProfile& q, double timing_sample) {
                  static_cast<unsigned long long>(q.sampler_drift_type_mismatch),
                  100.0 * static_cast<double>(q.sampler_drift_type_mismatch) / dd);
     {
-      double imd =
+      double const imd =
           q.sampler_drift_invalid_mid > 0 ? static_cast<double>(q.sampler_drift_invalid_mid) : 1.0;
-      double avg_excess_per_event =
+      double const avg_excess_per_event =
           q.sampler_drift_target_eq_sum > 0
               ? q.sampler_drift_excess_sum / static_cast<double>(q.sampler_drift_target_eq_sum)
               : 0.0;
-      double avg_total_per_event =
+      double const avg_total_per_event =
           q.sampler_drift_target_eq_sum > 0
               ? q.sampler_drift_total_sum / static_cast<double>(q.sampler_drift_target_eq_sum)
               : 0.0;
-      double frac_loss = avg_total_per_event > 0 ? avg_excess_per_event / avg_total_per_event : 0.0;
+      double const frac_loss =
+          avg_total_per_event > 0 ? avg_excess_per_event / avg_total_per_event : 0.0;
       std::fprintf(stderr,
                    "  invalid_mid breakdown:"
                    " target_ge_sum=%llu (%.1f%%)  target_lt_sum=%llu (%.1f%%)\n"
@@ -1118,19 +1119,19 @@ inline void report_select_reactants(const SrProfile& q, double timing_sample) {
   }
 
   // Per-path work widths.
-  double uni_single_avg_embs =
+  double const uni_single_avg_embs =
       q.path_calls[SrProfile::kPathUniSingle] > 0
           ? static_cast<double>(q.uni_single_embs_sum) /
                 static_cast<double>(q.path_calls[SrProfile::kPathUniSingle])
           : 0.0;
-  double bimol_a_avg = q.path_calls[SrProfile::kPathBimol] > 0
-                           ? static_cast<double>(q.bimol_embs_a_sum) /
-                                 static_cast<double>(q.path_calls[SrProfile::kPathBimol])
-                           : 0.0;
-  double bimol_b_avg = q.path_calls[SrProfile::kPathBimol] > 0
-                           ? static_cast<double>(q.bimol_embs_b_sum) /
-                                 static_cast<double>(q.path_calls[SrProfile::kPathBimol])
-                           : 0.0;
+  double const bimol_a_avg = q.path_calls[SrProfile::kPathBimol] > 0
+                                 ? static_cast<double>(q.bimol_embs_a_sum) /
+                                       static_cast<double>(q.path_calls[SrProfile::kPathBimol])
+                                 : 0.0;
+  double const bimol_b_avg = q.path_calls[SrProfile::kPathBimol] > 0
+                                 ? static_cast<double>(q.bimol_embs_b_sum) /
+                                       static_cast<double>(q.path_calls[SrProfile::kPathBimol])
+                                 : 0.0;
   std::fprintf(stderr,
                "  uni_single: avg_embs=%.3f  embs_empty=%llu\n"
                "  uni_mm_fm:  success=%llu  null=%llu\n"

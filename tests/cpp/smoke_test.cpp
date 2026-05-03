@@ -18,7 +18,7 @@ int main(int argc, char* argv[]) {
   }
 
   try {
-    std::string xml_path = argv[1];
+    std::string const xml_path = argv[1];
     std::cout << "Loading model from: " << xml_path << "\n";
 
     rulemonkey::RuleMonkeySimulator sim(xml_path);
