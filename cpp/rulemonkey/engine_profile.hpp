@@ -442,16 +442,19 @@ inline void report_fire_rule(const FireRuleProfile& p, double timing_fire) {
   auto sample_to_sec = [&](uint64_t ns, uint64_t sampled) -> double {
     if (sampled == 0)
       return 0.0;
-    return (double)ns / 1e9 * (double)K;
+    return static_cast<double>(ns) / 1e9 * static_cast<double>(K);
   };
   double total_est = sample_to_sec(p.total_ns, p.sampled_calls);
   double switch_est = sample_to_sec(p.switch_ns, p.sampled_calls);
   double cleanup_est = sample_to_sec(p.cleanup_ns, p.sampled_calls);
   double bfs_est = sample_to_sec(p.bfs_ns, p.sampled_calls);
-  double cx_exp_est = (p.cx_exp_sampled == 0) ? 0.0 : (double)p.cx_exp_ns / 1e9 * (double)K;
+  double cx_exp_est = (p.cx_exp_sampled == 0)
+                          ? 0.0
+                          : static_cast<double>(p.cx_exp_ns) / 1e9 * static_cast<double>(K);
   double denom_fr = total_est > 0 ? total_est : 1.0;
   std::fprintf(stderr, "[fire_rule profile] K=%d  calls=%llu  sampled=%llu\n", K,
-               (unsigned long long)p.calls, (unsigned long long)p.sampled_calls);
+               static_cast<unsigned long long>(p.calls),
+               static_cast<unsigned long long>(p.sampled_calls));
   std::fprintf(stderr,
                "  total_est=%.3fs  vs timing_fire=%.3fs  (chrono/fire ratio "
                "%.2f)\n",
@@ -464,27 +467,31 @@ inline void report_fire_rule(const FireRuleProfile& p, double timing_fire) {
   std::fprintf(stderr,
                "  post_fire_cx_exp=%.3fs  (fires=%llu sampled=%llu)  "
                "[billed to timing_fire today]\n",
-               cx_exp_est, (unsigned long long)p.cx_exp_fires,
-               (unsigned long long)p.cx_exp_sampled);
+               cx_exp_est, static_cast<unsigned long long>(p.cx_exp_fires),
+               static_cast<unsigned long long>(p.cx_exp_sampled));
   std::fprintf(stderr, "  per-op calls:\n");
   for (int i = 0; i < 5; ++i) {
     double op_est = sample_to_sec(p.op_ns[i], p.sampled_calls);
     std::fprintf(stderr,
                  "    %-15s  calls=%llu  est_time=%.3fs (%.1f%% of "
                  "total_est)\n",
-                 op_names[i], (unsigned long long)p.op_calls[i], op_est, 100.0 * op_est / denom_fr);
+                 op_names[i], static_cast<unsigned long long>(p.op_calls[i]), op_est,
+                 100.0 * op_est / denom_fr);
   }
   std::fprintf(stderr,
                "  mask_bookkeeping: mark_mol=%llu  mark_comp=%llu  "
                "ensure_mask_resizes=%llu\n",
-               (unsigned long long)p.mark_mol_calls, (unsigned long long)p.mark_comp_calls,
-               (unsigned long long)p.ensure_mask_resizes);
-  std::fprintf(stderr,
-               "  in_fire_bfs: fires=%llu  affected_final: sum=%llu max=%llu "
-               "avg=%.1f\n",
-               (unsigned long long)p.bfs_fires, (unsigned long long)p.affected_final_sum,
-               (unsigned long long)p.affected_final_max,
-               p.calls > 0 ? (double)p.affected_final_sum / (double)p.calls : 0.0);
+               static_cast<unsigned long long>(p.mark_mol_calls),
+               static_cast<unsigned long long>(p.mark_comp_calls),
+               static_cast<unsigned long long>(p.ensure_mask_resizes));
+  std::fprintf(
+      stderr,
+      "  in_fire_bfs: fires=%llu  affected_final: sum=%llu max=%llu "
+      "avg=%.1f\n",
+      static_cast<unsigned long long>(p.bfs_fires),
+      static_cast<unsigned long long>(p.affected_final_sum),
+      static_cast<unsigned long long>(p.affected_final_max),
+      p.calls > 0 ? static_cast<double>(p.affected_final_sum) / static_cast<double>(p.calls) : 0.0);
 }
 
 inline void report_remove_bond(const RemoveBondProfile& p) {
@@ -492,7 +499,7 @@ inline void report_remove_bond(const RemoveBondProfile& p) {
   auto est = [&](uint64_t ns) -> double {
     if (p.sampled_calls == 0)
       return 0.0;
-    return (double)ns / 1e9 * (double)K;
+    return static_cast<double>(ns) / 1e9 * static_cast<double>(K);
   };
   double total_est = est(p.total_ns);
   double bfs_est = est(p.bfs_ns);
@@ -500,31 +507,37 @@ inline void report_remove_bond(const RemoveBondProfile& p) {
   std::fprintf(stderr,
                "[remove_bond profile] K=%d  remove_bond_calls=%llu  "
                "split_calls=%llu  sampled=%llu\n",
-               K, (unsigned long long)p.remove_bond_calls, (unsigned long long)p.split_calls,
-               (unsigned long long)p.sampled_calls);
+               K, static_cast<unsigned long long>(p.remove_bond_calls),
+               static_cast<unsigned long long>(p.split_calls),
+               static_cast<unsigned long long>(p.sampled_calls));
   std::fprintf(stderr,
                "  total_est=%.3fs  bfs=%.3fs (%.1f%%)  "
                "partition=%.3fs (%.1f%%)\n",
                total_est, bfs_est, total_est > 0 ? 100.0 * bfs_est / total_est : 0.0, partition_est,
                total_est > 0 ? 100.0 * partition_est / total_est : 0.0);
-  std::fprintf(
-      stderr,
-      "  path counts: singleton=%llu (%.1f%%)  cycle_bond=%llu (%.1f%%)"
-      "  tree_split=%llu (%.1f%%)\n",
-      (unsigned long long)p.singleton_short_circuit,
-      p.split_calls > 0 ? 100.0 * (double)p.singleton_short_circuit / (double)p.split_calls : 0.0,
-      (unsigned long long)p.cycle_bond_removals,
-      p.split_calls > 0 ? 100.0 * (double)p.cycle_bond_removals / (double)p.split_calls : 0.0,
-      (unsigned long long)p.tree_bond_splits,
-      p.split_calls > 0 ? 100.0 * (double)p.tree_bond_splits / (double)p.split_calls : 0.0);
+  std::fprintf(stderr,
+               "  path counts: singleton=%llu (%.1f%%)  cycle_bond=%llu (%.1f%%)"
+               "  tree_split=%llu (%.1f%%)\n",
+               static_cast<unsigned long long>(p.singleton_short_circuit),
+               p.split_calls > 0 ? 100.0 * static_cast<double>(p.singleton_short_circuit) /
+                                       static_cast<double>(p.split_calls)
+                                 : 0.0,
+               static_cast<unsigned long long>(p.cycle_bond_removals),
+               p.split_calls > 0 ? 100.0 * static_cast<double>(p.cycle_bond_removals) /
+                                       static_cast<double>(p.split_calls)
+                                 : 0.0,
+               static_cast<unsigned long long>(p.tree_bond_splits),
+               p.split_calls > 0 ? 100.0 * static_cast<double>(p.tree_bond_splits) /
+                                       static_cast<double>(p.split_calls)
+                                 : 0.0);
   auto print_hist = [&](const char* name, const std::array<uint64_t, 7>& h) {
     uint64_t tot = 0;
     for (auto v : h)
       tot += v;
-    std::fprintf(stderr, "  %s: total=%llu  buckets", name, (unsigned long long)tot);
+    std::fprintf(stderr, "  %s: total=%llu  buckets", name, static_cast<unsigned long long>(tot));
     static const char* labels[7] = {"1", "2", "3-4", "5-8", "9-16", "17-32", "33+"};
     for (int i = 0; i < 7; ++i) {
-      std::fprintf(stderr, "  %s=%llu", labels[i], (unsigned long long)h[i]);
+      std::fprintf(stderr, "  %s=%llu", labels[i], static_cast<unsigned long long>(h[i]));
     }
     std::fprintf(stderr, "\n");
   };
@@ -532,13 +545,17 @@ inline void report_remove_bond(const RemoveBondProfile& p) {
   print_hist("cx_size_bfs  ", p.cx_size_bfs);
   print_hist("cx_size_split", p.cx_size_split);
   print_hist("half_edges   ", p.half_edges_hist);
-  double cx_avg = p.bfs_calls > 0 ? (double)p.cx_size_sum_bfs / (double)p.bfs_calls : 0.0;
-  double he_avg = p.bfs_calls > 0 ? (double)p.half_edges_sum / (double)p.bfs_calls : 0.0;
+  double cx_avg = p.bfs_calls > 0
+                      ? static_cast<double>(p.cx_size_sum_bfs) / static_cast<double>(p.bfs_calls)
+                      : 0.0;
+  double he_avg = p.bfs_calls > 0
+                      ? static_cast<double>(p.half_edges_sum) / static_cast<double>(p.bfs_calls)
+                      : 0.0;
   std::fprintf(stderr,
                "  bfs_cx_size: avg=%.2f max=%llu   "
                "half_edges_per_call: avg=%.2f max=%llu\n",
-               cx_avg, (unsigned long long)p.cx_size_max_bfs, he_avg,
-               (unsigned long long)p.half_edges_max);
+               cx_avg, static_cast<unsigned long long>(p.cx_size_max_bfs), he_avg,
+               static_cast<unsigned long long>(p.half_edges_max));
 }
 
 inline void report_incr_update(const IncrUpdateProfile& p, double timing_update) {
@@ -547,12 +564,12 @@ inline void report_incr_update(const IncrUpdateProfile& p, double timing_update)
   auto outer_sec = [&](uint64_t ns) -> double {
     if (p.sampled_calls == 0)
       return 0.0;
-    return (double)ns / 1e9 * (double)K;
+    return static_cast<double>(ns) / 1e9 * static_cast<double>(K);
   };
   auto inner_sec = [&](uint64_t ns) -> double {
     if (p.per_mid_sampled == 0)
       return 0.0;
-    return (double)ns / 1e9 * (double)K * (double)M;
+    return static_cast<double>(ns) / 1e9 * static_cast<double>(K) * static_cast<double>(M);
   };
   double total_est = outer_sec(p.total_ns);
   double expand_est = outer_sec(p.expand_ns);
@@ -571,8 +588,9 @@ inline void report_incr_update(const IncrUpdateProfile& p, double timing_update)
   std::fprintf(stderr,
                "[incr_update profile] K=%d  M=%d  calls=%llu  sampled=%llu"
                "  per_mid_sampled=%llu\n",
-               K, M, (unsigned long long)p.calls, (unsigned long long)p.sampled_calls,
-               (unsigned long long)p.per_mid_sampled);
+               K, M, static_cast<unsigned long long>(p.calls),
+               static_cast<unsigned long long>(p.sampled_calls),
+               static_cast<unsigned long long>(p.per_mid_sampled));
   std::fprintf(stderr,
                "  total_est=%.3fs  vs timing_update=%.3fs  "
                "(chrono/update ratio %.2f)\n",
@@ -603,36 +621,45 @@ inline void report_incr_update(const IncrUpdateProfile& p, double timing_update)
                "  counters: mids_visited=%llu  rules_visited=%llu  "
                "rules_skipped_synth=%llu  have_local_calls=%llu  "
                "mols_for_local_sum=%llu  rule_cache_clears=%llu\n",
-               (unsigned long long)p.mids_visited, (unsigned long long)p.rules_visited,
-               (unsigned long long)p.rules_skipped_needed, (unsigned long long)p.have_local_calls,
-               (unsigned long long)p.mols_for_local_sum,
-               (unsigned long long)p.rule_local_rate_cache_clears);
+               static_cast<unsigned long long>(p.mids_visited),
+               static_cast<unsigned long long>(p.rules_visited),
+               static_cast<unsigned long long>(p.rules_skipped_needed),
+               static_cast<unsigned long long>(p.have_local_calls),
+               static_cast<unsigned long long>(p.mols_for_local_sum),
+               static_cast<unsigned long long>(p.rule_local_rate_cache_clears));
   std::fprintf(stderr,
                "  per_mid: entries=%llu  cache_hits_epoch=%llu  "
                "cache_hits_mask=%llu  cache_misses=%llu  "
                "cache_uncacheable=%llu\n",
-               (unsigned long long)p.per_mid_entries, (unsigned long long)p.cache_hits_epoch,
-               (unsigned long long)p.cache_hits_mask, (unsigned long long)p.cache_misses,
-               (unsigned long long)p.cache_uncacheable);
-  std::fprintf(
-      stderr,
-      "  recompute_calls: count_a_multi=%llu  count_a_single=%llu"
-      "  count_b_multi=%llu  count_b_single=%llu  "
-      "shared=%llu  local_rate=%llu  fenwick_a=%llu  fenwick_b=%llu"
-      "  propensity=%llu\n",
-      (unsigned long long)p.count_a_multi_calls, (unsigned long long)p.count_a_single_calls,
-      (unsigned long long)p.count_b_multi_calls, (unsigned long long)p.count_b_single_calls,
-      (unsigned long long)p.shared_comp_calls, (unsigned long long)p.local_rate_path_calls,
-      (unsigned long long)p.fenwick_a_updates, (unsigned long long)p.fenwick_b_updates,
-      (unsigned long long)p.propensity_recomputes);
+               static_cast<unsigned long long>(p.per_mid_entries),
+               static_cast<unsigned long long>(p.cache_hits_epoch),
+               static_cast<unsigned long long>(p.cache_hits_mask),
+               static_cast<unsigned long long>(p.cache_misses),
+               static_cast<unsigned long long>(p.cache_uncacheable));
+  std::fprintf(stderr,
+               "  recompute_calls: count_a_multi=%llu  count_a_single=%llu"
+               "  count_b_multi=%llu  count_b_single=%llu  "
+               "shared=%llu  local_rate=%llu  fenwick_a=%llu  fenwick_b=%llu"
+               "  propensity=%llu\n",
+               static_cast<unsigned long long>(p.count_a_multi_calls),
+               static_cast<unsigned long long>(p.count_a_single_calls),
+               static_cast<unsigned long long>(p.count_b_multi_calls),
+               static_cast<unsigned long long>(p.count_b_single_calls),
+               static_cast<unsigned long long>(p.shared_comp_calls),
+               static_cast<unsigned long long>(p.local_rate_path_calls),
+               static_cast<unsigned long long>(p.fenwick_a_updates),
+               static_cast<unsigned long long>(p.fenwick_b_updates),
+               static_cast<unsigned long long>(p.propensity_recomputes));
   {
     uint64_t tot = 0;
     for (auto v : p.rules_visited_hist)
       tot += v;
     static const char* labels[7] = {"1", "2", "3-4", "5-8", "9-16", "17-32", "33+"};
-    std::fprintf(stderr, "  rules_visited_hist: total=%llu  buckets", (unsigned long long)tot);
+    std::fprintf(stderr, "  rules_visited_hist: total=%llu  buckets",
+                 static_cast<unsigned long long>(tot));
     for (int i = 0; i < 7; ++i) {
-      std::fprintf(stderr, "  %s=%llu", labels[i], (unsigned long long)p.rules_visited_hist[i]);
+      std::fprintf(stderr, "  %s=%llu", labels[i],
+                   static_cast<unsigned long long>(p.rules_visited_hist[i]));
     }
     std::fprintf(stderr, "\n");
   }
@@ -649,7 +676,7 @@ inline void report_incr_update(const IncrUpdateProfile& p, double timing_update)
     std::sort(idx.begin(), idx.end(),
               [](const auto& a, const auto& b) { return a.first > b.first; });
     std::fprintf(stderr, "  per_rule_%s (top %d of %zu, total=%llu):\n", label, topn, idx.size(),
-                 (unsigned long long)tot);
+                 static_cast<unsigned long long>(tot));
     uint64_t cum = 0;
     int shown = std::min<int>(topn, static_cast<int>(idx.size()));
     for (int i = 0; i < shown; ++i) {
@@ -657,7 +684,7 @@ inline void report_incr_update(const IncrUpdateProfile& p, double timing_update)
       double pct = tot > 0 ? 100.0 * idx[i].first / tot : 0.0;
       double cum_pct = tot > 0 ? 100.0 * cum / tot : 0.0;
       std::fprintf(stderr, "    RR%d: %llu (%.1f%%)  cum=%.1f%%\n", idx[i].second + 1,
-                   (unsigned long long)idx[i].first, pct, cum_pct);
+                   static_cast<unsigned long long>(idx[i].first), pct, cum_pct);
     }
   };
   dump_topn("recomputes", p.per_rule_recomputes, 15);
@@ -667,14 +694,14 @@ inline void report_incr_update(const IncrUpdateProfile& p, double timing_update)
 
 inline void report_record_at(const RecordAtProfile& p, double timing_record,
                              bool use_incremental_obs) {
-  double compute_obs_est = (double)p.compute_obs_ns / 1e9;
-  double record_est = (double)p.record_ns / 1e9;
+  double compute_obs_est = static_cast<double>(p.compute_obs_ns) / 1e9;
+  double record_est = static_cast<double>(p.record_ns) / 1e9;
   double sum_est = compute_obs_est + record_est;
   double denom = timing_record > 0 ? timing_record : 1.0;
   std::fprintf(stderr,
                "[record_at profile] K=1  calls=%llu  "
                "use_incremental_obs=%d\n",
-               (unsigned long long)p.calls, (int)use_incremental_obs);
+               static_cast<unsigned long long>(p.calls), static_cast<int>(use_incremental_obs));
   std::fprintf(stderr,
                "  compute_obs=%.3fs (%.1f%% of timing_record)  "
                "record_time_point=%.3fs (%.1f%%)  "
@@ -686,20 +713,22 @@ inline void report_record_at(const RecordAtProfile& p, double timing_record,
   std::fprintf(stderr, "  per-observable breakdown:\n");
   for (size_t i = 0; i < p.obs.size(); ++i) {
     const auto& po = p.obs[i];
-    double ev_s = (double)po.evaluate_ns / 1e9;
+    double ev_s = static_cast<double>(po.evaluate_ns) / 1e9;
     std::fprintf(stderr,
                  "    [%zu] %s (type=%s pats=%d)  calls=%llu  wall=%.4fs"
                  " (%.1f%% of compute_obs)\n",
                  i, po.name.c_str(), po.type.c_str(), po.pat_count,
-                 (unsigned long long)po.evaluate_calls, ev_s, 100.0 * ev_s / co_denom);
+                 static_cast<unsigned long long>(po.evaluate_calls), ev_s, 100.0 * ev_s / co_denom);
     std::fprintf(stderr, "        species_branch=%llu  molecules_branch=%llu\n",
-                 (unsigned long long)po.species_branch_calls,
-                 (unsigned long long)po.molecules_branch_calls);
+                 static_cast<unsigned long long>(po.species_branch_calls),
+                 static_cast<unsigned long long>(po.molecules_branch_calls));
     std::fprintf(stderr,
                  "        cx_visited=%llu  counted_cx_hits=%llu  "
                  "embed_calls=%llu  cx_members_walked=%llu\n",
-                 (unsigned long long)po.n_cx_visited, (unsigned long long)po.n_counted_cx_hits,
-                 (unsigned long long)po.n_embed_calls, (unsigned long long)po.n_cx_members_walked);
+                 static_cast<unsigned long long>(po.n_cx_visited),
+                 static_cast<unsigned long long>(po.n_counted_cx_hits),
+                 static_cast<unsigned long long>(po.n_embed_calls),
+                 static_cast<unsigned long long>(po.n_cx_members_walked));
     if (po.has_quantity) {
       std::fprintf(stderr, "        quantity_relation=\"%s\"  quantity_value=%d\n",
                    po.quantity_relation.c_str(), po.quantity_value);
@@ -710,7 +739,7 @@ inline void report_record_at(const RecordAtProfile& p, double timing_record,
   uint64_t sum_obs_ns = 0;
   for (const auto& po : p.obs)
     sum_obs_ns += po.evaluate_ns;
-  double sum_obs_s = (double)sum_obs_ns / 1e9;
+  double sum_obs_s = static_cast<double>(sum_obs_ns) / 1e9;
   std::fprintf(stderr,
                "  cross-check: Sum_per_obs_wall=%.4fs  compute_obs=%.4fs"
                "  ratio=%.3f\n",
@@ -720,22 +749,29 @@ inline void report_record_at(const RecordAtProfile& p, double timing_record,
 inline void report_obs_incr(const ObsIncrProfile& p, double timing_obs,
                             const std::vector<int>& incr_tracked_obs_indices) {
   const int K = kObsIncrProfileSampleEvery;
-  double update_est = (double)p.update_total_ns * K / 1e9;
-  double obs_loop_est = (double)p.obs_loop_ns * K / 1e9;
-  double prev_cx_loop_est = (double)p.prev_cx_loop_ns * K / 1e9;
-  double flush_est = (double)p.flush_total_ns / 1e9; // flush is full-sampled
+  double update_est = static_cast<double>(p.update_total_ns) * K / 1e9;
+  double obs_loop_est = static_cast<double>(p.obs_loop_ns) * K / 1e9;
+  double prev_cx_loop_est = static_cast<double>(p.prev_cx_loop_ns) * K / 1e9;
+  double flush_est = static_cast<double>(p.flush_total_ns) / 1e9; // flush is full-sampled
   double denom_obs = timing_obs > 0 ? timing_obs : 1.0;
   std::fprintf(stderr,
                "[obs_incr profile] K=%d  update_calls=%llu  sampled=%llu  "
                "flush_calls=%llu\n",
-               K, (unsigned long long)p.update_calls, (unsigned long long)p.update_sampled,
-               (unsigned long long)p.flush_calls);
+               K, static_cast<unsigned long long>(p.update_calls),
+               static_cast<unsigned long long>(p.update_sampled),
+               static_cast<unsigned long long>(p.flush_calls));
   std::fprintf(stderr,
                "  avg_affected=%.2f  flush_dirty_cx_avg=%.2f  "
                "flush_dead_cx_avg=%.2f\n",
-               p.update_calls > 0 ? (double)p.affected_sum / (double)p.update_calls : 0.0,
-               p.flush_calls > 0 ? (double)p.flush_dirty_cx_sum / (double)p.flush_calls : 0.0,
-               p.flush_calls > 0 ? (double)p.flush_dead_cx_sum / (double)p.flush_calls : 0.0);
+               p.update_calls > 0
+                   ? static_cast<double>(p.affected_sum) / static_cast<double>(p.update_calls)
+                   : 0.0,
+               p.flush_calls > 0
+                   ? static_cast<double>(p.flush_dirty_cx_sum) / static_cast<double>(p.flush_calls)
+                   : 0.0,
+               p.flush_calls > 0
+                   ? static_cast<double>(p.flush_dead_cx_sum) / static_cast<double>(p.flush_calls)
+                   : 0.0);
   std::fprintf(stderr,
                "  incremental_update=%.3fs (%.1f%% of timing_obs)  "
                "flush=%.3fs (%.1f%%)\n",
@@ -753,14 +789,15 @@ inline void report_obs_incr(const ObsIncrProfile& p, double timing_obs,
             [&](int a, int b) { return p.obs[a].per_mid_ns > p.obs[b].per_mid_ns; });
   for (int oi : order) {
     const auto& po = p.obs[oi];
-    double ev_s = (double)po.per_mid_ns * K / 1e9;
+    double ev_s = static_cast<double>(po.per_mid_ns) * K / 1e9;
     std::fprintf(stderr,
                  "    [%d] %s (type=%s pats=%d seed_t=%d)  "
                  "per_mid_calls=%llu  wall=%.4fs  deltas=%llu  "
                  "dirty_inserts=%llu\n",
                  oi, po.name.c_str(), po.type.c_str(), po.pat_count, po.seed_type_index,
-                 (unsigned long long)po.per_mid_calls, ev_s, (unsigned long long)po.contrib_deltas,
-                 (unsigned long long)po.dirty_inserts);
+                 static_cast<unsigned long long>(po.per_mid_calls), ev_s,
+                 static_cast<unsigned long long>(po.contrib_deltas),
+                 static_cast<unsigned long long>(po.dirty_inserts));
   }
 
   // Dedup audit: group tracked obs by pattern signature.
@@ -809,32 +846,38 @@ inline void report_count_multi(const CountMultiProfile& p) {
   auto ksec = [&](uint64_t ns) -> double {
     if (p.sampled_calls == 0)
       return 0.0;
-    return (double)ns / 1e9 * (double)K;
+    return static_cast<double>(ns) / 1e9 * static_cast<double>(K);
   };
   double total_est = ksec(p.total_ns);
   double seed_emb_est = ksec(p.seed_emb_ns);
   double bfs_est = ksec(p.bfs_ns);
   double disjoint_est = ksec(p.disjoint_ns);
   double denom = total_est > 0 ? total_est : 1.0;
-  std::fprintf(stderr,
-               "[count_multi profile] K=%d  calls=%llu  fm_hits=%llu (%.1f%%)"
-               "  generic=%llu (%.1f%%)  sampled=%llu\n",
-               K, (unsigned long long)p.calls, (unsigned long long)p.fm_hits,
-               p.calls > 0 ? 100.0 * (double)p.fm_hits / (double)p.calls : 0.0,
-               (unsigned long long)p.generic_calls,
-               p.calls > 0 ? 100.0 * (double)p.generic_calls / (double)p.calls : 0.0,
-               (unsigned long long)p.sampled_calls);
   std::fprintf(
       stderr,
-      "  generic paths: singleton_pattern=%llu (%.1f%%)"
-      "  zero_seed=%llu (%.1f%%)  disjoint=%llu (%.1f%%)\n",
-      (unsigned long long)p.singleton_pattern_calls,
-      p.generic_calls > 0 ? 100.0 * (double)p.singleton_pattern_calls / (double)p.generic_calls
-                          : 0.0,
-      (unsigned long long)p.zero_seed_calls,
-      p.generic_calls > 0 ? 100.0 * (double)p.zero_seed_calls / (double)p.generic_calls : 0.0,
-      (unsigned long long)p.disjoint_calls,
-      p.generic_calls > 0 ? 100.0 * (double)p.disjoint_calls / (double)p.generic_calls : 0.0);
+      "[count_multi profile] K=%d  calls=%llu  fm_hits=%llu (%.1f%%)"
+      "  generic=%llu (%.1f%%)  sampled=%llu\n",
+      K, static_cast<unsigned long long>(p.calls), static_cast<unsigned long long>(p.fm_hits),
+      p.calls > 0 ? 100.0 * static_cast<double>(p.fm_hits) / static_cast<double>(p.calls) : 0.0,
+      static_cast<unsigned long long>(p.generic_calls),
+      p.calls > 0 ? 100.0 * static_cast<double>(p.generic_calls) / static_cast<double>(p.calls)
+                  : 0.0,
+      static_cast<unsigned long long>(p.sampled_calls));
+  std::fprintf(stderr,
+               "  generic paths: singleton_pattern=%llu (%.1f%%)"
+               "  zero_seed=%llu (%.1f%%)  disjoint=%llu (%.1f%%)\n",
+               static_cast<unsigned long long>(p.singleton_pattern_calls),
+               p.generic_calls > 0 ? 100.0 * static_cast<double>(p.singleton_pattern_calls) /
+                                         static_cast<double>(p.generic_calls)
+                                   : 0.0,
+               static_cast<unsigned long long>(p.zero_seed_calls),
+               p.generic_calls > 0 ? 100.0 * static_cast<double>(p.zero_seed_calls) /
+                                         static_cast<double>(p.generic_calls)
+                                   : 0.0,
+               static_cast<unsigned long long>(p.disjoint_calls),
+               p.generic_calls > 0 ? 100.0 * static_cast<double>(p.disjoint_calls) /
+                                         static_cast<double>(p.generic_calls)
+                                   : 0.0);
   std::fprintf(stderr,
                "  total_est=%.3fs  seed_emb=%.3fs (%.1f%%)  bfs=%.3fs (%.1f%%)"
                "  disjoint=%.3fs (%.1f%%)\n",
@@ -845,31 +888,35 @@ inline void report_count_multi(const CountMultiProfile& p) {
                "  sub-phase sum=%.3fs  residual vs total_est=%.3fs "
                "(should be ≈ singleton/zero-seed early returns)\n",
                full_sum, total_est - full_sum);
-  double npm_avg =
-      p.generic_calls > p.singleton_pattern_calls
-          ? (double)p.n_pat_mols_sum / (double)(p.generic_calls - p.singleton_pattern_calls)
-          : 0.0;
+  double npm_avg = p.generic_calls > p.singleton_pattern_calls
+                       ? static_cast<double>(p.n_pat_mols_sum) /
+                             static_cast<double>(p.generic_calls - p.singleton_pattern_calls)
+                       : 0.0;
   uint64_t gen_non_singleton =
       p.generic_calls > p.singleton_pattern_calls ? p.generic_calls - p.singleton_pattern_calls : 0;
-  double seed_avg =
-      gen_non_singleton > 0 ? (double)p.seed_emb_sum / (double)gen_non_singleton : 0.0;
-  double bfs_avg =
-      gen_non_singleton > 0 ? (double)p.bfs_visited_sum / (double)gen_non_singleton : 0.0;
+  double seed_avg = gen_non_singleton > 0 ? static_cast<double>(p.seed_emb_sum) /
+                                                static_cast<double>(gen_non_singleton)
+                                          : 0.0;
+  double bfs_avg = gen_non_singleton > 0 ? static_cast<double>(p.bfs_visited_sum) /
+                                               static_cast<double>(gen_non_singleton)
+                                         : 0.0;
   std::fprintf(stderr,
                "  per-call avg (non-singleton generic): n_pat_mols=%.2f (max=*)"
                "  seed_embs=%.3f (sum=%llu max=%llu)"
                "  bfs_visited=%.3f (sum=%llu max=%llu)\n",
-               npm_avg, seed_avg, (unsigned long long)p.seed_emb_sum,
-               (unsigned long long)p.seed_emb_max, bfs_avg, (unsigned long long)p.bfs_visited_sum,
-               (unsigned long long)p.bfs_visited_max);
+               npm_avg, seed_avg, static_cast<unsigned long long>(p.seed_emb_sum),
+               static_cast<unsigned long long>(p.seed_emb_max), bfs_avg,
+               static_cast<unsigned long long>(p.bfs_visited_sum),
+               static_cast<unsigned long long>(p.bfs_visited_max));
   auto print_hist = [&](const char* name, const std::array<uint64_t, 7>& h) {
     uint64_t tot = 0;
     for (auto v : h)
       tot += v;
-    std::fprintf(stderr, "  %s hist: total=%llu  buckets", name, (unsigned long long)tot);
+    std::fprintf(stderr, "  %s hist: total=%llu  buckets", name,
+                 static_cast<unsigned long long>(tot));
     static const char* labels[7] = {"0-1", "2", "3-4", "5-8", "9-16", "17-32", "33+"};
     for (int i = 0; i < 7; ++i) {
-      std::fprintf(stderr, "  %s=%llu", labels[i], (unsigned long long)h[i]);
+      std::fprintf(stderr, "  %s=%llu", labels[i], static_cast<unsigned long long>(h[i]));
     }
     std::fprintf(stderr, "\n");
   };
@@ -882,7 +929,8 @@ inline void report_cmm_fc(const CmmFcProfile& q, const CountMultiProfile& cm) {
   const int K = kCmmFcProfileSampleEvery;
   const int R = 5; // phase rotor width
   auto phase_sec = [&](int p) -> double {
-    return (double)q.phase_ns[p] / 1e9 * (double)K * (double)R;
+    return static_cast<double>(q.phase_ns[p]) / 1e9 * static_cast<double>(K) *
+           static_cast<double>(R);
   };
   double p_seed = phase_sec(0);
   double p_ptrc = phase_sec(1);
@@ -895,10 +943,11 @@ inline void report_cmm_fc(const CmmFcProfile& q, const CountMultiProfile& cm) {
                "[cmm_fc profile] K=%d  rotor=%d  fc_calls=%llu  sampled=%llu"
                "  inactive_seed=%llu  seed_type_mismatches=%llu"
                "  seed_non_bond_rejects=%llu\n",
-               K, R, (unsigned long long)q.fc_calls, (unsigned long long)q.sampled_calls,
-               (unsigned long long)q.fc_inactive_seed,
-               (unsigned long long)q.fc_seed_type_mismatches,
-               (unsigned long long)q.fc_seed_non_bond_rejects);
+               K, R, static_cast<unsigned long long>(q.fc_calls),
+               static_cast<unsigned long long>(q.sampled_calls),
+               static_cast<unsigned long long>(q.fc_inactive_seed),
+               static_cast<unsigned long long>(q.fc_seed_type_mismatches),
+               static_cast<unsigned long long>(q.fc_seed_non_bond_rejects));
   std::fprintf(stderr,
                "  phase wall (×K×rotor): seed=%.4fs (%.1f%%)"
                "  partner_trace=%.4fs (%.1f%%)"
@@ -912,23 +961,29 @@ inline void report_cmm_fc(const CmmFcProfile& q, const CountMultiProfile& cm) {
   std::fprintf(stderr,
                "  phase_hits: seed=%llu  partner_trace=%llu"
                "  partner_local_scan=%llu  plocal_ok=%llu  partner_non_bond=%llu\n",
-               (unsigned long long)q.phase_hits[0], (unsigned long long)q.phase_hits[1],
-               (unsigned long long)q.phase_hits[2], (unsigned long long)q.phase_hits[3],
-               (unsigned long long)q.phase_hits[4]);
-  std::fprintf(
-      stderr,
-      "  candidate_iters=%llu  total_matches=%llu\n"
-      "    oob=%llu  state_rej=%llu  bond_rej=%llu  self_bond=%llu"
-      "  partner_inactive=%llu  partner_type_mm=%llu\n"
-      "    plocal_not_found=%llu  plocal_not_ok=%llu  partner_state_rej=%llu"
-      "  partner_non_bond_rej=%llu\n",
-      (unsigned long long)q.fc_candidate_iters, (unsigned long long)q.fc_total_matches,
-      (unsigned long long)q.fc_candidate_oob, (unsigned long long)q.fc_candidate_state_rejects,
-      (unsigned long long)q.fc_candidate_bond_rejects, (unsigned long long)q.fc_candidate_self_bond,
-      (unsigned long long)q.fc_partner_inactive, (unsigned long long)q.fc_partner_type_mismatches,
-      (unsigned long long)q.fc_plocal_not_found, (unsigned long long)q.fc_plocal_not_ok,
-      (unsigned long long)q.fc_partner_state_rejects,
-      (unsigned long long)q.fc_partner_non_bond_rejects);
+               static_cast<unsigned long long>(q.phase_hits[0]),
+               static_cast<unsigned long long>(q.phase_hits[1]),
+               static_cast<unsigned long long>(q.phase_hits[2]),
+               static_cast<unsigned long long>(q.phase_hits[3]),
+               static_cast<unsigned long long>(q.phase_hits[4]));
+  std::fprintf(stderr,
+               "  candidate_iters=%llu  total_matches=%llu\n"
+               "    oob=%llu  state_rej=%llu  bond_rej=%llu  self_bond=%llu"
+               "  partner_inactive=%llu  partner_type_mm=%llu\n"
+               "    plocal_not_found=%llu  plocal_not_ok=%llu  partner_state_rej=%llu"
+               "  partner_non_bond_rej=%llu\n",
+               static_cast<unsigned long long>(q.fc_candidate_iters),
+               static_cast<unsigned long long>(q.fc_total_matches),
+               static_cast<unsigned long long>(q.fc_candidate_oob),
+               static_cast<unsigned long long>(q.fc_candidate_state_rejects),
+               static_cast<unsigned long long>(q.fc_candidate_bond_rejects),
+               static_cast<unsigned long long>(q.fc_candidate_self_bond),
+               static_cast<unsigned long long>(q.fc_partner_inactive),
+               static_cast<unsigned long long>(q.fc_partner_type_mismatches),
+               static_cast<unsigned long long>(q.fc_plocal_not_found),
+               static_cast<unsigned long long>(q.fc_plocal_not_ok),
+               static_cast<unsigned long long>(q.fc_partner_state_rejects),
+               static_cast<unsigned long long>(q.fc_partner_non_bond_rejects));
   uint64_t rej_sum = q.fc_candidate_oob + q.fc_candidate_state_rejects +
                      q.fc_candidate_bond_rejects + q.fc_candidate_self_bond +
                      q.fc_partner_inactive + q.fc_partner_type_mismatches + q.fc_plocal_not_found +
@@ -937,21 +992,22 @@ inline void report_cmm_fc(const CmmFcProfile& q, const CountMultiProfile& cm) {
   std::fprintf(stderr,
                "  cross-check: rej_sum+matches=%llu  iters=%llu  (must be equal)"
                "  fm_hits=%llu (from count_multi)\n",
-               (unsigned long long)(rej_sum + q.fc_total_matches),
-               (unsigned long long)q.fc_candidate_iters, (unsigned long long)cm.fm_hits);
-  double fc = q.fc_calls > 0 ? (double)q.fc_calls : 1.0;
+               static_cast<unsigned long long>(rej_sum + q.fc_total_matches),
+               static_cast<unsigned long long>(q.fc_candidate_iters),
+               static_cast<unsigned long long>(cm.fm_hits));
+  double fc = q.fc_calls > 0 ? static_cast<double>(q.fc_calls) : 1.0;
   std::fprintf(stderr,
                "  per-call means: seed_bond_cand=%.2f (max=%llu)"
                "  partner_bond_cand=%.2f (max=%llu)"
                "  partner_non_bond_checks=%.2f (max=%llu)"
                "  seed_non_bond_checks=%.2f\n",
-               (double)q.fc_seed_bond_candidates_sum / fc,
-               (unsigned long long)q.fc_seed_bond_candidates_max,
-               (double)q.fc_partner_bond_candidates_sum / fc,
-               (unsigned long long)q.fc_partner_bond_candidates_max,
-               (double)q.fc_partner_non_bond_checks_sum / fc,
-               (unsigned long long)q.fc_partner_non_bond_checks_max,
-               (double)q.fc_seed_non_bond_checks_sum / fc);
+               static_cast<double>(q.fc_seed_bond_candidates_sum) / fc,
+               static_cast<unsigned long long>(q.fc_seed_bond_candidates_max),
+               static_cast<double>(q.fc_partner_bond_candidates_sum) / fc,
+               static_cast<unsigned long long>(q.fc_partner_bond_candidates_max),
+               static_cast<double>(q.fc_partner_non_bond_checks_sum) / fc,
+               static_cast<unsigned long long>(q.fc_partner_non_bond_checks_max),
+               static_cast<double>(q.fc_seed_non_bond_checks_sum) / fc);
   {
     const auto& h = q.fc_partner_non_bond_checks_hist;
     uint64_t tot = 0;
@@ -960,9 +1016,10 @@ inline void report_cmm_fc(const CmmFcProfile& q, const CountMultiProfile& cm) {
     std::fprintf(stderr,
                  "  partner_non_bond_checks hist (per fc call): total=%llu"
                  "  0=%llu  1=%llu  2=%llu  3=%llu  4=%llu  5=%llu  6+=%llu\n",
-                 (unsigned long long)tot, (unsigned long long)h[0], (unsigned long long)h[1],
-                 (unsigned long long)h[2], (unsigned long long)h[3], (unsigned long long)h[4],
-                 (unsigned long long)h[5], (unsigned long long)h[6]);
+                 static_cast<unsigned long long>(tot), static_cast<unsigned long long>(h[0]),
+                 static_cast<unsigned long long>(h[1]), static_cast<unsigned long long>(h[2]),
+                 static_cast<unsigned long long>(h[3]), static_cast<unsigned long long>(h[4]),
+                 static_cast<unsigned long long>(h[5]), static_cast<unsigned long long>(h[6]));
   }
 }
 
@@ -970,7 +1027,9 @@ inline void report_select_reactants(const SrProfile& q, double timing_sample) {
   const int K = kSelectReactantsProfileSampleEvery;
   static const char* path_names[SrProfile::kNPaths] = {"zero", "uni_single", "uni_multi_fm",
                                                        "uni_multi_gen", "bimol"};
-  auto path_sec = [&](int p) -> double { return (double)q.path_ns[p] / 1e9 * (double)K; };
+  auto path_sec = [&](int p) -> double {
+    return static_cast<double>(q.path_ns[p]) / 1e9 * static_cast<double>(K);
+  };
   double total_est = 0.0;
   for (int i = 0; i < SrProfile::kNPaths; ++i)
     total_est += path_sec(i);
@@ -981,58 +1040,68 @@ inline void report_select_reactants(const SrProfile& q, double timing_sample) {
                "[sr profile] K=%d  calls=%llu  sampled=%llu"
                "  total_est=%.3fs  vs timing_sample=%.3fs  (chrono/sel ratio "
                "%.2f)\n",
-               K, (unsigned long long)q.calls, (unsigned long long)q.sampled_calls, total_est,
-               timing_sample, timing_sample > 0 ? total_est / timing_sample : 0.0);
+               K, static_cast<unsigned long long>(q.calls),
+               static_cast<unsigned long long>(q.sampled_calls), total_est, timing_sample,
+               timing_sample > 0 ? total_est / timing_sample : 0.0);
   std::fprintf(stderr, "  per-path (calls  wall  %%sel  %%est  ns/call"
                        "  success  null_no_seed  null_post):\n");
   for (int i = 0; i < SrProfile::kNPaths; ++i) {
     double sec = path_sec(i);
-    double ns_per_call =
-        q.path_calls[i] > 0 ? (double)q.path_ns[i] * K / (double)q.path_calls[i] : 0.0;
+    double ns_per_call = q.path_calls[i] > 0 ? static_cast<double>(q.path_ns[i]) * K /
+                                                   static_cast<double>(q.path_calls[i])
+                                             : 0.0;
     std::fprintf(stderr,
                  "    %-14s  %10llu  %7.3fs  %5.1f%%  %5.1f%%  %7.1fns"
                  "  %10llu  %10llu  %10llu\n",
-                 path_names[i], (unsigned long long)q.path_calls[i], sec, 100.0 * sec / ts_denom,
-                 100.0 * sec / denom, ns_per_call, (unsigned long long)q.path_success[i],
-                 (unsigned long long)q.path_null_no_seed[i],
-                 (unsigned long long)q.path_null_post[i]);
+                 path_names[i], static_cast<unsigned long long>(q.path_calls[i]), sec,
+                 100.0 * sec / ts_denom, 100.0 * sec / denom, ns_per_call,
+                 static_cast<unsigned long long>(q.path_success[i]),
+                 static_cast<unsigned long long>(q.path_null_no_seed[i]),
+                 static_cast<unsigned long long>(q.path_null_post[i]));
   }
 
-  std::fprintf(
-      stderr,
-      "  sampler: calls=%llu"
-      "  fenwick_uses=%llu (%.1f%%)  fenwick_drifts=%llu (%.1f%%)"
-      "  linear=%llu (%.1f%%)  empty=%llu  local_prop=%llu\n",
-      (unsigned long long)q.sampler_calls, (unsigned long long)q.sampler_fenwick_uses,
-      q.sampler_calls > 0 ? 100.0 * (double)q.sampler_fenwick_uses / (double)q.sampler_calls : 0.0,
-      (unsigned long long)q.sampler_fenwick_drifts,
-      q.sampler_calls > 0 ? 100.0 * (double)q.sampler_fenwick_drifts / (double)q.sampler_calls
-                          : 0.0,
-      (unsigned long long)q.sampler_linear_calls,
-      q.sampler_calls > 0 ? 100.0 * (double)q.sampler_linear_calls / (double)q.sampler_calls : 0.0,
-      (unsigned long long)q.sampler_empty_pool, (unsigned long long)q.sampler_local_prop_calls);
+  std::fprintf(stderr,
+               "  sampler: calls=%llu"
+               "  fenwick_uses=%llu (%.1f%%)  fenwick_drifts=%llu (%.1f%%)"
+               "  linear=%llu (%.1f%%)  empty=%llu  local_prop=%llu\n",
+               static_cast<unsigned long long>(q.sampler_calls),
+               static_cast<unsigned long long>(q.sampler_fenwick_uses),
+               q.sampler_calls > 0 ? 100.0 * static_cast<double>(q.sampler_fenwick_uses) /
+                                         static_cast<double>(q.sampler_calls)
+                                   : 0.0,
+               static_cast<unsigned long long>(q.sampler_fenwick_drifts),
+               q.sampler_calls > 0 ? 100.0 * static_cast<double>(q.sampler_fenwick_drifts) /
+                                         static_cast<double>(q.sampler_calls)
+                                   : 0.0,
+               static_cast<unsigned long long>(q.sampler_linear_calls),
+               q.sampler_calls > 0 ? 100.0 * static_cast<double>(q.sampler_linear_calls) /
+                                         static_cast<double>(q.sampler_calls)
+                                   : 0.0,
+               static_cast<unsigned long long>(q.sampler_empty_pool),
+               static_cast<unsigned long long>(q.sampler_local_prop_calls));
   {
     uint64_t d = q.sampler_fenwick_drifts;
-    double dd = d > 0 ? (double)d : 1.0;
+    double dd = d > 0 ? static_cast<double>(d) : 1.0;
     std::fprintf(stderr,
                  "  drift breakdown: invalid_mid=%llu (%.1f%%)"
                  "  inactive_mol=%llu (%.1f%%)"
                  "  type_mismatch=%llu (%.1f%%)\n",
-                 (unsigned long long)q.sampler_drift_invalid_mid,
-                 100.0 * (double)q.sampler_drift_invalid_mid / dd,
-                 (unsigned long long)q.sampler_drift_inactive_mol,
-                 100.0 * (double)q.sampler_drift_inactive_mol / dd,
-                 (unsigned long long)q.sampler_drift_type_mismatch,
-                 100.0 * (double)q.sampler_drift_type_mismatch / dd);
+                 static_cast<unsigned long long>(q.sampler_drift_invalid_mid),
+                 100.0 * static_cast<double>(q.sampler_drift_invalid_mid) / dd,
+                 static_cast<unsigned long long>(q.sampler_drift_inactive_mol),
+                 100.0 * static_cast<double>(q.sampler_drift_inactive_mol) / dd,
+                 static_cast<unsigned long long>(q.sampler_drift_type_mismatch),
+                 100.0 * static_cast<double>(q.sampler_drift_type_mismatch) / dd);
     {
-      double imd = q.sampler_drift_invalid_mid > 0 ? (double)q.sampler_drift_invalid_mid : 1.0;
+      double imd =
+          q.sampler_drift_invalid_mid > 0 ? static_cast<double>(q.sampler_drift_invalid_mid) : 1.0;
       double avg_excess_per_event =
           q.sampler_drift_target_eq_sum > 0
-              ? q.sampler_drift_excess_sum / (double)q.sampler_drift_target_eq_sum
+              ? q.sampler_drift_excess_sum / static_cast<double>(q.sampler_drift_target_eq_sum)
               : 0.0;
       double avg_total_per_event =
           q.sampler_drift_target_eq_sum > 0
-              ? q.sampler_drift_total_sum / (double)q.sampler_drift_target_eq_sum
+              ? q.sampler_drift_total_sum / static_cast<double>(q.sampler_drift_target_eq_sum)
               : 0.0;
       double frac_loss = avg_total_per_event > 0 ? avg_excess_per_event / avg_total_per_event : 0.0;
       std::fprintf(stderr,
@@ -1040,27 +1109,28 @@ inline void report_select_reactants(const SrProfile& q, double timing_sample) {
                    " target_ge_sum=%llu (%.1f%%)  target_lt_sum=%llu (%.1f%%)\n"
                    "  weight loss when target>=sum: avg_excess=%.6g"
                    "  avg_total=%.6g  avg_loss_frac=%.4f%%\n",
-                   (unsigned long long)q.sampler_drift_target_eq_sum,
-                   100.0 * (double)q.sampler_drift_target_eq_sum / imd,
-                   (unsigned long long)q.sampler_drift_target_lt_sum,
-                   100.0 * (double)q.sampler_drift_target_lt_sum / imd, avg_excess_per_event,
-                   avg_total_per_event, 100.0 * frac_loss);
+                   static_cast<unsigned long long>(q.sampler_drift_target_eq_sum),
+                   100.0 * static_cast<double>(q.sampler_drift_target_eq_sum) / imd,
+                   static_cast<unsigned long long>(q.sampler_drift_target_lt_sum),
+                   100.0 * static_cast<double>(q.sampler_drift_target_lt_sum) / imd,
+                   avg_excess_per_event, avg_total_per_event, 100.0 * frac_loss);
     }
   }
 
   // Per-path work widths.
   double uni_single_avg_embs =
       q.path_calls[SrProfile::kPathUniSingle] > 0
-          ? (double)q.uni_single_embs_sum / (double)q.path_calls[SrProfile::kPathUniSingle]
+          ? static_cast<double>(q.uni_single_embs_sum) /
+                static_cast<double>(q.path_calls[SrProfile::kPathUniSingle])
           : 0.0;
-  double bimol_a_avg =
-      q.path_calls[SrProfile::kPathBimol] > 0
-          ? (double)q.bimol_embs_a_sum / (double)q.path_calls[SrProfile::kPathBimol]
-          : 0.0;
-  double bimol_b_avg =
-      q.path_calls[SrProfile::kPathBimol] > 0
-          ? (double)q.bimol_embs_b_sum / (double)q.path_calls[SrProfile::kPathBimol]
-          : 0.0;
+  double bimol_a_avg = q.path_calls[SrProfile::kPathBimol] > 0
+                           ? static_cast<double>(q.bimol_embs_a_sum) /
+                                 static_cast<double>(q.path_calls[SrProfile::kPathBimol])
+                           : 0.0;
+  double bimol_b_avg = q.path_calls[SrProfile::kPathBimol] > 0
+                           ? static_cast<double>(q.bimol_embs_b_sum) /
+                                 static_cast<double>(q.path_calls[SrProfile::kPathBimol])
+                           : 0.0;
   std::fprintf(stderr,
                "  uni_single: avg_embs=%.3f  embs_empty=%llu\n"
                "  uni_mm_fm:  success=%llu  null=%llu\n"
@@ -1068,13 +1138,16 @@ inline void report_select_reactants(const SrProfile& q, double timing_sample) {
                "  bimol: avg_embs_a=%.3f  avg_embs_b=%.3f"
                "  same_mol=%llu  same_cx=%llu  embs_empty=%llu"
                "  resolve_calls=%llu  resolve_failures=%llu\n",
-               uni_single_avg_embs, (unsigned long long)q.uni_single_embs_empty,
-               (unsigned long long)q.uni_mm_fm_success, (unsigned long long)q.uni_mm_fm_null,
-               (unsigned long long)q.uni_mm_gen_success, (unsigned long long)q.uni_mm_gen_null,
-               bimol_a_avg, bimol_b_avg, (unsigned long long)q.bimol_same_mol_rejects,
-               (unsigned long long)q.bimol_same_cx_rejects, (unsigned long long)q.bimol_embs_empty,
-               (unsigned long long)q.bimol_resolve_calls,
-               (unsigned long long)q.bimol_resolve_failures);
+               uni_single_avg_embs, static_cast<unsigned long long>(q.uni_single_embs_empty),
+               static_cast<unsigned long long>(q.uni_mm_fm_success),
+               static_cast<unsigned long long>(q.uni_mm_fm_null),
+               static_cast<unsigned long long>(q.uni_mm_gen_success),
+               static_cast<unsigned long long>(q.uni_mm_gen_null), bimol_a_avg, bimol_b_avg,
+               static_cast<unsigned long long>(q.bimol_same_mol_rejects),
+               static_cast<unsigned long long>(q.bimol_same_cx_rejects),
+               static_cast<unsigned long long>(q.bimol_embs_empty),
+               static_cast<unsigned long long>(q.bimol_resolve_calls),
+               static_cast<unsigned long long>(q.bimol_resolve_failures));
 }
 
 } // namespace rulemonkey

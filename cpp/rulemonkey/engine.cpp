@@ -3122,8 +3122,8 @@ struct Engine::Impl {
               }
               n_bonds /= 2;
               fprintf(stderr, "[fm_reject A] rule=%zu name=%s mols=%d bonds=%d reason=%s\n",
-                      (size_t)(&rule - model.rules.data()), rule.name.c_str(), n_mols, n_bonds,
-                      fm_reason.empty() ? "unknown" : fm_reason.c_str());
+                      static_cast<size_t>(&rule - model.rules.data()), rule.name.c_str(), n_mols,
+                      n_bonds, fm_reason.empty() ? "unknown" : fm_reason.c_str());
             }
           }
         }
@@ -3185,8 +3185,8 @@ struct Engine::Impl {
                 }
                 n_bonds /= 2;
                 fprintf(stderr, "[fm_reject B] rule=%zu name=%s mols=%d bonds=%d reason=%s\n",
-                        (size_t)(&rule - model.rules.data()), rule.name.c_str(), n_mols, n_bonds,
-                        fm_reason.empty() ? "unknown" : fm_reason.c_str());
+                        static_cast<size_t>(&rule - model.rules.data()), rule.name.c_str(), n_mols,
+                        n_bonds, fm_reason.empty() ? "unknown" : fm_reason.c_str());
               }
             }
           }
@@ -3720,7 +3720,8 @@ struct Engine::Impl {
                 fprintf(stderr,
                         "  cx=%d stored_pass=%d stored_mc=%d "
                         "live_total=%d live_pass=%d members=%zu\n",
-                        cx, (int)kv.second, stored_mc, live_total, (int)live_pass, members.size());
+                        cx, static_cast<int>(kv.second), stored_mc, live_total,
+                        static_cast<int>(live_pass), members.size());
               }
             }
           }
@@ -5118,7 +5119,8 @@ struct Engine::Impl {
                            "rng_ok=%d match_ok=%d\n"
                            "  fast.mol_ids.size=%zu gen.mol_ids.size=%zu "
                            "fast.comp_ids.size=%zu gen.comp_ids.size=%zu\n",
-                           (int)(&rule - model.rules.data()), mol_id, (int)rng_ok, (int)match_ok,
+                           static_cast<int>(&rule - model.rules.data()), mol_id,
+                           static_cast<int>(rng_ok), static_cast<int>(match_ok),
                            fast.mol_ids.size(), gen.mol_ids.size(), fast.comp_ids.size(),
                            gen.comp_ids.size());
               if (fast.mol_ids.size() == gen.mol_ids.size()) {
@@ -5462,8 +5464,8 @@ struct Engine::Impl {
                   "[fw INVARIANT FAIL] type=%d  use_a=%d  r=%.6f  total=%.6f"
                   "  mid=%d  prefix_before=%.6f  prefix_through=%.6f"
                   "  tree_sum=%.6f\n",
-                  type_index, (int)use_a, r, total, mid, prefix_before_mid, prefix_through_mid,
-                  ft.sum());
+                  type_index, static_cast<int>(use_a), r, total, mid, prefix_before_mid,
+                  prefix_through_mid, ft.sum());
           std::abort();
         }
       }
@@ -7032,7 +7034,8 @@ struct Engine::Impl {
       if (total_time > 0 || timing_wall > 0) {
         double denom = total_time > 0 ? total_time : timing_wall;
         fprintf(stderr, "[RM timing] events=%lld  null=%lld  total=%.3fs  wall=%.3fs\n",
-                (long long)event_count, (long long)null_event_count, total_time, timing_wall);
+                static_cast<long long>(event_count), static_cast<long long>(null_event_count),
+                total_time, timing_wall);
         fprintf(stderr, "  select_reactants: %.3fs (%.1f%%)\n", timing_sample,
                 100.0 * timing_sample / denom);
         fprintf(stderr, "  fire_rule:        %.3fs (%.1f%%)\n", timing_fire,
@@ -7057,8 +7060,8 @@ struct Engine::Impl {
         auto& rule = model.rules[ri];
         auto& rs = rule_states[ri];
         fprintf(stderr, "  %s (%s): fires=%llu  propensity=%.6g  a_total=%.6g\n", rule.id.c_str(),
-                rule.name.c_str(), (unsigned long long)rule_fire_counts[ri], rs.propensity,
-                rs.a_total);
+                rule.name.c_str(), static_cast<unsigned long long>(rule_fire_counts[ri]),
+                rs.propensity, rs.a_total);
       }
     }
 

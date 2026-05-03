@@ -91,8 +91,8 @@ void test_initial_concentration(const std::string& xml) {
   for (double a_tot : {0.0, 200.0, 5000.0}) {
     auto r = run_with(xml, {{"A_tot", a_tot}}, 10.0, 11, /*seed=*/1);
     check(initial_value(r, "A_1") == a_tot,
-          "Init conc: set_param(A_tot, " + std::to_string((int)a_tot) +
-              ") should give A_1(t=0)=" + std::to_string((int)a_tot));
+          "Init conc: set_param(A_tot, " + std::to_string(static_cast<int>(a_tot)) +
+              ") should give A_1(t=0)=" + std::to_string(static_cast<int>(a_tot)));
   }
 }
 
