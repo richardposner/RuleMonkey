@@ -5,6 +5,16 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## Unreleased
+
+### Changed
+
+- **CMake vendoring defaults.** The minimum CMake version is now 3.20.
+  `RULEMONKEY_BUILD_TESTS` and `RULEMONKEY_BUILD_CLI` default to
+  `PROJECT_IS_TOP_LEVEL`, `RULEMONKEY_WARNINGS_AS_ERRORS` defaults off
+  when RuleMonkey is added as a subdirectory, and tests no longer depend
+  on `CMAKE_SOURCE_DIR`.
+
 ## [3.1.2] — 2026-05-02
 
 ### Added

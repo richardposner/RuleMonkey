@@ -1,6 +1,14 @@
-cmake_minimum_required(VERSION 3.25)
+cmake_minimum_required(VERSION 3.20)
 
 project(RuleMonkey VERSION 3.1.2 LANGUAGES CXX)
+
+if(CMAKE_VERSION VERSION_LESS 3.21)
+    if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
+        set(PROJECT_IS_TOP_LEVEL ON)
+    else()
+        set(PROJECT_IS_TOP_LEVEL OFF)
+    endif()
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -45,13 +53,11 @@ add_library(RuleMonkey::rulemonkey ALIAS rulemonkey)
 
 target_compile_features(rulemonkey PUBLIC cxx_std_17)
 
-# -Werror is on by default for the in-tree build so a warning shows up
-# as a compile failure on the developer's machine before it lands in
-# CI.  Downstream consumers building RM as a subdirectory or against an
-# installed package can opt out with -DRULEMONKEY_WARNINGS_AS_ERRORS=OFF
-# (their toolchain may flag things ours does not — e.g., a newer GCC's
-# -Wmaybe-uninitialized tightening).
-option(RULEMONKEY_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ON)
+# -Werror is on by default for the top-level developer build so a warning
+# shows up as a compile failure before it lands in CI.  Downstream consumers
+# building RM as a subdirectory get the less brittle default and can opt in
+# with -DRULEMONKEY_WARNINGS_AS_ERRORS=ON.
+option(RULEMONKEY_WARNINGS_AS_ERRORS "Treat compiler warnings as errors" ${PROJECT_IS_TOP_LEVEL})
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
     target_compile_options(rulemonkey PRIVATE
         -Wall -Wextra -Wno-deprecated-declarations
@@ -77,13 +83,16 @@ endif()
 # ---------------------------------------------------------------------------
 # rm_driver: batch CLI
 # ---------------------------------------------------------------------------
-add_executable(rm_driver cpp/cli/rm_driver.cpp)
-target_link_libraries(rm_driver PRIVATE rulemonkey)
+option(RULEMONKEY_BUILD_CLI "Build the rm_driver batch CLI" ${PROJECT_IS_TOP_LEVEL})
+if(RULEMONKEY_BUILD_CLI)
+    add_executable(rm_driver cpp/cli/rm_driver.cpp)
+    target_link_libraries(rm_driver PRIVATE rulemonkey)
 
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-    target_compile_options(rm_driver PRIVATE -Wall -Wextra -Wno-deprecated-declarations)
-    if(RULEMONKEY_WARNINGS_AS_ERRORS)
-        target_compile_options(rm_driver PRIVATE -Werror)
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        target_compile_options(rm_driver PRIVATE -Wall -Wextra -Wno-deprecated-declarations)
+        if(RULEMONKEY_WARNINGS_AS_ERRORS)
+            target_compile_options(rm_driver PRIVATE -Werror)
+        endif()
     endif()
 endif()
 
@@ -98,7 +107,8 @@ endif()
 # Both Linux and macOS are exercised in CI (the asan job's matrix).  The
 # sanitizer flags themselves are platform-neutral; the CI step sets
 # ASAN_OPTIONS / UBSAN_OPTIONS to keep diagnostic output uniform.
-# Applied after rm_driver is declared so both library and CLI get the flags.
+# Applied after the optional rm_driver is declared so every built target gets
+# the flags.
 # ---------------------------------------------------------------------------
 option(RULEMONKEY_ENABLE_ASAN "Build with AddressSanitizer + UBSan" OFF)
 if(RULEMONKEY_ENABLE_ASAN)
@@ -108,7 +118,9 @@ if(RULEMONKEY_ENABLE_ASAN)
     set(_rm_asan_flags -fsanitize=address,undefined -fno-omit-frame-pointer)
     target_compile_options(rulemonkey  PRIVATE ${_rm_asan_flags})
     target_link_options   (rulemonkey  PUBLIC  ${_rm_asan_flags})
-    target_compile_options(rm_driver   PRIVATE ${_rm_asan_flags})
+    if(TARGET rm_driver)
+        target_compile_options(rm_driver PRIVATE ${_rm_asan_flags})
+    endif()
 endif()
 
 # ---------------------------------------------------------------------------
@@ -122,8 +134,11 @@ endif()
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
-enable_testing()
-add_subdirectory(tests)
+option(RULEMONKEY_BUILD_TESTS "Build RuleMonkey C++ tests" ${PROJECT_IS_TOP_LEVEL})
+if(RULEMONKEY_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
 
 # ---------------------------------------------------------------------------
 # Install rules
@@ -132,7 +147,7 @@ add_subdirectory(tests)
 #
 #   include/rulemonkey/{simulator,types}.hpp
 #   lib/librulemonkey.a
-#   bin/rm_driver
+#   bin/rm_driver     (when RULEMONKEY_BUILD_CLI=ON)
 #   lib/cmake/RuleMonkey/RuleMonkeyConfig.cmake
 #   lib/cmake/RuleMonkey/RuleMonkeyConfigVersion.cmake
 #   lib/cmake/RuleMonkey/RuleMonkeyTargets.cmake
@@ -168,8 +183,14 @@ if(RULEMONKEY_INSTALL)
     include(GNUInstallDirs)
     include(CMakePackageConfigHelpers)
 
-    # Public targets: the static library and the rm_driver CLI.
-    install(TARGETS rulemonkey rm_driver
+    # Public targets: always the static library, and the rm_driver CLI when
+    # RULEMONKEY_BUILD_CLI=ON.
+    set(_rulemonkey_install_targets rulemonkey)
+    if(TARGET rm_driver)
+        list(APPEND _rulemonkey_install_targets rm_driver)
+    endif()
+
+    install(TARGETS ${_rulemonkey_install_targets}
         EXPORT RuleMonkeyTargets
         ARCHIVE  DESTINATION ${CMAKE_INSTALL_LIBDIR}
         LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}

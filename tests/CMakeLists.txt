@@ -1,10 +1,13 @@
 # Smoke test: parses an XML model and runs a short simulation.
+set(_rulemonkey_test_dir "${PROJECT_SOURCE_DIR}/tests")
+set(_rulemonkey_private_include_dir "${PROJECT_SOURCE_DIR}/cpp/rulemonkey")
+
 add_executable(smoke_test cpp/smoke_test.cpp)
 target_link_libraries(smoke_test PRIVATE rulemonkey)
 
 add_test(
     NAME smoke_test
-    COMMAND smoke_test ${CMAKE_SOURCE_DIR}/tests/reference/nfsim/xml/A_plus_A.xml
+    COMMAND smoke_test ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
 )
 
 # set_param regression: verifies overrides reach the engine for Ele
@@ -17,10 +20,10 @@ target_link_libraries(set_param_test PRIVATE rulemonkey)
 add_test(
     NAME set_param_test
     COMMAND set_param_test
-        ${CMAKE_SOURCE_DIR}/tests/reference/nfsim/xml/A_plus_A.xml
-        ${CMAKE_SOURCE_DIR}/tests/models/feature_coverage/xml/ft_mm_ratelaw.xml
-        ${CMAKE_SOURCE_DIR}/tests/cpp/derived_param_model.xml
-        ${CMAKE_SOURCE_DIR}/tests/cpp/out_of_order_param_model.xml
+        ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_mm_ratelaw.xml
+        ${_rulemonkey_test_dir}/cpp/derived_param_model.xml
+        ${_rulemonkey_test_dir}/cpp/out_of_order_param_model.xml
 )
 
 # Homodimer rate parity: small-N steady state of A+A<->AA must match the
@@ -34,7 +37,7 @@ target_link_libraries(homodimer_rate_test PRIVATE rulemonkey)
 add_test(
     NAME homodimer_rate_test
     COMMAND homodimer_rate_test
-        ${CMAKE_SOURCE_DIR}/tests/reference/nfsim/xml/A_plus_A.xml
+        ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
 )
 
 # save_state / load_state regression: round-trip a mid-run snapshot
@@ -48,8 +51,8 @@ target_link_libraries(save_load_test PRIVATE rulemonkey)
 add_test(
     NAME save_load_test
     COMMAND save_load_test
-        ${CMAKE_SOURCE_DIR}/tests/reference/nfsim/xml/A_plus_A.xml
-        ${CMAKE_SOURCE_DIR}/tests/models/feature_coverage/xml/ft_mm_ratelaw.xml
+        ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_mm_ratelaw.xml
 )
 
 # Public-API coverage: surface-area regressions on getters and behavioral
@@ -63,7 +66,7 @@ target_link_libraries(api_coverage_test PRIVATE rulemonkey)
 add_test(
     NAME api_coverage_test
     COMMAND api_coverage_test
-        ${CMAKE_SOURCE_DIR}/tests/reference/nfsim/xml/A_plus_A.xml
+        ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
 )
 
 # Direct unit tests for the BNGL math expression parser/evaluator.  Pin
@@ -74,7 +77,7 @@ add_test(
 # access to cpp/rulemonkey/expr_eval.hpp (not part of the public API).
 add_executable(expr_eval_test cpp/expr_eval_test.cpp)
 target_link_libraries(expr_eval_test PRIVATE rulemonkey)
-target_include_directories(expr_eval_test PRIVATE ${CMAKE_SOURCE_DIR}/cpp/rulemonkey)
+target_include_directories(expr_eval_test PRIVATE ${_rulemonkey_private_include_dir})
 
 add_test(NAME expr_eval_test COMMAND expr_eval_test)
 
@@ -84,7 +87,7 @@ add_test(NAME expr_eval_test COMMAND expr_eval_test)
 # access pattern as expr_eval_test.
 add_executable(table_function_test cpp/table_function_test.cpp)
 target_link_libraries(table_function_test PRIVATE rulemonkey)
-target_include_directories(table_function_test PRIVATE ${CMAKE_SOURCE_DIR}/cpp/rulemonkey)
+target_include_directories(table_function_test PRIVATE ${_rulemonkey_private_include_dir})
 
 add_test(NAME table_function_test COMMAND table_function_test)
 
@@ -99,6 +102,6 @@ target_link_libraries(error_paths_test PRIVATE rulemonkey)
 add_test(
     NAME error_paths_test
     COMMAND error_paths_test
-        ${CMAKE_SOURCE_DIR}/tests/reference/nfsim/xml/A_plus_A.xml
+        ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
         ${CMAKE_CURRENT_BINARY_DIR}/error_paths_malformed.xml
 )

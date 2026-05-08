@@ -19,7 +19,7 @@ git history.
 
 ## Building
 
-Requires CMake ≥ 3.25, a C++17 compiler, and Ninja.
+Requires CMake ≥ 3.20, a C++17 compiler, and Ninja.
 
 ```bash
 cmake --preset release
@@ -28,6 +28,10 @@ ctest --preset release
 ```
 
 The `rm_driver` executable is built at `build/release/rm_driver`.
+
+When RuleMonkey is vendored with `add_subdirectory`, tests and the
+`rm_driver` CLI default off, while the `RuleMonkey::rulemonkey` target
+remains available for `target_link_libraries`.
 
 ## Usage
 
