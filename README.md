@@ -108,6 +108,29 @@ sim.save_state("checkpoint.bin");
 sim.destroy_session();
 ```
 
+Cooperative cancellation for long runs — `run`, `simulate`, and
+`step_to` each take an optional `rulemonkey::CancelCallback`.  The SSA
+loop polls it every ~1024 events; returning `false` raises
+`rulemonkey::Cancelled` (a `std::runtime_error` subclass) at a safe
+between-event point, leaving any active session at the last completed
+event's time so the caller can inspect, resume, or `destroy_session()`:
+
+```cpp
+auto t0 = std::chrono::steady_clock::now();
+auto budget = std::chrono::seconds(30);
+try {
+  auto r = sim.run(ts, /*seed=*/42,
+                   [&]() { return std::chrono::steady_clock::now() - t0 < budget; });
+} catch (const rulemonkey::Cancelled&) {
+  // wall-clock budget exceeded — no partial Result; embedder decides what to do
+}
+```
+
+Wall-clock budgets, signal handlers, and `request_cancel`-style atomic
+flags all compose on top of this single callback shape.  An empty
+(default-constructed) callback disables polling — there is no
+per-event cost in the common case.
+
 See `include/rulemonkey/simulator.hpp` for the complete contract,
 `include/rulemonkey/types.hpp` for the result/time-spec/feature-warning
 structs, and `examples/embed.cpp` for a minimal compilable example

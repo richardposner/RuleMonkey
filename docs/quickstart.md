@@ -97,6 +97,28 @@ auto r = sim.run({0.0, 10.0, 100}, /*seed=*/7);
 // r.observable_data[obs_idx][t_idx] is the value
 ```
 
+If you need to stop a long-running call from outside (wall-clock
+timeout, GUI cancel button, signal handler), pass an optional
+`rulemonkey::CancelCallback` to `run` / `simulate` / `step_to`.  The
+SSA loop polls it every ~1024 events; returning `false` throws
+`rulemonkey::Cancelled` (a `std::runtime_error` subclass) at a safe
+between-event point — the simulator instance stays usable and any
+active session is left at the last completed event's time, so the
+caller can inspect, resume, or `destroy_session()`:
+
+```cpp
+auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
+try {
+  auto r = sim.run({0.0, 10.0, 100}, /*seed=*/7,
+                   [&]() { return std::chrono::steady_clock::now() < deadline; });
+} catch (const rulemonkey::Cancelled&) {
+  // budget exceeded; no partial Result is returned
+}
+```
+
+An empty (default-constructed) callback disables polling, so callers
+that don't want cancellation pay no per-event overhead.
+
 See [`examples/embed.cpp`](../examples/embed.cpp) for a complete
 compilable example, and [`include/rulemonkey/simulator.hpp`](../include/rulemonkey/simulator.hpp)
 for the full contract.
