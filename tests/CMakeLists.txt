@@ -105,3 +105,18 @@ add_test(
         ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
         ${CMAKE_CURRENT_BINARY_DIR}/error_paths_malformed.xml
 )
+
+# Cooperative-cancellation regression: pins down the CancelCallback
+# contract on run() / simulate() / step_to() — pre-cancelled callback
+# throws immediately, Cancelled inherits std::runtime_error, mid-session
+# cancellation leaves the session at a partial time and is recoverable,
+# and an always-true callback produces a bit-identical trajectory.
+# Embedders (notably BNGsim's `timeout` kwarg path) rely on all four.
+add_executable(cancellation_test cpp/cancellation_test.cpp)
+target_link_libraries(cancellation_test PRIVATE rulemonkey)
+
+add_test(
+    NAME cancellation_test
+    COMMAND cancellation_test
+        ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
+)

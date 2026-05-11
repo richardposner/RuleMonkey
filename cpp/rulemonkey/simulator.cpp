@@ -1980,10 +1980,11 @@ void RuleMonkeySimulator::set_block_same_complex_binding(bool value) {
 // One-shot simulation
 // ---------------------------------------------------------------------------
 
-Result RuleMonkeySimulator::run(const TimeSpec& ts, std::uint64_t seed) {
+Result RuleMonkeySimulator::run(const TimeSpec& ts, std::uint64_t seed,
+                                const CancelCallback& should_continue) {
   impl_->apply_overrides();
   Engine engine(impl_->model, seed, impl_->molecule_limit);
-  return engine.run(ts);
+  return engine.run(ts, should_continue);
 }
 
 // ---------------------------------------------------------------------------
@@ -1996,7 +1997,7 @@ void RuleMonkeySimulator::initialize(std::uint64_t seed) {
   impl_->session->initialize();
 }
 
-void RuleMonkeySimulator::step_to(double time) {
+void RuleMonkeySimulator::step_to(double time, const CancelCallback& should_continue) {
   if (!impl_->session)
     throw std::runtime_error("No active session (call initialize first)");
   TimeSpec ts;
@@ -2004,10 +2005,11 @@ void RuleMonkeySimulator::step_to(double time) {
   ts.t_end = time;
   ts.n_points = 0;
   // step_to advances without sampling output — just run the SSA
-  impl_->session->run(ts);
+  impl_->session->run(ts, should_continue);
 }
 
-Result RuleMonkeySimulator::simulate(double t_start, double t_end, int n_points) {
+Result RuleMonkeySimulator::simulate(double t_start, double t_end, int n_points,
+                                     const CancelCallback& should_continue) {
   if (!impl_->session)
     throw std::runtime_error("No active session (call initialize first)");
 
@@ -2036,7 +2038,7 @@ Result RuleMonkeySimulator::simulate(double t_start, double t_end, int n_points)
   ts.t_start = t_start;
   ts.t_end = t_end;
   ts.n_points = n_points;
-  return impl_->session->run(ts);
+  return impl_->session->run(ts, should_continue);
 }
 
 void RuleMonkeySimulator::save_state(const std::string& path) const {

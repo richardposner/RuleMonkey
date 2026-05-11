@@ -6526,10 +6526,18 @@ struct Engine::Impl {
 
   // --- SSA loop ---
 
-  Result run_ssa(const TimeSpec& ts) {
+  Result run_ssa(const TimeSpec& ts, const CancelCallback& should_continue = {}) {
     Result result;
     result.observable_names = model.observable_names_ordered;
     result.observable_data.reserve(result.observable_names.size());
+
+    // Cooperative cancellation: poll `should_continue` every
+    // kCancelCheckStride SSA events.  Stride is a power of two so the test
+    // compiles to a single AND + branch — see BNGsim's own SSA wrapper for
+    // the same idiom.  Hoist the validity check out of the loop so the
+    // common no-callback case pays only one extra branch per stride.
+    constexpr int64_t kCancelCheckStride = 1024;
+    const bool has_cancel_cb = static_cast<bool>(should_continue);
 
     auto record_time_point = [&result](double t, const std::vector<double>& values) {
       assert(values.size() == result.observable_names.size());
@@ -6598,6 +6606,17 @@ struct Engine::Impl {
 
     // Main SSA loop
     while (current_time < ts.t_end) {
+      // Cooperative cancellation: between-event safe point.  Throwing
+      // before any state advances this iteration means the session is
+      // left at the last completed event's time/pool state — safe to
+      // discard via destroy_session() or to resume via another
+      // run/simulate call.  The stride mask keeps overhead negligible
+      // (~1024 events between checks); event_count starts at 0 so the
+      // first iteration honors a callback that's already requesting
+      // cancellation.
+      if (has_cancel_cb && (event_count & (kCancelCheckStride - 1)) == 0 && !should_continue())
+        throw Cancelled();
+
       // total_propensity is delta-updated by set_rule_propensity at every
       // rs.propensity write; periodically re-baseline to flush accumulated
       // FP drift (per-event delta sums + and - cancelations slowly bias the
@@ -7128,10 +7147,10 @@ void Engine::initialize() {
   impl_->initialized = true;
 }
 
-Result Engine::run(const TimeSpec& ts) {
+Result Engine::run(const TimeSpec& ts, const CancelCallback& should_continue) {
   if (!impl_->initialized)
     initialize();
-  return impl_->run_ssa(ts);
+  return impl_->run_ssa(ts, should_continue);
 }
 
 double Engine::current_time() const { return impl_->current_time; }

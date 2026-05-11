@@ -46,7 +46,13 @@ public:
   // method, TimeSpec, overrides, molecule limit, and seed are reproducible
   // within the same runtime build. Prior successful or failed runs do not
   // mutate reusable simulator state.
-  Result run(const TimeSpec& ts, std::uint64_t seed = 42);
+  //
+  // `should_continue`, if non-empty, is polled periodically from the SSA loop
+  // (see CancelCallback in types.hpp).  A `false` return throws
+  // `rulemonkey::Cancelled` out of this call; the simulator instance is left
+  // in a usable state and a subsequent run() may be issued.
+  Result run(const TimeSpec& ts, std::uint64_t seed = 42,
+             const CancelCallback& should_continue = {});
 
   // Creates or resets a live session from the parsed model plus the current
   // stored parameter overrides and molecule limit.
@@ -59,11 +65,23 @@ public:
   // but the caller sees no `Result`.  Suitable for "equilibrate then
   // perturb then sample" flows where the equilibration trajectory
   // is uninteresting.
-  void step_to(double time);
+  //
+  // `should_continue`, if non-empty, enables cooperative cancellation; a
+  // `false` return throws `rulemonkey::Cancelled` mid-advance.  The session's
+  // `current_time()` then reflects the last fully-applied event, so the
+  // caller may inspect partial state, resume by calling step_to / simulate
+  // again, or call `destroy_session()` to discard the run.
+  void step_to(double time, const CancelCallback& should_continue = {});
 
   // Samples a segment from the active session starting at the current session
   // time and ending at `t_end`.
-  Result simulate(double t_start, double t_end, int n_points);
+  //
+  // `should_continue` has the same cooperative-cancellation semantics as on
+  // `run()`; if it returns false mid-segment, `Cancelled` is thrown and the
+  // session is left at the time of the last completed event.  No partial
+  // Result is returned in that case.
+  Result simulate(double t_start, double t_end, int n_points,
+                  const CancelCallback& should_continue = {});
 
   // Adds `count` default, unbound molecules of the named imported
   // `MoleculeType` to the active session.

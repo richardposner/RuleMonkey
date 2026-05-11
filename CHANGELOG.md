@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+### Added
+
+- **Cooperative cancellation hook on `run()` / `simulate()` / `step_to()`.**
+  Each of the three public entry points now accepts an optional
+  `rulemonkey::CancelCallback` (a `std::function<bool()>`) that the SSA
+  event loop polls roughly every 1024 events; returning `false` raises
+  `rulemonkey::Cancelled` (a `std::runtime_error` subclass) at a safe
+  between-event point.  Empty callbacks disable polling and pay no
+  per-event overhead.  This unblocks the BNGsim `timeout` kwarg for the
+  RuleMonkey backend (closes
+  [#3](https://github.com/richardposner/RuleMonkey/issues/3)); the prior
+  workaround of wrapping each evaluation in a subprocess can now go
+  away.  Source-compatible — existing callers see only the defaulted
+  parameter — but mangled-name ABI changes, so consumers must rebuild
+  against the new headers.
+
+- **`tests/cpp/cancellation_test.cpp`** — regression test for the four
+  behavioral contracts the new hook adds: pre-cancelled callback throws
+  on entry, `Cancelled` inherits `std::runtime_error`, mid-session
+  `simulate()` cancellation leaves the session live with
+  `current_time()` strictly inside the requested window and is
+  recoverable via `destroy_session()` + re-`initialize()`, and an
+  always-true callback produces a bit-identical trajectory to the
+  no-callback path.
+
 ### Changed
 
 - **CMake vendoring defaults.** The minimum CMake version is now 3.20.

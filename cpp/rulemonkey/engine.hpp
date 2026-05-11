@@ -30,7 +30,10 @@ public:
   void initialize();
 
   // Run SSA from current time, recording observable values at sample points.
-  Result run(const TimeSpec& ts);
+  // `should_continue`, if non-empty, is polled inside the SSA loop; returning
+  // false throws `rulemonkey::Cancelled` out of run() at a safe between-event
+  // point (no partial event state is left exposed).
+  Result run(const TimeSpec& ts, const CancelCallback& should_continue = {});
 
   double current_time() const;
   std::vector<double> get_observable_values();

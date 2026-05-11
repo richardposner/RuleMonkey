@@ -5,11 +5,33 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <stdexcept>
 #include <string>
 #include <vector>
 
 namespace rulemonkey {
+
+// Cooperative-cancellation hook for long-running run() / simulate() / step_to()
+// calls.  The engine polls this callback periodically from the SSA event loop
+// (granularity is roughly every 1024 SSA events, fine enough for wall-clock
+// timeouts but coarse enough to keep per-event overhead negligible).  Return
+// `true` to let the simulation keep running, `false` to cancel; cancellation
+// causes the engine to throw a `Cancelled` exception out of the current call.
+// A default-constructed (empty) std::function disables the check entirely —
+// callers who don't need cancellation pay no per-event overhead.
+using CancelCallback = std::function<bool()>;
+
+// Thrown out of run() / simulate() / step_to() when the supplied
+// `CancelCallback` returns false.  Inherits from std::runtime_error so generic
+// catch handlers still see it, but a dedicated type lets embedders distinguish
+// a cooperative cancellation (a clean stop requested from outside) from a
+// genuine engine error.
+class Cancelled : public std::runtime_error {
+public:
+  Cancelled() : std::runtime_error("RuleMonkey simulation cancelled") {}
+  explicit Cancelled(const std::string& msg) : std::runtime_error(msg) {}
+};
 
 struct TimeSpec {
   double t_start = 0.0;
