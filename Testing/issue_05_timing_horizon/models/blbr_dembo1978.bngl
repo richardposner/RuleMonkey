@@ -1,0 +1,186 @@
+begin model
+
+#@title: |
+#  Symmetric bivalent hapten-receptor cross-linking
+#  (Dembo and Goldstein, 1978)
+
+#@description: |
+#  Network-free (NFsim) kinetic model of symmetric bivalent
+#  hapten binding to bivalent cell-surface antibody (IgE),
+#  forming linear chains. Three processes: (1) hapten capture
+#  from solution — a free bivalent hapten binds a receptor
+#  site; (2) receptor cross-linking — a tethered hapten arm
+#  binds a free receptor site on a DIFFERENT complex (no
+#  intra-complex rings); (3) bond dissociation — any
+#  hapten-receptor bond breaks.
+#
+#  This is the basic model without ring formation (J1 = J2
+#  = 0 in Dembo and Goldstein notation). The equilibrium
+#  cross-linking curve (fraction of antibody in polymers,
+#  x_poly, vs log hapten concentration) is bell-shaped and
+#  symmetric about a_max = 1 (i.e., A_max = 1/H in
+#  dimensional terms, corresponding to KC = 1 in Perelson
+#  and DeLisi notation). At high and low hapten
+#  concentrations, cross-linking approaches zero (prozone
+#  effect).
+#
+#  The kinetic formulation follows Perelson and DeLisi
+#  (1980), who showed that singly-bound and doubly-bound
+#  ligand concentrations (m and M) are governed by two
+#  coupled ODEs under the equivalent-site hypothesis. Given
+#  m(t) and M(t), the full aggregate size distribution can
+#  be obtained combinatorially.
+#
+#  Default parameterization: KxRT = 5 (dimensionless
+#  cross-linking propensity), reproducing moderate
+#  cross-linking as in Dembo and Goldstein (1978) Fig. 2
+#  (k = 10 case, scaled to KxRT = 5 for tractable
+#  simulation).
+
+#@keyword: |
+#  bivalent hapten, bivalent receptor, cross-linking,
+#  aggregation, prozone effect, bell-shaped dose response,
+#  mass action, network-free, NFsim, IgE, basophil,
+#  histamine release, equivalent-site hypothesis
+
+#@reference: |
+#  Dembo M, Goldstein B (1978). Theory of equilibrium binding
+#  of symmetric bivalent haptens to cell surface antibody:
+#  application to histamine release from basophils. J Immunol
+#  121:345-353. doi:10.4049/jimmunol.121.1.345
+#
+#  Perelson AS, DeLisi C (1980). Receptor clustering on a cell
+#  surface. I. Theory of receptor cross-linking by ligands
+#  bearing two chemically identical functional groups. Math
+#  Biosci 48:71-110. doi:10.1016/0025-5564(80)90017-6
+
+#@note: |
+#  Network generation is not feasible because bivalent-
+#  bivalent cross-linking produces an unbounded set of chain
+#  species. NFsim is used with -bscb (block same-complex
+#  binding, which implies complex bookkeeping).
+#
+#  Mapping to Dembo and Goldstein (1978) notation:
+#    H = 2 * Ka (twice the single-site association constant)
+#    K = cross-linking constant (units of area)
+#    k = K * X_T (dimensionless, here KxRT)
+#    a = H * A (dimensionless hapten concentration)
+#    a_max = 1 (when b = 0, i.e., no monovalent hapten)
+#    x_poly = fraction of antibody in polymers of size >= 2
+#
+#  Mapping to Perelson and DeLisi (1980) notation:
+#    K = k1/k-1 (association constant for whole ligand)
+#    K2 = k2/k-2 (cross-linking association constant)
+#    beta = KC/(1+KC) (dimensionless concentration)
+#    delta = beta*(1-beta)*K2*S0 (cross-linking parameter)
+#    M_bar = S0 * (1+2*delta - sqrt(1+4*delta)) / (4*delta)
+
+begin parameters
+
+  # Physical constants
+  NA  6.02214076e23  # /mol
+
+  # Experimental conditions
+  V_cell  1e-9  # L/cell
+  R_per_cell  3e5  # molecules/cell
+
+  # SSA/NFsim scaling
+  f  0.01  # dimensionless
+  V_sim  V_cell*f  # L
+
+  # Scaled molecule counts
+  RT  R_per_cell*f  # molecules (= 3000)
+
+  # Total bivalent hapten (ligand)
+  # Default: 10x receptor count (near optimal cross-linking)
+  LT_per_cell  3e6  # molecules/cell
+  LT  LT_per_cell*f  # molecules
+
+  # Single-site kinetic rate constants
+  # K = kon/koff = 1e8 /M (intrinsic affinity for one site)
+  kon  1e6  # /M/s
+  koff  0.01  # /s
+
+  # Dimensionless cross-linking propensity
+  # k = K * X_T in Dembo notation; KxRT here
+  KxRT  5  # dimensionless
+
+  # Stochastic rate constants (single-site, per molecule pair)
+  kf  kon/(NA*V_sim)  # /(molecule*s)
+  kxf  KxRT/RT*koff  # /(molecule*s)
+
+end parameters
+
+begin molecule types
+  # Bivalent hapten (ligand): two identical receptor-binding sites
+  L(r,r)
+  # Bivalent receptor (antibody/IgE): two identical hapten-binding sites
+  R(l,l)
+end molecule types
+
+begin seed species
+  L(r,r)  LT  # molecules
+  R(l,l)  RT  # molecules
+end seed species
+
+begin observables
+  # Free hapten (both sites unbound)
+  Species    Obs_Free_L        L(r,r)
+  # Free receptor (both sites unbound)
+  Species    Obs_Free_R        R(l,l)
+  # Total hapten-receptor bonds
+  Molecules  Obs_Bonds         L(r!1).R(l!1)
+  # Free hapten sites (on any hapten molecule)
+  Molecules  Obs_Free_L_sites  L(r)
+  # Free receptor sites (on any receptor molecule)
+  Molecules  Obs_Free_R_sites  R(l)
+end observables
+
+begin reaction rules
+
+  # ================================================================
+  # Hapten capture: free hapten binds a receptor site
+  # ================================================================
+  # Corresponds to R1 in Perelson and DeLisi (1980): a free ligand
+  # from solution binds a free receptor site with rate constant k1.
+  R_capture:  L(r,r) + R(l) -> L(r!1,r).R(l!1)  kf
+
+  # ================================================================
+  # Cross-linking: tethered hapten arm binds DIFFERENT complex
+  # ================================================================
+  # Corresponds to R2 in Perelson and DeLisi (1980): the free arm
+  # of a singly-bound hapten binds a receptor site on a different
+  # complex. The "+" between reactants with -bscb flag enforces
+  # inter-complex binding (no intra-complex rings).
+  R_crosslink:  L(r!+,r) + R(l) -> L(r!+,r!1).R(l!1)  kxf
+
+  # ================================================================
+  # Bond dissociation: any hapten-receptor bond breaks
+  # ================================================================
+  # Corresponds to reverse of R1/R2: any bond between hapten
+  # and receptor dissociates with rate constant k_off.
+  R_dissoc:  L(r!1).R(l!1) -> L(r) + R(l)  koff
+
+end reaction rules
+
+end model
+
+begin actions
+
+  #@note: |
+  #  Network generation is infeasible (unbounded chains).
+  #  NFsim flags:
+  #    -bscb  block same-complex binding (implies -cb)
+
+  # Equilibration kinetics
+
+  #@protocol: |
+  #  Simulate from all-free initial conditions to equilibrium
+  #  (3000 s). Cross-links build up and reach steady state as
+  #  hapten captures and cross-links balance dissociation.
+
+  simulate({method=>"nf",suffix=>"nfr",t_start=>0,\
+    t_end=>3000,n_steps=>300,gml=>2147483647,\
+    param=>"-bscb"})
+
+end actions

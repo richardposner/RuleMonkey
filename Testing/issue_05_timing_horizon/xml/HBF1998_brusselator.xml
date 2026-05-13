@@ -1,0 +1,193 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created by BioNetGen 2.9.3  -->
+<sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
+  <model id="HBF1998_brusselator">
+    <ListOfParameters>
+      <Parameter id="NA" type="Constant" value="6.0221408e+23" expr="6.02214076e23"/>
+      <Parameter id="V_ref" type="Constant" value="1" expr="1.0"/>
+      <Parameter id="f" type="Constant" value="1" expr="1.0"/>
+      <Parameter id="a" type="Constant" value="1" expr="1.0"/>
+      <Parameter id="b" type="Constant" value="3" expr="3.0"/>
+      <Parameter id="bp1" type="Constant" value="4" expr="4.0"/>
+      <Parameter id="scale" type="Constant" value="1000" expr="1000"/>
+      <Parameter id="inv_s" type="Constant" value="0.001" expr="0.001"/>
+      <Parameter id="_rateLaw1" type="Constant" value="1000" expr="a*scale"/>
+    </ListOfParameters>
+    <ListOfMoleculeTypes>
+      <MoleculeType id="x1"/>
+      <MoleculeType id="x2"/>
+    </ListOfMoleculeTypes>
+    <ListOfCompartments>
+    </ListOfCompartments>
+    <ListOfSpecies>
+      <Species id="S1"  concentration="1500" name="x1()">
+        <ListOfMolecules>
+          <Molecule id="S1_M1" name="x1"/>
+        </ListOfMolecules>
+      </Species>
+      <Species id="S2"  concentration="3000" name="x2()">
+        <ListOfMolecules>
+          <Molecule id="S2_M1" name="x2"/>
+        </ListOfMolecules>
+      </Species>
+    </ListOfSpecies>
+    <ListOfReactionRules>
+      <ReactionRule id="RR1" name="_R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR1_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP1_M1" name="x1"/>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR1_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="_rateLaw1"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+        </Map>
+        <ListOfOperations>
+          <Add id="RR1_PP1_M1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR2" name="_R2" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR2_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_RP1_M1" name="x1"/>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+        </ListOfProductPatterns>
+        <RateLaw id="RR2_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="bp1"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR2_RP1_M1"/>
+        </Map>
+        <ListOfOperations>
+          <Delete id="RR2_RP1" DeleteMolecules="0"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR3" name="_R3" symmetry_factor="1">
+        <ListOfReactantPatterns>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR3_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR3_PP1_M1" name="x1"/>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR3_RateLaw" type="Function" name="autocat" totalrate="0">
+          <ListOfArguments>
+          </ListOfArguments>
+        </RateLaw>
+        <Map>
+        </Map>
+        <ListOfOperations>
+          <Add id="RR3_PP1_M1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR4" name="_R4" symmetry_factor="1">
+        <ListOfReactantPatterns>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR4_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR4_PP1_M1" name="x2"/>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR4_RateLaw" type="Function" name="prod_x2" totalrate="0">
+          <ListOfArguments>
+          </ListOfArguments>
+        </RateLaw>
+        <Map>
+        </Map>
+        <ListOfOperations>
+          <Add id="RR4_PP1_M1"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR5" name="_R5" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR5_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR5_RP1_M1" name="x2"/>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+        </ListOfProductPatterns>
+        <RateLaw id="RR5_RateLaw" type="Function" name="autocat" totalrate="0">
+          <ListOfArguments>
+          </ListOfArguments>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR5_RP1_M1"/>
+        </Map>
+        <ListOfOperations>
+          <Delete id="RR5_RP1" DeleteMolecules="0"/>
+        </ListOfOperations>
+      </ReactionRule>
+    </ListOfReactionRules>
+    <ListOfObservables>
+      <Observable id="O1" name="Obs_x1" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O1_P1">
+            <ListOfMolecules>
+              <Molecule id="O1_P1_M1" name="x1"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O2" name="Obs_x2" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O2_P1">
+            <ListOfMolecules>
+              <Molecule id="O2_P1_M1" name="x2"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+    </ListOfObservables>
+    <ListOfFunctions>
+      <Function id="x1_c">
+        <ListOfReferences>
+          <Reference name="inv_s" type="Constant"/>
+          <Reference name="Obs_x1" type="Observable"/>
+        </ListOfReferences>
+        <Expression> Obs_x1*inv_s </Expression>
+      </Function>
+      <Function id="x2_c">
+        <ListOfReferences>
+          <Reference name="inv_s" type="Constant"/>
+          <Reference name="Obs_x2" type="Observable"/>
+        </ListOfReferences>
+        <Expression> Obs_x2*inv_s </Expression>
+      </Function>
+      <Function id="autocat">
+        <ListOfReferences>
+          <Reference name="scale" type="Constant"/>
+          <Reference name="x1_c" type="Function"/>
+          <Reference name="x2_c" type="Function"/>
+        </ListOfReferences>
+        <Expression> ((x1_c()*x1_c())*x2_c())*scale </Expression>
+      </Function>
+      <Function id="prod_x2">
+        <ListOfReferences>
+          <Reference name="b" type="Constant"/>
+          <Reference name="scale" type="Constant"/>
+          <Reference name="x1_c" type="Function"/>
+        </ListOfReferences>
+        <Expression> (b*x1_c())*scale </Expression>
+      </Function>
+    </ListOfFunctions>
+  </model>
+</sbml>
