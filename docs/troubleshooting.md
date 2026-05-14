@@ -61,6 +61,50 @@ on any model with same-complex binding shapes or ring bonds.
 See `model_semantics.md` § "Strict BNGL semantics" for the precise
 LHS-`+` and RHS-`+` rules RM enforces.
 
+### Function rate law goes negative
+
+If a function rate law in your BNGL can evaluate to a negative number
+during simulation, the two engines diverge:
+
+- **NFsim** prints `The function you provided for functional rxn …
+  evaluates to a value less than zero!` and aborts the run.  This
+  surfaces immediately when the negative branch is reached, which may
+  be at `t=0` or partway through the trajectory.
+- **RuleMonkey** clamps the propensity to zero for that step and keeps
+  running — the affected reaction is treated as having no firing rate
+  while the underlying expression is negative.  The clamp is in
+  `set_rule_propensity` (`cpp/rulemonkey/engine.cpp`) and applies to
+  every rate-update path.
+
+This shows up when a continuous-ODE rate term has been folded into a
+single BNGL rule.  For example:
+
+```
+prod_X() = p_3 * scale * (Obs_I - I_b)   # ODE term: dX/dt += this
+0 -> X()  prod_X()                       # SSA: rate can be negative
+```
+
+In the ODE this term provides decay when `Obs_I < I_b`; in SSA the
+"production" reaction has no decay channel and the negative value is
+not physically meaningful.
+
+To make the model run identically on both engines, **split into two
+sign-guarded reactions**:
+
+```
+prod_X_pos() = if(Obs_I > I_b, p_3 * scale * (Obs_I - I_b), 0)
+prod_X_neg() = if(Obs_I < I_b, p_3 * scale * (I_b - Obs_I), 0)
+0 -> X()  prod_X_pos()
+X() -> 0  prod_X_neg() / Obs_X   # or whatever turns the rate into a per-mol rate
+```
+
+(The per-molecule conversion for the decay branch is model-specific —
+ODE→SSA conversion isn't mechanical when the underlying term mixes
+production and decay.)
+
+See also `model_semantics.md` § "Rate laws / Function" for the
+engine-side rule.
+
 ## Parameter overrides
 
 ### `set_param` had no effect on my run

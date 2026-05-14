@@ -48,6 +48,35 @@ RuleMonkey defaults to strict BNGL semantics (`block_same_complex_binding`,
 equivalent to NFsim's `-bscb` flag). Pass `-no-bscb` for compatibility with
 NFsim runs that disabled this check.
 
+## Behavior differences vs NFsim
+
+Two intentional differences are worth knowing about when comparing RM
+and NFsim runs of the same BNGL model:
+
+1. **Strict BNGL semantics on by default.** `block_same_complex_binding`
+   is enabled (equivalent to NFsim's `-bscb`). Pass `-no-bscb` to match
+   an NFsim run that disabled the check. See
+   [`docs/model_semantics.md`](docs/model_semantics.md) § "Strict BNGL
+   semantics" for the precise LHS-`+` / RHS-`+` rules and
+   [`docs/troubleshooting.md`](docs/troubleshooting.md) § "Differs from
+   NFsim by a small but reproducible amount" for the practical
+   guidance.
+2. **Negative function-based propensities are clamped, not refused.**
+   If a function rate law evaluates negative at some point in the
+   trajectory (a common authoring slip is `prod() = k*(Obs - setpoint)`
+   with no sign guard, which can flip sign when `Obs < setpoint`), RM
+   treats that reaction as propensity 0 for the affected step; NFsim
+   refuses the model and exits with a "negative propensity" error. The
+   clamp lives in `set_rule_propensity` and runs unconditionally for
+   every propensity update path. Both behaviors are defensible — the
+   underlying BNGL is mis-authored for SSA, where a single reaction
+   whose rate can flip sign should be split into two reactions each
+   guarded by `max(0, ±expr)` (or `if(expr > 0, expr, 0)`). See
+   [`docs/model_semantics.md`](docs/model_semantics.md) § "Rate laws /
+   Function" for the engine-side rule and
+   [`docs/troubleshooting.md`](docs/troubleshooting.md) § "Function
+   rate law goes negative" for porting guidance.
+
 ## Layout
 
 ```

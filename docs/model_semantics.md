@@ -60,6 +60,21 @@ The runtime severity model is two-level:
   `time` / `t`, and references to other functions. Local functions
   (per-molecule or per-pattern arguments) are supported in both
   per-molecule and complex-wide scopes.
+  - **Negative-value clamp.** If the expression evaluates to a negative
+    number at some point in the trajectory, RM clamps the resulting
+    propensity to zero for that step — the reaction simply doesn't fire
+    until the expression becomes non-negative again. The clamp lives
+    in `set_rule_propensity` (`cpp/rulemonkey/engine.cpp`) and runs on
+    every rate-update path (synthesis rules, normal updates, local-rate
+    updates). NFsim's behavior on the same input is to refuse the
+    model and exit with a "negative propensity" error. **Both behaviors
+    are defensible workarounds for a model that's mis-authored for SSA
+    semantics**: a single reaction whose rate flips sign with state is
+    really two reactions (one for each direction), each guarded by
+    `if(expr > 0, expr, 0)` (or the symmetric form for the other
+    direction). If you're porting a continuous-ODE rate law verbatim
+    into a BNGL rule, audit for this and split before either engine
+    will give you physically meaningful trajectories.
 - **`MM(kcat, Km)`** — Michaelis-Menten via NFsim's QSS formula:
   `sFree = 0.5·((S − Km − E) + √((S − Km − E)² + 4·Km·S))`,
   `a = kcat·sFree·E/(Km + sFree)`. Mirrors `MMRxnClass::update_a` in
