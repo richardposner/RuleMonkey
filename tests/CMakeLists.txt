@@ -106,6 +106,23 @@ add_test(
         ${CMAKE_CURRENT_BINARY_DIR}/error_paths_malformed.xml
 )
 
+# Negative-propensity clamp diagnostic regression: pins down that
+# function rate laws evaluating to a negative number (a) get clamped
+# to zero rather than aborting the run, and (b) emit exactly one WARN
+# line per rule on first occurrence — the diagnostic surface NFsim
+# refuses the model entirely on.  Without the per-rule latch a noisy
+# oscillator would spam the log; without the WARN at all the author
+# would have no signal that the BNGL is mis-authored for SSA.
+add_executable(negative_rate_clamp_test cpp/negative_rate_clamp_test.cpp)
+target_link_libraries(negative_rate_clamp_test PRIVATE rulemonkey)
+
+add_test(
+    NAME negative_rate_clamp_test
+    COMMAND negative_rate_clamp_test
+        ${_rulemonkey_test_dir}/cpp/negative_rate_clamp_model.xml
+        ${CMAKE_CURRENT_BINARY_DIR}/negative_rate_clamp_stderr.txt
+)
+
 # Cooperative-cancellation regression: pins down the CancelCallback
 # contract on run() / simulate() / step_to() — pre-cancelled callback
 # throws immediately, Cancelled inherits std::runtime_error, mid-session

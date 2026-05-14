@@ -65,15 +65,17 @@ and NFsim runs of the same BNGL model:
    If a function rate law evaluates negative at some point in the
    trajectory (a common authoring slip is `prod() = k*(Obs - setpoint)`
    with no sign guard, which can flip sign when `Obs < setpoint`), RM
-   treats that reaction as propensity 0 for the affected step; NFsim
-   refuses the model and exits with a "negative propensity" error. The
-   clamp lives in `set_rule_propensity` and runs unconditionally for
-   every propensity update path. Both behaviors are defensible — the
-   underlying BNGL is mis-authored for SSA, where a single reaction
-   whose rate can flip sign should be split into two reactions each
-   guarded by `max(0, ±expr)` (or `if(expr > 0, expr, 0)`). See
-   [`docs/model_semantics.md`](docs/model_semantics.md) § "Rate laws /
-   Function" for the engine-side rule and
+   treats that reaction as propensity 0 for the affected step and
+   emits one `WARN: rule '…' propensity clamped to 0 …` line to stderr
+   the first time this happens to each rule; further clamps on the same
+   rule are silent so an oscillator around the zero crossing doesn't
+   spam the log. NFsim refuses the model and exits with a "negative
+   propensity" error. Both behaviors are defensible — the underlying
+   BNGL is mis-authored for SSA, where a single reaction whose rate can
+   flip sign should be split into two reactions each guarded by
+   `if(expr > 0, expr, 0)` (or the symmetric form for the other
+   direction). See [`docs/model_semantics.md`](docs/model_semantics.md)
+   § "Rate laws / Function" for the engine-side rule and
    [`docs/troubleshooting.md`](docs/troubleshooting.md) § "Function
    rate law goes negative" for porting guidance.
 

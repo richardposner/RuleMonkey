@@ -74,7 +74,16 @@ during simulation, the two engines diverge:
   running — the affected reaction is treated as having no firing rate
   while the underlying expression is negative.  The clamp is in
   `set_rule_propensity` (`cpp/rulemonkey/engine.cpp`) and applies to
-  every rate-update path.
+  every rate-update path.  On the first clamp per rule, RM prints one
+  diagnostic line to stderr:
+  ```
+  WARN: rule '<rule-id>' (<rule-name>) propensity clamped to 0 — rate
+  function '<fn-name>' evaluated to <value> at t=<time>;
+  further clamps on this rule are silent
+  ```
+  Subsequent clamps on the same rule are silent.  This catches the
+  authoring slip without spamming the log on a model that legitimately
+  oscillates around the zero crossing.
 
 This shows up when a continuous-ODE rate term has been folded into a
 single BNGL rule.  For example:

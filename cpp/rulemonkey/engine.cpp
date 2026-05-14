@@ -2279,6 +2279,14 @@ struct RuleState {
   uint64_t a_relevant_mask = 0;
   uint64_t b_relevant_mask = 0;
   bool a_mask_complete = false;
+
+  // First-occurrence latch for the negative-propensity clamp diagnostic
+  // in set_rule_propensity.  Once a rule's rate has evaluated negative
+  // and been clamped to 0 once, further negative evaluations are silent
+  // (otherwise an oscillator with a state-dependent rate would spam the
+  // log).  Default-constructed false; never reset, so the warning fires
+  // at most once per rule per simulator lifetime.
+  bool clamp_warned = false;
   bool b_mask_complete = false;
 };
 
@@ -2801,6 +2809,20 @@ struct Engine::Impl {
   int64_t events_since_propensity_rebaseline = 0;
 
   void set_rule_propensity(RuleState& rs, double new_value) {
+    if (new_value < 0 && !rs.clamp_warned) {
+      rs.clamp_warned = true;
+      // rs is always inside rule_states (every call site indexes through
+      // rule_states[ri] or iterates the vector), so pointer arithmetic to
+      // recover the index is well-defined for vector elements.
+      auto const ri = static_cast<size_t>(&rs - rule_states.data());
+      auto const& rule = model.rules[ri];
+      const char* fn = rule.rate_law.function_name.c_str();
+      fprintf(stderr,
+              "WARN: rule '%s' (%s) propensity clamped to 0 — rate%s%s%s "
+              "evaluated to %g at t=%g; further clamps on this rule are silent\n",
+              rule.id.c_str(), rule.name.c_str(), (fn[0] != 0 ? " function '" : ""), fn,
+              (fn[0] != 0 ? "'" : ""), new_value, current_time);
+    }
     new_value = std::max<double>(new_value, 0);
     total_propensity += new_value - rs.propensity;
     rs.propensity = new_value;

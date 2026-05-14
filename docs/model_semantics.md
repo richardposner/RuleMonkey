@@ -66,15 +66,20 @@ The runtime severity model is two-level:
     until the expression becomes non-negative again. The clamp lives
     in `set_rule_propensity` (`cpp/rulemonkey/engine.cpp`) and runs on
     every rate-update path (synthesis rules, normal updates, local-rate
-    updates). NFsim's behavior on the same input is to refuse the
-    model and exit with a "negative propensity" error. **Both behaviors
-    are defensible workarounds for a model that's mis-authored for SSA
-    semantics**: a single reaction whose rate flips sign with state is
-    really two reactions (one for each direction), each guarded by
-    `if(expr > 0, expr, 0)` (or the symmetric form for the other
-    direction). If you're porting a continuous-ODE rate law verbatim
-    into a BNGL rule, audit for this and split before either engine
-    will give you physically meaningful trajectories.
+    updates). On the first clamp per rule, RM emits one stderr line
+    like `WARN: rule 'RR2' (_R2) propensity clamped to 0 — rate function
+    'prod_rate' evaluated to -1 at t=0.851; further clamps on this rule
+    are silent` so the authoring slip surfaces without spamming the log
+    on oscillator-style trajectories.  NFsim's behavior on the same
+    input is to refuse the model and exit with a "negative propensity"
+    error. **Both behaviors are defensible workarounds for a model
+    that's mis-authored for SSA semantics**: a single reaction whose
+    rate flips sign with state is really two reactions (one for each
+    direction), each guarded by `if(expr > 0, expr, 0)` (or the
+    symmetric form for the other direction). If you're porting a
+    continuous-ODE rate law verbatim into a BNGL rule, audit for this
+    and split before either engine will give you physically meaningful
+    trajectories.
 - **`MM(kcat, Km)`** — Michaelis-Menten via NFsim's QSS formula:
   `sFree = 0.5·((S − Km − E) + √((S − Km − E)² + 4·Km·S))`,
   `a = kcat·sFree·E/(Km + sFree)`. Mirrors `MMRxnClass::update_a` in
