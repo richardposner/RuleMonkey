@@ -453,6 +453,14 @@ struct ExprEvalProfile {
   uint64_t evaluate_rate_ns = 0;
   uint64_t sampled_local_rate_calls = 0;
   uint64_t evaluate_local_rate_ns = 0;
+  // Sub-spans of evaluate_local_rate, accumulated on the same sampled
+  // calls as evaluate_local_rate_ns.  obs = per-molecule observable
+  // re-evaluation (evaluate_observable_on); expr = expr::evaluate of the
+  // local-function ASTs.  Only the expr slice is ExprTk-addressable; the
+  // remainder (local-rate est minus these two) is update_eval_vars plus
+  // the eval-var save/restore bookkeeping.
+  uint64_t local_obs_eval_ns = 0;
+  uint64_t local_expr_eval_ns = 0;
   uint64_t sampled_uev_calls = 0; // bracketed update_eval_vars rebuilds
   uint64_t update_eval_vars_ns = 0;
 };
@@ -1193,6 +1201,8 @@ inline void report_expr_eval(const ExprEvalProfile& p, double timing_wall) {
   auto ull = [](uint64_t v) { return static_cast<unsigned long long>(v); };
   double const rate_est = est(p.evaluate_rate_ns, p.sampled_rate_calls);
   double const local_est = est(p.evaluate_local_rate_ns, p.sampled_local_rate_calls);
+  double const local_obs_est = est(p.local_obs_eval_ns, p.sampled_local_rate_calls);
+  double const local_expr_est = est(p.local_expr_eval_ns, p.sampled_local_rate_calls);
   double const uev_est = est(p.update_eval_vars_ns, p.sampled_uev_calls);
   // Headline: evaluate_rate and evaluate_local_rate are disjoint paths,
   // so their estimates add.  update_eval_vars cost is already folded into
@@ -1210,6 +1220,16 @@ inline void report_expr_eval(const ExprEvalProfile& p, double timing_wall) {
                "est=%.4fs (%.2f%% of wall)\n",
                ull(p.evaluate_local_rate_calls), ull(p.sampled_local_rate_calls), local_est,
                100.0 * local_est / denom);
+  if (p.sampled_local_rate_calls > 0) {
+    double const ldenom = local_est > 0 ? local_est : 1.0;
+    double const local_rest = local_est - local_obs_est - local_expr_est;
+    std::fprintf(stderr,
+                 "      of which: observable re-eval=%.4fs (%.1f%% of local)  "
+                 "expr::evaluate=%.4fs (%.1f%% of local, ExprTk-addressable)  "
+                 "rest=%.4fs (%.1f%%)\n",
+                 local_obs_est, 100.0 * local_obs_est / ldenom, local_expr_est,
+                 100.0 * local_expr_est / ldenom, local_rest, 100.0 * local_rest / ldenom);
+  }
   std::fprintf(stderr,
                "  update_eval_vars:     calls=%llu  rebuilds=%llu  sampled=%llu  "
                "est=%.4fs (%.2f%% of wall)  [sub-component of the two above]\n",

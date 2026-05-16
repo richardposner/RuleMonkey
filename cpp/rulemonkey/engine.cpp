@@ -4595,9 +4595,25 @@ struct Engine::Impl {
 
     // Override observable slots with local evaluations at mol_id,
     // using precomputed local_obs_indices (avoids set rebuild + linear scan).
+    // elr_sub is a rolling marker: on sampled calls it brackets first the
+    // observable re-eval span, then the local-function expr::evaluate span,
+    // so issue #6 can separate the ExprTk-addressable cost from the rest.
+    std::chrono::steady_clock::time_point elr_sub;
+    if constexpr (kExprEvalProfile) {
+      if (elr_sampled)
+        elr_sub = std::chrono::steady_clock::now();
+    }
     for (int const oi : local_obs_indices) {
       auto& obs = model.observables[oi];
       eval_vars_flat[eval_obs_slot[oi]] = evaluate_observable_on(obs, mol_id, !per_molecule);
+    }
+    if constexpr (kExprEvalProfile) {
+      if (elr_sampled) {
+        auto const now = std::chrono::steady_clock::now();
+        expr_eval_profile_.local_obs_eval_ns += static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(now - elr_sub).count());
+        elr_sub = now;
+      }
     }
 
     // Re-evaluate local functions only.  Functions are stored in
@@ -4615,6 +4631,13 @@ struct Engine::Impl {
       } catch (...) {
         eval_vars_flat[eval_gf_main_slot[i]] = 0.0;
       }
+    }
+    if constexpr (kExprEvalProfile) {
+      if (elr_sampled)
+        expr_eval_profile_.local_expr_eval_ns +=
+            static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                      std::chrono::steady_clock::now() - elr_sub)
+                                      .count());
     }
 
     auto fit = model.function_index.find(rule.rate_law.function_name);
