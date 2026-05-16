@@ -2675,6 +2675,7 @@ struct Engine::Impl {
   // counters.  Both struct definitions live in engine_profile.hpp.
   ObsIncrProfile obs_incr_profile_;
   SrProfile sr_profile_;
+  ExprEvalProfile expr_eval_profile_;
   // Per-Engine homes for the two profile structs whose call sites are
   // static free functions (count_multi_mol_fast / count_2mol_1bond_fc).
   // Threaded in by pointer so concurrent Engines on different threads
@@ -3563,6 +3564,26 @@ struct Engine::Impl {
   // --- Rate evaluation ---
 
   double evaluate_rate(const Rule& rule) {
+    if constexpr (kExprEvalProfile) {
+      expr_eval_profile_.evaluate_rate_calls++;
+      if (rule.rate_law.is_dynamic) {
+        expr_eval_profile_.evaluate_rate_dynamic++;
+        if (expr_eval_profile_.evaluate_rate_dynamic % kExprEvalProfileSampleEvery == 0) {
+          expr_eval_profile_.sampled_rate_calls++;
+          auto const t0 = std::chrono::steady_clock::now();
+          double const r = evaluate_rate_impl(rule);
+          expr_eval_profile_.evaluate_rate_ns +=
+              static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                        std::chrono::steady_clock::now() - t0)
+                                        .count());
+          return r;
+        }
+      }
+    }
+    return evaluate_rate_impl(rule);
+  }
+
+  double evaluate_rate_impl(const Rule& rule) {
     if (!rule.rate_law.is_dynamic)
       return rule.rate_law.rate_value;
 
@@ -3641,9 +3662,30 @@ struct Engine::Impl {
   // call (TFUN counter source = Function) still does a full rebuild
   // and sees later function values written, matching prior behavior.
   void update_eval_vars() {
+    if constexpr (kExprEvalProfile)
+      expr_eval_profile_.update_eval_vars_calls++;
     if (eval_vars_seen_gen == eval_vars_gen)
       return;
+    if constexpr (kExprEvalProfile) {
+      expr_eval_profile_.update_eval_vars_rebuilds++;
+      if (expr_eval_profile_.update_eval_vars_rebuilds % kExprEvalProfileSampleEvery == 0) {
+        expr_eval_profile_.sampled_uev_calls++;
+        auto const t0 = std::chrono::steady_clock::now();
+        rebuild_eval_vars();
+        expr_eval_profile_.update_eval_vars_ns +=
+            static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                      std::chrono::steady_clock::now() - t0)
+                                      .count());
+        return;
+      }
+    }
+    rebuild_eval_vars();
+  }
 
+  // The rebuild body of update_eval_vars: runs only on a generation-cache
+  // miss.  Split out so the K-sampled chrono in update_eval_vars brackets
+  // the real work and not the (common) short-circuit return.
+  void rebuild_eval_vars() {
     eval_vars_flat[eval_time_slot] = current_time;
 
     for (int i = 0; i < static_cast<int>(model.observables.size()); ++i) {
@@ -3654,11 +3696,15 @@ struct Engine::Impl {
     for (int i = 0; i < static_cast<int>(model.functions.size()); ++i) {
       auto& gf = model.functions[i];
       if (gf.is_tfun && gf.tfun) {
+        if constexpr (kExprEvalProfile)
+          expr_eval_profile_.tfun_evals++;
         double const ctr = get_tfun_counter_value(gf);
         double const val = gf.tfun->evaluate(ctr);
         eval_vars_flat[eval_gf_main_slot[i]] = val;
         eval_vars_flat[eval_gf_tfun_slot[i]] = val;
       } else if (gf.ast) {
+        if constexpr (kExprEvalProfile)
+          expr_eval_profile_.global_fn_ast_evals++;
         try {
           eval_vars_flat[eval_gf_main_slot[i]] = expr::evaluate(*gf.ast, eval_vars_flat);
         } catch (...) {
@@ -4514,6 +4560,17 @@ struct Engine::Impl {
   // For pattern-level argument binding: evaluates observables across the
   // molecule's entire complex (complex-wide scope).
   double evaluate_local_rate(const Rule& rule, int mol_id) {
+    bool elr_sampled = false;
+    std::chrono::steady_clock::time_point elr_t0;
+    if constexpr (kExprEvalProfile) {
+      expr_eval_profile_.evaluate_local_rate_calls++;
+      elr_sampled =
+          (expr_eval_profile_.evaluate_local_rate_calls % kExprEvalProfileSampleEvery == 0);
+      if (elr_sampled) {
+        expr_eval_profile_.sampled_local_rate_calls++;
+        elr_t0 = std::chrono::steady_clock::now();
+      }
+    }
     update_eval_vars();
 
     bool const per_molecule = rule.rate_law.local_arg_is_molecule;
@@ -4551,6 +4608,8 @@ struct Engine::Impl {
     // is_local() functions).
     for (int const i : eval_local_fn_slots) {
       auto& gf = model.functions[i];
+      if constexpr (kExprEvalProfile)
+        expr_eval_profile_.local_fn_ast_evals++;
       try {
         eval_vars_flat[eval_gf_main_slot[i]] = expr::evaluate(*gf.ast, eval_vars_flat);
       } catch (...) {
@@ -4568,6 +4627,13 @@ struct Engine::Impl {
     for (size_t k = 0; k < eval_local_fn_slots.size(); ++k)
       eval_vars_flat[eval_gf_main_slot[eval_local_fn_slots[k]]] = eval_local_fn_save_[k];
 
+    if constexpr (kExprEvalProfile) {
+      if (elr_sampled)
+        expr_eval_profile_.evaluate_local_rate_ns +=
+            static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                                      std::chrono::steady_clock::now() - elr_t0)
+                                      .count());
+    }
     return result;
   }
 
@@ -7205,6 +7271,9 @@ struct Engine::Impl {
 
     if constexpr (kSelectReactantsProfile)
       report_select_reactants(sr_profile_, timing_sample);
+
+    if constexpr (kExprEvalProfile)
+      report_expr_eval(expr_eval_profile_, timing_wall);
 
     result.event_count = event_count;
     return result;

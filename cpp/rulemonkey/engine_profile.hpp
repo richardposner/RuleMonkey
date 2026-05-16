@@ -118,6 +118,16 @@ inline constexpr bool kRecordAtProfile = kDevProfilesEnabled;
 inline constexpr bool kObsIncrProfile = kDevProfilesEnabled;
 inline constexpr int kObsIncrProfileSampleEvery = 16;
 
+// expr::evaluate hot path — evaluate_rate / evaluate_local_rate /
+// update_eval_vars.  Drives issue #6: is function-based rate-law
+// evaluation a meaningful fraction of total wall time?  A single
+// expr::evaluate call is short (a recursive walk of a small AST), so
+// per-call chrono would be swamped by clock overhead — instead we
+// keep always-on invocation counters and K-sample whole-call chrono
+// on the enclosing functions, then divide.
+inline constexpr bool kExprEvalProfile = kDevProfilesEnabled;
+inline constexpr int kExprEvalProfileSampleEvery = 16;
+
 // ---------------------------------------------------------------------------
 // Invariant gates.  Slow correctness checks that run a reference path
 // alongside a fast path and abort on divergence.  OFF by default even
@@ -423,6 +433,28 @@ struct ObsIncrProfile {
     uint64_t contrib_deltas = 0;
   };
   std::vector<PerObs> obs;
+};
+
+struct ExprEvalProfile {
+  // Always-on counters — a bare increment, negligible overhead.
+  uint64_t evaluate_rate_calls = 0;       // evaluate_rate() entries (all rules)
+  uint64_t evaluate_rate_dynamic = 0;     // ... with a dynamic rate law (real work)
+  uint64_t evaluate_local_rate_calls = 0; // evaluate_local_rate() entries
+  uint64_t update_eval_vars_calls = 0;    // update_eval_vars() entries
+  uint64_t update_eval_vars_rebuilds = 0; // ... that missed the generation cache
+  uint64_t global_fn_ast_evals = 0;       // global function ASTs settled in rebuilds
+  uint64_t tfun_evals = 0;                // TableFunction evals during rebuilds
+  uint64_t local_fn_ast_evals = 0;        // local function ASTs settled per local-rate call
+  // K-sampled whole-call chrono on the enclosing functions.  evaluate_rate
+  // and evaluate_local_rate are disjoint paths (a rule is one or the
+  // other); each estimate INCLUDES the nested update_eval_vars cost when a
+  // rebuild lands inside it — usually a no-op via the generation cache.
+  uint64_t sampled_rate_calls = 0;
+  uint64_t evaluate_rate_ns = 0;
+  uint64_t sampled_local_rate_calls = 0;
+  uint64_t evaluate_local_rate_ns = 0;
+  uint64_t sampled_uev_calls = 0; // bracketed update_eval_vars rebuilds
+  uint64_t update_eval_vars_ns = 0;
 };
 
 // ===========================================================================
@@ -1149,6 +1181,52 @@ inline void report_select_reactants(const SrProfile& q, double timing_sample) {
                static_cast<unsigned long long>(q.bimol_embs_empty),
                static_cast<unsigned long long>(q.bimol_resolve_calls),
                static_cast<unsigned long long>(q.bimol_resolve_failures));
+}
+
+inline void report_expr_eval(const ExprEvalProfile& p, double timing_wall) {
+  const int K = kExprEvalProfileSampleEvery;
+  auto est = [&](uint64_t ns, uint64_t sampled) -> double {
+    if (sampled == 0)
+      return 0.0;
+    return static_cast<double>(ns) / 1e9 * static_cast<double>(K);
+  };
+  auto ull = [](uint64_t v) { return static_cast<unsigned long long>(v); };
+  double const rate_est = est(p.evaluate_rate_ns, p.sampled_rate_calls);
+  double const local_est = est(p.evaluate_local_rate_ns, p.sampled_local_rate_calls);
+  double const uev_est = est(p.update_eval_vars_ns, p.sampled_uev_calls);
+  // Headline: evaluate_rate and evaluate_local_rate are disjoint paths,
+  // so their estimates add.  update_eval_vars cost is already folded into
+  // both — reported separately only as a sub-component, not added here.
+  double const expr_total = rate_est + local_est;
+  double const denom = timing_wall > 0 ? timing_wall : 1.0;
+  std::fprintf(stderr, "[expr_eval profile] K=%d  wall=%.3fs\n", K, timing_wall);
+  std::fprintf(stderr,
+               "  evaluate_rate:        calls=%llu  dynamic=%llu  sampled=%llu  "
+               "est=%.4fs (%.2f%% of wall)\n",
+               ull(p.evaluate_rate_calls), ull(p.evaluate_rate_dynamic), ull(p.sampled_rate_calls),
+               rate_est, 100.0 * rate_est / denom);
+  std::fprintf(stderr,
+               "  evaluate_local_rate:  calls=%llu  sampled=%llu  "
+               "est=%.4fs (%.2f%% of wall)\n",
+               ull(p.evaluate_local_rate_calls), ull(p.sampled_local_rate_calls), local_est,
+               100.0 * local_est / denom);
+  std::fprintf(stderr,
+               "  update_eval_vars:     calls=%llu  rebuilds=%llu  sampled=%llu  "
+               "est=%.4fs (%.2f%% of wall)  [sub-component of the two above]\n",
+               ull(p.update_eval_vars_calls), ull(p.update_eval_vars_rebuilds),
+               ull(p.sampled_uev_calls), uev_est, 100.0 * uev_est / denom);
+  std::fprintf(stderr, "  >> expression-eval total est = %.4fs (%.2f%% of wall)\n", expr_total,
+               100.0 * expr_total / denom);
+  std::fprintf(stderr, "  function settles: global_ast=%llu  tfun=%llu  local_ast=%llu\n",
+               ull(p.global_fn_ast_evals), ull(p.tfun_evals), ull(p.local_fn_ast_evals));
+  if (p.sampled_rate_calls > 0)
+    std::fprintf(stderr, "  mean ns/sampled evaluate_rate call:       %.1f\n",
+                 static_cast<double>(p.evaluate_rate_ns) /
+                     static_cast<double>(p.sampled_rate_calls));
+  if (p.sampled_local_rate_calls > 0)
+    std::fprintf(stderr, "  mean ns/sampled evaluate_local_rate call: %.1f\n",
+                 static_cast<double>(p.evaluate_local_rate_ns) /
+                     static_cast<double>(p.sampled_local_rate_calls));
 }
 
 } // namespace rulemonkey
