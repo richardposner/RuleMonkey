@@ -97,6 +97,15 @@ public:
   // observable against current pool state.
   std::vector<double> get_observable_values();
 
+  // Returns the current active-session global-function values in the same
+  // order as `function_names()`.  These are the BNGL `begin functions`
+  // entries with no local (per-molecule) arguments — the derived
+  // quantities models commonly use as their measured outputs.  Non-const
+  // for the same reason as `get_observable_values()`: a between-event call
+  // forces a fresh evaluation of the observables the functions depend on.
+  // Throws std::runtime_error if no session is active.
+  std::vector<double> get_function_values();
+
   // Returns the numeric parameter value that the simulator would currently use
   // for the named declared parameter, accounting for any active overrides.
   // Derived parameter expressions (e.g., `B = 2*A` declared in the BNGL)
@@ -187,6 +196,13 @@ public:
   // Returns observable names in XML declaration order captured at
   // construction. The returned vector is a copy.
   std::vector<std::string> observable_names() const;
+
+  // Returns global-function names in XML declaration order captured at
+  // construction — the `begin functions` entries with no local arguments,
+  // parallel to a Result's `function_names`.  Local functions are
+  // excluded; the vector is empty for a model without global functions.
+  // The returned vector is a copy.
+  std::vector<std::string> function_names() const;
 
   // Returns parameter names in XML declaration order captured at
   // construction. The returned vector is a copy.

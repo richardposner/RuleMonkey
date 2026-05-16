@@ -56,8 +56,12 @@ int main(int argc, char* argv[]) {
     auto result = sim.run(ts, seed);
 
     // Print final time-point as a sanity-check trajectory summary.
+    // Global-function columns (if the model has a `begin functions`
+    // block) follow the observables, same column-major layout.
     std::cout << "# time";
     for (auto& name : result.observable_names)
+      std::cout << "\t" << name;
+    for (auto& name : result.function_names)
       std::cout << "\t" << name;
     std::cout << "\n";
 
@@ -66,6 +70,8 @@ int main(int argc, char* argv[]) {
       std::cout << result.time[last];
       for (std::size_t obs = 0; obs < result.n_observables(); ++obs)
         std::cout << "\t" << result.observable_data[obs][last];
+      for (std::size_t fn = 0; fn < result.n_functions(); ++fn)
+        std::cout << "\t" << result.function_data[fn][last];
       std::cout << "\n";
     }
     return 0;

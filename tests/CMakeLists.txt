@@ -123,6 +123,52 @@ add_test(
         ${CMAKE_CURRENT_BINARY_DIR}/negative_rate_clamp_stderr.txt
 )
 
+# Global-function exposure regression (issue #7): pins down that
+# Result::function_names / function_data, RuleMonkeySimulator::function_names()
+# and get_function_values() expose BNGL global-function values, that the
+# per-sample columns stay algebraically consistent with the observables
+# they derive from (including nested function-of-function settle order),
+# and that a model with no functions presents an empty — not absent —
+# function surface.
+add_executable(function_values_test cpp/function_values_test.cpp)
+target_link_libraries(function_values_test PRIVATE rulemonkey)
+
+add_test(
+    NAME function_values_test
+    COMMAND function_values_test
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_nested_functions.xml
+        ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
+)
+
+# rm_driver `.gdat` function-column opt-in (issue #7): the global-function
+# columns must appear ONLY with --print-functions, matching BNGL's
+# `print_functions=>1`.  Two CTest fixtures on the same function-bearing
+# model assert the header content directly via PASS/FAIL regexes — no C++
+# harness needed.  Guarded on the rm_driver target so a tests-only build
+# (RULEMONKEY_BUILD_CLI=OFF) still configures.
+if(TARGET rm_driver)
+    add_test(
+        NAME rm_driver_functions_default_off
+        COMMAND rm_driver
+            ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_nested_functions.xml
+            10 5 7
+    )
+    # Default run: observables present, function columns absent.
+    set_tests_properties(rm_driver_functions_default_off PROPERTIES
+        PASS_REGULAR_EXPRESSION "S_total"
+        FAIL_REGULAR_EXPRESSION "frac_P")
+
+    add_test(
+        NAME rm_driver_functions_print_flag
+        COMMAND rm_driver
+            ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_nested_functions.xml
+            10 5 7 --print-functions
+    )
+    # With --print-functions: all three global functions appear in the header.
+    set_tests_properties(rm_driver_functions_print_flag PROPERTIES
+        PASS_REGULAR_EXPRESSION "frac_P.*modulator.*phos_rate")
+endif()
+
 # Cooperative-cancellation regression: pins down the CancelCallback
 # contract on run() / simulate() / step_to() — pre-cancelled callback
 # throws immediately, Cancelled inherits std::runtime_error, mid-session

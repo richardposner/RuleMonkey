@@ -69,8 +69,13 @@ build/release/rm_driver model.xml 200 100 --load-state ckpt.bin --t-start 100
 
 ## 4. Read the output
 
-Every row begins with the time column; the rest are observables, in
-the order declared in the BNGL `begin observables` block.
+Every row begins with the time column, followed by the observables in
+the order declared in the BNGL `begin observables` block.  Passing
+`--print-functions` to `rm_driver` appends one column per global
+function (the `begin functions` entries with no local arguments) —
+opt-in, matching BNGL's `print_functions=>1`; the default file is
+observables-only.  Index columns by header name so a reader is
+agnostic to whether function columns are present.
 
 ```python
 # minimal Python reader
@@ -95,7 +100,16 @@ rulemonkey::RuleMonkeySimulator sim("my_model.xml");
 sim.set_param("kf", 0.5);                    // optional override
 auto r = sim.run({0.0, 10.0, 100}, /*seed=*/7);
 // r.observable_data[obs_idx][t_idx] is the value
+// r.function_data[fn_idx][t_idx]   is a global-function value
 ```
+
+`Result` also carries `function_names` / `function_data` — the BNGL
+`begin functions` entries that have no local (per-molecule) arguments,
+sampled at the same time points as the observables.  These are the
+derived quantities models commonly use as their measured outputs (e.g.
+`Clusters() = monomer + dimer + …`).  The matching live-session
+accessors are `function_names()` and `get_function_values()`, parallel
+to `observable_names()` / `get_observable_values()`.
 
 If you need to stop a long-running call from outside (wall-clock
 timeout, GUI cancel button, signal handler), pass an optional

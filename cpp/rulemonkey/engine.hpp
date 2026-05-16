@@ -37,6 +37,16 @@ public:
 
   double current_time() const;
   std::vector<double> get_observable_values();
+
+  // Global-function values for the current pool state, in the same order
+  // as `function_names()`.  Non-const for the same reason as
+  // get_observable_values(): the values are re-evaluated on demand.
+  std::vector<double> get_function_values();
+
+  // Names of the model's global (non-local) functions, in XML
+  // declaration order.  Parallel to a Result's `function_names`.
+  std::vector<std::string> function_names() const;
+
   int get_molecule_count(const std::string& type_name) const;
   void add_molecules(const std::string& type_name, int count);
 

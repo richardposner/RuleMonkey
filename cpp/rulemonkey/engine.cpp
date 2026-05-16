@@ -2696,6 +2696,14 @@ struct Engine::Impl {
   std::vector<int> eval_gf_main_slot; // [func_idx] -> slot
   std::vector<int> eval_gf_tfun_slot; // [func_idx] -> slot, -1 if not tfun
 
+  // Global (non-local) functions whose value is exposed to embedders via
+  // Result::function_data and get_function_values().  Local functions are
+  // excluded: they evaluate per-molecule and have no single global value.
+  // `output_function_indices` indexes into model.functions; the names are
+  // cached in declaration order to parallel Result::function_names.
+  std::vector<int> output_function_indices;
+  std::vector<std::string> output_function_names;
+
   // Stale-flag short-circuit for update_eval_vars.  `eval_vars_gen` is
   // bumped whenever the inputs to the rate-law layout change
   // (current_time advances, obs_values is mutated by compute_observables
@@ -2781,6 +2789,18 @@ struct Engine::Impl {
       auto& name = model.parameter_names_ordered[i];
       auto it = model.parameters.find(name);
       eval_vars_flat[i] = (it != model.parameters.end()) ? it->second : 0.0;
+    }
+
+    // Cache the global-function output list once: it depends only on the
+    // model (which function entries have local arguments), never on run
+    // state, so embedders see a stable name vector across runs.
+    output_function_indices.clear();
+    output_function_names.clear();
+    for (int i = 0; i < static_cast<int>(model.functions.size()); ++i) {
+      if (!model.functions[i].is_local()) {
+        output_function_indices.push_back(i);
+        output_function_names.push_back(model.functions[i].name);
+      }
     }
 
     eval_local_fn_slots.clear();
@@ -3648,6 +3668,27 @@ struct Engine::Impl {
     }
 
     eval_vars_seen_gen = eval_vars_gen;
+  }
+
+  // Settle every function against the current observable values and
+  // return the subset exposed to embedders (global, i.e. non-local,
+  // functions in declaration order).  Bumps eval_vars_gen so the settle
+  // runs even when the cached layout looks current: the caller — a
+  // sample point or an explicit get_function_values() query — needs
+  // values reflecting the just-refreshed obs_values, and the debug
+  // invariant path of refresh_observables_for_sample does not bump the
+  // generation itself.  The settle order matches update_eval_vars, so
+  // functions that reference earlier functions see settled inputs.
+  std::vector<double> compute_function_values() {
+    if (output_function_indices.empty())
+      return {};
+    ++eval_vars_gen;
+    update_eval_vars();
+    std::vector<double> vals;
+    vals.reserve(output_function_indices.size());
+    for (int const fi : output_function_indices)
+      vals.push_back(eval_vars_flat[eval_gf_main_slot[fi]]);
+    return vals;
   }
 
   // --- Observable evaluation ---
@@ -6552,6 +6593,8 @@ struct Engine::Impl {
     Result result;
     result.observable_names = model.observable_names_ordered;
     result.observable_data.reserve(result.observable_names.size());
+    result.function_names = output_function_names;
+    result.function_data.reserve(result.function_names.size());
 
     // Cooperative cancellation: poll `should_continue` every
     // kCancelCheckStride SSA events.  Stride is a power of two so the test
@@ -6568,6 +6611,21 @@ struct Engine::Impl {
       result.time.push_back(t);
       for (std::size_t i = 0; i < values.size(); ++i)
         result.observable_data[i].push_back(values[i]);
+    };
+
+    // Append the current global-function values as one more column-major
+    // row.  Called from record_at immediately after record_time_point so
+    // it settles functions against the same refreshed obs_values that the
+    // observable row was built from; it deliberately does NOT touch
+    // result.time (record_time_point owns that).
+    auto record_function_point = [&result, this]() {
+      if (output_function_indices.empty())
+        return; // no global functions → nothing to record (common case)
+      std::vector<double> const fvals = compute_function_values();
+      if (result.function_data.empty())
+        result.function_data.resize(fvals.size());
+      for (std::size_t i = 0; i < fvals.size(); ++i)
+        result.function_data[i].push_back(fvals[i]);
     };
 
     // Compute sample times
@@ -6615,6 +6673,7 @@ struct Engine::Impl {
         refresh_observables_for_sample();
         record_time_point(t, obs_values);
       }
+      record_function_point();
       timing_record +=
           std::chrono::duration<double>(std::chrono::steady_clock::now() - rec_t0).count();
     };
@@ -7184,6 +7243,16 @@ std::vector<double> Engine::get_observable_values() {
   impl_->compute_observables();
   return impl_->obs_values;
 }
+
+std::vector<double> Engine::get_function_values() {
+  // Global functions are derived from observables, so refresh those
+  // first (same staleness reasoning as get_observable_values), then
+  // settle the functions against the fresh observable values.
+  impl_->compute_observables();
+  return impl_->compute_function_values();
+}
+
+std::vector<std::string> Engine::function_names() const { return impl_->output_function_names; }
 
 int Engine::get_molecule_count(const std::string& type_name) const {
   int const ti = impl_->model.mol_type_index(type_name);

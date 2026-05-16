@@ -60,6 +60,12 @@ The runtime severity model is two-level:
   `time` / `t`, and references to other functions. Local functions
   (per-molecule or per-pattern arguments) are supported in both
   per-molecule and complex-wide scopes.
+  - **Global function of a local function is ill-defined.** A global
+    (no-argument) function that references a *local* function has no
+    molecule context at global scope, so its exposed value (`.gdat`
+    column, `get_function_values()`) reflects an unspecified per-molecule
+    slot — don't rely on it; NFsim treats the same construct as a model
+    error.
   - **Negative-value clamp.** If the expression evaluates to a negative
     number at some point in the trajectory, RM clamps the resulting
     propensity to zero for that step — the reaction simply doesn't fire

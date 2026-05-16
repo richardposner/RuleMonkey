@@ -124,6 +124,7 @@ auto result = sim.run(ts, /*seed=*/42);
 
 for (size_t t = 0; t < result.n_times(); ++t) {
   // result.time[t], result.observable_data[obs_idx][t]
+  // result.function_data[fn_idx][t] — BNGL global-function values
 }
 ```
 

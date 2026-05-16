@@ -1,8 +1,10 @@
 // RuleMonkey batch driver: run a model from XML and output .gdat format.
 // Usage: rm_driver <xml_path> <t_end> <n_steps> [seed] [-no-bscb]
 //        [--ignore-unsupported] [--save-state <path>] [--load-state <path>]
-//        [--t-start <time>]
-// Output: tab-separated .gdat to stdout (# header, then time + observables)
+//        [--t-start <time>] [--print-functions]
+// Output: tab-separated .gdat to stdout (# header, then time +
+//         observables; global-function columns appended only with
+//         --print-functions)
 // Stderr: CPU time in seconds
 //
 // RuleMonkey defaults to strict BNGL semantics (block_same_complex_binding=true,
@@ -11,6 +13,11 @@
 //
 // Pass --ignore-unsupported to suppress errors for unsupported BNGL features
 // in the XML (warnings are always printed).
+//
+// Pass --print-functions to append the model's global-function values as
+// trailing .gdat columns (after the observables).  Off by default, mirroring
+// BNGL's `print_functions=>1` opt-in; the in-process Result API exposes the
+// values unconditionally regardless of this flag.
 //
 // State continuation:
 //   --save-state <path>  Save full simulation state at t_end to file.
@@ -63,7 +70,7 @@ int main(int argc, char* argv[]) {
   if (argc < 4) {
     std::cerr << "Usage: rm_driver <xml_path> <t_end> <n_steps> [seed] [-no-bscb]"
                  " [--ignore-unsupported] [--save-state <path>]"
-                 " [--load-state <path>] [--t-start <time>]\n";
+                 " [--load-state <path>] [--t-start <time>] [--print-functions]\n";
     return 1;
   }
 
@@ -80,6 +87,7 @@ int main(int argc, char* argv[]) {
     uint64_t seed = 42;
     bool bscb = true; // strict BNGL semantics by default
     bool ignore_unsupported = false;
+    bool print_functions = false; // opt-in; matches BNGL `print_functions=>1`
     bool seed_set = false;
     std::string save_state_path;
     std::string load_state_path;
@@ -97,6 +105,8 @@ int main(int argc, char* argv[]) {
         bscb = true;
       } else if (std::strcmp(argv[i], "--ignore-unsupported") == 0) {
         ignore_unsupported = true;
+      } else if (std::strcmp(argv[i], "--print-functions") == 0) {
+        print_functions = true;
       } else if (std::strcmp(argv[i], "--save-state") == 0) {
         if (++i >= argc) {
           std::cerr << "--save-state requires a path\n";
@@ -187,11 +197,18 @@ int main(int argc, char* argv[]) {
     auto t1 = std::chrono::high_resolution_clock::now();
     double const cpu_s = std::chrono::duration<double>(t1 - t0).count();
 
-    // Output header
+    // Output header.  Global-function columns (the model's `begin
+    // functions` entries with no local arguments) follow the observables
+    // — same column-major layout — but only when `--print-functions` is
+    // passed.  This mirrors BNGL's `print_functions=>1` opt-in: the
+    // default `.gdat` is observables-only.
     std::cout << "#";
     std::cout << " time";
     for (auto& name : result.observable_names)
       std::cout << "\t" << name;
+    if (print_functions)
+      for (auto& name : result.function_names)
+        std::cout << "\t" << name;
     std::cout << "\n";
 
     // Round-trip-precise doubles in the .gdat output: 17 decimal digits
@@ -204,6 +221,9 @@ int main(int argc, char* argv[]) {
       std::cout << result.time[t];
       for (size_t o = 0; o < result.n_observables(); ++o)
         std::cout << "\t" << result.observable_data[o][t];
+      if (print_functions)
+        for (size_t f = 0; f < result.n_functions(); ++f)
+          std::cout << "\t" << result.function_data[f][t];
       std::cout << "\n";
     }
 

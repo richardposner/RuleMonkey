@@ -9,6 +9,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Global-function values in the public API.** `rulemonkey::Result`
+  now carries `function_names` and `function_data` alongside
+  `observable_names` / `observable_data`, populated at every output time
+  point; `function_data` is column-major (`function_data[fn_idx][t_idx]`)
+  and parallel to `observable_data`. `RuleMonkeySimulator` gains
+  `function_names()` (XML declaration order, captured at construction)
+  and `get_function_values()` (live-session readback, mirroring
+  `get_observable_values()`). These expose the BNGL `begin functions`
+  entries — the derived quantities models commonly use as their
+  measured/fitted outputs (e.g. `Clusters() = monomer + dimer + …`) —
+  which the engine already evaluates internally for rate laws. Only
+  *global* (non-local) functions are surfaced; local functions evaluate
+  per-molecule and have no single global value, so `function_names` may
+  be shorter than the model's full `begin functions` block. The API
+  surface is unconditional. Closes
+  [#7](https://github.com/richardposner/RuleMonkey/issues/7). SSA
+  trajectories and observable output are unchanged; the header-only ABI
+  change means consumers must rebuild against the new headers.
+
+- **`rm_driver --print-functions`.** A new opt-in flag that appends the
+  model's global-function values as trailing `.gdat` columns (after the
+  observables). Off by default, mirroring BNGL's `print_functions=>1`:
+  the default `.gdat` stays observables-only and byte-identical to what
+  earlier RM versions emitted. The flag governs only `rm_driver`'s text
+  output — the in-process `Result` API exposes the values regardless.
+
+- **`tests/cpp/function_values_test.cpp`** — regression test for the new
+  function surface: `function_names()` declaration order, the
+  column-major shape of `Result::function_data`, per-sample algebraic
+  consistency with the observables each function derives from (covering
+  nested function-of-function settle order), live `get_function_values()`
+  readback against `get_observable_values()`, the no-session throw, and
+  the empty-not-absent function surface of a model with no functions.
+
 - **Cooperative cancellation hook on `run()` / `simulate()` / `step_to()`.**
   Each of the three public entry points now accepts an optional
   `rulemonkey::CancelCallback` (a `std::function<bool()>`) that the SSA

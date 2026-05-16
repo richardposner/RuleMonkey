@@ -1,38 +1,60 @@
 # `.gdat` output format
 
 `rm_driver` writes its trajectory output to `stdout` in `.gdat`
-format — the same shape NFsim produces.  This document is the
-authoritative reference for that format.  CPU time goes to `stderr`.
+format.  This document is the authoritative reference for that
+format.  CPU time goes to `stderr`.
+
+The default column layout is `time` followed by every observable —
+identical to what NFsim emits.  Passing `--print-functions` to
+`rm_driver` appends one trailing column per *global function* (the
+BNGL `begin functions` entries with no local, per-molecule arguments).
+This opt-in mirrors BNGL's `print_functions=>1`; NFsim gates the
+equivalent output behind `turnOnGlobalFuncOut()`.  Without the flag —
+or for a model with no global functions — the file is observables-only.
 
 ## File shape
 
 One header line followed by N data lines.  Every line is tab-separated.
 
 ```
-# time<TAB>obs_1<TAB>obs_2<TAB>...<TAB>obs_K
-t_0<TAB>v_1,0<TAB>v_2,0<TAB>...<TAB>v_K,0
-t_1<TAB>v_1,1<TAB>v_2,1<TAB>...<TAB>v_K,1
+# time<TAB>obs_1<TAB>...<TAB>obs_K[<TAB>fn_1<TAB>...<TAB>fn_F]
+t_0<TAB>v_1,0<TAB>...<TAB>v_K,0[<TAB>g_1,0<TAB>...<TAB>g_F,0]
+t_1<TAB>v_1,1<TAB>...<TAB>v_K,1[<TAB>g_1,1<TAB>...<TAB>g_F,1]
 ...
-t_N<TAB>v_1,N<TAB>v_2,N<TAB>...<TAB>v_K,N
+t_N<TAB>v_1,N<TAB>...<TAB>v_K,N[<TAB>g_1,N<TAB>...<TAB>g_F,N]
 ```
+
+The bracketed `fn_*` / `g_*` columns are present only when
+`--print-functions` is passed.
 
 - The header line begins with a literal `#` followed by a single
   space, then `time`, then a tab-separated list of observable names
   in the order they were declared in the BNGL `begin observables`
-  block.
-- Observable names are emitted verbatim from the XML's
-  `<Observable name="...">` attribute.  RM never renames or
-  re-encodes them.
-- Every data line has exactly `1 + K` tab-separated fields, where
-  `K` is the number of observables.
+  block.  With `--print-functions`, the global-function names follow,
+  in `begin functions` declaration order.
+- Observable and function names are emitted verbatim from the XML's
+  `<Observable name="...">` / `<Function id="...">` attributes.  RM
+  never renames or re-encodes them.
+- Global functions are evaluated at every sample time from the same
+  pool state as the observables — they are exposed values RM already
+  computes for rate-law evaluation, not a separate pass.
+- Every data line has exactly `1 + K` tab-separated fields by default,
+  or `1 + K + F` with `--print-functions`, where `K` is the number of
+  observables and `F` the number of global functions.
 - For a `rm_driver model.xml T N` invocation, the file has
   **`N + 1` data lines** — samples at `t_start`, `t_start + dt`, …,
   `t_end`, where `dt = (t_end − t_start) / N`.
 
+The in-process C++ API (`rulemonkey::Result`) exposes
+`function_names` / `function_data` **unconditionally** — the
+`--print-functions` opt-in governs only `rm_driver`'s text output, not
+the embedding surface.
+
 ## Numeric precision
 
-Time and observable values are emitted via the C++ `<<` operator
-with `std::cout`'s default precision: **6 significant figures**.
+Time, observable, and global-function values are emitted via the C++
+`<<` operator with `std::cout`'s default precision: **6 significant
+figures**.
 This matches NFsim's default and is sufficient for the parity
 benchmarks in this repo.  External consumers who need more digits
 should:
@@ -90,8 +112,15 @@ Two header-parsing notes:
 ## Edge cases
 
 - **Zero observables**: a model with no `begin observables` block
-  produces a header of just `# time\n` and rows with a single time
+  produces a header of just `# time\n` (plus any global-function
+  columns, if `--print-functions` is set) and rows with a single time
   field per line.  Parsing the columns by tab still works.
+- **No function columns**: without `--print-functions` — or for a
+  model with no global functions (no `begin functions` block, or only
+  local functions) — the file carries no trailing function columns and
+  is observables-only.  Index columns by header name (see the parsing
+  recipe) rather than position so a consumer is agnostic to whether
+  function columns are present.
 - **Absorbing state**: when the system reaches zero total propensity
   (no rule can fire), RM fills the remaining sample points by
   repeating the last computed state, so the row count is unchanged.

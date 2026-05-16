@@ -1787,6 +1787,7 @@ struct RuleMonkeySimulator::Impl {
 
   std::vector<std::string> obs_names;
   std::vector<std::string> param_names;
+  std::vector<std::string> func_names; // global (non-local) function names
   std::vector<UnsupportedFeature> unsupported_features;
 
   // Keep a clean copy of parameters for override/restore
@@ -1921,6 +1922,13 @@ RuleMonkeySimulator::RuleMonkeySimulator(const std::string& xml_path, Method met
   impl_->base_parameters = impl_->model.parameters;
   impl_->obs_names = impl_->model.observable_names_ordered;
   impl_->param_names = impl_->model.parameter_names_ordered;
+  // Global (non-local) functions only — must use the same filter and
+  // declaration order as Engine::output_function_names so the simulator's
+  // function_names() agrees with a Result's function_names.
+  for (const auto& gf : impl_->model.functions) {
+    if (!gf.is_local())
+      impl_->func_names.push_back(gf.name);
+  }
 }
 
 RuleMonkeySimulator::~RuleMonkeySimulator() = default;
@@ -1932,6 +1940,8 @@ RuleMonkeySimulator& RuleMonkeySimulator::operator=(RuleMonkeySimulator&&) noexc
 // ---------------------------------------------------------------------------
 
 std::vector<std::string> RuleMonkeySimulator::observable_names() const { return impl_->obs_names; }
+
+std::vector<std::string> RuleMonkeySimulator::function_names() const { return impl_->func_names; }
 
 std::vector<std::string> RuleMonkeySimulator::parameter_names() const { return impl_->param_names; }
 
@@ -2072,6 +2082,12 @@ std::vector<double> RuleMonkeySimulator::get_observable_values() {
   if (!impl_->session)
     throw std::runtime_error("No active session");
   return impl_->session->get_observable_values();
+}
+
+std::vector<double> RuleMonkeySimulator::get_function_values() {
+  if (!impl_->session)
+    throw std::runtime_error("No active session");
+  return impl_->session->get_function_values();
 }
 
 double RuleMonkeySimulator::get_parameter(const std::string& name) const {
