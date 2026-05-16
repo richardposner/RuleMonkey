@@ -44,6 +44,7 @@ target_include_directories(rulemonkey
     PUBLIC  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
             $<INSTALL_INTERFACE:include>
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/cpp/rulemonkey
+            ${CMAKE_CURRENT_SOURCE_DIR}/third_party/bngsim_expr/include
 )
 
 # Stable namespaced alias for in-tree consumers (`add_subdirectory`):
@@ -52,6 +53,37 @@ target_include_directories(rulemonkey
 add_library(RuleMonkey::rulemonkey ALIAS rulemonkey)
 
 target_compile_features(rulemonkey PUBLIC cxx_std_17)
+
+# ---------------------------------------------------------------------------
+# Expression evaluator backend: ExprTk, via bngsim::ExprTkEvaluator.
+#
+# RM's rate-law / function expression evaluator IS bngsim::ExprTkEvaluator
+# (issue #6, dev/exprtk_swap_plan_2026_05_16.md).  RM is itself vendored into
+# BNGsim, which already ships these exact sources as the `bngsim::expression`
+# target.  Compiling RM's vendored copy *inside* a BNGsim build would emit a
+# second set of bngsim:: symbols → ODR violation / linker duplicate-symbol
+# error.  So the vendored copy is gated on PROJECT-level target detection:
+#
+#   - In a BNGsim build  -> link the host's bngsim::expression target.
+#   - Standalone RM build -> compile the vendored third_party copy.
+#
+# The vendored expression.cpp is built as a separate OBJECT library so the
+# 1.6 MB exprtk.hpp compile (~40 s) is isolated to one TU and so exprtk's
+# (third-party, not warning-clean) code is not subject to RM's -Wall -Werror.
+# Its objects are folded into librulemonkey.a via target_sources, so there is
+# no extra target to install/export.  See third_party/bngsim_expr/VENDOR.
+# ---------------------------------------------------------------------------
+if(TARGET bngsim::expression)
+    target_link_libraries(rulemonkey PRIVATE bngsim::expression)
+else()
+    add_library(rm_bngsim_expr OBJECT
+        third_party/bngsim_expr/src/expression.cpp)
+    target_include_directories(rm_bngsim_expr PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/bngsim_expr/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/exprtk)
+    target_compile_features(rm_bngsim_expr PUBLIC cxx_std_17)
+    target_sources(rulemonkey PRIVATE $<TARGET_OBJECTS:rm_bngsim_expr>)
+endif()
 
 # -Werror is on by default for the top-level developer build so a warning
 # shows up as a compile failure before it lands in CI.  Downstream consumers

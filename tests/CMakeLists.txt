@@ -69,15 +69,18 @@ add_test(
         ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
 )
 
-# Direct unit tests for the BNGL math expression parser/evaluator.  Pin
-# down review #1 (unary minus precedence), #2 (&& / || short-circuit),
-# and #6 (== / != bit-exact) at the parse-and-evaluate level so a
-# regression surfaces here as a one-line miscompare instead of a
-# trajectory drift on some incidental BNGL parity model.  Needs PRIVATE
-# access to cpp/rulemonkey/expr_eval.hpp (not part of the public API).
+# Direct unit tests for RuleMonkey's expression layer (issue #6): the
+# expr::collect_variables dependency scanner and the ExprTk semantics RM
+# depends on (unary-minus precedence, ^ associativity, bit-exact == / !=,
+# lazy if).  A regression surfaces here as a one-line miscompare instead
+# of a trajectory drift on some incidental BNGL parity model.  Needs
+# PRIVATE access to cpp/rulemonkey/expr_eval.hpp (not part of the public
+# API) and to the vendored bngsim/expression.hpp evaluator header.
 add_executable(expr_eval_test cpp/expr_eval_test.cpp)
 target_link_libraries(expr_eval_test PRIVATE rulemonkey)
-target_include_directories(expr_eval_test PRIVATE ${_rulemonkey_private_include_dir})
+target_include_directories(expr_eval_test PRIVATE
+    ${_rulemonkey_private_include_dir}
+    ${PROJECT_SOURCE_DIR}/third_party/bngsim_expr/include)
 
 add_test(NAME expr_eval_test COMMAND expr_eval_test)
 

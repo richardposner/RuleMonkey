@@ -1,13 +1,15 @@
 #include "engine.hpp"
 
 #include "engine_profile.hpp"
-#include "expr_eval.hpp"
 #include "model.hpp"
 #include "table_function.hpp"
+
+#include "bngsim/expression.hpp"
 
 #include <algorithm>
 #include <array>
 #include <cassert>
+#include <cctype>
 #include <chrono>
 #include <cmath>
 #include <cstring>
@@ -2686,16 +2688,28 @@ struct Engine::Impl {
   // Dynamic rate evaluation state.  `eval_vars_flat` holds variable
   // values in a fixed layout — params, then time, then observables,
   // then function values (with an extra slot per tfun function for
-  // the `__tfun_NAME__` magic name).  All function ASTs are lowered
-  // against `eval_layout_index` once at engine construction so per-
-  // event evaluation reads `eval_vars_flat[var_index]` instead of
-  // doing a string hash lookup against an unordered_map.
+  // the `__tfun_NAME__` magic name).  Every slot is bound by address
+  // into `expr_eval_` once at engine construction (init_eval_layout):
+  // `eval_vars_flat` is sized exactly once and never reallocates, so
+  // `&eval_vars_flat[slot]` is stable for the engine's lifetime.
+  // Per-event evaluation just writes the live values into the slots
+  // and calls `expr_eval_.evaluate(id)`.
   std::vector<double> eval_vars_flat;
   std::unordered_map<std::string, int> eval_layout_index;
   int eval_time_slot = -1;
   std::vector<int> eval_obs_slot;     // [obs_idx] -> slot
   std::vector<int> eval_gf_main_slot; // [func_idx] -> slot
   std::vector<int> eval_gf_tfun_slot; // [func_idx] -> slot, -1 if not tfun
+
+  // ExprTk evaluator for every rate-law / global-function expression
+  // in the model (issue #6 — replaces the hand-rolled AST evaluator).
+  // `gf_expr_id_[func_idx]` is the compiled-expression id for that
+  // global function, or -1 for a pure-TFUN function with no wrapper
+  // expression (evaluate the table directly).  Rate laws are always
+  // emitted by BNG2 as named global functions, so the engine never
+  // compiles a per-rule inline expression.
+  bngsim::ExprTkEvaluator expr_eval_;
+  std::vector<int> gf_expr_id_;
 
   // Global (non-local) functions whose value is exposed to embedders via
   // Result::function_data and get_function_values().  Local functions are
@@ -2739,13 +2753,12 @@ struct Engine::Impl {
     init_eval_layout();
   }
 
-  // Build the flat variable layout for rate-law evaluation and lower
-  // every function AST against it.  Idempotent at engine construction:
-  // we own the model copy, so mutating shared_ptr<AstNode> children
-  // affects only this engine's view.  The simulator never re-evaluates
-  // function ASTs (it only resolves parameter expressions, on a
-  // separate cache — see resolve_cached in simulator.cpp), so no
-  // outside caller depends on the un-lowered shape.
+  // Build the flat variable layout for rate-law evaluation: assign every
+  // parameter / time / observable / function / tfun-slot a slot index in
+  // `eval_vars_flat`, bind each slot by address into `expr_eval_`, and
+  // compile every global-function expression.  Runs once at engine
+  // construction.  The simulator owns a separate ExprTk evaluator for the
+  // parameter cascade (see resolve_cached in simulator.cpp).
   void init_eval_layout() {
     eval_layout_index.clear();
     int next = 0;
@@ -2777,11 +2790,6 @@ struct Engine::Impl {
 
     eval_vars_flat.assign(next, 0.0);
 
-    for (auto& gf : model.functions) {
-      if (gf.ast)
-        expr::lower_variables(*gf.ast, eval_layout_index);
-    }
-
     // Parameters are constant for the lifetime of the engine
     // (set_param is rejected during an active session and rebuilds the
     // engine on the next run), so write them into eval_vars_flat once
@@ -2790,6 +2798,39 @@ struct Engine::Impl {
       auto& name = model.parameter_names_ordered[i];
       auto it = model.parameters.find(name);
       eval_vars_flat[i] = (it != model.parameters.end()) ? it->second : 0.0;
+    }
+
+    // Bind every layout slot into the ExprTk evaluator by address.
+    // `eval_vars_flat` is now sized for good and never reallocates, so
+    // `&eval_vars_flat[slot]` is stable for the engine's lifetime.
+    // `time` is NOT bound as a variable — ExprTk registers `time()` as
+    // a zero-arg function, wired straight to the live `current_time`
+    // member.  Bare `t` IS bound (RM aliases it to the time slot,
+    // which rebuild_eval_vars keeps equal to current_time).
+    expr_eval_.set_time_ptr(&current_time);
+    for (auto& [name, slot] : eval_layout_index) {
+      if (name == "time")
+        continue;
+      expr_eval_.define_variable(name, &eval_vars_flat[slot]);
+    }
+
+    // Compile every global-function / rate-law expression.  A pure-TFUN
+    // function carries no wrapper expression → id -1, evaluated straight
+    // off the table.  A non-TFUN function whose expression fails to
+    // compile is a hard model error and propagates out of construction.
+    gf_expr_id_.assign(model.functions.size(), -1);
+    for (int i = 0; i < static_cast<int>(model.functions.size()); ++i) {
+      auto& gf = model.functions[i];
+      if (gf.expression_text.empty())
+        continue;
+      std::string const src = strip_layout_call_args(gf.expression_text);
+      try {
+        gf_expr_id_[i] = expr_eval_.compile(src);
+      } catch (const std::exception&) {
+        if (!gf.is_tfun)
+          throw;
+        gf_expr_id_[i] = -1; // pure-TFUN: fall back to the raw table value
+      }
     }
 
     // Cache the global-function output list once: it depends only on the
@@ -2806,10 +2847,59 @@ struct Engine::Impl {
 
     eval_local_fn_slots.clear();
     for (int i = 0; i < static_cast<int>(model.functions.size()); ++i) {
-      auto& gf = model.functions[i];
-      if (gf.is_local() && gf.ast)
+      if (model.functions[i].is_local() && gf_expr_id_[i] >= 0)
         eval_local_fn_slots.push_back(i);
     }
+  }
+
+  // Rewrite `name(...)` -> `name` for every identifier that names an
+  // eval-layout slot (parameter / observable / global function / tfun
+  // magic name).  RM's legacy AST evaluator treated a reference like
+  // `M_on(z)` or `frac_P()` as "the current value of the slot named
+  // M_on / frac_P" — the argument list was parsed but never evaluated
+  // (BNG2 emits observable-at-local-scope and function references this
+  // way).  ExprTk has no such notion: `M_on` is a scalar variable, so
+  // `M_on(z)` would be misparsed as the implicit product `M_on * (z)`.
+  // Stripping the balanced argument list reproduces the slot-value
+  // semantics exactly.  Builtin calls (`exp`, `if`, `time`, ...) are not
+  // eval-layout names, so they pass through untouched.
+  std::string strip_layout_call_args(const std::string& expr) const {
+    std::string out;
+    out.reserve(expr.size());
+    size_t i = 0;
+    const size_t n = expr.size();
+    while (i < n) {
+      const bool at_boundary =
+          (i == 0) ||
+          (!std::isalnum(static_cast<unsigned char>(expr[i - 1])) && expr[i - 1] != '_');
+      const bool ident_start = std::isalpha(static_cast<unsigned char>(expr[i])) || expr[i] == '_';
+      if (at_boundary && ident_start) {
+        size_t const start = i;
+        ++i;
+        while (i < n && (std::isalnum(static_cast<unsigned char>(expr[i])) || expr[i] == '_'))
+          ++i;
+        std::string const ident = expr.substr(start, i - start);
+        out += ident;
+        if (i < n && expr[i] == '(' && eval_layout_index.count(ident)) {
+          int depth = 0;
+          for (; i < n; ++i) {
+            if (expr[i] == '(') {
+              ++depth;
+            } else if (expr[i] == ')') {
+              --depth;
+              if (depth == 0) {
+                ++i;
+                break;
+              }
+            }
+          }
+        }
+        continue;
+      }
+      out += expr[i];
+      ++i;
+    }
+    return out;
   }
 
   // Uniform [0, 1)
@@ -3597,23 +3687,20 @@ struct Engine::Impl {
         if (gf.is_tfun && gf.tfun) {
           double const ctr_val = get_tfun_counter_value(gf);
           double const tfun_val = gf.tfun->evaluate(ctr_val);
-          if (gf.ast) {
+          if (gf_expr_id_[gi] >= 0) {
             // Patch the magic __tfun_NAME__ slot for this rule's
             // own tfun result (update_eval_vars wrote it from the
             // function's own counter, but BNG2 emits the rate-law
             // wrapper expecting it pre-patched on each call).
             eval_vars_flat[eval_gf_tfun_slot[gi]] = tfun_val;
-            return expr::evaluate(*gf.ast, eval_vars_flat);
+            return expr_eval_.evaluate(gf_expr_id_[gi]);
           }
           return tfun_val;
         }
-        if (gf.ast)
-          return expr::evaluate(*gf.ast, eval_vars_flat);
+        if (gf_expr_id_[gi] >= 0)
+          return expr_eval_.evaluate(gf_expr_id_[gi]);
       }
     }
-
-    if (rule.rate_law.rate_ast)
-      return expr::evaluate(*rule.rate_law.rate_ast, eval_vars_flat);
 
     return rule.rate_law.rate_value;
   }
@@ -3635,9 +3722,9 @@ struct Engine::Impl {
     }
     case TfunCounterSource::Function: {
       auto fit = model.function_index.find(gf.tfun_counter_name);
-      if (fit != model.function_index.end() && model.functions[fit->second].ast) {
+      if (fit != model.function_index.end() && gf_expr_id_[fit->second] >= 0) {
         update_eval_vars();
-        return expr::evaluate(*model.functions[fit->second].ast, eval_vars_flat);
+        return expr_eval_.evaluate(gf_expr_id_[fit->second]);
       }
       return 0.0;
     }
@@ -3702,11 +3789,11 @@ struct Engine::Impl {
         double const val = gf.tfun->evaluate(ctr);
         eval_vars_flat[eval_gf_main_slot[i]] = val;
         eval_vars_flat[eval_gf_tfun_slot[i]] = val;
-      } else if (gf.ast) {
+      } else if (gf_expr_id_[i] >= 0) {
         if constexpr (kExprEvalProfile)
           expr_eval_profile_.global_fn_ast_evals++;
         try {
-          eval_vars_flat[eval_gf_main_slot[i]] = expr::evaluate(*gf.ast, eval_vars_flat);
+          eval_vars_flat[eval_gf_main_slot[i]] = expr_eval_.evaluate(gf_expr_id_[i]);
         } catch (...) {
           eval_vars_flat[eval_gf_main_slot[i]] = 0.0;
         }
@@ -4621,11 +4708,10 @@ struct Engine::Impl {
     // observables (BNG2 emits local arg references only inside
     // is_local() functions).
     for (int const i : eval_local_fn_slots) {
-      auto& gf = model.functions[i];
       if constexpr (kExprEvalProfile)
         expr_eval_profile_.local_fn_ast_evals++;
       try {
-        eval_vars_flat[eval_gf_main_slot[i]] = expr::evaluate(*gf.ast, eval_vars_flat);
+        eval_vars_flat[eval_gf_main_slot[i]] = expr_eval_.evaluate(gf_expr_id_[i]);
       } catch (...) {
         eval_vars_flat[eval_gf_main_slot[i]] = 0.0;
       }

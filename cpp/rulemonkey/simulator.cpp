@@ -5,6 +5,8 @@
 #include "model.hpp"
 #include "table_function.hpp"
 
+#include "bngsim/expression.hpp"
+
 #include <algorithm>
 #include <atomic>
 #include <cctype>
@@ -343,30 +345,36 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node);
 // BNG XML → Model parsing
 // ===========================================================================
 
-// Resolve a parameter-derived numeric expression with a lazy AST cache.
+// Resolve a parameter-derived numeric expression against an ExprTk
+// evaluator, memoizing the compiled-expression id.
 //
-// `s` is the symbolic source captured from XML.  `ast` is in/out: on the
-// first call it is parsed and stored, and on every subsequent call the
-// parse is skipped and `expr::evaluate` runs against the live `params`
-// map.  Callers that re-resolve the same expression repeatedly
-// (parameter cascade, apply_overrides) thus pay parse cost once.
+// `s` is the symbolic source captured from XML.  `ev` must already have
+// every parameter the expression can reference bound as a variable
+// (see Impl::build_param_evaluator and load_model's parameter loop).
+// `id_cache` maps the raw expression string to its compiled id, so a
+// caller re-resolving the same expression (parameter cascade,
+// apply_overrides) pays the ExprTk compile cost only once.
 //
-// `expr::parse` already produces the right node shape for the trivial
-// inputs the legacy resolve_value short-circuited: a pure-numeric string
-// becomes a Literal node (evaluator returns immediately) and a bare
-// param name becomes a Variable node (evaluator does one hash lookup).
-// `expr::VariableMap` is a typedef of `std::unordered_map<std::string,
-// double>` so `params` is passed by const reference — no per-call copy.
+// Compiled expressions are immutable; only the bound parameter values
+// change.  set_param mutates those values but does NOT invalidate the
+// cache — re-evaluating a compiled id picks up the new values.
 //
-// ASTs are immutable; only the values they reference change.  set_param
-// mutates `params` but does NOT invalidate the cache.
-double resolve_cached(const std::string& s, std::shared_ptr<expr::AstNode>& ast,
-                      const std::unordered_map<std::string, double>& params) {
+// Throws std::runtime_error if `ev.compile()` rejects `s` (genuine
+// syntax error / unknown identifier); callers that tolerate forward
+// references (the cascade) wrap the call in try/catch.
+double resolve_cached(const std::string& s, bngsim::ExprTkEvaluator& ev,
+                      std::unordered_map<std::string, int>& id_cache) {
   if (s.empty())
     return 0.0;
-  if (!ast)
-    ast = expr::parse(s);
-  return expr::evaluate(*ast, params);
+  auto it = id_cache.find(s);
+  int id;
+  if (it != id_cache.end()) {
+    id = it->second;
+  } else {
+    id = ev.compile(s);
+    id_cache.emplace(s, id);
+  }
+  return ev.evaluate(id);
 }
 
 // Parse a pattern (reactant, product, or observable) from XML.
@@ -565,25 +573,36 @@ Model load_model(const std::string& xml_path,
   model.xml_path = xml_path;
   auto xml_dir = std::filesystem::path(xml_path).parent_path();
 
+  // Load-time ExprTk evaluator.  Used for the parameter cascade below
+  // and, further down, for Ele/MM rate constants and initial-species
+  // concentrations.  Its variables are bound by address into
+  // model.parameters; that map is fully populated (every parameter
+  // seeded to 0) before any expression is compiled, so no binding goes
+  // stale.  This evaluator is LOCAL to load_model: the returned Model
+  // is move-constructed by the caller, which relocates model.parameters,
+  // so the simulator's Impl builds its own param_eval_ afterwards (see
+  // Impl::build_param_evaluator).
+  bngsim::ExprTkEvaluator load_eval;
+  std::unordered_map<std::string, int> load_eval_ids;
+
   // ---- 1. Parameters ----
   auto* param_list = find_child(*model_node, "ListOfParameters");
   if (param_list) {
+    // Phase 1: register every parameter (value seeded to 0) so the
+    // evaluator has all variables bound before any expression compiles.
     for (auto& pn : param_list->children) {
       if (pn.name != "Parameter")
         continue;
       auto id = need_attr(pn, "id");
       auto val_str = need_attr(pn, "value");
-      double val;
-      try {
-        val = resolve_cached(val_str, model.parameter_asts[id], model.parameters);
-      } catch (...) {
-        val = 0.0; // forward reference — will be resolved later
+      if (model.parameters.find(id) == model.parameters.end()) {
+        model.parameters[id] = 0.0;
+        model.parameter_names_ordered.push_back(id);
+        load_eval.define_variable(id, &model.parameters[id]);
       }
-      model.parameters[id] = val;
       model.parameter_exprs[id] = val_str;
-      model.parameter_names_ordered.push_back(id);
     }
-    // Iterate to fixed point for forward references and chained
+    // Phase 2: iterate to fixed point for forward references and chained
     // derivations.  BNG2 emits parameters in dependency order so a
     // single retry pass usually settles, but arbitrary XML may declare
     // `P3 = 2*P2; P2 = P1; P1 = 1` in that order — a single retry
@@ -597,8 +616,7 @@ Model load_model(const std::string& xml_path,
       for (auto& name : model.parameter_names_ordered) {
         const auto& val_str = model.parameter_exprs[name];
         try {
-          double const resolved =
-              resolve_cached(val_str, model.parameter_asts[name], model.parameters);
+          double const resolved = resolve_cached(val_str, load_eval, load_eval_ids);
           if (resolved != model.parameters[name]) {
             model.parameters[name] = resolved;
             changed = true;
@@ -630,7 +648,7 @@ Model load_model(const std::string& xml_path,
     for (auto& name : model.parameter_names_ordered) {
       const auto& val_str = model.parameter_exprs[name];
       try {
-        (void)resolve_cached(val_str, model.parameter_asts[name], model.parameters);
+        (void)resolve_cached(val_str, load_eval, load_eval_ids);
       } catch (const std::exception& e) {
         std::fprintf(stderr,
                      "Warning: parameter '%s' could not be resolved (expression "
@@ -721,7 +739,7 @@ Model load_model(const std::string& xml_path,
       if (conc_str.empty())
         conc_str = opt_attr(spn, "count");
       si.concentration_expr = conc_str;
-      si.concentration = resolve_cached(conc_str, si.concentration_ast, model.parameters);
+      si.concentration = resolve_cached(conc_str, load_eval, load_eval_ids);
 
       // Map XML IDs to (mol_idx, comp_idx) within this species
       std::unordered_map<std::string, std::pair<int, int>> id_map;
@@ -964,11 +982,14 @@ Model load_model(const std::string& xml_path,
                                                     gf.tfun_counter_name, method);
         }
 
-        // Parse the expression (may contain __TFUN__VAL__)
+        // Capture the wrapper expression (may contain __TFUN__VAL__).
+        // Actual compilation happens at engine init (ExprTk); a pure-TFUN
+        // function whose expression won't compile falls back to the raw
+        // table value there.
         auto* expr_node = find_child(fn, "Expression");
         if (expr_node && !expr_node->text.empty()) {
           gf.expression_text = trim(expr_node->text);
-          // Replace __TFUN__VAL__ with the variable name for evaluation
+          // Replace __TFUN__VAL__ with the magic __tfun_NAME__ slot name.
           auto& et = gf.expression_text;
           // Two BNG2 emit conventions for the lookup-result sentinel:
           //   - BNG2 2.9.3 (uppercase TFUN()):   "__TFUN__VAL__" (13 chars)
@@ -986,24 +1007,13 @@ Model load_model(const std::string& xml_path,
               break;
             }
           }
-          try {
-            gf.ast = expr::parse(et);
-          } catch (...) { // NOLINT(bugprone-empty-catch)
-            // Pure TFUN — just use value directly
-          }
         }
       } else {
-        // Regular function
+        // Regular function — capture the expression source; the engine
+        // compiles it (and surfaces any syntax error) at init time.
         auto* expr_node = find_child(fn, "Expression");
-        if (expr_node && !expr_node->text.empty()) {
+        if (expr_node && !expr_node->text.empty())
           gf.expression_text = trim(expr_node->text);
-          try {
-            gf.ast = expr::parse(gf.expression_text);
-          } catch (...) {
-            throw std::runtime_error("Cannot parse function '" + gf.name +
-                                     "' expression: " + gf.expression_text);
-          }
-        }
       }
 
       model.function_index[gf.name] = static_cast<int>(model.functions.size());
@@ -1326,8 +1336,7 @@ Model load_model(const std::string& xml_path,
                 continue;
               auto val = need_attr(rcn, "value");
               rule.rate_law.rate_expr = val;
-              rule.rate_law.rate_value =
-                  resolve_cached(val, rule.rate_law.rate_value_ast, model.parameters);
+              rule.rate_law.rate_value = resolve_cached(val, load_eval, load_eval_ids);
               break;
             }
           }
@@ -1373,12 +1382,10 @@ Model load_model(const std::string& xml_path,
               auto val = need_attr(rcn, "value");
               if (idx == 0) {
                 rule.rate_law.mm_kcat_expr = val;
-                rule.rate_law.mm_kcat =
-                    resolve_cached(val, rule.rate_law.mm_kcat_ast, model.parameters);
+                rule.rate_law.mm_kcat = resolve_cached(val, load_eval, load_eval_ids);
               } else if (idx == 1) {
                 rule.rate_law.mm_Km_expr = val;
-                rule.rate_law.mm_Km =
-                    resolve_cached(val, rule.rate_law.mm_Km_ast, model.parameters);
+                rule.rate_law.mm_Km = resolve_cached(val, load_eval, load_eval_ids);
               }
               ++idx;
             }
@@ -1446,9 +1453,7 @@ Model load_model(const std::string& xml_path,
     // (parameters, observables, or other functions).
     std::unordered_map<std::string, std::vector<std::string>> func_deps;
     for (auto& gf : model.functions) {
-      std::vector<std::string> deps;
-      if (gf.ast)
-        expr::collect_variables(*gf.ast, deps);
+      std::vector<std::string> deps = expr::collect_variables(gf.expression_text);
       if (gf.is_tfun && gf.tfun_counter_source == TfunCounterSource::Observable)
         deps.push_back(gf.tfun_counter_name);
       if (gf.is_tfun && gf.tfun_counter_source == TfunCounterSource::Function)
@@ -1461,12 +1466,6 @@ Model load_model(const std::string& xml_path,
     for (auto& rule : model.rules) {
       if (!rule.rate_law.function_name.empty())
         seeds.insert(rule.rate_law.function_name);
-      if (rule.rate_law.rate_ast) {
-        std::vector<std::string> vars;
-        expr::collect_variables(*rule.rate_law.rate_ast, vars);
-        for (auto& v : vars)
-          seeds.insert(v);
-      }
       if (rule.rate_law.uses_tfun &&
           rule.rate_law.tfun_counter_source == TfunCounterSource::Observable)
         seeds.insert(rule.rate_law.tfun_counter_name);
@@ -1858,6 +1857,26 @@ struct RuleMonkeySimulator::Impl {
   // Keep a clean copy of parameters for override/restore
   std::unordered_map<std::string, double> base_parameters;
 
+  // ExprTk evaluator for the parameter cascade + Ele/MM rate constants +
+  // initial-species concentrations (issue #6).  Its variables are bound
+  // by address into `model.parameters` (see build_param_evaluator), so
+  // model.parameters keys must never be inserted/erased/whole-map-
+  // reassigned after build_param_evaluator() runs — sync_parameters
+  // mutates values in place for exactly this reason.  `param_eval_ids_`
+  // memoizes compiled-expression ids keyed by the raw expression string.
+  bngsim::ExprTkEvaluator param_eval_;
+  std::unordered_map<std::string, int> param_eval_ids_;
+
+  // Bind every model parameter into `param_eval_` by address.  Idempotent:
+  // re-initialize replaces `model`, so the evaluator is rebuilt from
+  // scratch each call (a fresh ExprTkEvaluator drops all prior bindings).
+  void build_param_evaluator() {
+    param_eval_ = bngsim::ExprTkEvaluator{};
+    param_eval_ids_.clear();
+    for (auto& name : model.parameter_names_ordered)
+      param_eval_.define_variable(name, &model.parameters[name]);
+  }
+
   // Rebuild model.parameters from base_parameters + param_overrides,
   // cascading derived parameter expressions so an override on a base
   // parameter propagates to any parameter that references it
@@ -1867,9 +1886,22 @@ struct RuleMonkeySimulator::Impl {
   // get_parameter() returns a coherent view between runs without
   // requiring a full apply_overrides() rate-law / species walk.
   void sync_parameters() {
-    model.parameters = base_parameters;
-    for (auto& [name, val] : param_overrides)
-      model.parameters[name] = val;
+    // Reset to base values IN PLACE.  `param_eval_` binds its variables
+    // by address into `model.parameters`, so the map's nodes must not be
+    // relocated — a whole-map `model.parameters = base_parameters` could
+    // do exactly that.  model.parameters and base_parameters carry the
+    // identical key set (parameters are never added/removed after load),
+    // so an in-place value overwrite is sufficient.
+    for (auto& [name, val] : model.parameters) {
+      auto bit = base_parameters.find(name);
+      if (bit != base_parameters.end())
+        val = bit->second;
+    }
+    for (auto& [name, val] : param_overrides) {
+      auto it = model.parameters.find(name);
+      if (it != model.parameters.end())
+        it->second = val;
+    }
 
     // Re-cascade in declaration order: a parameter not directly
     // overridden re-resolves its parsed expression against the
@@ -1895,8 +1927,7 @@ struct RuleMonkeySimulator::Impl {
         if (eit == model.parameter_exprs.end())
           continue;
         try {
-          double const resolved =
-              resolve_cached(eit->second, model.parameter_asts[name], model.parameters);
+          double const resolved = resolve_cached(eit->second, param_eval_, param_eval_ids_);
           if (resolved != model.parameters[name]) {
             model.parameters[name] = resolved;
             changed = true;
@@ -1946,12 +1977,12 @@ struct RuleMonkeySimulator::Impl {
     for (auto& rule : model.rules) {
       auto& rl = rule.rate_law;
       if (rl.type == RateLawType::Ele && !rl.rate_expr.empty())
-        rl.rate_value = resolve_cached(rl.rate_expr, rl.rate_value_ast, model.parameters);
+        rl.rate_value = resolve_cached(rl.rate_expr, param_eval_, param_eval_ids_);
       else if (rl.type == RateLawType::MM) {
         if (!rl.mm_kcat_expr.empty())
-          rl.mm_kcat = resolve_cached(rl.mm_kcat_expr, rl.mm_kcat_ast, model.parameters);
+          rl.mm_kcat = resolve_cached(rl.mm_kcat_expr, param_eval_, param_eval_ids_);
         if (!rl.mm_Km_expr.empty())
-          rl.mm_Km = resolve_cached(rl.mm_Km_expr, rl.mm_Km_ast, model.parameters);
+          rl.mm_Km = resolve_cached(rl.mm_Km_expr, param_eval_, param_eval_ids_);
       }
     }
 
@@ -1961,8 +1992,7 @@ struct RuleMonkeySimulator::Impl {
     // parse, so refresh it here from the (possibly re-resolved) source.
     for (auto& si : model.initial_species) {
       if (!si.concentration_expr.empty())
-        si.concentration =
-            resolve_cached(si.concentration_expr, si.concentration_ast, model.parameters);
+        si.concentration = resolve_cached(si.concentration_expr, param_eval_, param_eval_ids_);
     }
     for (auto& fs : model.fixed_species) {
       if (fs.source_init_idx >= 0 &&
@@ -2094,6 +2124,11 @@ RuleMonkeySimulator::RuleMonkeySimulator(const std::string& xml_path, Method met
   impl_->method = method;
   impl_->xml_path_str = xml_path;
   impl_->model = load_model(xml_path, &impl_->unsupported_features);
+  // Bind the parameter cascade evaluator onto the now-final model.
+  // load_model resolved every parameter / Ele / MM / concentration once
+  // already (its own load-time evaluator); param_eval_ takes over for
+  // set_param re-resolution (sync_parameters / apply_overrides).
+  impl_->build_param_evaluator();
   impl_->base_parameters = impl_->model.parameters;
   impl_->obs_names = impl_->model.observable_names_ordered;
   impl_->param_names = impl_->model.parameter_names_ordered;

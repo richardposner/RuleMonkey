@@ -2,6 +2,12 @@ default_install_hook_types: [pre-commit, pre-push]
 default_stages: [pre-commit]
 fail_fast: false
 
+# Vendored third-party sources (ExprTk + bngsim::ExprTkEvaluator — see
+# third_party/bngsim_expr/VENDOR) are copied verbatim and must NOT be
+# touched by clang-format / whitespace fixers, or they drift from their
+# upstream pin.  clang-tidy already scopes itself to cpp/ + tests/cpp/.
+exclude: '^third_party/'
+
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

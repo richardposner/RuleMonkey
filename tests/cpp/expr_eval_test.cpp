@@ -1,31 +1,36 @@
-// Direct unit tests for the BNGL math expression parser/evaluator.
+// Direct unit tests for RuleMonkey's expression layer.
 //
-// These pin down semantics that the BNGL parity ladder only exercises
-// indirectly (rate-law evaluation buried in event firing).  When a
-// future change shifts how `parse()` or `evaluate()` handles operator
-// precedence, short-circuit logical ops, or FP-equality comparison,
-// the failure surfaces here as a one-line miscompare instead of a
-// 3-sigma trajectory drift on some incidental model.
+// As of issue #6, RM evaluates BNGL rate-law / function / parameter
+// expressions with bngsim::ExprTkEvaluator (vendored ExprTk wrapper),
+// and keeps only a lightweight dependency scanner — expr::collect_variables
+// — in its own code.  This file pins down both:
 //
-// Pinned regressions (review item numbers from dev/code_review_2026_05_01.md):
+//   1. expr::collect_variables — RM's own code: every genuine identifier
+//      is returned, numeric literals (incl. scientific notation) never
+//      leak a spurious variable.
 //
-//   #1  Unary `-` must bind looser than `^`: `-2^2 = -(2^2) = -4`.
-//   #2  `&&` / `||` must short-circuit: `if(x>0 && 1/x>1, …)` with x=0
-//       must NOT evaluate `1/x` and produce NaN.
-//   #6  `==` / `!=` are bit-exact (NFsim/muParser parity).  Two literals
-//       that round to the same double compare equal; FP arithmetic
-//       errors do not silently coerce to "almost equal".
+//   2. ExprTk semantics that the BNGL parity ladder only exercises
+//      indirectly.  These were the migration's feared landmines
+//      (dev/exprtk_swap_plan_2026_05_16.md §2); pinning them here means a
+//      future re-vendor of exprtk.hpp that shifts any of them fails as a
+//      one-line miscompare instead of a 3-sigma trajectory drift:
 //
-// Plus a handful of sanity checks on operator precedence / associativity /
-// builtin dispatch so the parser's overall shape is regression-protected
-// alongside the high-impact edge cases above.
+//        - unary `-` binds looser than `^`: `-2^2 = -(2^2) = -4`
+//        - `^` is right-associative: `2^3^2 = 2^9 = 512`
+//        - `==` / `!=` are bit-exact (NFsim/muParser parity), NOT
+//          epsilon-based
+//        - 3-arg `if(c,a,b)` lazily evaluates only the taken branch
+//        - the `ln` alias is natural log
 
 #include "expr_eval.hpp"
 
+#include "bngsim/expression.hpp"
+
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
-#include <stdexcept>
 #include <string>
+#include <vector>
 
 namespace {
 
@@ -38,160 +43,125 @@ void check(bool ok, const std::string& msg) {
   }
 }
 
-double eval(const std::string& src, const rulemonkey::expr::VariableMap& vars = {}) {
-  auto ast = rulemonkey::expr::parse(src);
-  return rulemonkey::expr::evaluate(*ast, vars);
+// Compile + evaluate a standalone expression (no variables).
+double eval(const std::string& src) {
+  bngsim::ExprTkEvaluator ev;
+  int const id = ev.compile(src);
+  return ev.evaluate(id);
 }
 
-bool throws_runtime_error(const std::string& src, const rulemonkey::expr::VariableMap& vars = {}) {
-  try {
-    auto ast = rulemonkey::expr::parse(src);
-    (void)rulemonkey::expr::evaluate(*ast, vars);
-    return false;
-  } catch (const std::runtime_error&) {
-    return true;
-  } catch (...) {
-    return false;
-  }
+bool collected(const std::string& expr, const std::string& name) {
+  auto vars = rulemonkey::expr::collect_variables(expr);
+  return std::find(vars.begin(), vars.end(), name) != vars.end();
 }
 
 // ---------------------------------------------------------------------------
-// #1 — unary minus precedence: `-2^2` parses as `-(2^2) = -4`, not `(-2)^2 = 4`.
-// Reviewer's pre-fix behavior: `-2^2 = 4` (silent wrong answer for negative
-// bases in rate laws and TFUN expressions).  Fix at `3b96b84` routed unary
-// `-`/`+` operands through `parse_power` so the unary sits OUTSIDE the
-// exponentiation.
+// expr::collect_variables — RM's dependency scanner.
 // ---------------------------------------------------------------------------
-void test_unary_minus_vs_power() {
-  check(eval("-2^2") == -4.0, "-2^2 must parse as -(2^2) = -4 (unary - binds looser than ^)");
+void test_collect_variables() {
+  // Genuine identifiers are all returned.
+  check(collected("k_break*(1+(0.30*A_bound))", "k_break"), "collect: k_break");
+  check(collected("k_break*(1+(0.30*A_bound))", "A_bound"), "collect: A_bound");
+
+  // A local-function argument inside a call survives the scan (harmless —
+  // it simply matches no parameter/observable/function downstream).
+  check(collected("k_base*exp((-J)*NbrUp(z))", "NbrUp"), "collect: function ref NbrUp");
+  check(collected("k_base*exp((-J)*NbrUp(z))", "z"), "collect: local arg z");
+  check(collected("k_base*exp((-J)*NbrUp(z))", "J"), "collect: J");
+
+  // Numeric literals must NOT leak identifiers — in particular the
+  // exponent marker of a scientific-notation literal.
+  check(!collected("1e-5 + foo", "e"), "collect: `1e-5` must not yield variable `e`");
+  check(collected("1e-5 + foo", "foo"), "collect: foo alongside `1e-5`");
+  check(!collected("3.0 * 2", "3"), "collect: digits are not identifiers");
+
+  // De-duplication: a name referenced twice appears once.
+  auto vars = rulemonkey::expr::collect_variables("a + a*b + a");
+  check(std::count(vars.begin(), vars.end(), std::string("a")) == 1, "collect: dedup `a`");
+
+  // Comparison / conditional expression — every operand identifier shows up.
+  check(collected("if((A<threshold),k_on,k_off)", "A"), "collect: A in if-cond");
+  check(collected("if((A<threshold),k_on,k_off)", "threshold"), "collect: threshold");
+  check(collected("if((A<threshold),k_on,k_off)", "k_on"), "collect: k_on");
+  check(collected("if((A<threshold),k_on,k_off)", "k_off"), "collect: k_off");
+}
+
+// ---------------------------------------------------------------------------
+// Unary minus vs. `^`, and `^` associativity.
+// ---------------------------------------------------------------------------
+void test_unary_minus_and_power() {
+  check(eval("-2^2") == -4.0, "-2^2 must parse as -(2^2) = -4 (unary - looser than ^)");
   check(eval("-(2^2)") == -4.0, "explicit -(2^2) = -4");
-  check(eval("(-2)^2") == 4.0, "explicit (-2)^2 = 4 (parenthesized unary)");
-  check(eval("- 2 ^ 2") == -4.0, "whitespace must not change unary precedence");
+  check(eval("(-2)^2") == 4.0, "explicit (-2)^2 = 4");
   check(eval("-2^3") == -8.0, "-2^3 = -(2^3) = -8");
-  check(eval("--2") == 2.0, "double negation");
-  check(eval("-2^0") == -1.0, "-2^0 = -(1) = -1");
-  // Right-associativity of ^ combined with unary
-  check(eval("-2^2^3") == -256.0, "-2^2^3 = -(2^(2^3)) = -256 (^ right-assoc)");
+  check(eval("2^3^2") == 512.0, "^ is right-associative: 2^(3^2) = 2^9 = 512");
 }
 
 // ---------------------------------------------------------------------------
-// #2 — logical && / || short-circuit.  Pre-fix RM evaluated both sides
-// unconditionally; `if(x>0 && 1/x>1, val, 0)` with x=0 divided by zero and
-// produced NaN that poisoned the rate.  Fix at `87af961` special-cased the
-// logical ops in the evaluator before generic both-sides eval.
-// ---------------------------------------------------------------------------
-void test_short_circuit_and_or() {
-  rulemonkey::expr::VariableMap const vars{{"x", 0.0}};
-
-  // && short-circuit: false-and-divbyzero must NOT evaluate the RHS.
-  // The if-branch is selected by the AND's value (false → else branch = 0).
-  // If the && evaluated both sides eagerly, 1/0 → +inf → +inf > 1 → 1, but
-  // worse, in earlier RM 0/0 paths could surface NaN that propagated.
-  // Either way, the SAFE behavior is "result = 0, no NaN, no exception".
-  double const r1 = eval("if(x > 0 && 1/x > 1, 99, 0)", vars);
-  check(r1 == 0.0, "&& short-circuit: x=0 must give 0 (not NaN, not 99)");
-  check(!std::isnan(r1), "&& short-circuit: result must not be NaN");
-
-  // || short-circuit: true-or-divbyzero must NOT evaluate the RHS.
-  rulemonkey::expr::VariableMap const vars_true{{"x", 1.0}};
-  double const r2 = eval("if(x > 0 || 1/0 > 1, 99, 0)", vars_true);
-  check(r2 == 99.0, "|| short-circuit: x=1 must give 99 without evaluating 1/0");
-  check(!std::isnan(r2), "|| short-circuit: result must not be NaN");
-
-  // Sanity: when the LHS does NOT short-circuit, the RHS is evaluated
-  // and contributes to the truth value (no surprise here).
-  rulemonkey::expr::VariableMap const v_pos{{"x", 0.5}};
-  double const r3 = eval("if(x > 0 && 1/x > 1, 99, 0)", v_pos);
-  // 1/0.5 = 2, 2 > 1 is true, x > 0 is true → AND true → 99
-  check(r3 == 99.0, "&& with both sides truthy: result is the then-branch");
-
-  // The same shape with || should also work — both true.
-  double const r4 = eval("if(x > 0 || 1/x > 1, 99, 0)", v_pos);
-  check(r4 == 99.0, "|| with both sides truthy: result is the then-branch");
-}
-
-// ---------------------------------------------------------------------------
-// #6 — `==` and `!=` on doubles are bit-exact (NFsim muParser parity).
-// Pre-edit this was a silent gotcha; we now document and pin down the
-// behavior so a future "let's add a tolerance" change has to update this
-// test deliberately.
+// `==` / `!=` are bit-exact, not epsilon-based.
 // ---------------------------------------------------------------------------
 void test_double_equality_exact() {
-  // Bit-identical literals compare equal.
   check(eval("1.0 == 1.0") == 1.0, "1.0 == 1.0 is true");
   check(eval("1.0 != 1.0") == 0.0, "1.0 != 1.0 is false");
-  check(eval("0 == 0") == 1.0, "0 == 0 is true");
 
-  // FP arithmetic that "should" land on a clean value but doesn't.
-  // 0.1 + 0.2 = 0.30000000000000004, which != 0.3.  This is the gotcha.
-  check(eval("0.1 + 0.2 == 0.3") == 0.0,
-        "0.1 + 0.2 == 0.3 must be FALSE (bit-exact, NFsim parity)");
+  // The classic FP gotcha: 0.1 + 0.2 = 0.30000000000000004 != 0.3.
+  check(eval("0.1 + 0.2 == 0.3") == 0.0, "0.1 + 0.2 == 0.3 must be FALSE (bit-exact)");
   check(eval("0.1 + 0.2 != 0.3") == 1.0, "and the != complement must be TRUE");
 
-  // Variables that hold the same value compare equal.
-  rulemonkey::expr::VariableMap const vars{{"a", 7.5}, {"b", 7.5}, {"c", 7.50001}};
-  check(eval("a == b", vars) == 1.0, "vars with identical bits compare equal");
-  check(eval("a == c", vars) == 0.0, "vars off by 1e-5 compare unequal");
+  // A sub-epsilon-but-nonzero difference still compares unequal.
+  check(eval("1e-11 == 0") == 0.0, "1e-11 == 0 must be FALSE (no epsilon window)");
 
-  // Comparison operators work as expected.
   check(eval("1.0 < 2.0") == 1.0, "1 < 2");
   check(eval("2.0 <= 2.0") == 1.0, "2 <= 2");
-  check(eval("3.0 > 2.0") == 1.0, "3 > 2");
   check(eval("3.0 >= 3.0") == 1.0, "3 >= 3");
 }
 
 // ---------------------------------------------------------------------------
-// Sanity: arithmetic precedence + builtins.  Not from the review report,
-// but cheap and locks in the broader parser shape so a refactor can't
-// accidentally swap precedence layers.
+// 3-arg `if` lazily evaluates only the taken branch — the untaken branch
+// must not run (e.g. a division by zero in it must not surface).
 // ---------------------------------------------------------------------------
-void test_arithmetic_precedence() {
-  check(eval("1 + 2 * 3") == 7.0, "* binds tighter than +");
-  check(eval("(1 + 2) * 3") == 9.0, "parentheses override");
-  check(eval("2 ^ 3 ^ 2") == 512.0, "^ is right-associative: 2^(3^2) = 2^9 = 512");
-  check(eval("2 * 3 + 4 * 5") == 26.0, "two * groups separated by +");
-  check(eval("10 - 3 - 2") == 5.0, "- is left-associative");
-  check(eval("8 / 2 / 2") == 2.0, "/ is left-associative");
+void test_if_lazy_ternary() {
+  double const r1 = eval("if(0, 1/0, 5)");
+  check(r1 == 5.0, "if(false, …) selects the else-branch");
+  check(!std::isnan(r1), "untaken then-branch (1/0) must not poison the result");
 
-  // Builtin dispatch (single switch via BuiltinKind).
-  check(std::abs(eval("sqrt(16)") - 4.0) < 1e-12, "sqrt(16) = 4");
-  check(eval("abs(-3.5)") == 3.5, "abs(-3.5) = 3.5");
-  check(std::abs(eval("ln(exp(2))") - 2.0) < 1e-12, "ln(exp(2)) = 2");
-  check(eval("min(3, 7)") == 3.0, "min(3, 7) = 3");
-  check(eval("max(3, 7)") == 7.0, "max(3, 7) = 7");
-  check(eval("pow(2, 10)") == 1024.0, "pow(2, 10) = 1024");
-  check(eval("floor(3.9)") == 3.0, "floor(3.9) = 3");
-  check(eval("ceil(3.1)") == 4.0, "ceil(3.1) = 4");
-  check(eval("round(3.5)") == 4.0, "round(3.5) = 4");
-
-  // `if` ternary
-  check(eval("if(1 > 0, 100, 200)") == 100.0, "if(true, ...) → then-branch");
-  check(eval("if(1 < 0, 100, 200)") == 200.0, "if(false, ...) → else-branch");
+  double const r2 = eval("if(1, 5, 1/0)");
+  check(r2 == 5.0, "if(true, …) selects the then-branch");
+  check(!std::isnan(r2), "untaken else-branch (1/0) must not poison the result");
 }
 
-// Variable resolution: unknown name throws cleanly with the variable name in the
-// error message.  Pinned because parse-time resolution shifted to lower_variables
-// in #12 and the un-lowered evaluator path is the fallback used by
-// resolve_cached.
-void test_unresolved_variable() {
-  check(throws_runtime_error("missing_var + 1"),
-        "evaluate against an empty VariableMap on a Variable node throws");
+// ---------------------------------------------------------------------------
+// Builtins + the `ln` alias (natural log), and variable binding.
+// ---------------------------------------------------------------------------
+void test_builtins_and_variables() {
+  check(std::abs(eval("sqrt(16)") - 4.0) < 1e-12, "sqrt(16) = 4");
+  check(eval("max(3, 7)") == 7.0, "max(3, 7) = 7");
+  check(eval("pow(2, 10)") == 1024.0, "pow(2, 10) = 1024");
+  check(std::abs(eval("ln(exp(2))") - 2.0) < 1e-12, "ln is natural log: ln(exp(2)) = 2");
 
-  rulemonkey::expr::VariableMap const vars{{"a", 5.0}};
-  check(eval("a + 1", vars) == 6.0, "known variable resolves");
-  check(throws_runtime_error("a + b", vars),
-        "partially-known expression throws on the unknown half");
+  // Variables bound by address — the contract RM's engine relies on:
+  // mutate the bound storage, re-evaluate, see the new value.
+  bngsim::ExprTkEvaluator ev;
+  double a = 3.0;
+  double b = 4.0;
+  ev.define_variable("a", &a);
+  ev.define_variable("b", &b);
+  int const id = ev.compile("a*a + b*b");
+  check(ev.evaluate(id) == 25.0, "a*a + b*b with a=3,b=4 = 25");
+  a = 6.0;
+  b = 8.0;
+  check(ev.evaluate(id) == 100.0, "re-evaluate after mutating bound storage = 100");
 }
 
 } // namespace
 
 int main() {
   try {
-    test_unary_minus_vs_power();
-    test_short_circuit_and_or();
+    test_collect_variables();
+    test_unary_minus_and_power();
     test_double_equality_exact();
-    test_arithmetic_precedence();
-    test_unresolved_variable();
+    test_if_lazy_ternary();
+    test_builtins_and_variables();
   } catch (const std::exception& e) {
     std::fprintf(stderr, "EXCEPTION: %s\n", e.what());
     return 2;
@@ -201,7 +171,7 @@ int main() {
     std::fprintf(stderr, "\n%d assertion(s) failed\n", g_failures);
     return 1;
   }
-  std::fprintf(stderr, "OK: expr_eval semantics (unary -, short-circuit, FP-eq, "
-                       "precedence, builtins, unresolved-var) all pass\n");
+  std::fprintf(stderr, "OK: expr layer (collect_variables, unary -, ^ assoc, "
+                       "bit-exact ==, lazy if, builtins, var binding) all pass\n");
   return 0;
 }

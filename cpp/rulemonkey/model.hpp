@@ -5,7 +5,6 @@
 #include <unordered_map>
 #include <vector>
 
-#include "expr_eval.hpp"
 #include "table_function.hpp"
 
 namespace rulemonkey {
@@ -167,12 +166,10 @@ struct RateLaw {
   RateLawType type = RateLawType::Ele;
   double rate_value = 0.0;
   std::string rate_expr; // symbolic source — re-resolved in apply_overrides
-  std::shared_ptr<expr::AstNode> rate_value_ast; // cached parse of `rate_expr`
   bool is_total_rate = false;
 
   // For Function rate law
   bool is_dynamic = false;
-  std::shared_ptr<expr::AstNode> rate_ast;
   std::string function_name;          // if referencing a global function
   bool is_local = false;              // has local molecule/species arguments
   bool local_arg_is_molecule = false; // true = arg bound to molecule (per-mol eval)
@@ -181,10 +178,8 @@ struct RateLaw {
   // For MM
   double mm_Km = 0.0;
   double mm_kcat = 0.0;
-  std::string mm_kcat_expr;                   // symbolic source — re-resolved in apply_overrides
-  std::string mm_Km_expr;                     // symbolic source — re-resolved in apply_overrides
-  std::shared_ptr<expr::AstNode> mm_kcat_ast; // cached parse of `mm_kcat_expr`
-  std::shared_ptr<expr::AstNode> mm_Km_ast;   // cached parse of `mm_Km_expr`
+  std::string mm_kcat_expr; // symbolic source — re-resolved in apply_overrides
+  std::string mm_Km_expr;   // symbolic source — re-resolved in apply_overrides
 
   // TFUN backing (if rate depends on a table function)
   bool uses_tfun = false;
@@ -256,7 +251,9 @@ struct Observable {
 
 struct GlobalFunction {
   std::string name;
-  std::shared_ptr<expr::AstNode> ast;
+  // Raw BNGL expression source.  Compiled into the engine's ExprTk
+  // evaluator at engine init (see Engine::Impl::init_eval_layout).  An
+  // empty string marks a pure-TFUN function with no wrapper expression.
   std::string expression_text;
 
   // Local function support
@@ -293,7 +290,6 @@ struct SpeciesInit {
   std::string name;
   double concentration = 0.0;
   std::string concentration_expr; // symbolic source — re-resolved in apply_overrides
-  std::shared_ptr<expr::AstNode> concentration_ast; // cached parse of `concentration_expr`
   std::vector<SpeciesInitMol> molecules;
   std::vector<SpeciesInitBond> bonds;
 };
@@ -338,14 +334,6 @@ struct Model {
   // the current parser, but a future emitter may omit) skip the
   // cascade for that parameter and keep the parsed numeric value.
   std::unordered_map<std::string, std::string> parameter_exprs;
-
-  // Parsed AST cache parallel to `parameter_exprs`, populated once at
-  // load-time so the parameter-cascade fixed-point loop and
-  // sync_parameters re-evaluate against the live `parameters` map
-  // without re-parsing on every call.  ASTs are immutable; only the
-  // values they reference change, so no invalidation is required when
-  // set_param mutates a parameter.
-  std::unordered_map<std::string, std::shared_ptr<expr::AstNode>> parameter_asts;
 
   std::vector<std::string> observable_names_ordered;
 
