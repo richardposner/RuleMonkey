@@ -4333,10 +4333,8 @@ struct Engine::Impl {
     oip_clock::time_point oip_flush_start;
     if constexpr (kObsIncrProfile) {
       obs_incr_profile_.flush_calls++;
-      oip_flush_sampled = (obs_incr_profile_.flush_calls % kObsIncrProfileSampleEvery) == 0 ||
-                          kObsIncrProfileSampleEvery == 1;
-      // Flush fires once per sample (O(n_steps+1)), so almost always
-      // cheap to full-sample regardless of K.  Sample every call.
+      // Flush fires once per sample (O(n_steps+1)), so it is cheap to
+      // full-sample regardless of K.  Sample every call.
       oip_flush_sampled = true;
       if (oip_flush_sampled) {
         obs_incr_profile_.flush_sampled++;
