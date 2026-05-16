@@ -27,22 +27,41 @@ cmake --build --preset release
 ctest --preset release
 ```
 
-The `rm_driver` executable is built at `build/release/rm_driver`.
+The `rm_driver` and `rm_scan` executables are built at
+`build/release/rm_driver` and `build/release/rm_scan`.
 
 When RuleMonkey is vendored with `add_subdirectory`, tests and the
-`rm_driver` CLI default off, while the `RuleMonkey::rulemonkey` target
-remains available for `target_link_libraries`.
+command-line tools default off, while the `RuleMonkey::rulemonkey`
+target remains available for `target_link_libraries`.
 
 ## Usage
+
+`rm_driver` runs a single trajectory:
 
 ```bash
 build/release/rm_driver <model.xml> <t_end> <n_steps> [seed] [-no-bscb] \
     [--ignore-unsupported] [--save-state <path>] [--load-state <path>] \
-    [--t-start <time>]
+    [--t-start <time>] [--print-functions]
 ```
 
 Output is tab-separated `.gdat` on stdout (header line beginning with `#`,
 then time + observable columns). CPU time is printed to stderr.
+
+`rm_scan` sweeps one parameter and reports the endpoint response at each
+value — the RuleMonkey equivalent of BioNetGen's `parameter_scan` and
+`bifurcate` actions:
+
+```bash
+build/release/rm_scan <model.xml> --param <name> \
+    (--values v1,v2,... | --min <m> --max <x> --n-points <n> [--log]) \
+    --t-end <t> [--t-start <t>] [--n-steps <k>] [--seed <s>] \
+    [--bifurcate] [--reset-conc 0|1] [--print-functions] [-no-bscb] \
+    [--ignore-unsupported]
+```
+
+Output is tab-separated `.scan` on stdout (one row per swept value).
+See [`docs/scan_format.md`](docs/scan_format.md) for the format and the
+BNG-semantics mapping.
 
 RuleMonkey defaults to strict BNGL semantics (`block_same_complex_binding`,
 equivalent to NFsim's `-bscb` flag). Pass `-no-bscb` for compatibility with
@@ -83,11 +102,12 @@ and NFsim runs of the same BNGL model:
 
 ```
 cpp/rulemonkey/      Core engine sources
-cpp/cli/             rm_driver CLI
+cpp/cli/             rm_driver / rm_scan command-line tools
 include/rulemonkey/  Public C++ API headers
 tests/
   cpp/               C++ unit tests (smoke, set_param, save/load, homodimer rate,
-                     public API, expr_eval, table_function, error paths)
+                     public API, expr_eval, table_function, error paths,
+                     parameter_scan/bifurcate)
   models/            BNGL test corpora (feature_coverage, real-world, basicModels)
   reference/         Gold-standard reference trajectories from NFsim and earlier RM
 harness/             Python benchmarking + validation drivers

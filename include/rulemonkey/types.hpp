@@ -74,6 +74,60 @@ struct Result {
   std::size_t n_functions() const noexcept { return function_names.size(); }
 };
 
+// Specification for a parameter sweep (parameter_scan / bifurcate).
+//
+// The swept parameter takes either an explicit value list (`values`) or a
+// generated range (`par_min` / `par_max` / `n_points`, with optional
+// `log_scale` geometric spacing).  `values` takes precedence when non-empty;
+// this mirrors BNG's `par_scan_vals` vs `par_min`/`par_max`/`n_scan_pts`.
+//
+// `per_point` is the time window simulated at each point; the recorded
+// response is the *endpoint* value (the observables / global functions at
+// `t_end`), matching BNG's parameter_scan, which extracts the last `.gdat`
+// row of each per-point run.
+struct ScanSpec {
+  std::string parameter;      // declared parameter name to sweep
+  std::vector<double> values; // explicit value list; precedence over range
+  double par_min = 0.0;       // range form (used when `values` is empty):
+  double par_max = 0.0;
+  int n_points = 0;
+  bool log_scale = false; // geometric (log) spacing across the range
+  // When true, every point runs fresh from the model's seed species (an
+  // independent dose-response point).  When false, each point continues
+  // from the previous point's final molecular state (BNG `reset_conc=>0`).
+  // bifurcate() always carries state over and ignores this field.
+  bool reset_conc = true;
+  TimeSpec per_point; // time window simulated at each point
+};
+
+// One parameter_scan result: the endpoint observable / global-function
+// values at each swept parameter value.  `*_endpoints` are row-major —
+// `observable_endpoints[point_idx][obs_idx]` — one row per parameter value,
+// columns parallel to `observable_names` / `function_names`.
+struct ScanResult {
+  std::string parameter;
+  std::vector<double> param_values;
+  std::vector<std::string> observable_names;
+  std::vector<std::string> function_names;
+  std::vector<std::vector<double>> observable_endpoints;
+  std::vector<std::vector<double>> function_endpoints;
+
+  std::size_t n_points() const noexcept { return param_values.size(); }
+};
+
+// bifurcate result: a forward sweep (par_min -> par_max) and a backward
+// sweep (par_max -> par_min) run as one continuous trajectory, so a
+// bistable model surfaces hysteresis between the two branches.
+//
+// Both ScanResults carry the *same ascending* `param_values`: the backward
+// sweep's endpoints are re-ordered out of run order into ascending
+// parameter order, so column `i` of `forward` and `backward` always refer
+// to the same parameter value.
+struct BifurcateResult {
+  ScanResult forward;
+  ScanResult backward;
+};
+
 enum class Severity { Warn, Error };
 
 struct UnsupportedFeature {

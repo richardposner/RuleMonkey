@@ -9,6 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Parameter sweeps: `parameter_scan` and `bifurcate`.**
+  `RuleMonkeySimulator` gains two methods — `parameter_scan(ScanSpec,
+  seed)` and `bifurcate(ScanSpec, seed)` — the RuleMonkey equivalents of
+  BioNetGen's `parameter_scan` and `bifurcate` actions. A sweep runs the
+  model at each value of one parameter (an explicit value list, or a
+  linear / geometric `min`/`max`/`n_points` range) and records the
+  *endpoint* observable and global-function values, matching BNG's
+  extraction of the last `.gdat` row per run. `parameter_scan` with
+  `reset_conc=false` and `bifurcate` carry molecular state over between
+  points; `bifurcate` runs the forward and backward sweeps as one
+  continuous trajectory so a bistable model surfaces hysteresis. New
+  `ScanSpec` / `ScanResult` / `BifurcateResult` types in `types.hpp`. A
+  new `rm_scan` command-line tool exposes both modes and writes the
+  result in tab-separated `.scan` format on stdout (function columns
+  gated behind `--print-functions`, mirroring
+  [#7](https://github.com/richardposner/RuleMonkey/issues/7); see
+  [`docs/scan_format.md`](docs/scan_format.md)). Closes
+  [#8](https://github.com/richardposner/RuleMonkey/issues/8). SSA
+  trajectories and existing output are unchanged; the header-only ABI
+  change means consumers must rebuild against the new headers.
+
 - **Global-function values in the public API.** `rulemonkey::Result`
   now carries `function_names` and `function_data` alongside
   `observable_names` / `observable_data`, populated at every output time

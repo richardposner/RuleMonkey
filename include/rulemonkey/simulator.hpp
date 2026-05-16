@@ -54,6 +54,41 @@ public:
   Result run(const TimeSpec& ts, std::uint64_t seed = 42,
              const CancelCallback& should_continue = {});
 
+  // Runs a parameter sweep: for each value of `spec.parameter`, simulates the
+  // model over `spec.per_point` and records the endpoint observable and
+  // global-function values (the values at `per_point.t_end`).  This is the
+  // RM equivalent of BNG's `parameter_scan` action.
+  //
+  // With `spec.reset_conc == true` (the default) every point is an
+  // independent run from the model's seed species — the dose-response case.
+  // With `reset_conc == false` each point continues from the previous
+  // point's final molecular state (BNG `reset_conc=>0`); the sweep is then
+  // one continuous-time trajectory, so time-dependent rate laws see a
+  // cumulative clock rather than a per-point reset.
+  //
+  // Every point uses the same `seed`: as in BNG, the seed is a run-level
+  // setting, not per-point, so the points share a random stream and differ
+  // only by the swept parameter.
+  //
+  // Throws std::runtime_error if a session is active, if `spec.parameter` is
+  // not a declared parameter, or if the spec is otherwise invalid (empty
+  // value set, `n_points < 1`, `n_points < 2` with distinct `par_min`/
+  // `par_max`, or `log_scale` with a non-positive bound).
+  ScanResult parameter_scan(const ScanSpec& spec, std::uint64_t seed = 42);
+
+  // Runs `spec` as a forward sweep (par_min -> par_max) immediately followed
+  // by a backward sweep (par_max -> par_min), as one continuous trajectory:
+  // molecular state carries over across every point and across the
+  // forward/backward turn, so a bistable model traces out a hysteresis loop.
+  // This is the RM equivalent of BNG's `bifurcate` action.
+  //
+  // `spec.reset_conc` is ignored — bifurcation requires carry-over.  The
+  // returned `BifurcateResult` aligns both branches to the same ascending
+  // parameter axis (see types.hpp).
+  //
+  // Throws std::runtime_error under the same conditions as parameter_scan().
+  BifurcateResult bifurcate(const ScanSpec& spec, std::uint64_t seed = 42);
+
   // Creates or resets a live session from the parsed model plus the current
   // stored parameter overrides and molecule limit.
   void initialize(std::uint64_t seed = 42);

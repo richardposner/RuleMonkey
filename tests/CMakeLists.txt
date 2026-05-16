@@ -183,3 +183,67 @@ add_test(
     COMMAND cancellation_test
         ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
 )
+
+# parameter_scan / bifurcate regression (issue #8): pins down value
+# generation (explicit list, linear + geometric ranges, degenerate
+# single-point / zero-width cases), endpoint shape, fixed-seed
+# determinism, the monotone AA response of A+A<->AA to the forward
+# rate, global-function columns, the ascending-axis alignment of
+# bifurcate's forward/backward branches, ScanSpec validation, and that
+# a sweep restores the swept parameter's override state.
+add_executable(parameter_scan_test cpp/parameter_scan_test.cpp)
+target_link_libraries(parameter_scan_test PRIVATE rulemonkey)
+
+add_test(
+    NAME parameter_scan_test
+    COMMAND parameter_scan_test
+        ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_nested_functions.xml
+)
+
+# rm_scan CLI smoke + `.scan` header regressions (issue #8).  Like the
+# rm_driver function-column tests, these assert output shape directly
+# via PASS/FAIL regexes.  Guarded on the rm_scan target so a tests-only
+# build (RULEMONKEY_BUILD_CLI=OFF) still configures.
+if(TARGET rm_scan)
+    # parameter_scan: header is `# <param>` + observable names; no
+    # function columns without --print-functions.
+    add_test(
+        NAME rm_scan_parameter_scan
+        COMMAND rm_scan
+            ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_nested_functions.xml
+            --param k0 --min 0.01 --max 0.2 --n-points 4 --t-end 20
+    )
+    set_tests_properties(rm_scan_parameter_scan PROPERTIES
+        PASS_REGULAR_EXPRESSION "# k0\t.*S_total"
+        FAIL_REGULAR_EXPRESSION "phos_rate")
+
+    # --print-functions appends the global-function columns.
+    add_test(
+        NAME rm_scan_print_functions
+        COMMAND rm_scan
+            ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_nested_functions.xml
+            --param k0 --min 0.01 --max 0.2 --n-points 4 --t-end 20 --print-functions
+    )
+    set_tests_properties(rm_scan_print_functions PROPERTIES
+        PASS_REGULAR_EXPRESSION "frac_P.*modulator.*phos_rate")
+
+    # --bifurcate: every observable gets paired `_fwd` / `_bwd` columns.
+    add_test(
+        NAME rm_scan_bifurcate
+        COMMAND rm_scan
+            ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
+            --param kp --min 0.001 --max 0.006 --n-points 5 --t-end 20 --bifurcate
+    )
+    set_tests_properties(rm_scan_bifurcate PROPERTIES
+        PASS_REGULAR_EXPRESSION "A_1_fwd\tA_1_bwd")
+
+    # An invalid spec (n_points == 1 with distinct bounds) exits non-zero.
+    add_test(
+        NAME rm_scan_rejects_bad_spec
+        COMMAND rm_scan
+            ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
+            --param kp --min 0.001 --max 0.006 --n-points 1 --t-end 20
+    )
+    set_tests_properties(rm_scan_rejects_bad_spec PROPERTIES WILL_FAIL TRUE)
+endif()

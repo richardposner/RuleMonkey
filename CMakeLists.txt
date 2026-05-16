@@ -81,19 +81,24 @@ if(RULEMONKEY_ENABLE_DEV_PROFILES)
 endif()
 
 # ---------------------------------------------------------------------------
-# rm_driver: batch CLI
+# Command-line tools: rm_driver (single-trajectory batch) and rm_scan
+# (parameter_scan / bifurcate parameter sweeps).
 # ---------------------------------------------------------------------------
-option(RULEMONKEY_BUILD_CLI "Build the rm_driver batch CLI" ${PROJECT_IS_TOP_LEVEL})
+option(RULEMONKEY_BUILD_CLI "Build the rm_driver / rm_scan command-line tools" ${PROJECT_IS_TOP_LEVEL})
 if(RULEMONKEY_BUILD_CLI)
     add_executable(rm_driver cpp/cli/rm_driver.cpp)
-    target_link_libraries(rm_driver PRIVATE rulemonkey)
+    add_executable(rm_scan cpp/cli/rm_scan.cpp)
 
-    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-        target_compile_options(rm_driver PRIVATE -Wall -Wextra -Wno-deprecated-declarations)
-        if(RULEMONKEY_WARNINGS_AS_ERRORS)
-            target_compile_options(rm_driver PRIVATE -Werror)
+    foreach(_rm_cli_target rm_driver rm_scan)
+        target_link_libraries(${_rm_cli_target} PRIVATE rulemonkey)
+        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+            target_compile_options(${_rm_cli_target} PRIVATE
+                -Wall -Wextra -Wno-deprecated-declarations)
+            if(RULEMONKEY_WARNINGS_AS_ERRORS)
+                target_compile_options(${_rm_cli_target} PRIVATE -Werror)
+            endif()
         endif()
-    endif()
+    endforeach()
 endif()
 
 # ---------------------------------------------------------------------------
@@ -118,9 +123,11 @@ if(RULEMONKEY_ENABLE_ASAN)
     set(_rm_asan_flags -fsanitize=address,undefined -fno-omit-frame-pointer)
     target_compile_options(rulemonkey  PRIVATE ${_rm_asan_flags})
     target_link_options   (rulemonkey  PUBLIC  ${_rm_asan_flags})
-    if(TARGET rm_driver)
-        target_compile_options(rm_driver PRIVATE ${_rm_asan_flags})
-    endif()
+    foreach(_rm_cli_target rm_driver rm_scan)
+        if(TARGET ${_rm_cli_target})
+            target_compile_options(${_rm_cli_target} PRIVATE ${_rm_asan_flags})
+        endif()
+    endforeach()
 endif()
 
 # ---------------------------------------------------------------------------
@@ -148,6 +155,7 @@ endif()
 #   include/rulemonkey/{simulator,types}.hpp
 #   lib/librulemonkey.a
 #   bin/rm_driver     (when RULEMONKEY_BUILD_CLI=ON)
+#   bin/rm_scan       (when RULEMONKEY_BUILD_CLI=ON)
 #   lib/cmake/RuleMonkey/RuleMonkeyConfig.cmake
 #   lib/cmake/RuleMonkey/RuleMonkeyConfigVersion.cmake
 #   lib/cmake/RuleMonkey/RuleMonkeyTargets.cmake
@@ -183,12 +191,14 @@ if(RULEMONKEY_INSTALL)
     include(GNUInstallDirs)
     include(CMakePackageConfigHelpers)
 
-    # Public targets: always the static library, and the rm_driver CLI when
-    # RULEMONKEY_BUILD_CLI=ON.
+    # Public targets: always the static library, and the rm_driver / rm_scan
+    # command-line tools when RULEMONKEY_BUILD_CLI=ON.
     set(_rulemonkey_install_targets rulemonkey)
-    if(TARGET rm_driver)
-        list(APPEND _rulemonkey_install_targets rm_driver)
-    endif()
+    foreach(_rm_cli_target rm_driver rm_scan)
+        if(TARGET ${_rm_cli_target})
+            list(APPEND _rulemonkey_install_targets ${_rm_cli_target})
+        endif()
+    endforeach()
 
     install(TARGETS ${_rulemonkey_install_targets}
         EXPORT RuleMonkeyTargets

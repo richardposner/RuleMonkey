@@ -6,6 +6,7 @@
 #include "table_function.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -1770,6 +1771,70 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
   return warnings;
 }
 
+// ---------------------------------------------------------------------------
+// parameter_scan / bifurcate helpers
+// ---------------------------------------------------------------------------
+
+// Validates the non-range parts of a ScanSpec common to parameter_scan and
+// bifurcate.  `who` names the caller for the error text.  Range validation
+// (par_min/par_max/n_points/log_scale) lives in build_scan_values.
+void validate_scan_spec(const ScanSpec& spec, bool session_active,
+                        const std::unordered_map<std::string, double>& base_parameters,
+                        const char* who) {
+  if (session_active)
+    throw std::runtime_error(std::string("Cannot ") + who + " during active session");
+  if (spec.parameter.empty())
+    throw std::runtime_error(std::string(who) + ": spec.parameter is empty");
+  if (!base_parameters.count(spec.parameter))
+    throw std::runtime_error(std::string(who) + ": unknown parameter '" + spec.parameter +
+                             "' (must be a parameter declared in the loaded XML)");
+  if (spec.per_point.n_points < 1)
+    throw std::runtime_error(std::string(who) +
+                             ": per_point.n_points must be >= 1 (need at least one "
+                             "sampled segment to record an endpoint)");
+  if (spec.per_point.t_end < spec.per_point.t_start)
+    throw std::runtime_error(std::string(who) + ": per_point.t_end (" +
+                             std::to_string(spec.per_point.t_end) + ") is earlier than t_start (" +
+                             std::to_string(spec.per_point.t_start) + ")");
+}
+
+// Resolves a ScanSpec's swept-parameter values.  An explicit `values` list
+// takes precedence; otherwise a range is generated from par_min/par_max/
+// n_points with optional geometric (log) spacing.  Mirrors BNG's
+// par_scan_vals vs par_min/par_max/n_scan_pts precedence and validation.
+std::vector<double> build_scan_values(const ScanSpec& spec) {
+  if (!spec.values.empty())
+    return spec.values;
+
+  if (spec.n_points < 1)
+    throw std::runtime_error("parameter_scan: n_points must be >= 1 when no explicit "
+                             "value list is given");
+  const bool degenerate = (spec.par_min == spec.par_max);
+  if (!degenerate && spec.n_points < 2)
+    throw std::runtime_error("parameter_scan: n_points must be > 1 when par_min != par_max");
+  if (spec.log_scale && (spec.par_min <= 0.0 || spec.par_max <= 0.0))
+    throw std::runtime_error("parameter_scan: log_scale requires par_min and par_max > 0");
+
+  std::vector<double> values;
+  values.reserve(static_cast<std::size_t>(spec.n_points));
+  if (spec.n_points == 1 || degenerate) {
+    // A single point (or a zero-width range) is just par_min repeated;
+    // sidesteps the (n_points - 1) division below.
+    for (int k = 0; k < spec.n_points; ++k)
+      values.push_back(spec.par_min);
+    return values;
+  }
+
+  const double lo = spec.log_scale ? std::log(spec.par_min) : spec.par_min;
+  const double hi = spec.log_scale ? std::log(spec.par_max) : spec.par_max;
+  const double delta = (hi - lo) / (spec.n_points - 1);
+  for (int k = 0; k < spec.n_points; ++k) {
+    const double x = lo + (k * delta);
+    values.push_back(spec.log_scale ? std::exp(x) : x);
+  }
+  return values;
+}
+
 } // anonymous namespace
 
 // ===========================================================================
@@ -1906,6 +1971,116 @@ struct RuleMonkeySimulator::Impl {
       }
     }
   }
+
+  // Endpoint observable / global-function values for one chain of scan
+  // points.  Both matrices are row-major: `obs[point_idx][obs_idx]`.
+  struct ScanChainEndpoints {
+    std::vector<std::vector<double>> obs;
+    std::vector<std::vector<double>> fun;
+  };
+
+  // Runs an ordered sequence of `(parameter = value)` scan points and
+  // returns the endpoint (last sample row) of each point's trajectory.
+  //
+  // `reset_conc == true`: every point is an independent run() from the
+  // model's seed species — the dose-response case.  `reset_conc == false`:
+  // every point continues from the prior point's final molecular state,
+  // threaded through a temporary state file, so the sweep is one
+  // continuous-time trajectory sharing a single RNG stream.
+  //
+  // The swept override is restored to its pre-call state on the way out
+  // (including the exception path), leaving the simulator exactly as the
+  // caller configured it.  Assumes no session is active on entry.
+  ScanChainEndpoints run_scan_chain(const std::string& parameter, const std::vector<double>& values,
+                                    const TimeSpec& per_point, bool reset_conc,
+                                    std::uint64_t seed) {
+    // Snapshot the swept parameter's prior override so the chain is
+    // side-effect free regardless of how it exits.
+    const bool had_override = param_overrides.count(parameter) != 0;
+    const double prior_value = had_override ? param_overrides.at(parameter) : 0.0;
+    auto restore_override = [&]() {
+      if (had_override)
+        param_overrides[parameter] = prior_value;
+      else
+        param_overrides.erase(parameter);
+      sync_parameters();
+    };
+
+    // One state file per chain invocation; reused (overwritten) across the
+    // points of a carry-over chain, removed when the chain finishes.  A
+    // process-global counter keeps concurrent chains from colliding.
+    static std::atomic<unsigned long long> chain_counter{0};
+    const std::filesystem::path tmp =
+        std::filesystem::temp_directory_path() /
+        ("rm_scan_" + std::to_string(chain_counter.fetch_add(1)) + ".rmstate");
+    bool tmp_written = false;
+    const double duration = per_point.t_end - per_point.t_start;
+
+    ScanChainEndpoints out;
+    out.obs.reserve(values.size());
+    out.fun.reserve(values.size());
+
+    try {
+      for (std::size_t k = 0; k < values.size(); ++k) {
+        param_overrides[parameter] = values[k];
+        sync_parameters();
+        apply_overrides();
+
+        Result r;
+        if (reset_conc) {
+          // Fresh, independent run from seed species.  Every point uses
+          // the same seed: as in BNG, the seed is run-level, not
+          // per-point, so points share a random stream.
+          Engine engine(model, seed, molecule_limit);
+          r = engine.run(TimeSpec{per_point.t_start, per_point.t_end, per_point.n_points});
+        } else {
+          // Carry-over chain: point 0 starts from seed species; every
+          // later point resumes the prior point's pool + RNG state.
+          if (k == 0) {
+            session = std::make_unique<Engine>(model, seed, molecule_limit);
+            session->initialize();
+          } else {
+            session = std::make_unique<Engine>(model, 0, molecule_limit);
+            session->load_state(tmp.string());
+          }
+          const double t0 = session->current_time();
+          r = session->run(TimeSpec{t0, t0 + duration, per_point.n_points});
+          if (k + 1 < values.size()) {
+            session->save_state(tmp.string());
+            tmp_written = true;
+          }
+          session.reset();
+        }
+
+        // Endpoint = the last sample row (the values at t_end).
+        if (r.n_times() == 0)
+          throw std::runtime_error("run_scan_chain: point produced no samples");
+        std::vector<double> obs_row(r.n_observables());
+        for (std::size_t o = 0; o < r.n_observables(); ++o)
+          obs_row[o] = r.observable_data[o].back();
+        std::vector<double> fun_row(r.n_functions());
+        for (std::size_t f = 0; f < r.n_functions(); ++f)
+          fun_row[f] = r.function_data[f].back();
+        out.obs.push_back(std::move(obs_row));
+        out.fun.push_back(std::move(fun_row));
+      }
+    } catch (...) {
+      session.reset();
+      if (tmp_written) {
+        std::error_code ec;
+        std::filesystem::remove(tmp, ec);
+      }
+      restore_override();
+      throw;
+    }
+
+    if (tmp_written) {
+      std::error_code ec;
+      std::filesystem::remove(tmp, ec);
+    }
+    restore_override();
+    return out;
+  }
 };
 
 // ---------------------------------------------------------------------------
@@ -1995,6 +2170,65 @@ Result RuleMonkeySimulator::run(const TimeSpec& ts, std::uint64_t seed,
   impl_->apply_overrides();
   Engine engine(impl_->model, seed, impl_->molecule_limit);
   return engine.run(ts, should_continue);
+}
+
+// ---------------------------------------------------------------------------
+// Parameter sweeps
+// ---------------------------------------------------------------------------
+
+ScanResult RuleMonkeySimulator::parameter_scan(const ScanSpec& spec, std::uint64_t seed) {
+  validate_scan_spec(spec, impl_->session != nullptr, impl_->base_parameters, "parameter_scan");
+  const std::vector<double> values = build_scan_values(spec);
+
+  auto ep = impl_->run_scan_chain(spec.parameter, values, spec.per_point, spec.reset_conc, seed);
+
+  ScanResult res;
+  res.parameter = spec.parameter;
+  res.param_values = values;
+  res.observable_names = impl_->obs_names;
+  res.function_names = impl_->func_names;
+  res.observable_endpoints = std::move(ep.obs);
+  res.function_endpoints = std::move(ep.fun);
+  return res;
+}
+
+BifurcateResult RuleMonkeySimulator::bifurcate(const ScanSpec& spec, std::uint64_t seed) {
+  validate_scan_spec(spec, impl_->session != nullptr, impl_->base_parameters, "bifurcate");
+  const std::vector<double> ascending = build_scan_values(spec);
+  const std::size_t n = ascending.size();
+
+  // One continuous trajectory: the ascending forward sweep immediately
+  // followed by the descending backward sweep.  The backward sweep's
+  // first point repeats par_max, exactly as BNG's bifurcate re-runs the
+  // endpoint without resetting concentrations.
+  std::vector<double> sequence = ascending;
+  sequence.reserve(2 * n);
+  for (std::size_t i = n; i-- > 0;)
+    sequence.push_back(ascending[i]);
+
+  // Carry-over is intrinsic to a bifurcation sweep; spec.reset_conc is
+  // ignored.
+  auto ep =
+      impl_->run_scan_chain(spec.parameter, sequence, spec.per_point, /*reset_conc=*/false, seed);
+
+  BifurcateResult out;
+  for (ScanResult* branch : {&out.forward, &out.backward}) {
+    branch->parameter = spec.parameter;
+    branch->param_values = ascending;
+    branch->observable_names = impl_->obs_names;
+    branch->function_names = impl_->func_names;
+    branch->observable_endpoints.resize(n);
+    branch->function_endpoints.resize(n);
+  }
+  for (std::size_t i = 0; i < n; ++i) {
+    out.forward.observable_endpoints[i] = std::move(ep.obs[i]);
+    out.forward.function_endpoints[i] = std::move(ep.fun[i]);
+    // Backward run order is sequence[n .. 2n-1] = par_max .. par_min;
+    // re-index to the same ascending axis as forward.
+    out.backward.observable_endpoints[i] = std::move(ep.obs[(2 * n) - 1 - i]);
+    out.backward.function_endpoints[i] = std::move(ep.fun[(2 * n) - 1 - i]);
+  }
+  return out;
 }
 
 // ---------------------------------------------------------------------------
