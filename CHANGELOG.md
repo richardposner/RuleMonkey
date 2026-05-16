@@ -5,7 +5,7 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## [3.2.0] — 2026-05-16
 
 ### Added
 
@@ -665,7 +665,8 @@ The legacy implementation, RuleMonkey 2.0.25, was introduced in:
 > RG. *RuleMonkey: software for stochastic simulation of rule-based
 > models.* BMC Bioinformatics 11:404 (2010). PMID: 20673321.
 
-[Unreleased]: https://github.com/wshlavacek/RuleMonkey/compare/v3.1.1...HEAD
+[3.2.0]: https://github.com/wshlavacek/RuleMonkey/releases/tag/v3.2.0
+[3.1.2]: https://github.com/wshlavacek/RuleMonkey/releases/tag/v3.1.2
 [3.1.1]: https://github.com/wshlavacek/RuleMonkey/releases/tag/v3.1.1
 [3.1.0]: https://github.com/wshlavacek/RuleMonkey/releases/tag/v3.1.0
 [3.0.0]: https://github.com/wshlavacek/RuleMonkey/releases/tag/v3.0.0
