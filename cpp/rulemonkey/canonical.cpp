@@ -22,10 +22,15 @@
 //        own color AND no molecule has two interchangeable bonded
 //        components left tied, the refined colors fix a unique,
 //        isomorphism-invariant ordering; render directly, no search.
-//     3. Individualization-refinement for residual symmetric classes —
-//        NOT yet implemented (plan §6 step 3).  Until then a symmetric
-//        complex falls back to an input-order tie-break and is reported
-//        via CanonForm::fully_refined == false.
+//        This is the overwhelmingly common case (asymmetric complexes).
+//     3. Individualization-refinement (plan §3.2 step 3) for residual
+//        symmetric classes — rings, homo-oligomers.  Pick a target
+//        cell, individualize each vertex in it in turn, re-refine,
+//        recurse to a leaf (a coloring the fast-path test accepts);
+//        the canonical label is the lexicographically minimal rendered
+//        BNGL string over all leaves.  This makes the label a *true*
+//        canonical form on every input — 1-WL alone is incomplete on
+//        regular/symmetric graphs.
 //
 //   Rendering (§3.3): walk molecules in canonical order; within each
 //   molecule keep the molecule type's component-name layout but order
@@ -47,6 +52,7 @@
 #include <map>
 #include <string>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 namespace rulemonkey::canonical {
@@ -79,6 +85,15 @@ void ComplexGraph::add_bond(int mol_a, int local_a, int mol_b, int local_b) {
 // ===========================================================================
 
 namespace {
+
+// Leaf-count safety valve for individualization-refinement (plan §3.2
+// step 3, and the step-3 brief's "recursion/leaf guard").  BNGL
+// complexes are small and richly labeled, so the search tree is tiny
+// and shallow in practice; this cap exists only so a pathological
+// hand-built input cannot blow up.  It is NOT a tuning knob — plan §5
+// defers all profiling/tuning to step 7.  If the cap is ever hit the
+// best leaf found so far is returned (still deterministic per input).
+constexpr long kLeafBudget = 200000;
 
 // A bonded component contributes a vertex whose initial color is this
 // string.  Unbonded components instead fold into their molecule's color
@@ -121,6 +136,102 @@ CompKey comp_key(const ComplexGraph::Component& c, int bonded_color) {
   if (bonded_color < 0)
     return {0, 0, c.state};
   return {1, bonded_color, std::string{}};
+}
+
+// 1-WL color refinement, in place.  Each round recolors a vertex by
+// (own color, sorted neighbor colors); signatures are sorted and
+// ranked, so the output colors are a canonical 0..k-1 ranking derived
+// purely from structure.  The own-color term means refinement only
+// ever splits classes — it has converged once the class count stops
+// rising.  Accepts any integer colors on input (individualization
+// passes a vertex an out-of-range marker color; the first round
+// re-ranks everything), so it doubles as the post-individualization
+// re-refine step.
+void refine(const std::vector<std::vector<int>>& adj, std::vector<int>& color) {
+  int const n_vert = static_cast<int>(color.size());
+  if (n_vert == 0)
+    return;
+  std::vector<int> next_color(n_vert);
+  int n_classes = 0;
+  bool first = true;
+  while (true) {
+    std::vector<std::pair<std::vector<int>, int>> sigs; // (signature, vertex)
+    sigs.reserve(n_vert);
+    for (int v = 0; v < n_vert; ++v) {
+      std::vector<int> sig;
+      sig.reserve(adj[v].size() + 1);
+      sig.push_back(color[v]);
+      std::vector<int> nbr;
+      nbr.reserve(adj[v].size());
+      for (int const u : adj[v])
+        nbr.push_back(color[u]);
+      std::sort(nbr.begin(), nbr.end());
+      sig.insert(sig.end(), nbr.begin(), nbr.end());
+      sigs.emplace_back(std::move(sig), v);
+    }
+    std::sort(sigs.begin(), sigs.end());
+
+    int rank = -1;
+    const std::vector<int>* prev = nullptr;
+    for (const auto& [sig, v] : sigs) {
+      if (prev == nullptr || *prev != sig)
+        ++rank;
+      next_color[v] = rank;
+      prev = &sig;
+    }
+    int const new_classes = rank + 1;
+    color.swap(next_color);
+    if (!first && new_classes == n_classes)
+      break; // partition stable
+    first = false;
+    n_classes = new_classes;
+  }
+}
+
+// Refined color of each bonded component's vertex (-1 if free) — the
+// renderer's within-molecule ordering key.
+std::vector<int> bonded_colors(const ComplexGraph& g, const std::vector<int>& color,
+                               const std::vector<int>& comp_vertex) {
+  std::vector<int> bc(g.components.size(), -1);
+  for (int gc = 0; gc < static_cast<int>(g.components.size()); ++gc) {
+    if (comp_vertex[gc] >= 0)
+      bc[gc] = color[comp_vertex[gc]];
+  }
+  return bc;
+}
+
+// Leaf test: is `color` discriminating enough that `render` produces a
+// unique, isomorphism-invariant string?  True iff (a) every molecule
+// vertex landed in its own color class and (b) no molecule has two
+// interchangeable bonded components — same name, same refined color —
+// left tied.  Either residual symmetry is what individualization
+// resolves; this same test is the fast-path gate and the search's leaf
+// condition.  (Component vertices on *different* molecules, or of
+// different names, may still share a color — that never affects the
+// render, so it does not block a leaf.)
+bool is_leaf(const ComplexGraph& g, const std::vector<int>& color,
+             const std::vector<int>& comp_vertex, int n_mol) {
+  std::vector<int> mc(color.begin(), color.begin() + n_mol);
+  std::sort(mc.begin(), mc.end());
+  for (int i = 1; i < n_mol; ++i)
+    if (mc[i] == mc[i - 1])
+      return false;
+  for (int m = 0; m < n_mol; ++m) {
+    const auto& mol = g.molecules[m];
+    std::map<std::string, std::vector<int>> seen; // name -> bonded-vertex colors
+    for (int i = 0; i < mol.n_comp; ++i) {
+      int const gc = mol.first_comp + i;
+      if (comp_vertex[gc] < 0)
+        continue; // free component — no vertex, physically interchangeable
+      int const c = color[comp_vertex[gc]];
+      auto& bucket = seen[g.components[gc].name];
+      for (int const pc : bucket)
+        if (pc == c)
+          return false;
+      bucket.push_back(c);
+    }
+  }
+  return true;
 }
 
 // Render the canonical BNGL string.  `order` is the canonical molecule
@@ -182,6 +293,96 @@ std::string render(const ComplexGraph& g, const std::vector<int>& order,
     out += ')';
   }
   return out;
+}
+
+// Render a leaf coloring: derive the canonical molecule order (sort by
+// refined color — at a leaf every molecule color is distinct, so this
+// is a total order) and the per-component bonded colors, then render.
+std::string render_leaf(const ComplexGraph& g, const std::vector<int>& color,
+                        const std::vector<int>& comp_vertex, int n_mol) {
+  std::vector<int> order(n_mol);
+  for (int m = 0; m < n_mol; ++m)
+    order[m] = m;
+  std::sort(order.begin(), order.end(), [&](int a, int b) { return color[a] < color[b]; });
+  return render(g, order, bonded_colors(g, color, comp_vertex));
+}
+
+// Pick the target cell for individualization: the smallest non-singleton
+// color class, ties broken by (smallest) color value.  This rule is a
+// pure function of the partition, hence isomorphism-invariant — which is
+// what makes the set of leaves the search explores correspond under any
+// graph isomorphism, and so the lexicographic-minimum leaf render a
+// true canonical form.  Returns the chosen color, or -1 if the coloring
+// is already discrete (never happens when called on a non-leaf).
+int pick_cell(const std::vector<int>& color) {
+  std::map<int, int> count;
+  for (int const c : color)
+    ++count[c];
+  int chosen = -1;
+  int best_size = 0;
+  for (const auto& [c, s] : count) { // map iterates in ascending color order
+    if (s < 2)
+      continue;
+    if (chosen < 0 || s < best_size) {
+      chosen = c;
+      best_size = s;
+    }
+  }
+  return chosen;
+}
+
+// Individualization-refinement search state (plan §3.2 step 3).
+// Inputs are held by pointer (not reference) so the struct stays a
+// plain value type — clang-tidy gates reference data members.
+struct SearchState {
+  const ComplexGraph* g;
+  const std::vector<std::vector<int>>* adj;
+  const std::vector<int>* comp_vertex;
+  int n_mol;
+  long leaf_budget;      // remaining leaves before the §5 guard trips
+  bool best_set = false; // false until the first leaf is rendered
+  std::string best;      // lexicographically minimal leaf render so far
+};
+
+// Recurse: `color` is a WL-stable coloring.  At a leaf, render and keep
+// the minimum.  Otherwise pick a target cell and, for each of its
+// vertices, individualize that vertex (give it a fresh top color),
+// re-refine, and recurse.  Individualization strictly splits the cell,
+// so every path reaches a discrete (hence leaf) coloring in at most
+// n_vert steps — termination needs no separate depth bound; the leaf
+// budget guards only against a pathological branching factor.
+void search(SearchState& st, const std::vector<int>& color) {
+  if (is_leaf(*st.g, color, *st.comp_vertex, st.n_mol)) {
+    std::string label = render_leaf(*st.g, color, *st.comp_vertex, st.n_mol);
+    if (!st.best_set || label < st.best) {
+      st.best = std::move(label);
+      st.best_set = true;
+    }
+    --st.leaf_budget;
+    return;
+  }
+  if (st.leaf_budget <= 0)
+    return; // §5 safety valve — keep the best leaf already found
+
+  int const target = pick_cell(color);
+  int mx = 0;
+  for (int const c : color)
+    mx = std::max(mx, c);
+
+  int const n_vert = static_cast<int>(color.size());
+  for (int v = 0; v < n_vert; ++v) {
+    if (color[v] != target)
+      continue;
+    if (st.leaf_budget <= 0)
+      return;
+    // Individualize v: a fresh color above every existing one.  refine
+    // re-ranks, leaving v alone in the top class; the choice is applied
+    // identically to isomorphic graphs, so the search trees correspond.
+    std::vector<int> branch = color;
+    branch[v] = mx + 1;
+    refine(*st.adj, branch);
+    search(st, branch);
+  }
 }
 
 } // namespace
@@ -256,97 +457,28 @@ CanonForm canonicalize(const ComplexGraph& g) {
   std::vector<int> color(n_vert);
   for (int v = 0; v < n_vert; ++v)
     color[v] = intern[init_str[v]];
-  int n_classes = static_cast<int>(intern.size());
 
   // --- 1-WL color refinement ----------------------------------------------
+  refine(adj, color);
+
+  // --- Fast path -----------------------------------------------------------
   //
-  // Each round recolors a vertex by (own color, sorted neighbor
-  // colors).  Signatures are sorted and ranked, so the new integer
-  // colors stay a canonical ranking.  Refinement only ever splits
-  // classes; it has converged once the class count stops rising.
-  std::vector<int> next_color(n_vert);
-  while (true) {
-    std::vector<std::pair<std::vector<int>, int>> sigs; // (signature, vertex)
-    sigs.reserve(n_vert);
-    for (int v = 0; v < n_vert; ++v) {
-      std::vector<int> sig;
-      sig.reserve(adj[v].size() + 1);
-      sig.push_back(color[v]);
-      std::vector<int> nbr;
-      nbr.reserve(adj[v].size());
-      for (int const u : adj[v])
-        nbr.push_back(color[u]);
-      std::sort(nbr.begin(), nbr.end());
-      sig.insert(sig.end(), nbr.begin(), nbr.end());
-      sigs.emplace_back(std::move(sig), v);
-    }
-    std::sort(sigs.begin(), sigs.end());
+  // If refinement alone discriminated the complex (plan §3.2 step 2),
+  // the refined colors fix a unique isomorphism-invariant ordering;
+  // render directly.  This is the overwhelmingly common case.
+  if (is_leaf(g, color, comp_vertex, n_mol))
+    return {render_leaf(g, color, comp_vertex, n_mol), /*fast_path=*/true};
 
-    int rank = -1;
-    const std::vector<int>* prev = nullptr;
-    for (const auto& [sig, v] : sigs) {
-      if (prev == nullptr || *prev != sig)
-        ++rank;
-      next_color[v] = rank;
-      prev = &sig;
-    }
-    int const new_classes = rank + 1;
-    color.swap(next_color);
-    if (new_classes == n_classes)
-      break; // partition stable
-    n_classes = new_classes;
-  }
-
-  // Refined color of each bonded component's vertex (-1 if free) — the
-  // renderer's within-molecule ordering key.
-  std::vector<int> bonded_color(g.components.size(), -1);
-  for (int gc = 0; gc < static_cast<int>(g.components.size()); ++gc) {
-    if (comp_vertex[gc] >= 0)
-      bonded_color[gc] = color[comp_vertex[gc]];
-  }
-
-  // --- Canonical molecule order + fully-refined check ----------------------
+  // --- Individualization-refinement (plan §3.2 step 3) ---------------------
   //
-  // Sort molecule vertices by refined color.  The label is a true
-  // canonical form (fully_refined) iff (a) every molecule landed in its
-  // own color class and (b) no molecule has two interchangeable bonded
-  // components — same name, same refined color — left tied.  Either
-  // residual symmetry needs individualization (plan §3.2 step 3); until
-  // then we tie-break by input order, which is deterministic but NOT
-  // isomorphism-invariant.
-  std::vector<int> order(n_mol);
-  for (int m = 0; m < n_mol; ++m)
-    order[m] = m;
-  std::stable_sort(order.begin(), order.end(), [&](int a, int b) { return color[a] < color[b]; });
-
-  bool fully_refined = true;
-  for (int i = 1; i < n_mol && fully_refined; ++i) {
-    if (color[order[i]] == color[order[i - 1]])
-      fully_refined = false;
-  }
-  for (int m = 0; m < n_mol && fully_refined; ++m) {
-    const auto& mol = g.molecules[m];
-    std::map<std::string, std::vector<CompKey>> seen;
-    for (int i = 0; i < mol.n_comp; ++i) {
-      int const gc = mol.first_comp + i;
-      auto key = comp_key(g.components[gc], bonded_color[gc]);
-      // A genuine tie is two bonded components of the same name with
-      // the same refined color (free components with an equal key are
-      // physically identical, so their order never matters).
-      if (std::get<0>(key) == 1) {
-        auto& bucket = seen[g.components[gc].name];
-        for (const auto& prev : bucket) {
-          if (prev == key) {
-            fully_refined = false;
-            break;
-          }
-        }
-        bucket.push_back(key);
-      }
-    }
-  }
-
-  return {render(g, order, bonded_color), fully_refined};
+  // A genuinely symmetric complex (rings, homo-oligomers) survived
+  // refinement.  Branch on a target cell, individualize each member,
+  // re-refine, and recurse; the canonical label is the lexicographically
+  // minimal leaf render.  This is a true canonical form — see search()
+  // and pick_cell() for why the leaf set is isomorphism-invariant.
+  SearchState st{&g, &adj, &comp_vertex, n_mol, kLeafBudget, false, std::string{}};
+  search(st, color);
+  return {st.best, /*fast_path=*/false};
 }
 
 std::string canonical_label(const ComplexGraph& g) { return canonicalize(g).label; }

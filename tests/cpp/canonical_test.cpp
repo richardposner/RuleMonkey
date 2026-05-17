@@ -1,27 +1,30 @@
 // Direct unit tests for RuleMonkey's canonical complex labeler
-// (cpp/rulemonkey/canonical.{hpp,cpp}; plan §6 steps 1-2).
+// (cpp/rulemonkey/canonical.{hpp,cpp}; plan §6 steps 1-3).
 //
 // Two layers, per the plan's testing note (§6):
 //
 //   1. Hand-built ComplexGraph cases — pin specific shapes (single
-//      molecule, asymmetric dimer, homo-dimer, within-molecule
-//      symmetric components, chains, self-bond rings) to exact
-//      canonical strings and to the input-order invariance the labeler
-//      must hold.
+//      molecule, asymmetric dimer, chains, self-bond ring, and the
+//      genuinely symmetric shapes that exercise individualization-
+//      refinement: rings, homo-dimers/trimers, the ss_tlbr_rings and
+//      ss_symmetric_homopoly feature-coverage topologies) to exact
+//      canonical strings and to build-order invariance.
 //
 //   2. A property-based test — the test that actually catches
 //      canonicalization bugs.  It (a) generates a random connected
 //      complex, applies a random graph isomorphism (permute molecules +
 //      permute interchangeable same-name components), and asserts the
 //      canonical label is unchanged; and (b) makes a targeted
-//      structural change and asserts the label differs.
+//      structural change and asserts the label differs.  The generator
+//      is biased toward symmetric complexes (rings, homo-oligomers) so
+//      the individualization-refinement search path is heavily
+//      exercised.
 //
-// Individualization-refinement (plan §3.2 step 3) is not yet
-// implemented, so a genuinely symmetric complex reports
-// `fully_refined == false`.  The property test asserts hard invariance
-// only on fully-refined complexes and reports the residual count — when
-// step 3 lands, every generated complex becomes fully refined and the
-// reporting branch disappears.
+// As of plan §3.2 step 3 the labeler is complete: individualization-
+// refinement resolves genuine symmetry, so EVERY complex — symmetric or
+// not — has a true canonical form.  The property test therefore asserts
+// isomorphism invariance as a HARD invariant on every generated input
+// (no fully-refined gate), and counts how many inputs needed the search.
 
 #include "canonical.hpp"
 
@@ -63,7 +66,7 @@ using C = std::pair<std::string, std::string>;
 std::vector<C> comps(std::initializer_list<C> cs) { return {cs.begin(), cs.end()}; }
 
 // ===========================================================================
-// 1. Hand-built unit tests
+// 1. Hand-built unit tests — asymmetric shapes (fast path)
 // ===========================================================================
 
 void test_single_molecule() {
@@ -72,7 +75,7 @@ void test_single_molecule() {
   ComplexGraph g;
   g.add_molecule("A", comps({{"a", ""}, {"b", "x"}}));
   check_eq(canonical_label(g), "A(a,b~x)", "single molecule A(a,b~x)");
-  check(canonicalize(g).fully_refined, "single molecule is fully refined");
+  check(canonicalize(g).fast_path, "single molecule takes the fast path");
 }
 
 void test_asymmetric_dimer_order_invariant() {
@@ -90,18 +93,7 @@ void test_asymmetric_dimer_order_invariant() {
 
   check_eq(canonical_label(g1), "A(a!1).B(b!1)", "asymmetric dimer canonical string");
   check_eq(canonical_label(g1), canonical_label(g2), "asymmetric dimer invariant to build order");
-  check(canonicalize(g1).fully_refined, "asymmetric dimer is fully refined");
-}
-
-void test_homodimer_symmetric() {
-  // A(a!1).A(a!1): two molecules of one type, fully symmetric.  The
-  // label is the same string regardless of build order even though the
-  // complex is symmetric (so not fully_refined yet).
-  ComplexGraph g;
-  g.add_molecule("A", comps({{"a", ""}}));
-  g.add_molecule("A", comps({{"a", ""}}));
-  g.add_bond(0, 0, 1, 0);
-  check_eq(canonical_label(g), "A(a!1).A(a!1)", "homodimer canonical string");
+  check(canonicalize(g1).fast_path, "asymmetric dimer takes the fast path");
 }
 
 void test_within_molecule_symmetric_components() {
@@ -118,8 +110,7 @@ void test_within_molecule_symmetric_components() {
   g2.add_bond(0, 1, 1, 0); // bond on A's slot 1
 
   check_eq(canonical_label(g1), canonical_label(g2), "interchangeable component slot invariance");
-  check(canonicalize(g1).fully_refined,
-        "A(a,a!1).B(b!1) is fully refined (WL distinguishes the two `a`s)");
+  check(canonicalize(g1).fast_path, "A(a,a!1).B(b!1) takes the fast path (only one `a` is bonded)");
 }
 
 void test_chain_order_invariant() {
@@ -141,15 +132,17 @@ void test_chain_order_invariant() {
   g2.add_bond(0, 1, 2, 0);
 
   check_eq(canonical_label(g1), canonical_label(g2), "3-chain build-order invariance");
-  check(canonicalize(g1).fully_refined, "asymmetric 3-chain is fully refined");
+  check(canonicalize(g1).fast_path, "asymmetric 3-chain takes the fast path");
 }
 
 void test_self_bond_ring() {
-  // A single molecule whose two components are bonded to each other.
+  // A single molecule whose two distinctly-named components are bonded
+  // to each other — asymmetric, fast path.
   ComplexGraph g;
   g.add_molecule("A", comps({{"l", ""}, {"r", ""}}));
   g.add_bond(0, 0, 0, 1);
   check_eq(canonical_label(g), "A(l!1,r!1)", "self-bonded molecule");
+  check(canonicalize(g).fast_path, "self-bonded molecule takes the fast path");
 }
 
 void test_non_isomorphic_differ() {
@@ -169,14 +162,158 @@ void test_non_isomorphic_differ() {
 }
 
 // ===========================================================================
+// 1b. Hand-built unit tests — symmetric shapes (individualization search)
+// ===========================================================================
+
+void test_homodimer_symmetric() {
+  // A(a!1).A(a!1): two molecules of one type, fully symmetric.  1-WL
+  // cannot break the molecule-vertex tie — individualization must.
+  ComplexGraph g;
+  g.add_molecule("A", comps({{"a", ""}}));
+  g.add_molecule("A", comps({{"a", ""}}));
+  g.add_bond(0, 0, 1, 0);
+  check_eq(canonical_label(g), "A(a!1).A(a!1)", "homodimer canonical string");
+  check(!canonicalize(g).fast_path, "homodimer needs the individualization search");
+}
+
+// Build a homo-ring of `n` copies of A(l,r): A[k].r bonds A[k+1].l, the
+// last wraps to A[0].  `start` rotates the build so isomorphism
+// invariance can be checked; `reverse` flips bond direction.
+ComplexGraph make_lr_ring(int n, int start, bool reverse) {
+  ComplexGraph g;
+  for (int k = 0; k < n; ++k)
+    g.add_molecule("A", comps({{"l", ""}, {"r", ""}}));
+  for (int k = 0; k < n; ++k) {
+    int const a = (start + k) % n;
+    int const b = (start + k + 1) % n;
+    if (reverse)
+      g.add_bond(b, 0, a, 1); // b.l -- a.r
+    else
+      g.add_bond(a, 1, b, 0); // a.r -- b.l
+  }
+  return g;
+}
+
+void test_lr_ring_3() {
+  // 3-membered ring of A(l,r) — a regular graph 1-WL cannot resolve.
+  std::string const canon = canonical_label(make_lr_ring(3, 0, false));
+  check_eq(canon, "A(l!1,r!2).A(l!2,r!3).A(l!3,r!1)", "3-ring canonical string");
+  check(!canonicalize(make_lr_ring(3, 0, false)).fast_path, "3-ring needs the search");
+  // Isomorphism invariance: every rotation and the reflection of the
+  // ring must canonicalize to the same string.
+  for (int s = 0; s < 3; ++s) {
+    check_eq(canonical_label(make_lr_ring(3, s, false)), canon, "3-ring rotation invariance");
+    check_eq(canonical_label(make_lr_ring(3, s, true)), canon, "3-ring reflection invariance");
+  }
+}
+
+void test_lr_ring_4() {
+  // 4-membered ring of A(l,r).  Molecules are emitted in refined-color
+  // order (not ring-walk order), so the bond labels are not sequential.
+  std::string const canon = canonical_label(make_lr_ring(4, 0, false));
+  check_eq(canon, "A(l!1,r!2).A(l!3,r!1).A(l!2,r!4).A(l!4,r!3)", "4-ring canonical string");
+  check(!canonicalize(make_lr_ring(4, 0, false)).fast_path, "4-ring needs the search");
+  for (int s = 0; s < 4; ++s) {
+    check_eq(canonical_label(make_lr_ring(4, s, false)), canon, "4-ring rotation invariance");
+    check_eq(canonical_label(make_lr_ring(4, s, true)), canon, "4-ring reflection invariance");
+  }
+}
+
+// ss_symmetric_homopoly shape: P(s,s) — one molecule type, two
+// interchangeable `s` sites.  Build a chain of `n` copies, P[k].s bonds
+// P[k+1].s; `ring` wraps the last back to P[0].  `start`/`reverse`
+// rotate the build for invariance checks.
+ComplexGraph make_homopoly(int n, bool ring, int start, bool reverse) {
+  ComplexGraph g;
+  for (int k = 0; k < n; ++k)
+    g.add_molecule("P", comps({{"s", ""}, {"s", ""}}));
+  int const links = ring ? n : n - 1;
+  for (int e = 0; e < links; ++e) {
+    int const a = (start + e) % n;
+    int const b = (start + e + 1) % n;
+    // s-slot 1 of `a` bonds s-slot 0 of `b` (slot choice is itself a
+    // symmetry the canonicalizer must absorb).
+    if (reverse)
+      g.add_bond(b, 0, a, 1);
+    else
+      g.add_bond(a, 1, b, 0);
+  }
+  return g;
+}
+
+void test_homopoly_trimer_chain() {
+  // ss_symmetric_homopoly: a linear homo-trimer P(s,s) — reflection-
+  // symmetric (the two ends are interchangeable).  The doubly-bonded
+  // center sorts first (no free site -> smaller molecule color).
+  std::string const canon = canonical_label(make_homopoly(3, false, 0, false));
+  check_eq(canon, "P(s!1,s!2).P(s,s!1).P(s,s!2)", "homopoly trimer chain canonical string");
+  check(!canonicalize(make_homopoly(3, false, 0, false)).fast_path,
+        "homopoly trimer chain needs the search");
+  check_eq(canonical_label(make_homopoly(3, false, 0, true)), canon,
+           "homopoly trimer chain reflection invariance");
+}
+
+void test_homopoly_ring_3() {
+  // A 3-membered homo-ring of P(s,s) — every molecule and every site
+  // interchangeable; the hardest small symmetric case.
+  std::string const canon = canonical_label(make_homopoly(3, true, 0, false));
+  check_eq(canon, "P(s!1,s!2).P(s!3,s!1).P(s!2,s!3)", "homopoly 3-ring canonical string");
+  check(!canonicalize(make_homopoly(3, true, 0, false)).fast_path,
+        "homopoly 3-ring needs the search");
+  for (int s = 0; s < 3; ++s) {
+    check_eq(canonical_label(make_homopoly(3, true, s, false)), canon,
+             "homopoly 3-ring rotation invariance");
+    check_eq(canonical_label(make_homopoly(3, true, s, true)), canon,
+             "homopoly 3-ring reflection invariance");
+  }
+}
+
+// ss_tlbr_rings shape: trivalent L(r,r,r) cross-linked with bivalent
+// R(l,l).  The smallest ring alternates 2 L and 2 R; each L keeps one
+// free `r`.  Modeled as a 4-cycle of ring positions 0..3 (even = L,
+// odd = R); molecule index k is ring position (k+rot)%4, so `rot`
+// rotates the build order — every rotation is the same ring.
+ComplexGraph make_tlbr_ring(int rot) {
+  ComplexGraph g;
+  auto mol_of = [&](int p) { return (p - rot + 4) % 4; };
+  for (int k = 0; k < 4; ++k) {
+    int const p = (k + rot) % 4;
+    if (p % 2 == 0)
+      g.add_molecule("L", comps({{"r", ""}, {"r", ""}, {"r", ""}}));
+    else
+      g.add_molecule("R", comps({{"l", ""}, {"l", ""}}));
+  }
+  // Ring edge e joins ring positions e and e+1.  An L at position p
+  // owns edges p-1 (its site 0) and p (its site 1); likewise for R.
+  for (int e = 0; e < 4; ++e) {
+    int const pa = e, pb = (e + 1) % 4;
+    int const p_l = (pa % 2 == 0) ? pa : pb;
+    int const p_r = (pa % 2 == 0) ? pb : pa;
+    int const l_site = (e == p_l) ? 1 : 0;
+    int const r_site = (e == p_r) ? 1 : 0;
+    g.add_bond(mol_of(p_l), l_site, mol_of(p_r), r_site);
+  }
+  return g;
+}
+
+void test_tlbr_ring() {
+  // 2L + 2R alternating ring — the ss_tlbr_rings minimal closure.
+  std::string const canon = canonical_label(make_tlbr_ring(0));
+  check_eq(canon, "L(r,r!1,r!2).R(l!1,l!3).R(l!4,l!2).L(r,r!3,r!4)", "tlbr ring canonical string");
+  check(!canonicalize(make_tlbr_ring(0)).fast_path, "tlbr ring needs the search");
+  // Rotating the build order is an isomorphism — same ring.
+  for (int r = 0; r < 4; ++r)
+    check_eq(canonical_label(make_tlbr_ring(r)), canon, "tlbr ring build-rotation invariance");
+}
+
+// ===========================================================================
 // 2. Property-based test
 // ===========================================================================
 
-// Molecule-type alphabet for the random generator.  Each entry is the
-// ordered list of component names of that type; `A`/`B` have
-// interchangeable components, `C` has distinct ones, `D` is monovalent.
-// Held behind an accessor (function-local static) rather than a
-// namespace-scope object so its allocating constructor never runs
+// Molecule-type alphabet for the random generator.  `A`/`B` have
+// interchangeable components (the symmetry-prone types), `C` has
+// distinct ones, `D` is monovalent.  Held behind an accessor
+// (function-local static) so its allocating constructor never runs
 // before main.
 using TypeAlphabet = std::vector<std::pair<std::string, std::vector<std::string>>>;
 const TypeAlphabet& types() {
@@ -187,6 +324,15 @@ const TypeAlphabet& types() {
       {"D", {"s"}},
   };
   return t;
+}
+
+// Weighted type-index pool: heavily favors the interchangeable-component
+// types A and B so generated complexes are often genuinely symmetric
+// (rings, homo-oligomers) and the individualization search is the path
+// being exercised, not the fast path.
+const std::vector<int>& type_pool() {
+  static const std::vector<int> pool = {0, 0, 0, 0, 1, 1, 1, 2, 3}; // A x4, B x3, C, D
+  return pool;
 }
 
 // A generated complex, kept in a form the isomorphism applicator can
@@ -215,15 +361,22 @@ ComplexGraph build(const GenComplex& gc) {
 
 // Generate a random connected complex.  Returns false (caller retries)
 // if a random spanning tree could not be completed for want of a free
-// component.
+// component.  Biased toward symmetric complexes: every so often all
+// molecules share one type (homo-oligomers), and several extra bonds
+// are added to close rings.
 bool generate(std::mt19937& rng, GenComplex& out) {
   out = GenComplex{};
-  std::uniform_int_distribution<int> n_mol_d(1, 6);
+  std::uniform_int_distribution<int> n_mol_d(1, 7);
   int const n_mol = n_mol_d(rng);
 
-  std::uniform_int_distribution<int> type_d(0, static_cast<int>(types().size()) - 1);
+  std::uniform_int_distribution<int> pool_d(0, static_cast<int>(type_pool().size()) - 1);
+  // One run in three is a pure homo-oligomer: all molecules one type.
+  std::uniform_int_distribution<int> mono_d(0, 2);
+  bool const mono = mono_d(rng) == 0;
+  int const mono_type = type_pool()[pool_d(rng)];
+
   for (int m = 0; m < n_mol; ++m) {
-    int const t = type_d(rng);
+    int const t = mono ? mono_type : type_pool()[pool_d(rng)];
     out.type_idx.push_back(t);
     std::vector<std::string> st;
     std::uniform_int_distribution<int> state_d(0, 2); // 0 = stateless
@@ -261,8 +414,9 @@ bool generate(std::mt19937& rng, GenComplex& out) {
     out.bonds.push_back({k, take_free(k), j, take_free(j)});
   }
 
-  // A few extra bonds add cycles (and self-bonds).
-  std::uniform_int_distribution<int> extra_d(0, 2);
+  // Several extra bonds add cycles (and self-bonds) — biases the sample
+  // toward ring-bearing, symmetric complexes.
+  std::uniform_int_distribution<int> extra_d(0, 5);
   int const extra = extra_d(rng);
   for (int e = 0; e < extra; ++e) {
     std::vector<int> have;
@@ -354,7 +508,7 @@ void test_property_based() {
   // re-runnable. NOLINTNEXTLINE(bugprone-random-generator-seed)
   std::mt19937 rng(0xC0FFEEU);
   int const kRuns = 4000;
-  int generated = 0, fully = 0, residual_match = 0, residual_total = 0;
+  int generated = 0, fast = 0, searched = 0;
 
   for (int run = 0; run < kRuns; ++run) {
     GenComplex gc;
@@ -364,29 +518,25 @@ void test_property_based() {
 
     ComplexGraph g = build(gc);
     auto cf = canonicalize(g);
+    if (cf.fast_path)
+      ++fast;
+    else
+      ++searched;
 
     // Determinism: the same input must always produce the same label.
     check_eq(canonical_label(g), cf.label, "canonicalize is deterministic");
 
-    // (a) Isomorphism invariance.
+    // (a) Isomorphism invariance — a HARD invariant on every input now
+    // that individualization-refinement resolves all symmetry (step 3).
     const GenComplex perm = permute(rng, gc);
     ComplexGraph gp = build(perm);
     auto cfp = canonicalize(gp);
-    if (cf.fully_refined) {
-      ++fully;
-      check_eq(cfp.label, cf.label, "fully-refined canonical label is isomorphism-invariant");
-      check(cfp.fully_refined, "fully_refined verdict is itself isomorphism-invariant");
-    } else {
-      // Symmetric residue — invariance is not yet guaranteed (step 3).
-      ++residual_total;
-      if (cfp.label == cf.label)
-        ++residual_match;
-    }
+    check_eq(cfp.label, cf.label, "canonical label is isomorphism-invariant");
+    check(cfp.fast_path == cf.fast_path, "fast_path verdict is itself isomorphism-invariant");
 
     // (b) A targeted structural change must change the label: flip the
     // state of one component.
     GenComplex tweaked = gc;
-    // find any component and flip its state
     {
       int const m = run % static_cast<int>(tweaked.states.size());
       int const c = 0;
@@ -398,11 +548,12 @@ void test_property_based() {
   }
 
   std::fprintf(stderr,
-               "property test: %d complexes generated, %d fully refined, "
-               "%d symmetric residue (%d/%d permutation-stable anyway)\n",
-               generated, fully, residual_total, residual_match, residual_total);
+               "property test: %d complexes generated, %d fast path, "
+               "%d needed individualization search\n",
+               generated, fast, searched);
   check(generated > 1000, "generator produced a healthy sample");
-  check(fully > 500, "a substantial fraction of complexes hit the fast path");
+  check(fast > 200, "a substantial fraction of complexes hit the fast path");
+  check(searched > 200, "the symmetric bias exercises the individualization search");
 }
 
 } // namespace
@@ -411,11 +562,16 @@ int main() {
   try {
     test_single_molecule();
     test_asymmetric_dimer_order_invariant();
-    test_homodimer_symmetric();
     test_within_molecule_symmetric_components();
     test_chain_order_invariant();
     test_self_bond_ring();
     test_non_isomorphic_differ();
+    test_homodimer_symmetric();
+    test_lr_ring_3();
+    test_lr_ring_4();
+    test_homopoly_trimer_chain();
+    test_homopoly_ring_3();
+    test_tlbr_ring();
     test_property_based();
   } catch (const std::exception& e) {
     std::fprintf(stderr, "EXCEPTION: %s\n", e.what());

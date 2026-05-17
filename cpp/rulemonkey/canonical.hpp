@@ -18,13 +18,13 @@
 // engine->graph bridge lives with the engine.  See the plan handoff /
 // the step-0 report.
 //
-// SCOPE as of this module's first landing (plan §6 steps 1-2):
-// `canonical_label` implements 1-WL color refinement + the
-// all-distinct-colors fast path.  Individualization-refinement for
-// genuinely symmetric complexes (rings, homo-oligomers — plan §3.2
-// step 3) is NOT yet implemented; for such inputs the returned label
-// is deterministic per input but not guaranteed isomorphism-invariant.
-// `canonicalize().fully_refined` reports which path was taken.
+// SCOPE as of plan §6 step 3: `canonical_label` is a complete
+// canonicalizer — 1-WL color refinement, the all-distinct-colors fast
+// path, and individualization-refinement search for genuinely
+// symmetric complexes (rings, homo-oligomers).  The returned label is
+// a *true* canonical form on every input: isomorphic complexes always
+// produce byte-equal labels.  `canonicalize().fast_path` reports only
+// which path was taken (informational), not a correctness boundary.
 
 #include <string>
 #include <utility>
@@ -85,20 +85,22 @@ struct ComplexGraph {
 
 // Result of canonicalizing one complex.
 struct CanonForm {
-  std::string label;  // canonical BNGL species string (also the dedup key)
-  bool fully_refined; // true  -> 1-WL fully discriminated every molecule;
-                      //          `label` is a true canonical form.
-                      // false -> a symmetric color class survived
-                      //          refinement; `label` used an incomplete
-                      //          tie-break and is NOT guaranteed
-                      //          isomorphism-invariant until plan §3.2
-                      //          step 3 (individualization) lands.
+  std::string label; // canonical BNGL species string (also the dedup key).
+                     // ALWAYS a true canonical form: isomorphic complexes
+                     // yield byte-equal labels.
+  bool fast_path;    // INFORMATIONAL — which algorithm path produced
+                     // `label`, not a correctness boundary.
+                     // true  -> 1-WL refinement alone discriminated the
+                     //          complex; no search ran (the common case).
+                     // false -> the complex had genuine symmetry (a ring
+                     //          or homo-oligomer) and `label` was found
+                     //          by individualization-refinement search.
 };
 
-// Canonicalize a complex: 1-WL color refinement, then render the
-// canonical BNGL string by walking molecules in refined-color order.
-// Pure function of the graph — see `CanonForm::fully_refined` for the
-// current correctness boundary.
+// Canonicalize a complex: 1-WL color refinement, the all-distinct fast
+// path, and individualization-refinement search for symmetric residue
+// (plan §3.2).  Pure function of the graph; `label` is a true canonical
+// form on every input.  `fast_path` reports which path was taken.
 CanonForm canonicalize(const ComplexGraph& g);
 
 // Convenience wrapper: the canonical BNGL string only.  This is the
