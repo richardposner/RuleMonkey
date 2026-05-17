@@ -45,6 +45,16 @@
 //   therefore emit each molecule's components in molecule-type
 //   declaration order — which it does, since the engine stores
 //   MoleculeInstance::comp_ids that way.
+//
+//   Performance (plan §5, step 7): the per-search-node hot path —
+//   refine / is_leaf / render, each run once per individualization
+//   leaf — is allocation-light.  Component names and states are
+//   interned to dense ints once per complex (Tables); refinement uses
+//   a CSR adjacency and reuses its signature scratch across calls
+//   (Refiner); is_leaf / render group components with reusable buffers
+//   instead of rebuilding std::map<std::string,…> per call.  The
+//   algorithm and the emitted label are unchanged — this is purely the
+//   §5 "speed by design" cleanup, profiled and applied in step 7.
 
 #include "canonical.hpp"
 
@@ -90,9 +100,9 @@ namespace {
 // step 3, and the step-3 brief's "recursion/leaf guard").  BNGL
 // complexes are small and richly labeled, so the search tree is tiny
 // and shallow in practice; this cap exists only so a pathological
-// hand-built input cannot blow up.  It is NOT a tuning knob — plan §5
-// defers all profiling/tuning to step 7.  If the cap is ever hit the
-// best leaf found so far is returned (still deterministic per input).
+// hand-built input cannot blow up.  It is NOT a tuning knob.  If the
+// cap is ever hit the best leaf found so far is returned (still
+// deterministic per input).
 constexpr long kLeafBudget = 200000;
 
 // A bonded component contributes a vertex whose initial color is this
@@ -125,68 +135,170 @@ std::string molecule_color(const ComplexGraph& g, const ComplexGraph::Molecule& 
   return s;
 }
 
+// Interned per-complex name / state tables (plan §5 "colors as interned
+// integers, not strings").  The hot path — is_leaf and render, run once
+// per individualization leaf — groups and orders components by name and
+// state.  Interning both to dense ints once per complex lets that path
+// use int comparisons and allocation-light scratch instead of rebuilding
+// std::map<std::string,…> on every call.
+//
+// State ids are assigned in sorted string order, so `state_id` ordering
+// equals state-string ordering — comp_key depends on this (it orders a
+// molecule's free same-name components by state).
+struct Tables {
+  std::vector<int> comp_name_id; // component global index -> dense name id
+  std::vector<int> state_id;     // component global index -> dense state id
+};
+
+Tables build_tables(const ComplexGraph& g) {
+  int const n = g.component_count();
+  Tables t;
+  t.comp_name_id.assign(n, 0);
+  t.state_id.assign(n, 0);
+  std::map<std::string, int> names;  // sorted -> ids follow string order
+  std::map<std::string, int> states; // sorted -> ids follow string order
+  for (int gc = 0; gc < n; ++gc) {
+    names.emplace(g.components[gc].name, 0);
+    states.emplace(g.components[gc].state, 0);
+  }
+  {
+    int next = 0;
+    for (auto& [str, id] : names)
+      id = next++;
+  }
+  {
+    int next = 0;
+    for (auto& [str, id] : states)
+      id = next++;
+  }
+  for (int gc = 0; gc < n; ++gc) {
+    t.comp_name_id[gc] = names[g.components[gc].name];
+    t.state_id[gc] = states[g.components[gc].state];
+  }
+  return t;
+}
+
 // Within-molecule canonical ordering key for one component.  Components
 // that share a name are interchangeable BNGL sites; the renderer orders
 // each such group by this key.  Free components (which have no graph
-// vertex) sort ahead of bonded ones and break ties by state; bonded
-// components sort by their refined WL color.  `bonded_color` is the
-// refined color of the component's vertex, or -1 for a free component.
-using CompKey = std::tuple<int, int, std::string>; // (bonded?, color, state)
-CompKey comp_key(const ComplexGraph::Component& c, int bonded_color) {
+// vertex) sort ahead of bonded ones and break ties by state id; bonded
+// components break ties by their refined color.
+using CompKey = std::tuple<int, int, int>; // (bonded?, bonded_color, state_id)
+CompKey comp_key(int bonded_color, int state_id) {
   if (bonded_color < 0)
-    return {0, 0, c.state};
-  return {1, bonded_color, std::string{}};
+    return {0, 0, state_id};
+  return {1, bonded_color, 0};
 }
 
-// 1-WL color refinement, in place.  Each round recolors a vertex by
-// (own color, sorted neighbor colors); signatures are sorted and
-// ranked, so the output colors are a canonical 0..k-1 ranking derived
-// purely from structure.  The own-color term means refinement only
-// ever splits classes — it has converged once the class count stops
-// rising.  Accepts any integer colors on input (individualization
-// passes a vertex an out-of-range marker color; the first round
-// re-ranks everything), so it doubles as the post-individualization
-// re-refine step.
-void refine(const std::vector<std::vector<int>>& adj, std::vector<int>& color) {
-  int const n_vert = static_cast<int>(color.size());
-  if (n_vert == 0)
-    return;
-  std::vector<int> next_color(n_vert);
-  int n_classes = 0;
-  bool first = true;
-  while (true) {
-    std::vector<std::pair<std::vector<int>, int>> sigs; // (signature, vertex)
-    sigs.reserve(n_vert);
-    for (int v = 0; v < n_vert; ++v) {
-      std::vector<int> sig;
-      sig.reserve(adj[v].size() + 1);
-      sig.push_back(color[v]);
-      std::vector<int> nbr;
-      nbr.reserve(adj[v].size());
-      for (int const u : adj[v])
-        nbr.push_back(color[u]);
-      std::sort(nbr.begin(), nbr.end());
-      sig.insert(sig.end(), nbr.begin(), nbr.end());
-      sigs.emplace_back(std::move(sig), v);
-    }
-    std::sort(sigs.begin(), sigs.end());
+// 1-WL color refinement with reusable, allocation-light scratch.
+//
+// The algorithm is the textbook one: each round recolors a vertex by
+// (own color, sorted neighbor colors); signatures are ranked, so the
+// output colors are a canonical 0..k-1 ranking derived purely from
+// structure.  The own-color term means refinement only ever splits
+// classes — it has converged once the class count stops rising.
+// Accepts any integer colors on input (individualization passes a
+// vertex an out-of-range marker color; the first round re-ranks
+// everything), so it doubles as the post-individualization re-refine
+// step.
+//
+// The Refiner wrapper exists for speed only (plan §5, step 7): the
+// adjacency is held CSR (flat arrays), and the per-round signature
+// scratch — sorted neighbor colors and the vertex ordering — lives in
+// buffers reused across every refine() call.  Individualization-
+// refinement calls refine() once per search node; on a large symmetric
+// complex that is the dominant allocation cost, and reuse removes it.
+struct Refiner {
+  std::vector<int> adj_off;  // CSR offsets, size n_vert + 1
+  std::vector<int> adj_flat; // CSR neighbor lists, size = total degree
+  std::vector<int> next_color;
+  std::vector<int> order; // vertex permutation scratch
+  std::vector<int> nbr;   // per-vertex sorted neighbor colors, CSR-laid
 
-    int rank = -1;
-    const std::vector<int>* prev = nullptr;
-    for (const auto& [sig, v] : sigs) {
-      if (prev == nullptr || *prev != sig)
-        ++rank;
-      next_color[v] = rank;
-      prev = &sig;
-    }
-    int const new_classes = rank + 1;
-    color.swap(next_color);
-    if (!first && new_classes == n_classes)
-      break; // partition stable
-    first = false;
-    n_classes = new_classes;
+  explicit Refiner(const std::vector<std::vector<int>>& adj) {
+    int const n = static_cast<int>(adj.size());
+    adj_off.assign(n + 1, 0);
+    for (int v = 0; v < n; ++v)
+      adj_off[v + 1] = adj_off[v] + static_cast<int>(adj[v].size());
+    adj_flat.resize(adj_off[n]);
+    for (int v = 0; v < n; ++v)
+      std::copy(adj[v].begin(), adj[v].end(), adj_flat.begin() + adj_off[v]);
+    next_color.resize(n);
+    order.resize(n);
+    nbr.resize(adj_off[n]);
   }
-}
+
+  // Lexicographic compare of vertices a and b by this round's signature
+  // — (own color, sorted neighbor-color slice).  `nbr` must already hold
+  // the sorted neighbor colors for this round.
+  bool sig_less(const std::vector<int>& color, int a, int b) const {
+    if (color[a] != color[b])
+      return color[a] < color[b];
+    int const la = adj_off[a + 1] - adj_off[a];
+    int const lb = adj_off[b + 1] - adj_off[b];
+    int const l = std::min(la, lb);
+    for (int k = 0; k < l; ++k)
+      if (nbr[adj_off[a] + k] != nbr[adj_off[b] + k])
+        return nbr[adj_off[a] + k] < nbr[adj_off[b] + k];
+    return la < lb;
+  }
+
+  // True iff a and b carry an identical signature this round.
+  bool same_sig(const std::vector<int>& color, int a, int b) const {
+    if (color[a] != color[b])
+      return false;
+    int const la = adj_off[a + 1] - adj_off[a];
+    int const lb = adj_off[b + 1] - adj_off[b];
+    if (la != lb)
+      return false;
+    for (int k = 0; k < la; ++k)
+      if (nbr[adj_off[a] + k] != nbr[adj_off[b] + k])
+        return false;
+    return true;
+  }
+
+  void refine(std::vector<int>& color) {
+    int const n = static_cast<int>(color.size());
+    if (n == 0)
+      return;
+    int n_classes = 0;
+    bool first = true;
+    while (true) {
+      for (int v = 0; v < n; ++v) {
+        int const b = adj_off[v];
+        int const e = adj_off[v + 1];
+        for (int k = b; k < e; ++k)
+          nbr[k] = color[adj_flat[k]];
+        std::sort(nbr.begin() + b, nbr.begin() + e);
+      }
+      for (int v = 0; v < n; ++v)
+        order[v] = v;
+      std::sort(order.begin(), order.end(), [&](int a, int b) { return sig_less(color, a, b); });
+      int rank = -1;
+      for (int i = 0; i < n; ++i) {
+        if (i == 0 || !same_sig(color, order[i - 1], order[i]))
+          ++rank;
+        next_color[order[i]] = rank;
+      }
+      int const new_classes = rank + 1;
+      color.swap(next_color);
+      if (!first && new_classes == n_classes)
+        break; // partition stable
+      first = false;
+      n_classes = new_classes;
+    }
+  }
+};
+
+// Reusable per-canonicalization scratch for the leaf-test and renderer,
+// so a search that visits many leaves allocates these buffers once, not
+// once per leaf.
+struct Scratch {
+  std::vector<int> mol_colors;            // is_leaf: molecule-color copy
+  std::vector<std::pair<int, int>> pairs; // is_leaf: (name_id, color) per molecule
+  std::vector<int> order;                 // render_leaf: molecule ordering
+  std::vector<int> comp_label;            // render: bond-label assignment
+};
 
 // Refined color of each bonded component's vertex (-1 if free) — the
 // renderer's within-molecule ordering key.
@@ -209,82 +321,96 @@ std::vector<int> bonded_colors(const ComplexGraph& g, const std::vector<int>& co
 // condition.  (Component vertices on *different* molecules, or of
 // different names, may still share a color — that never affects the
 // render, so it does not block a leaf.)
-bool is_leaf(const ComplexGraph& g, const std::vector<int>& color,
-             const std::vector<int>& comp_vertex, int n_mol) {
-  std::vector<int> mc(color.begin(), color.begin() + n_mol);
-  std::sort(mc.begin(), mc.end());
+bool is_leaf(const ComplexGraph& g, const Tables& tab, const std::vector<int>& color,
+             const std::vector<int>& comp_vertex, int n_mol, Scratch& s) {
+  s.mol_colors.assign(color.begin(), color.begin() + n_mol);
+  std::sort(s.mol_colors.begin(), s.mol_colors.end());
   for (int i = 1; i < n_mol; ++i)
-    if (mc[i] == mc[i - 1])
+    if (s.mol_colors[i] == s.mol_colors[i - 1])
       return false;
   for (int m = 0; m < n_mol; ++m) {
     const auto& mol = g.molecules[m];
-    std::map<std::string, std::vector<int>> seen; // name -> bonded-vertex colors
+    s.pairs.clear();
     for (int i = 0; i < mol.n_comp; ++i) {
       int const gc = mol.first_comp + i;
       if (comp_vertex[gc] < 0)
         continue; // free component — no vertex, physically interchangeable
-      int const c = color[comp_vertex[gc]];
-      auto& bucket = seen[g.components[gc].name];
-      for (int const pc : bucket)
-        if (pc == c)
-          return false;
-      bucket.push_back(c);
+      s.pairs.emplace_back(tab.comp_name_id[gc], color[comp_vertex[gc]]);
     }
+    std::sort(s.pairs.begin(), s.pairs.end());
+    for (size_t i = 1; i < s.pairs.size(); ++i)
+      if (s.pairs[i] == s.pairs[i - 1])
+        return false; // two same-name bonded components, same color
   }
   return true;
 }
 
 // Render the canonical BNGL string.  `order` is the canonical molecule
 // ordering; `bonded_color[gc]` is the refined color of bonded component
-// `gc`'s vertex (-1 if `gc` is free).  Within each molecule the
-// type's name layout is preserved and same-name components are placed
-// in `comp_key` order; bond labels are assigned 1,2,3,... in
-// first-encounter order along the resulting walk.
-std::string render(const ComplexGraph& g, const std::vector<int>& order,
-                   const std::vector<int>& bonded_color) {
-  std::vector<int> comp_label(g.components.size(), 0); // 0 = unassigned
+// `gc`'s vertex (-1 if `gc` is free).  Within each molecule the type's
+// name layout is preserved and same-name components are placed in
+// `comp_key` order; bond labels are assigned 1,2,3,... in first-
+// encounter order along the resulting walk.
+std::string render(const ComplexGraph& g, const Tables& tab, const std::vector<int>& order,
+                   const std::vector<int>& bonded_color, Scratch& s) {
+  s.comp_label.assign(g.components.size(), 0); // 0 = unassigned
   int next_label = 1;
   std::string out;
+  out.reserve(48 * order.size());
 
   for (size_t oi = 0; oi < order.size(); ++oi) {
     if (oi)
       out += '.';
     const auto& m = g.molecules[order[oi]];
-
-    // Group this molecule's component slots by name, then order each
-    // group canonically.  `groups[name]` is the global component
-    // indices of that name, sorted by comp_key.
-    std::map<std::string, std::vector<int>> groups;
-    for (int i = 0; i < m.n_comp; ++i)
-      groups[g.components[m.first_comp + i].name].push_back(m.first_comp + i);
-    for (auto& [name, gcs] : groups) {
-      std::sort(gcs.begin(), gcs.end(), [&](int a, int b) {
-        return comp_key(g.components[a], bonded_color[a]) <
-               comp_key(g.components[b], bonded_color[b]);
-      });
-    }
-    std::map<std::string, int> cursor;
-
     out += m.type_name;
     out += '(';
     for (int i = 0; i < m.n_comp; ++i) {
       if (i)
         out += ',';
-      // Slot i keeps its declared name; the canonical component placed
-      // there is the next one from that name's ordered group.
-      const std::string& name = g.components[m.first_comp + i].name;
-      int const gc = groups[name][cursor[name]++];
-      const auto& c = g.components[gc];
+      // Slot i keeps its declared name.  The canonical component placed
+      // here is, among this molecule's components of that name, the
+      // r-th smallest by comp_key — where r is slot i's rank among
+      // same-name slots in declared order.  At a leaf no two same-name
+      // components of one molecule share a comp_key, so the r-th is
+      // unambiguous.  Resolved by an O(n_comp^3) scan with no
+      // allocation; n_comp is tiny (this replaces a per-molecule
+      // std::map<std::string,…> grouping).
+      int const slot_gc = m.first_comp + i;
+      int const name = tab.comp_name_id[slot_gc];
+      int r = 0;
+      for (int j = 0; j < i; ++j)
+        if (tab.comp_name_id[m.first_comp + j] == name)
+          ++r;
+      int chosen = slot_gc;
+      for (int k = 0; k < m.n_comp; ++k) {
+        int const gk = m.first_comp + k;
+        if (tab.comp_name_id[gk] != name)
+          continue;
+        const auto kk = std::make_pair(comp_key(bonded_color[gk], tab.state_id[gk]), k);
+        int less = 0;
+        for (int p = 0; p < m.n_comp; ++p) {
+          int const gp = m.first_comp + p;
+          if (tab.comp_name_id[gp] != name)
+            continue;
+          if (std::make_pair(comp_key(bonded_color[gp], tab.state_id[gp]), p) < kk)
+            ++less;
+        }
+        if (less == r) {
+          chosen = gk;
+          break;
+        }
+      }
+      const auto& c = g.components[chosen];
       out += c.name;
       if (!c.state.empty()) {
         out += '~';
         out += c.state;
       }
       if (c.partner >= 0) {
-        int& lbl = comp_label[gc];
+        int& lbl = s.comp_label[chosen];
         if (lbl == 0) {
           lbl = next_label++;
-          comp_label[c.partner] = lbl;
+          s.comp_label[c.partner] = lbl;
         }
         out += '!';
         out += std::to_string(lbl);
@@ -298,13 +424,13 @@ std::string render(const ComplexGraph& g, const std::vector<int>& order,
 // Render a leaf coloring: derive the canonical molecule order (sort by
 // refined color — at a leaf every molecule color is distinct, so this
 // is a total order) and the per-component bonded colors, then render.
-std::string render_leaf(const ComplexGraph& g, const std::vector<int>& color,
-                        const std::vector<int>& comp_vertex, int n_mol) {
-  std::vector<int> order(n_mol);
+std::string render_leaf(const ComplexGraph& g, const Tables& tab, const std::vector<int>& color,
+                        const std::vector<int>& comp_vertex, int n_mol, Scratch& s) {
+  s.order.resize(n_mol);
   for (int m = 0; m < n_mol; ++m)
-    order[m] = m;
-  std::sort(order.begin(), order.end(), [&](int a, int b) { return color[a] < color[b]; });
-  return render(g, order, bonded_colors(g, color, comp_vertex));
+    s.order[m] = m;
+  std::sort(s.order.begin(), s.order.end(), [&](int a, int b) { return color[a] < color[b]; });
+  return render(g, tab, s.order, bonded_colors(g, color, comp_vertex), s);
 }
 
 // Pick the target cell for individualization: the smallest non-singleton
@@ -315,17 +441,22 @@ std::string render_leaf(const ComplexGraph& g, const std::vector<int>& color,
 // true canonical form.  Returns the chosen color, or -1 if the coloring
 // is already discrete (never happens when called on a non-leaf).
 int pick_cell(const std::vector<int>& color) {
-  std::map<int, int> count;
+  // refine() emits a dense 0..k-1 ranking, so a flat tally indexed by
+  // color replaces the std::map this used.
+  int mx = 0;
+  for (int const c : color)
+    mx = std::max(mx, c);
+  std::vector<int> count(mx + 1, 0);
   for (int const c : color)
     ++count[c];
   int chosen = -1;
   int best_size = 0;
-  for (const auto& [c, s] : count) { // map iterates in ascending color order
-    if (s < 2)
+  for (int c = 0; c <= mx; ++c) { // ascending color order
+    if (count[c] < 2)
       continue;
-    if (chosen < 0 || s < best_size) {
+    if (chosen < 0 || count[c] < best_size) {
       chosen = c;
-      best_size = s;
+      best_size = count[c];
     }
   }
   return chosen;
@@ -336,12 +467,14 @@ int pick_cell(const std::vector<int>& color) {
 // plain value type — clang-tidy gates reference data members.
 struct SearchState {
   const ComplexGraph* g;
-  const std::vector<std::vector<int>>* adj;
+  const Tables* tab;
+  Refiner* refiner;
   const std::vector<int>* comp_vertex;
   int n_mol;
   long leaf_budget;      // remaining leaves before the §5 guard trips
   bool best_set = false; // false until the first leaf is rendered
   std::string best;      // lexicographically minimal leaf render so far
+  Scratch scratch;       // reused across every leaf this search visits
 };
 
 // Recurse: `color` is a WL-stable coloring.  At a leaf, render and keep
@@ -352,8 +485,8 @@ struct SearchState {
 // n_vert steps — termination needs no separate depth bound; the leaf
 // budget guards only against a pathological branching factor.
 void search(SearchState& st, const std::vector<int>& color) {
-  if (is_leaf(*st.g, color, *st.comp_vertex, st.n_mol)) {
-    std::string label = render_leaf(*st.g, color, *st.comp_vertex, st.n_mol);
+  if (is_leaf(*st.g, *st.tab, color, *st.comp_vertex, st.n_mol, st.scratch)) {
+    std::string label = render_leaf(*st.g, *st.tab, color, *st.comp_vertex, st.n_mol, st.scratch);
     if (!st.best_set || label < st.best) {
       st.best = std::move(label);
       st.best_set = true;
@@ -380,7 +513,7 @@ void search(SearchState& st, const std::vector<int>& color) {
     // identically to isomorphic graphs, so the search trees correspond.
     std::vector<int> branch = color;
     branch[v] = mx + 1;
-    refine(*st.adj, branch);
+    st.refiner->refine(branch);
     search(st, branch);
   }
 }
@@ -391,6 +524,8 @@ CanonForm canonicalize(const ComplexGraph& g) {
   int const n_mol = g.molecule_count();
   if (n_mol == 0)
     return {"", true};
+
+  Tables const tab = build_tables(g);
 
   // --- Build the port graph ------------------------------------------------
   //
@@ -459,15 +594,17 @@ CanonForm canonicalize(const ComplexGraph& g) {
     color[v] = intern[init_str[v]];
 
   // --- 1-WL color refinement ----------------------------------------------
-  refine(adj, color);
+  Refiner refiner(adj);
+  refiner.refine(color);
 
   // --- Fast path -----------------------------------------------------------
   //
   // If refinement alone discriminated the complex (plan §3.2 step 2),
   // the refined colors fix a unique isomorphism-invariant ordering;
   // render directly.  This is the overwhelmingly common case.
-  if (is_leaf(g, color, comp_vertex, n_mol))
-    return {render_leaf(g, color, comp_vertex, n_mol), /*fast_path=*/true};
+  Scratch scratch;
+  if (is_leaf(g, tab, color, comp_vertex, n_mol, scratch))
+    return {render_leaf(g, tab, color, comp_vertex, n_mol, scratch), /*fast_path=*/true};
 
   // --- Individualization-refinement (plan §3.2 step 3) ---------------------
   //
@@ -476,7 +613,8 @@ CanonForm canonicalize(const ComplexGraph& g) {
   // re-refine, and recurse; the canonical label is the lexicographically
   // minimal leaf render.  This is a true canonical form — see search()
   // and pick_cell() for why the leaf set is isomorphism-invariant.
-  SearchState st{&g, &adj, &comp_vertex, n_mol, kLeafBudget, false, std::string{}};
+  SearchState st{&g,          &tab,  &refiner,      &comp_vertex, n_mol,
+                 kLeafBudget, false, std::string{}, Scratch{}};
   search(st, color);
   return {st.best, /*fast_path=*/false};
 }
