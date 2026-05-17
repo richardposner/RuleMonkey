@@ -1,7 +1,7 @@
 // RuleMonkey batch driver: run a model from XML and output .gdat format.
 // Usage: rm_driver <xml_path> <t_end> <n_steps> [seed] [-no-bscb]
 //        [--ignore-unsupported] [--save-state <path>] [--load-state <path>]
-//        [--t-start <time>] [--print-functions]
+//        [--t-start <time>] [--print-functions] [--species <path>]
 // Output: tab-separated .gdat to stdout (# header, then time +
 //         observables; global-function columns appended only with
 //         --print-functions)
@@ -23,6 +23,11 @@
 //   --save-state <path>  Save full simulation state at t_end to file.
 //   --load-state <path>  Load state from file instead of seed species.
 //   --t-start <time>     Override t_start (default 0; use with --load-state).
+//
+// Species output:
+//   --species <path>     After the run, write the final-state species
+//                        census to <path> as a BNG-format `.species`
+//                        file (BNG2.pl `readNFspecies`-compatible).
 
 #include "rulemonkey/simulator.hpp"
 
@@ -70,7 +75,8 @@ int main(int argc, char* argv[]) {
   if (argc < 4) {
     std::cerr << "Usage: rm_driver <xml_path> <t_end> <n_steps> [seed] [-no-bscb]"
                  " [--ignore-unsupported] [--save-state <path>]"
-                 " [--load-state <path>] [--t-start <time>] [--print-functions]\n";
+                 " [--load-state <path>] [--t-start <time>] [--print-functions]"
+                 " [--species <path>]\n";
     return 1;
   }
 
@@ -91,6 +97,7 @@ int main(int argc, char* argv[]) {
     bool seed_set = false;
     std::string save_state_path;
     std::string load_state_path;
+    std::string species_path;
     double t_start = 0.0;
     bool t_start_set = false;
 
@@ -119,6 +126,12 @@ int main(int argc, char* argv[]) {
           return 1;
         }
         load_state_path = argv[i];
+      } else if (std::strcmp(argv[i], "--species") == 0) {
+        if (++i >= argc) {
+          std::cerr << "--species requires a path\n";
+          return 1;
+        }
+        species_path = argv[i];
       } else if (std::strcmp(argv[i], "--t-start") == 0) {
         if (++i >= argc) {
           std::cerr << "--t-start requires a value\n";
@@ -161,7 +174,10 @@ int main(int argc, char* argv[]) {
     auto t0 = std::chrono::high_resolution_clock::now();
 
     rulemonkey::Result result;
-    bool const use_session = !save_state_path.empty() || !load_state_path.empty();
+    // --species needs the pool to survive past the run, so it forces
+    // session mode (the one-shot run() path keeps no inspectable pool).
+    bool const use_session =
+        !save_state_path.empty() || !load_state_path.empty() || !species_path.empty();
 
     if (use_session) {
       // Session mode: needed for save/load state
@@ -183,6 +199,9 @@ int main(int argc, char* argv[]) {
 
       if (!save_state_path.empty())
         sim.save_state(save_state_path);
+
+      if (!species_path.empty())
+        sim.write_species_file(species_path);
 
       sim.destroy_session();
     } else {

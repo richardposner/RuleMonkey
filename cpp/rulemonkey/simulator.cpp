@@ -2378,4 +2378,16 @@ void RuleMonkeySimulator::add_molecules(const std::string& type_name, int count)
   impl_->session->add_molecules(type_name, count);
 }
 
+std::vector<SpeciesRow> RuleMonkeySimulator::enumerate_species() const {
+  if (!impl_->session)
+    throw std::runtime_error("No active session");
+  return impl_->session->enumerate_species();
+}
+
+void RuleMonkeySimulator::write_species_file(const std::string& path) const {
+  if (!impl_->session)
+    throw std::runtime_error("No active session");
+  impl_->session->write_species_file(path);
+}
+
 } // namespace rulemonkey

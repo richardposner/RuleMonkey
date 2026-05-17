@@ -122,6 +122,22 @@ public:
   // `MoleculeType` to the active session.
   void add_molecules(const std::string& molecule_type_name, int count);
 
+  // Enumerates the live species in the active session: every complex in
+  // the pool is canonicalized and graph-isomorphic complexes are grouped
+  // into one `SpeciesRow` with a summed instance count, sorted by the
+  // canonical species string.  This is a one-shot pool walk — intended
+  // to be called while the simulation is paused (between `simulate()`
+  // segments or after a run), not per event.
+  // Throws std::runtime_error if no session is active.
+  std::vector<SpeciesRow> enumerate_species() const;
+
+  // Writes `enumerate_species()` to `path` as a BNG-format `.species`
+  // file: `#` comment header followed by one `<pattern>  <count>` line
+  // per species, readable by BNG2.pl's `readNFspecies` (issue #9 §2).
+  // Throws std::runtime_error if no session is active or `path` cannot
+  // be opened for writing.
+  void write_species_file(const std::string& path) const;
+
   // Returns the current active-session molecule count for the named imported
   // `MoleculeType`.
   int get_molecule_count(const std::string& molecule_type_name) const;

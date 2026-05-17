@@ -1,5 +1,6 @@
 #include "engine.hpp"
 
+#include "canonical.hpp"
 #include "engine_profile.hpp"
 #include "model.hpp"
 #include "table_function.hpp"
@@ -17,6 +18,7 @@
 #include <functional>
 #include <iomanip>
 #include <limits>
+#include <map>
 #include <numeric>
 #include <queue>
 #include <random>
@@ -290,6 +292,13 @@ public:
     auto it = complex_members_.find(cx_id);
     return (it != complex_members_.end()) ? it->second : empty;
   }
+
+  // All live complexes, keyed by complex id -> the molecule ids it
+  // contains.  The species enumerator (issue #9 §2) walks this to visit
+  // the pool one connected complex at a time.  Empty member lists are
+  // pruned eagerly (see delete_molecule / merge_complexes), so every
+  // entry is a non-empty live complex.
+  const std::unordered_map<int, std::vector<int>>& complexes() const { return complex_members_; }
 
   // P7: number of cycle bonds in complex `cx_id` (|edges| - |vertices| + 1
   // for the connected subgraph).  Returns 0 for tree complexes or unknown
@@ -7396,6 +7405,58 @@ Engine::Engine(const Model& model, uint64_t seed, int molecule_limit)
 
 Engine::~Engine() = default;
 
+// ===========================================================================
+// Species enumeration (issue #9 §2 — `.species` output)
+// ===========================================================================
+
+namespace {
+
+// extract_complex — the sole bridge from engine pool internals to the
+// canonical labeler (plan §4).  Builds a canonical::ComplexGraph for one
+// connected complex, given the molecule ids it contains.  Component
+// states are rendered to their BNGL state-name strings; an unbonded or
+// stateless component carries "" (no `~state`).
+canonical::ComplexGraph extract_complex(const AgentPool& pool, const Model& model,
+                                        const std::vector<int>& mol_ids) {
+  canonical::ComplexGraph g;
+  // global component id -> (graph molecule index, local component index)
+  std::unordered_map<int, std::pair<int, int>> comp_loc;
+  for (int const mid : mol_ids) {
+    const auto& mol = pool.molecule(mid);
+    const auto& mtype = model.molecule_types[mol.type_index];
+    int const gmol = g.molecule_count();
+    std::vector<std::pair<std::string, std::string>> comps;
+    comps.reserve(mol.comp_ids.size());
+    for (int li = 0; li < static_cast<int>(mol.comp_ids.size()); ++li) {
+      int const cid = mol.comp_ids[li];
+      const auto& ctype = mtype.components[li];
+      int const si = pool.component(cid).state_index;
+      std::string state;
+      if (si >= 0 && si < static_cast<int>(ctype.allowed_states.size()))
+        state = ctype.allowed_states[si];
+      comps.emplace_back(ctype.name, state);
+      comp_loc.emplace(cid, std::pair<int, int>{gmol, li});
+    }
+    g.add_molecule(mtype.name, comps);
+  }
+  // One graph edge per bond.  bond_partner is a global component id;
+  // emit each bond once, from its lower-id endpoint.  Both endpoints are
+  // in this complex, so comp_loc always resolves.
+  for (int const mid : mol_ids) {
+    for (int const cid : pool.molecule(mid).comp_ids) {
+      int const partner = pool.component(cid).bond_partner;
+      if (partner > cid) {
+        const auto& a = comp_loc.at(cid);
+        const auto& b = comp_loc.at(partner);
+        g.add_bond(a.first, a.second, b.first, b.second);
+      }
+    }
+  }
+  return g;
+}
+
+} // namespace
+
 void Engine::initialize() {
   impl_->init_species();
   impl_->compute_observables(); // must come before init_rule_states for Function rate laws
@@ -7498,5 +7559,41 @@ void Engine::add_molecules(const std::string& type_name, int count) {
 void Engine::save_state(const std::string& path) const { impl_->save_state_to(path); }
 
 void Engine::load_state(const std::string& path) { impl_->load_state_from(path); }
+
+std::vector<SpeciesRow> Engine::enumerate_species() const {
+  // Canonicalize every complex; graph-isomorphic complexes share a
+  // canonical label and so collapse to one map entry with a summed
+  // count.  std::map keeps the rows sorted by the species string.
+  std::map<std::string, long> counts;
+  for (const auto& cx : impl_->pool.complexes()) {
+    const std::vector<int>& members = cx.second;
+    if (members.empty())
+      continue;
+    const auto graph = extract_complex(impl_->pool, impl_->model, members);
+    ++counts[canonical::canonical_label(graph)];
+  }
+  std::vector<SpeciesRow> rows;
+  rows.reserve(counts.size());
+  for (const auto& [label, n] : counts)
+    rows.push_back(SpeciesRow{label, n});
+  return rows;
+}
+
+void Engine::write_species_file(const std::string& path) const {
+  std::vector<SpeciesRow> const rows = enumerate_species();
+  std::ofstream out(path);
+  if (!out)
+    throw std::runtime_error("Cannot open species file for writing: " + path);
+  long total = 0;
+  for (const auto& r : rows)
+    total += r.count;
+  // BNG-format `.species` file: `#` comment lines (stripped by BNG2.pl's
+  // readNFspecies), then one `<canonical pattern>  <integer count>` line
+  // per species.  Rows are already sorted by enumerate_species().
+  out << "# RuleMonkey generated species list\n";
+  out << "# " << rows.size() << " species, " << total << " complexes\n";
+  for (const auto& r : rows)
+    out << r.species << "  " << r.count << "\n";
+}
 
 } // namespace rulemonkey

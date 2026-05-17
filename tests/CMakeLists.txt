@@ -108,6 +108,20 @@ target_include_directories(canonical_test PRIVATE ${_rulemonkey_private_include_
 
 add_test(NAME canonical_test COMMAND canonical_test)
 
+# Species enumeration + `.species` output (issue #9 §2): exercises the
+# batch pipeline end to end — pool walk, extract_complex, canonical
+# labeling, isomorphism dedup, sorted SpeciesRow rows, and the
+# BNG-format `.species` file writer — through the public simulator API.
+add_executable(species_enumeration_test cpp/species_enumeration_test.cpp)
+target_link_libraries(species_enumeration_test PRIVATE rulemonkey)
+
+add_test(
+    NAME species_enumeration_test
+    COMMAND species_enumeration_test
+        ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ss_symmetric_homopoly.xml
+)
+
 # Error-path regression: pins down that the documented public-API
 # error surfaces (missing file, malformed XML, unknown set_param,
 # mutators called while a session is active) throw std::runtime_error

@@ -128,6 +128,19 @@ struct BifurcateResult {
   ScanResult backward;
 };
 
+// One row of an enumerated species census: a canonical BNGL species
+// pattern string and the number of complex instances of that species
+// currently live in the pool.  Two complexes contribute to the same
+// row iff they are graph-isomorphic (same species); `species` is the
+// true canonical label, so it doubles as the dedup key and as a valid
+// BNG-format pattern line.  Produced by
+// `RuleMonkeySimulator::enumerate_species()` and written one per line
+// to a BNG-format `.species` file (see `write_species_file()`).
+struct SpeciesRow {
+  std::string species; // canonical BNGL pattern string
+  long count;          // number of complex instances of this species
+};
+
 enum class Severity { Warn, Error };
 
 struct UnsupportedFeature {

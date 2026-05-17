@@ -54,6 +54,19 @@ public:
   void save_state(const std::string& path) const;
   void load_state(const std::string& path);
 
+  // Enumerate the live species in the current pool: walk every complex,
+  // canonicalize it, and group graph-isomorphic complexes into one row
+  // with a summed instance count.  Rows are sorted by the canonical
+  // species string.  A one-shot pool walk (issue #9 §2 batch mode); an
+  // un-initialized engine yields an empty list.
+  std::vector<SpeciesRow> enumerate_species() const;
+
+  // Write enumerate_species() to `path` as a BNG-format `.species` file
+  // (BNG2.pl `readNFspecies`-compatible: `#` comment header, then one
+  // `<pattern>  <count>` line per species).  Throws if `path` cannot be
+  // opened for writing.
+  void write_species_file(const std::string& path) const;
+
 private:
   struct Impl;
   std::unique_ptr<Impl> impl_;
