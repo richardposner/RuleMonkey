@@ -25,6 +25,14 @@ CMakeFiles/
 CMakeCache.txt
 compile_commands.json
 
+# CTest scratch (regenerated every `ctest` run; lands here when ctest is
+# invoked from the repo root instead of a build dir)
+Testing/Temporary/
+
+# Claude Code local agent state (scheduled-tasks lock, etc.) — runtime,
+# machine-local, never shared
+.claude/
+
 # Local env overrides
 .envrc.local
 
