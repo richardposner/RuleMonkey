@@ -89,6 +89,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Expression evaluator: hand-rolled parser replaced with ExprTk.** The
+  BNGL rate-law / function / parameter math evaluator (`expr_eval`) is now
+  [ExprTk](https://www.partow.net/programming/exprtk/), via the
+  `bngsim::ExprTkEvaluator` wrapper RuleMonkey shares with its BNGsim
+  integration host. All four expression consumers — global functions,
+  rate-law ASTs, the simulator parameter cascade, and local functions —
+  moved at once; the hand-rolled recursive-descent parser and `AstNode`
+  tree-walker are gone. Expression evaluation is ~16–30% faster per call
+  on function-rate models (no effect on mass-action); SSA trajectories
+  are bit-identical to 3.1.x. Closes
+  [#6](https://github.com/richardposner/RuleMonkey/issues/6). No public
+  API or header change. Build note: ExprTk is vendored under
+  `third_party/` and compiled only in a standalone build — a CMake gate
+  (`if(TARGET bngsim::expression)`) links the host's copy inside a BNGsim
+  build instead. `scripts/vendor_exprtk.py --check` guards the vendored
+  copy against drift from its pinned BNGsim commit.
+
 - **CMake vendoring defaults.** The minimum CMake version is now 3.20.
   `RULEMONKEY_BUILD_TESTS` and `RULEMONKEY_BUILD_CLI` default to
   `PROJECT_IS_TOP_LEVEL`, `RULEMONKEY_WARNINGS_AS_ERRORS` defaults off

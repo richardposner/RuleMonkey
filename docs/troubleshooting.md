@@ -33,17 +33,22 @@ resolve.  Most common causes:
 - Forward reference that the parser's iteration cap can't resolve
   (the cap is `parameter_count + 4` passes; cycles never resolve).
 - A rate-law expression using a function the expression evaluator
-  doesn't know.  Built-in functions are listed in
-  `cpp/rulemonkey/expr_eval.cpp`'s `is_builtin` set; user-defined
-  global functions need a matching `<Function>` block in the XML.
+  doesn't know.  Standard math built-ins (`exp`, `ln`, `sqrt`, `if`,
+  `min` / `max`, `pow`, …) are provided by ExprTk; user-defined global
+  functions need a matching `<Function>` block in the XML.
 
-### "expr_eval: builtin 'X' called with N argument(s); no matching signature"
+### "ExprTk compilation failed for expression: '...'"
 
-A built-in math function was called with the wrong arity (e.g.
-`pow(x)` with one arg instead of `pow(x, y)`).  The error is loud by
-design — the prior code silently fell through to a variable lookup
-and reported "unknown function 'X'", which obscured the real
-problem.
+A rate-law / function / parameter expression could not be compiled by
+the ExprTk evaluator.  Common causes:
+
+- A built-in math function called with the wrong arity (e.g. `pow(x)`
+  with one arg instead of `pow(x, y)`).
+- A reference to a name that is neither a parameter, an observable, nor
+  a declared global function.
+- A genuine syntax error in the BNGL expression.
+
+The ExprTk parser message after the `—` pinpoints the offending token.
 
 ### Differs from NFsim by a small but reproducible amount
 
