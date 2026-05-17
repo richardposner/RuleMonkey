@@ -1,32 +1,30 @@
 Vendored ExprTk expression evaluator
 =====================================
 
-Source repo : ~/Code/PyBNF-Private/bngsim  (BNGsim)
+RuleMonkey's rate-law / function / parameter expression evaluator is
+bngsim::ExprTkEvaluator (see issue #6).  These three files are copied
+verbatim from BNGsim and are compiled ONLY in a standalone RuleMonkey
+build: CMakeLists.txt gates them on `if(TARGET bngsim::expression)`, so
+inside a BNGsim build RM links the host's copy instead.
+
+Source repo  : BNGsim (github.com/wshlavacek/PyBNF-Private, bngsim/ subdir)
 Pinned commit: f5cbc33c42f9c84ade79287cb80da44c908e1406
-               ("fix(bngsim): mangle bngsim-only function aliases to match
-                 BNGL contract", 2026-05-10)
 
 Vendored files (copied verbatim, no edits):
-  third_party/exprtk/exprtk.hpp                       <- bngsim third_party/exprtk/exprtk.hpp
+  third_party/exprtk/exprtk.hpp                         <- bngsim third_party/exprtk/exprtk.hpp
   third_party/bngsim_expr/include/bngsim/expression.hpp <- bngsim include/bngsim/expression.hpp
-  third_party/bngsim_expr/src/expression.cpp          <- bngsim src/expression.cpp
+  third_party/bngsim_expr/src/expression.cpp            <- bngsim src/expression.cpp
 
-Why these are here
-------------------
-RuleMonkey's rate-law / function expression evaluator is bngsim::ExprTkEvaluator
-(see issue #6, dev/exprtk_swap_plan_2026_05_16.md). RM is itself vendored into
-BNGsim, which ALREADY ships these exact files. To avoid compiling two copies of
-the bngsim:: symbols into a single binary:
+Refresh / drift-check
+---------------------
+This file is maintained by scripts/vendor_exprtk.py — the `Pinned commit:`
+line above is the machine-readable pin (do not reformat it).
 
-  * CMakeLists.txt gates the vendored copy on `if(TARGET bngsim::expression)`:
-    inside a BNGsim build RM links the host's target; standalone RM builds
-    compile this vendored copy.
-  * BNGsim's scripts/vendor_rulemonkey.py MUST exclude third_party/exprtk/ and
-    third_party/bngsim_expr/ from the RM copy it pulls in (action item tracked
-    in the swap plan §4.3a).
+  scripts/vendor_exprtk.py            # re-copy the 3 files from BNGsim main, re-pin
+  scripts/vendor_exprtk.py --ref <r>  # ... from a specific BNGsim ref/tag/commit
+  scripts/vendor_exprtk.py --check    # verify the 3 files still match the pin
 
-Updating
---------
-Re-copy all three files together from the same BNGsim commit and update the
-pin above. exprtk.hpp is header-only — two identical copies merge fine, but
-version skew between RM's copy and BNGsim's is undefined behavior.
+exprtk.hpp is header-only — two identical copies merge fine, but version
+skew between RM's copy and BNGsim's is undefined behavior (an ODR
+violation).  `--check` is the guard against that drift; run it (or wire it
+into CI) when bumping the pin.  See dev/exprtk_swap_plan_2026_05_16.md §4.3a.
