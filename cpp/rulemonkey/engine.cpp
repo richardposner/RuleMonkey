@@ -178,6 +178,7 @@ public:
     int const cx = next_complex_id_++;
     mol.complex_id = cx;
     complex_members_[cx] = {mol_id};
+    mark_cx_dirty(cx); // a freshly born complex has no cached canonical label
 
     type_mol_index_[type_index].push_back(mol_id);
     return mol_id;
@@ -202,7 +203,10 @@ public:
       members.erase(std::remove(members.begin(), members.end(), mol_id), members.end());
       if (members.empty()) {
         cxs_died_.push_back(cxit->first);
+        cxs_dirty_.erase(cxit->first); // dead complex: drop any pending dirty mark
         complex_members_.erase(cxit);
+      } else {
+        mark_cx_dirty(cxit->first); // surviving complex lost a member -> relabel
       }
     }
 
@@ -222,7 +226,12 @@ public:
     free_mol_ids_.push_back(mol_id);
   }
 
-  void set_state(int comp_id, int new_state) { components_[comp_id].state_index = new_state; }
+  void set_state(int comp_id, int new_state) {
+    components_[comp_id].state_index = new_state;
+    // No membership change, but the complex's canonical label depends on
+    // component states, so its cached label is now stale.
+    mark_cx_dirty(molecules_[comp_to_mol_[comp_id]].complex_id);
+  }
 
   void add_bond(int comp_a, int comp_b) {
     components_[comp_a].bond_partner = comp_b;
@@ -234,11 +243,13 @@ public:
     int const cx_b = molecules_[mol_b].complex_id;
 
     if (cx_a != cx_b) {
-      merge_complexes(cx_a, cx_b);
+      merge_complexes(cx_a, cx_b); // dirties cx_a (keep), evicts cx_b (merged away)
     } else {
       // P7: both endpoints already in the same complex — the new bond
       // closes a cycle (|edges| increases by 1, |vertices| unchanged).
+      // The complex id is unchanged but its graph (and label) changed.
       ++cycle_bond_count_[cx_a];
+      mark_cx_dirty(cx_a);
     }
   }
 
@@ -256,6 +267,13 @@ public:
     int const mol_a = comp_to_mol_[comp_a];
     int const mol_b = comp_to_mol_[comp_b];
     int const old_cx = molecules_[mol_a].complex_id;
+
+    // A bond was removed from old_cx, so its graph (and label) changed.
+    // old_cx always survives remove_bond — mol_a stays in it whether or
+    // not a split occurs — so dirtying it here is unconditional; the
+    // split case additionally dirties the new complex inside
+    // split_complex_if_needed.
+    mark_cx_dirty(old_cx);
 
     // Check if complex needs splitting
     split_complex_if_needed(mol_a, mol_b, old_cx);
@@ -332,6 +350,7 @@ public:
         int const max_state = static_cast<int>(mtype.components[i].allowed_states.size()) - 1;
         if (c.state_index < max_state)
           c.state_index++;
+        mark_cx_dirty(mol.complex_id); // state feeds the canonical label
         return;
       }
     }
@@ -341,6 +360,7 @@ public:
     auto& c = components_[comp_id];
     if (c.state_index > 0)
       c.state_index--;
+    mark_cx_dirty(molecules_[comp_to_mol_[comp_id]].complex_id);
   }
 
   // --- State serialization ---
@@ -402,6 +422,10 @@ public:
       is >> comp_to_mol_[i];
     is >> n;
     complex_members_.clear();
+    // read_state replaces the whole pool: every prior dirty mark refers to
+    // a complex id that no longer exists.  Clearing the set here pairs with
+    // the wholesale cx_label_cache_ clear in Engine::Impl::load_state_from.
+    cxs_dirty_.clear();
     for (int i = 0; i < n; ++i) {
       int cx, nm;
       is >> cx >> nm;
@@ -462,6 +486,11 @@ private:
     }
     complex_members_.erase(cx_merge);
     cxs_died_.push_back(cx_merge);
+
+    // cx_keep absorbed cx_merge's molecules, so its cached label is stale;
+    // cx_merge is gone, so drop any dirty mark it carried.
+    mark_cx_dirty(cx_keep);
+    cxs_dirty_.erase(cx_merge);
 
     // P7: combined complex inherits the sum of both counters.  The bridging
     // bond that triggered this merge is a tree edge in the merged complex
@@ -605,6 +634,7 @@ private:
     // the two resulting pieces equals the pre-split cycle count.  Piece A's
     // cycles come from its (edges - vertices + 1); Piece B gets the remainder.
     int const new_cx = next_complex_id_++;
+    mark_cx_dirty(new_cx); // the split-off piece is a brand new complex
     std::vector<int> new_members;
     std::vector<int> old_members;
 
@@ -671,7 +701,32 @@ public:
     cxs_died_.clear();
   }
 
+  // Cx IDs whose cached canonical label is stale — a structural mutator
+  // edited the complex since its label was last (re)computed (issue #9
+  // §2 step 5, plan decision #6).  The structural mutators above own the
+  // marking: it is pure cx-id bookkeeping with no canonical dependency,
+  // so placing it on AgentPool catches every mutation site uniformly
+  // (fire_rule's op loop, the add_molecules API, and read_state) instead
+  // of relying on each caller to remember.  The label cache itself and
+  // the lazy recompute live on Engine::Impl (it owns extract_complex /
+  // canonical_label); Engine::Impl::cached_label_of consults this set on
+  // read and erases an id once it recomputes.
+  //
+  // Bounded by the live complex count, not the run length: a mutator
+  // that kills a complex (merge / last-member delete) erases its id
+  // here, so the set never holds a dead id.  An absent id is treated as
+  // dirty too (a just-born complex has no cache entry), so missing a
+  // mark for a brand-new complex is harmless; missing one for an *edited
+  // existing* complex is the bug the decision-#6 self-check catches.
+  std::unordered_set<int> cxs_dirty_;
+
 private:
+  // O(1) cache-invalidation hook for the structural mutators above: a
+  // single set insert per edited complex.  This is the entire event-loop
+  // cost the cached-incremental label mode adds (plan §5); canonical
+  // labeling itself never runs here.
+  void mark_cx_dirty(int cx_id) { cxs_dirty_.insert(cx_id); }
+
   // P7: |edges| - |vertices| + 1 per complex, maintained incrementally.
   // Absent entries mean 0 (tree or unknown complex).
   std::unordered_map<int, int> cycle_bond_count_;
@@ -2535,6 +2590,13 @@ struct ReactionMatch {
   std::vector<int> comp_ids; // flat pattern comp idx -> actual comp_id
 };
 
+// The sole engine -> canonical-labeler bridge (plan §4); defined far
+// below, after the pattern-matching machinery.  Forward-declared here so
+// Engine::Impl::cached_label_of (the cached-incremental label layer) can
+// call it.
+canonical::ComplexGraph extract_complex(const AgentPool& pool, const Model& model,
+                                        const std::vector<int>& mol_ids);
+
 } // namespace
 
 struct Engine::Impl {
@@ -2555,6 +2617,37 @@ struct Engine::Impl {
   int molecule_limit;
   std::mt19937_64 rng;
   bool initialized = false;
+
+  // Cached-incremental canonical-label layer (issue #9 §2 step 5, plan
+  // decision #6).  Maps a live complex id to its last-computed canonical
+  // BNGL label.  Lazy: an entry is (re)computed by cached_label_of only
+  // when read while its id is dirty (pool.cxs_dirty_) or absent — the SSA
+  // event loop never canonicalizes, it only sets dirty bits.  Cleared
+  // wholesale on load_state.  No production consumer yet; today it is
+  // populated and validated only by the decision-#6 self-check inside
+  // enumerate_species (gated on kCanonicalCacheSelfCheck).
+  std::unordered_map<int, std::string> cx_label_cache_;
+
+  // Lazy canonical label for one live complex: returns the cached string
+  // when valid, otherwise recanonicalizes from scratch, stores, and
+  // clears the dirty bit.  This is the cached-incremental read primitive
+  // (plan §3.2 step 5); partial scaling's species census (plan §7.2)
+  // will be its first real consumer.  An absent id is treated as dirty
+  // (a just-born complex has no entry yet).
+  const std::string& cached_label_of(int cx_id) {
+    // erase() both clears the dirty mark and reports whether it was set.
+    bool const was_dirty = pool.cxs_dirty_.erase(cx_id) != 0;
+    auto it = cx_label_cache_.find(cx_id);
+    if (was_dirty || it == cx_label_cache_.end()) {
+      std::string label = canonical::canonical_label(
+          extract_complex(pool, model, pool.molecules_in_complex(cx_id)));
+      if (it == cx_label_cache_.end())
+        it = cx_label_cache_.emplace(cx_id, std::move(label)).first;
+      else
+        it->second = std::move(label);
+    }
+    return it->second;
+  }
 
   // Type→rule index: for each molecule type, which rules reference it as
   // reactant A or B.  Built once in init_rule_states(), used by
@@ -3017,6 +3110,10 @@ struct Engine::Impl {
     is >> event_count;
     is >> null_event_count;
     pool.read_state(is);
+    // The restored pool has all-new complex ids; every cached label is
+    // stale.  pool.read_state already cleared pool.cxs_dirty_; drop the
+    // label cache to match (plan §3.2 step 5 — the load_state trap).
+    cx_label_cache_.clear();
     is >> rng;
     is >> marker;
     if (marker != "END")
@@ -7564,13 +7661,48 @@ std::vector<SpeciesRow> Engine::enumerate_species() const {
   // Canonicalize every complex; graph-isomorphic complexes share a
   // canonical label and so collapse to one map entry with a summed
   // count.  std::map keeps the rows sorted by the species string.
+  //
+  // The batch sweep stays a from-scratch recompute (plan §5): it does
+  // NOT read the cached-incremental cache.  In Debug / ASan builds,
+  // though, it doubles as the decision-#6 self-check — each complex's
+  // fresh label is compared against cached_label_of, which returns the
+  // cached string when the complex is not dirty.  A mismatch there means
+  // a structural mutator failed to mark the complex dirty: the cache is
+  // stale yet read as valid.  That is the load-bearing correctness proof
+  // for the cached-incremental layer until partial scaling consumes it.
   std::map<std::string, long> counts;
   for (const auto& cx : impl_->pool.complexes()) {
     const std::vector<int>& members = cx.second;
     if (members.empty())
       continue;
     const auto graph = extract_complex(impl_->pool, impl_->model, members);
-    ++counts[canonical::canonical_label(graph)];
+    std::string label = canonical::canonical_label(graph);
+    if constexpr (kCanonicalCacheSelfCheck) {
+      // cached_label_of returns the cached label for a non-dirty complex
+      // and a fresh recompute for a dirty/absent one; either way it must
+      // equal the independent from-scratch `label` computed just above.
+      const std::string& cached = impl_->cached_label_of(cx.first);
+      if (cached != label) {
+        std::fprintf(stderr, "[canonical cache invariant violated] cx=%d cached='%s' fresh='%s'\n",
+                     cx.first, cached.c_str(), label.c_str());
+        std::abort();
+      }
+    }
+    ++counts[std::move(label)];
+  }
+  if constexpr (kCanonicalCacheSelfCheck) {
+    // Evict cache entries for complexes that have since died (merged
+    // away or last-member deleted).  Complex ids are monotonic and never
+    // reused, so a stale entry can never alias a live complex — this is
+    // memory hygiene, not correctness.  The cache is only ever populated
+    // here, so pruning here keeps it bounded by the live complex count.
+    const auto& live = impl_->pool.complexes();
+    for (auto it = impl_->cx_label_cache_.begin(); it != impl_->cx_label_cache_.end();) {
+      if (live.find(it->first) == live.end())
+        it = impl_->cx_label_cache_.erase(it);
+      else
+        ++it;
+    }
   }
   std::vector<SpeciesRow> rows;
   rows.reserve(counts.size());

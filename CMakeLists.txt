@@ -164,6 +164,23 @@ if(RULEMONKEY_ENABLE_ASAN)
 endif()
 
 # ---------------------------------------------------------------------------
+# Canonical-label cache self-check (issue #9 §2 step 5, plan decision #6).
+#
+# The cached-incremental canonical-label layer (per-complex cached label +
+# dirty bit, invalidated by the structural mutators) has no production
+# consumer yet — partial scaling (plan §7.2) is future work.  Its
+# correctness is instead proven by an invariant: every cached-label read
+# must equal a from-scratch recanonicalization.  The check is compiled IN
+# for Debug and ASan builds, so ctest and the corpus guard tier exercise
+# it, and OUT of Release, where the batch `.species` sweep stays a plain
+# from-scratch walk.  A plain `assert` cannot carry this: the asan preset
+# is RelWithDebInfo, which defines NDEBUG.
+# ---------------------------------------------------------------------------
+if(RULEMONKEY_ENABLE_ASAN OR CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_definitions(rulemonkey PRIVATE RULEMONKEY_CANONICAL_CACHE_SELFCHECK)
+endif()
+
+# ---------------------------------------------------------------------------
 # Examples (off by default — host projects opt in)
 # ---------------------------------------------------------------------------
 option(RULEMONKEY_BUILD_EXAMPLES "Build the C++ embedding examples" OFF)

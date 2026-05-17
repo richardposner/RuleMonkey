@@ -157,6 +157,24 @@ inline constexpr bool kSpeciesIncrObsInvariant = false;
 // itself is `kObsFastMatch` in engine.cpp.
 inline constexpr bool kObsFastMatchInvariant = false;
 
+// Canonical-label cache self-check (issue #9 §2 step 5, plan decision #6).
+// The cached-incremental canonical-label layer has no production consumer
+// yet (partial scaling, plan §7.2, is future work), so its correctness is
+// proven by an invariant: every cached-label read must equal a from-scratch
+// recanonicalization.  Unlike the gates above — manually flipped while
+// refactoring — this one is driven by the build type: the
+// RULEMONKEY_CANONICAL_CACHE_SELFCHECK compile definition is set by
+// CMakeLists.txt for Debug and ASan builds and left unset for Release, so
+// ctest and the corpus guard tier exercise the invariant while the release
+// `.species` sweep stays a plain from-scratch walk with no cache traffic.
+// `assert` cannot carry this: the asan preset is RelWithDebInfo, which
+// defines NDEBUG and so disables assert.
+#ifdef RULEMONKEY_CANONICAL_CACHE_SELFCHECK
+inline constexpr bool kCanonicalCacheSelfCheck = true;
+#else
+inline constexpr bool kCanonicalCacheSelfCheck = false;
+#endif
+
 // ===========================================================================
 // Profile struct definitions
 // ---------------------------------------------------------------------------

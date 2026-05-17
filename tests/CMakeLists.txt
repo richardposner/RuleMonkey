@@ -112,6 +112,10 @@ add_test(NAME canonical_test COMMAND canonical_test)
 # batch pipeline end to end — pool walk, extract_complex, canonical
 # labeling, isomorphism dedup, sorted SpeciesRow rows, and the
 # BNG-format `.species` file writer — through the public simulator API.
+# Also drives the cached-incremental label layer (plan §6 step 5): in
+# Debug/ASan builds enumerate_species cross-checks every cached label
+# against a from-scratch recompute, so the merge/split/ring models swept
+# repeatedly here abort on a missed cache-invalidation hook.
 add_executable(species_enumeration_test cpp/species_enumeration_test.cpp)
 target_link_libraries(species_enumeration_test PRIVATE rulemonkey)
 
@@ -120,6 +124,7 @@ add_test(
     COMMAND species_enumeration_test
         ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
         ${_rulemonkey_test_dir}/models/feature_coverage/xml/ss_symmetric_homopoly.xml
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_ring_closure.xml
 )
 
 # Error-path regression: pins down that the documented public-API

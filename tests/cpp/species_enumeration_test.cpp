@@ -1,16 +1,30 @@
 // Integration test for species enumeration + `.species` output
-// (issue #9 §2, plan §6 step 4).  Exercises the full batch pipeline:
+// (issue #9 §2, plan §6 step 4) and the cached-incremental label layer
+// (plan §6 step 5, decision #6).  Exercises the full batch pipeline:
 // AgentPool -> extract_complex -> canonical_label -> isomorphism dedup
 // -> sorted SpeciesRow list -> BNG-format `.species` file.
 //
-// Run against two models:
+// Run against three models:
 //   A_plus_A              -- A(a)+A(a)<->A(a!1).A(a!1): monomer plus a
 //                            symmetric homodimer, so the pool walk hits
 //                            the canonical individualization search.
+//                            Merge-heavy (and unbind/split).
 //   ss_symmetric_homopoly -- P(s,s) self-binding: larger symmetric
-//                            chains/rings stress the canonicalizer.
+//                            chains/rings stress the canonicalizer;
+//                            merge- and split-heavy.
+//   ft_ring_closure       -- A/B binding with ring closure + reverse
+//                            rules: exercises cycle-bond add_bond,
+//                            split-on-unbind, and ring formation.
 //
-// argv: <A_plus_A.xml> <ss_symmetric_homopoly.xml>
+// argv: <A_plus_A.xml> <ss_symmetric_homopoly.xml> <ft_ring_closure.xml>
+//
+// In Debug/ASan builds, enumerate_species cross-checks each complex's
+// cached canonical label against a from-scratch recompute and aborts on
+// mismatch (the decision-#6 invariant).  test_cached_label_invariant
+// calls enumerate_species repeatedly across many simulate() segments so
+// that cross-check runs against a cache that has been populated,
+// invalidated by merge/split/state events, and lazily recomputed
+// mid-run — a missed invalidation hook surfaces there as an abort.
 
 #include "rulemonkey/simulator.hpp"
 
@@ -173,16 +187,84 @@ void test_symmetric_pipeline(const std::string& hp_xml) {
   check(has_multi, "homopolymer run formed at least one multi-molecule species");
 }
 
+// Cached-incremental label invariant (plan decision #6, step 5).  Drive
+// many simulate() segments, calling enumerate_species between each.  In
+// Debug/ASan builds every enumerate_species runs the decision-#6
+// cross-check (cached label == from-scratch recompute) over the current
+// cache: complexes untouched since the previous segment are validated
+// against their *stale* cache entry, so a structural mutator that fails
+// to dirty an edited complex aborts the process here.  In Release the
+// check compiles out and this still exercises repeated batch sweeps
+// interleaved with simulation.  Independent of the cross-check, the test
+// asserts molecule conservation and sorted/distinct rows every segment.
+void test_cached_label_invariant(const std::string& xml, const std::string& tag, double seg_len,
+                                 long expected_mol_total) {
+  RuleMonkeySimulator sim(xml);
+  sim.initialize(7);
+
+  double t = 0.0;
+  for (int seg = 0; seg < 24; ++seg) {
+    auto rows = sim.enumerate_species();
+    long total = 0;
+    for (size_t i = 0; i < rows.size(); ++i) {
+      check(rows[i].count > 0, tag + ": species count positive");
+      total += rows[i].count * molecule_count_of(rows[i].species);
+      if (i)
+        check(rows[i - 1].species < rows[i].species, tag + ": rows sorted and distinct");
+    }
+    check(total == expected_mol_total,
+          tag + ": molecule conservation at segment " + std::to_string(seg) + " (got " +
+              std::to_string(total) + ", expected " + std::to_string(expected_mol_total) + ")");
+    double const next = t + seg_len;
+    sim.simulate(t, next, 1);
+    t = next;
+  }
+  // A final sweep after the last simulate segment so the cross-check
+  // also validates the cache state left by the trailing events.
+  auto rows = sim.enumerate_species();
+  long total = 0;
+  for (const auto& r : rows)
+    total += r.count * molecule_count_of(r.species);
+  check(total == expected_mol_total, tag + ": molecule conservation after final segment");
+}
+
+// load_state must clear the label cache wholesale (the restored pool has
+// all-new complex ids).  Save mid-run, load into a fresh simulator, then
+// enumerate — in Debug/ASan the cross-check would abort if a stale entry
+// from before the load survived.
+void test_cache_survives_save_load(const std::string& xml, const std::string& tag) {
+  const std::string path = "species_enumeration_test_state.scratch";
+  RuleMonkeySimulator sim(xml);
+  sim.initialize(7);
+  sim.simulate(0.0, 5.0, 5);
+  (void)sim.enumerate_species(); // populate the label cache
+  sim.save_state(path);
+
+  RuleMonkeySimulator loaded(xml);
+  loaded.initialize(99);
+  loaded.simulate(0.0, 2.0, 2); // give the fresh sim its own cache state
+  (void)loaded.enumerate_species();
+  loaded.load_state(path); // must drop that cache wholesale
+  auto rows = loaded.enumerate_species();
+  std::remove(path.c_str());
+  check(!rows.empty(), tag + ": species census non-empty after load_state");
+  // The loaded session resumes at the save point (t=5.0); keep editing
+  // the pool post-load so the cross-check also covers the rebuilt cache.
+  loaded.simulate(5.0, 9.0, 4);
+  (void)loaded.enumerate_species();
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
-  if (argc < 3) {
-    std::fprintf(stderr,
-                 "usage: species_enumeration_test <A_plus_A.xml> <ss_symmetric_homopoly.xml>\n");
+  if (argc < 4) {
+    std::fprintf(stderr, "usage: species_enumeration_test <A_plus_A.xml> "
+                         "<ss_symmetric_homopoly.xml> <ft_ring_closure.xml>\n");
     return 2;
   }
   const std::string aa_xml = argv[1];
   const std::string hp_xml = argv[2];
+  const std::string ring_xml = argv[3];
 
   try {
     test_seed_species_exact(aa_xml);
@@ -190,6 +272,15 @@ int main(int argc, char* argv[]) {
     test_species_file_roundtrip(aa_xml);
     test_no_session_throws(aa_xml);
     test_symmetric_pipeline(hp_xml);
+    // Cached-incremental layer: merge-heavy, split-heavy, and ring-forming
+    // models, each swept many times mid-run.  Seed totals: A_plus_A
+    // A_tot=1000; ss_symmetric_homopoly P_tot=200; ft_ring_closure
+    // A_tot=B_tot=60 -> 120 molecules.
+    test_cached_label_invariant(aa_xml, "A_plus_A", 2.0, 1000);
+    test_cached_label_invariant(hp_xml, "ss_symmetric_homopoly", 5.0, 200);
+    test_cached_label_invariant(ring_xml, "ft_ring_closure", 5.0, 120);
+    test_cache_survives_save_load(hp_xml, "ss_symmetric_homopoly");
+    test_cache_survives_save_load(ring_xml, "ft_ring_closure");
   } catch (const std::exception& e) {
     std::fprintf(stderr, "EXCEPTION: %s\n", e.what());
     return 2;
