@@ -176,6 +176,21 @@ add_test(
         ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
 )
 
+# evaluate_expression session API (issue #9 §1): pins down that an
+# arbitrary BNGL expression evaluated against a live session resolves
+# parameters, observables, global functions, and the time() / t clock
+# to the same values the dedicated accessors report, that the `extra`
+# map shadows model symbols without mutating session state, and that a
+# compile failure or a no-session call throws.
+add_executable(evaluate_expression_test cpp/evaluate_expression_test.cpp)
+target_link_libraries(evaluate_expression_test PRIVATE rulemonkey)
+
+add_test(
+    NAME evaluate_expression_test
+    COMMAND evaluate_expression_test
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_nested_functions.xml
+)
+
 # rm_driver `.gdat` function-column opt-in (issue #7): the global-function
 # columns must appear ONLY with --print-functions, matching BNGL's
 # `print_functions=>1`.  Two CTest fixtures on the same function-bearing

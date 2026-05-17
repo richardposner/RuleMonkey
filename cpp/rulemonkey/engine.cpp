@@ -3930,6 +3930,60 @@ struct Engine::Impl {
     return vals;
   }
 
+  // Evaluate an arbitrary BNGL expression against the current session
+  // state (issue #9 §1).  A fresh ExprTkEvaluator is built per call:
+  // this is a paused-session query so the compile cost is acceptable,
+  // and `extra` may carry names outside the model's symbol namespace
+  // that the engine's shared `expr_eval_` does not bind.
+  double evaluate_expression(const std::string& expr,
+                             const std::unordered_map<std::string, double>& extra) {
+    // Refresh derived state so observables / functions reflect the
+    // current (possibly between-event) pool — same staleness reasoning
+    // as get_observable_values() / get_function_values().
+    compute_observables();
+    ++eval_vars_gen;
+    update_eval_vars();
+
+    // Collect every resolvable name, model symbols first, `extra` last
+    // (so an explicit override shadows a model symbol on a name clash).
+    std::unordered_map<std::string, double> values;
+    for (const auto& name : model.parameter_names_ordered) {
+      auto it = model.parameters.find(name);
+      values[name] = (it != model.parameters.end()) ? it->second : 0.0;
+    }
+    values["t"] = current_time;
+    for (int i = 0; i < static_cast<int>(model.observables.size()); ++i)
+      values[model.observables[i].name] = eval_vars_flat[eval_obs_slot[i]];
+    for (int const fi : output_function_indices)
+      values[model.functions[fi].name] = eval_vars_flat[eval_gf_main_slot[fi]];
+    for (const auto& [name, val] : extra)
+      values[name] = val;
+
+    // Bind each name by address into a fresh evaluator.  `slots` is
+    // sized up front and never grows, so the addresses stay valid for
+    // the compile / evaluate below.
+    bngsim::ExprTkEvaluator ev;
+    ev.set_time_ptr(&current_time);
+    std::vector<double> slots;
+    std::vector<std::string> names;
+    slots.reserve(values.size());
+    names.reserve(values.size());
+    for (const auto& [name, val] : values) {
+      names.push_back(name);
+      slots.push_back(val);
+    }
+    for (size_t i = 0; i < names.size(); ++i)
+      ev.define_variable(names[i], &slots[i]);
+
+    int id = -1;
+    try {
+      id = ev.compile(expr);
+    } catch (const std::exception& e) {
+      throw std::runtime_error("evaluate_expression: cannot compile '" + expr + "': " + e.what());
+    }
+    return ev.evaluate(id);
+  }
+
   // --- Observable evaluation ---
 
   // Compute all observables (for output sampling and initialization).
@@ -7587,6 +7641,11 @@ std::vector<double> Engine::get_function_values() {
 }
 
 std::vector<std::string> Engine::function_names() const { return impl_->output_function_names; }
+
+double Engine::evaluate_expression(const std::string& expr,
+                                   const std::unordered_map<std::string, double>& extra) {
+  return impl_->evaluate_expression(expr, extra);
+}
 
 int Engine::get_molecule_count(const std::string& type_name) const {
   int const ti = impl_->model.mol_type_index(type_name);

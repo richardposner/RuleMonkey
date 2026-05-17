@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 #include "rulemonkey/types.hpp"
@@ -184,6 +185,25 @@ public:
   // forces a fresh evaluation of the observables the functions depend on.
   // Throws std::runtime_error if no session is active.
   std::vector<double> get_function_values();
+
+  // Evaluates the BNGL expression `expr` against the active session's
+  // current state and returns its numeric value (issue #9 §1).
+  //
+  // Resolvable symbols: every declared parameter, the bare clock `t` and
+  // the `time()` builtin, every observable, and every global function —
+  // all settled against the current pool, exactly as a rate law would
+  // see them between events.  The `extra` map supplies additional
+  // name=value bindings layered on top; an `extra` name shadows a model
+  // symbol on a clash, so callers can probe "what would this expression
+  // be if X were Y" without mutating session state.
+  //
+  // Non-const for the same reason as get_observable_values(): a
+  // between-event call recomputes observables (and the functions derived
+  // from them) before evaluating.
+  // Throws std::runtime_error if no session is active or if `expr` does
+  // not compile (syntax error / unresolved identifier).
+  double evaluate_expression(const std::string& expr,
+                             const std::unordered_map<std::string, double>& extra = {});
 
   // Returns the numeric parameter value that the simulator would currently use
   // for the named declared parameter, accounting for any active overrides.

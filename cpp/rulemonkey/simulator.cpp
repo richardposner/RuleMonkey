@@ -2359,6 +2359,14 @@ std::vector<double> RuleMonkeySimulator::get_function_values() {
   return impl_->session->get_function_values();
 }
 
+double
+RuleMonkeySimulator::evaluate_expression(const std::string& expr,
+                                         const std::unordered_map<std::string, double>& extra) {
+  if (!impl_->session)
+    throw std::runtime_error("No active session");
+  return impl_->session->evaluate_expression(expr, extra);
+}
+
 double RuleMonkeySimulator::get_parameter(const std::string& name) const {
   auto it = impl_->model.parameters.find(name);
   if (it == impl_->model.parameters.end())

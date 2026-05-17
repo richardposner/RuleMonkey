@@ -7,6 +7,7 @@
 #include <memory>
 #include <random>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace rulemonkey {
@@ -49,6 +50,17 @@ public:
 
   int get_molecule_count(const std::string& type_name) const;
   void add_molecules(const std::string& type_name, int count);
+
+  // Evaluate an arbitrary BNGL expression string against the current
+  // session state (issue #9 §1).  Resolvable symbols: every model
+  // parameter, the bare clock `t` and the `time()` builtin, every
+  // observable, and every global function — all settled against the
+  // current pool.  `extra` name=value bindings are layered last, so a
+  // caller-supplied name shadows a model symbol on a clash.  Non-const:
+  // observables / functions are recomputed on demand, as in
+  // get_observable_values().  Throws if `expr` fails to compile.
+  double evaluate_expression(const std::string& expr,
+                             const std::unordered_map<std::string, double>& extra = {});
 
   // Save full simulation state to file; load restores pool and derived state.
   void save_state(const std::string& path) const;
