@@ -94,6 +94,20 @@ target_include_directories(table_function_test PRIVATE ${_rulemonkey_private_inc
 
 add_test(NAME table_function_test COMMAND table_function_test)
 
+# Direct unit tests for the canonical complex labeler (issue #9 §2;
+# dev/canonical_labeling_plan_2026_05_16.md steps 1-2).  Hand-built
+# ComplexGraph shapes pinned to exact canonical strings, plus a
+# property-based test that applies random graph isomorphisms (molecule
+# + interchangeable-component permutations) and asserts the canonical
+# label is invariant — the test that catches refinement / render /
+# bond-labeling bugs.  Needs PRIVATE access to cpp/rulemonkey/canonical.hpp
+# (the labeler is engine-internal, not part of the public API).
+add_executable(canonical_test cpp/canonical_test.cpp)
+target_link_libraries(canonical_test PRIVATE rulemonkey)
+target_include_directories(canonical_test PRIVATE ${_rulemonkey_private_include_dir})
+
+add_test(NAME canonical_test COMMAND canonical_test)
+
 # Error-path regression: pins down that the documented public-API
 # error surfaces (missing file, malformed XML, unknown set_param,
 # mutators called while a session is active) throw std::runtime_error

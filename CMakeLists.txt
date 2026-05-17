@@ -38,6 +38,7 @@ add_library(rulemonkey STATIC
     cpp/rulemonkey/simulator.cpp
     cpp/rulemonkey/expr_eval.cpp
     cpp/rulemonkey/table_function.cpp
+    cpp/rulemonkey/canonical.cpp
 )
 
 target_include_directories(rulemonkey
