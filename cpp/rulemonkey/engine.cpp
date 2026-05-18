@@ -4901,20 +4901,31 @@ struct Engine::Impl {
     // delta-maintained per-mid in obs_mol_contrib by
     // incremental_update_observables, which runs before the propensity
     // recompute each event — so obs_mol_contrib is post-event fresh here.
-    // Per-molecule local eval is then a table read, with no embedding
-    // counts.  Species-type and rate-dependent observables, and
+    // Per-molecule local eval is then a table read; complex-wide eval is a
+    // sum of the per-mid contribs over the complex.  Either way no
+    // embedding counts.  Species-type and rate-dependent observables, and
     // !use_incremental_obs models, are not in this table and take the
-    // recompute fallback below.  (Complex-wide scope — issue #10 §3 — is
-    // not yet routed here; it falls through to the recompute.)
-    if (!complex_wide && use_incremental_obs && obs_idx >= 0 &&
+    // recompute fallback below.
+    if (use_incremental_obs && obs_idx >= 0 &&
         obs_idx < static_cast<int>(incr_obs_is_tracked.size()) && incr_obs_is_tracked[obs_idx] &&
         !incr_obs_is_species[obs_idx]) {
       auto& contrib = obs_mol_contrib[obs_idx];
       double fast = 0.0;
       bool fast_ok = false;
       // obs_mol_contrib grows on molecule-count growth; if it has not
-      // caught up to mol_id, fall back to recompute.
-      if (mol_id < static_cast<int>(contrib.size())) {
+      // caught up to a mid we need, fall back to recompute.
+      if (complex_wide) {
+        int const cx = pool.complex_of(mol_id);
+        fast_ok = true;
+        for (int const mid : pool.molecules_in_complex(cx)) {
+          if (mid >= static_cast<int>(contrib.size())) {
+            fast_ok = false;
+            fast = 0.0;
+            break;
+          }
+          fast += contrib[mid];
+        }
+      } else if (mol_id < static_cast<int>(contrib.size())) {
         fast = contrib[mol_id];
         fast_ok = true;
       }
