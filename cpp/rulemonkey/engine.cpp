@@ -5202,6 +5202,11 @@ struct Engine::Impl {
       auto& rule = model.rules[ri];
       auto& rs = rule_states[ri];
       auto& bi = bind_infos[ri];
+      // Per-rule, NOT per-event: local_rate_cache is keyed by complex id
+      // alone and caches the rule-specific local_rate.  Hoisting this
+      // clear to per-event scope would let one rule's complex-wide rate
+      // be reused for a different rule that touches the same complex —
+      // wrong (it made AN/ANx fail the corpus tier; issue #10).
       local_rate_cache.clear();
       if constexpr (kIncrUpdateProfile)
         incr_profile_.rule_local_rate_cache_clears++;
