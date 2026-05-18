@@ -4822,13 +4822,12 @@ struct Engine::Impl {
   // `obs_idx` is the observable's index in model.observables — used only
   // by the issue #10 spike instrumentation to key the redundancy tracker.
   // Not `const`: the spike mutates expr_eval_profile_ / eoo_spike_prev_.
-  double evaluate_observable_on(const Observable& obs, int mol_id, bool complex_wide, int obs_idx) {
-    if (!pool.molecule(mol_id).active)
-      return 0.0;
+  // From-scratch recompute of an observable's value seeded at mol_id.
+  // `width` accumulates count_embeddings_* invocations — the real work
+  // unit, read by the issue #10 spike counters and zero on the fast path.
+  double evaluate_observable_on_recompute(const Observable& obs, int mol_id, bool complex_wide,
+                                          uint64_t& width) const {
     double total = 0;
-    // count_embeddings_* invocations (issue #10 spike); unread when the
-    // profiler gate is compiled out.
-    [[maybe_unused]] uint64_t width = 0;
     if (complex_wide) {
       int const cx = pool.complex_of(mol_id);
       for (auto& pat : obs.patterns) {
@@ -4858,11 +4857,17 @@ struct Engine::Impl {
                        : count_embeddings_single(pool, mol_id, pm, model);
       }
     }
-    // issue #10 spike: classify this call against the last computation of
-    // the same (observable, scope-id) key.  Within one event the graph is
-    // static, so an unchanged result that was last seen this same epoch is
-    // reclaimable by per-event memoization; an unchanged result last seen
-    // in an earlier epoch needs a persistent incremental tracker.
+    return total;
+  }
+
+  // issue #10 spike: classify a call against the last computation of the
+  // same (observable, scope-id) key.  Within one event the graph is
+  // static, so an unchanged result last seen this same epoch is
+  // reclaimable by per-event memoization; an unchanged result last seen in
+  // an earlier epoch needs a persistent incremental tracker.  Fast-path
+  // calls record width=0, so eoo_embed_counts now tracks only the work the
+  // fallback recompute still performs — the spike confirms the fix.
+  void eoo_record_spike(int obs_idx, int mol_id, bool complex_wide, double total, uint64_t width) {
     if constexpr (kExprEvalProfile) {
       auto& p = expr_eval_profile_;
       p.eoo_calls++;
@@ -4886,6 +4891,53 @@ struct Engine::Impl {
       else
         it->second = EooSpikeRec{total, eoo_spike_epoch_};
     }
+  }
+
+  double evaluate_observable_on(const Observable& obs, int mol_id, bool complex_wide, int obs_idx) {
+    if (!pool.molecule(mol_id).active)
+      return 0.0;
+
+    // issue #10 fast path: a Molecules-type tracked observable is
+    // delta-maintained per-mid in obs_mol_contrib by
+    // incremental_update_observables, which runs before the propensity
+    // recompute each event — so obs_mol_contrib is post-event fresh here.
+    // Per-molecule local eval is then a table read, with no embedding
+    // counts.  Species-type and rate-dependent observables, and
+    // !use_incremental_obs models, are not in this table and take the
+    // recompute fallback below.  (Complex-wide scope — issue #10 §3 — is
+    // not yet routed here; it falls through to the recompute.)
+    if (!complex_wide && use_incremental_obs && obs_idx >= 0 &&
+        obs_idx < static_cast<int>(incr_obs_is_tracked.size()) && incr_obs_is_tracked[obs_idx] &&
+        !incr_obs_is_species[obs_idx]) {
+      auto& contrib = obs_mol_contrib[obs_idx];
+      double fast = 0.0;
+      bool fast_ok = false;
+      // obs_mol_contrib grows on molecule-count growth; if it has not
+      // caught up to mol_id, fall back to recompute.
+      if (mol_id < static_cast<int>(contrib.size())) {
+        fast = contrib[mol_id];
+        fast_ok = true;
+      }
+      if (fast_ok) {
+        if constexpr (kLocalObsTrackInvariant) {
+          uint64_t chk_width = 0;
+          double const ref = evaluate_observable_on_recompute(obs, mol_id, complex_wide, chk_width);
+          if (ref != fast) {
+            std::fprintf(stderr,
+                         "kLocalObsTrackInvariant: obs=%d mol=%d complex_wide=%d "
+                         "table=%.17g recompute=%.17g\n",
+                         obs_idx, mol_id, static_cast<int>(complex_wide), fast, ref);
+            std::abort();
+          }
+        }
+        eoo_record_spike(obs_idx, mol_id, complex_wide, fast, /*width=*/0);
+        return fast;
+      }
+    }
+
+    uint64_t width = 0;
+    double const total = evaluate_observable_on_recompute(obs, mol_id, complex_wide, width);
+    eoo_record_spike(obs_idx, mol_id, complex_wide, total, width);
     return total;
   }
 

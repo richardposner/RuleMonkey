@@ -182,6 +182,19 @@ if(RULEMONKEY_ENABLE_ASAN OR CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 # ---------------------------------------------------------------------------
+# Local-observable tracker self-check (issue #10).  evaluate_observable_on
+# routes tracked Molecules-type observables through the per-mid
+# obs_mol_contrib table instead of a from-scratch embedding recompute.  The
+# table is delta-maintained by incremental_update_observables; correctness
+# is proven by an invariant — every fast-path read must equal the
+# from-scratch recompute.  Compiled IN for Debug and ASan, OUT of Release,
+# matching the canonical-cache self-check above.
+# ---------------------------------------------------------------------------
+if(RULEMONKEY_ENABLE_ASAN OR CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_definitions(rulemonkey PRIVATE RULEMONKEY_LOCAL_OBS_SELFCHECK)
+endif()
+
+# ---------------------------------------------------------------------------
 # Examples (off by default — host projects opt in)
 # ---------------------------------------------------------------------------
 option(RULEMONKEY_BUILD_EXAMPLES "Build the C++ embedding examples" OFF)

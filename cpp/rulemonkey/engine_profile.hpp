@@ -175,6 +175,19 @@ inline constexpr bool kCanonicalCacheSelfCheck = true;
 inline constexpr bool kCanonicalCacheSelfCheck = false;
 #endif
 
+// Local-observable tracker self-check (issue #10).  evaluate_observable_on's
+// obs_mol_contrib fast path must equal a from-scratch embedding recompute.
+// When on, evaluate_observable_on computes both and std::abort()s on
+// mismatch.  Like kCanonicalCacheSelfCheck this is build-type driven: the
+// RULEMONKEY_LOCAL_OBS_SELFCHECK compile definition is set by CMakeLists.txt
+// for Debug and ASan and left unset for Release, so ctest and the guard
+// tier exercise the invariant while Release takes the bare table read.
+#ifdef RULEMONKEY_LOCAL_OBS_SELFCHECK
+inline constexpr bool kLocalObsTrackInvariant = true;
+#else
+inline constexpr bool kLocalObsTrackInvariant = false;
+#endif
+
 // ===========================================================================
 // Profile struct definitions
 // ---------------------------------------------------------------------------
