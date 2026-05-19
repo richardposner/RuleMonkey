@@ -188,12 +188,33 @@ template <typename T> struct StdFunc3Adapter : public exprtk::ifunction<T> {
 //      we only rewrite identifiers that were actually mangled at
 //      registration. The mangling map is per-evaluator and lives on Impl.
 
+static const std::unordered_set<std::string> &exprtk_reserved_identifiers() {
+    static const std::unordered_set<std::string> reserved = [] {
+        std::unordered_set<std::string> names;
+        names.reserve(exprtk::details::reserved_words_size + exprtk::details::reserved_symbols_size);
+        for (std::size_t i = 0; i < exprtk::details::reserved_words_size; ++i) {
+            names.insert(exprtk::details::reserved_words[i]);
+        }
+        for (std::size_t i = 0; i < exprtk::details::reserved_symbols_size; ++i) {
+            names.insert(exprtk::details::reserved_symbols[i]);
+        }
+        return names;
+    }();
+    return reserved;
+}
+
+static const std::unordered_set<std::string> &bngsim_exprtk_aliases() {
+    static const std::unordered_set<std::string> aliases = {"ln", "rint", "sign", "mratio", "time"};
+    return aliases;
+}
+
 static bool is_exprtk_reserved(const std::string &name) {
     // Names that, if registered as a user variable, would collide with
     // a name already taken by the symbol table. Two sources:
     //
-    //   1. ExprTk's reserved_words[] + reserved_symbols[] (see
-    //      third_party/exprtk/exprtk.hpp). Both lists reject add_variable().
+    //   1. ExprTk's current reserved_words[] + reserved_symbols[] lists,
+    //      read directly from the vendored upstream header so bumps cannot
+    //      silently drift away from our mangling assumptions.
     //
     //   2. bngsim-specific function aliases registered in
     //      ExprTkEvaluator::Impl::init_builtins() (`ln`, `rint`, `sign`,
@@ -208,21 +229,10 @@ static bool is_exprtk_reserved(const std::string &name) {
     //
     // Comparison is exact (case-sensitive) because we build with
     // exprtk_disable_caseinsensitivity, so e.g. `Const` is not reserved.
-    static const std::unordered_set<std::string> reserved = {
-        // Control-flow / language keywords (ExprTk reserved_words[])
-        "assert", "break", "case", "continue", "const", "default", "false", "for", "if", "else",
-        "ilike", "in", "like", "and", "nand", "nor", "not", "null", "or", "repeat", "return", "shl",
-        "shr", "swap", "switch", "true", "until", "var", "while", "xnor", "xor",
-        // Built-in math / utility functions (ExprTk reserved_symbols[])
-        "abs", "acos", "acosh", "asin", "asinh", "atan", "atanh", "atan2", "avg", "ceil", "clamp",
-        "cos", "cosh", "cot", "csc", "deg2grad", "deg2rad", "equal", "erf", "erfc", "exp", "expm1",
-        "floor", "frac", "grad2deg", "hypot", "iclamp", "inrange", "log", "log10", "log2", "logn",
-        "log1p", "mand", "max", "min", "mod", "mor", "mul", "ncdf", "not_equal", "pow", "rad2deg",
-        "root", "round", "roundn", "sec", "sgn", "sin", "sinc", "sinh", "sqrt", "sum", "tan",
-        "tanh", "trunc",
-        // bngsim-registered function aliases (init_builtins)
-        "ln", "rint", "sign", "mratio", "time"};
-    return reserved.find(name) != reserved.end();
+    const auto &exprtk_reserved = exprtk_reserved_identifiers();
+    const auto &bngsim_aliases = bngsim_exprtk_aliases();
+    return exprtk_reserved.find(name) != exprtk_reserved.end() ||
+           bngsim_aliases.find(name) != bngsim_aliases.end();
 }
 
 // Compute the symbol-table key for `name` at registration time.

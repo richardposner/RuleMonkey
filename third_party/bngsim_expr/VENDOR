@@ -1,30 +1,31 @@
-Vendored ExprTk expression evaluator
-=====================================
+Vendored BNGsim expression evaluator
+======================================
 
-RuleMonkey's rate-law / function / parameter expression evaluator is
-bngsim::ExprTkEvaluator (see issue #6).  These three files are copied
-verbatim from BNGsim and are compiled ONLY in a standalone RuleMonkey
-build: CMakeLists.txt gates them on `if(TARGET bngsim::expression)`, so
-inside a BNGsim build RM links the host's copy instead.
+RuleMonkey's standalone rate-law / function / parameter expression
+evaluator is bngsim::ExprTkEvaluator. These files are copied verbatim
+from BNGsim and are compiled only in standalone RuleMonkey builds;
+inside a BNGsim build, RuleMonkey links the host bngsim::expression
+target instead.
 
-Source repo  : BNGsim (github.com/wshlavacek/PyBNF-Private, bngsim/ subdir)
-Pinned commit: f5cbc33c42f9c84ade79287cb80da44c908e1406
+Source repo  : git@github.com:wshlavacek/PyBNF-Private.git
+Source subdir: bngsim
+Pinned commit: c3987d5bb00af6a12dfe5ba1228a6322099de0f5
+Metadata     : third_party/bngsim_expr/VENDOR.json
 
 Vendored files (copied verbatim, no edits):
-  third_party/exprtk/exprtk.hpp                         <- bngsim third_party/exprtk/exprtk.hpp
+  third_party/exprtk/exprtk.hpp <- bngsim third_party/exprtk/exprtk.hpp
   third_party/bngsim_expr/include/bngsim/expression.hpp <- bngsim include/bngsim/expression.hpp
-  third_party/bngsim_expr/src/expression.cpp            <- bngsim src/expression.cpp
+  third_party/bngsim_expr/src/expression.cpp <- bngsim src/expression.cpp
 
 Refresh / drift-check
 ---------------------
-This file is maintained by scripts/vendor_exprtk.py — the `Pinned commit:`
-line above is the machine-readable pin (do not reformat it).
+This file is a human-readable companion to VENDOR.json. The JSON
+metadata is the source of truth for checksums and provenance.
 
-  scripts/vendor_exprtk.py            # re-copy the 3 files from BNGsim main, re-pin
-  scripts/vendor_exprtk.py --ref <r>  # ... from a specific BNGsim ref/tag/commit
-  scripts/vendor_exprtk.py --check    # verify the 3 files still match the pin
+  scripts/vendor_exprtk.py --bngsim-repo /path/to/bngsim
+  scripts/vendor_exprtk.py --bngsim-repo /path/to/bngsim --summary
+  scripts/vendor_exprtk.py --check
 
-exprtk.hpp is header-only — two identical copies merge fine, but version
-skew between RM's copy and BNGsim's is undefined behavior (an ODR
-violation).  `--check` is the guard against that drift; run it (or wire it
-into CI) when bumping the pin.  See dev/exprtk_swap_plan_2026_05_16.md §4.3a.
+exprtk.hpp is header-only, but version skew between RuleMonkey's
+standalone copy and BNGsim's expression layer is undefined behavior
+(an ODR violation). The vendoring check guards against that drift.
