@@ -9,7 +9,7 @@ target instead.
 
 Source repo  : git@github.com:wshlavacek/PyBNF-Private.git
 Source subdir: bngsim
-Pinned commit: c3987d5bb00af6a12dfe5ba1228a6322099de0f5
+Pinned commit: 330cfcc4913a98bd45f2dc80da047621a2ed8092
 Metadata     : third_party/bngsim_expr/VENDOR.json
 
 Vendored files (copied verbatim, no edits):

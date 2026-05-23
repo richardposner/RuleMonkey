@@ -21,8 +21,15 @@
 
 #include "bngsim/expression.hpp"
 
+#include <algorithm>
 #include <cmath>
+#include <cstdint>
+#include <cstdio>
+#include <cstring>
+#include <initializer_list>
+#include <iostream>
 #include <stdexcept>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
@@ -31,102 +38,223 @@ namespace bngsim {
 
 // ─── Mratio: confluent hypergeometric ratio M(a+1,b+1,z)/M(a,b,z) ───────────
 //
-// Ported from BNG's Util::Mratio (W. S. Hlavacek, 2018).
-// Uses modified Lentz continued fraction method.
+// Direct port of BNG2.pl Perl2/Expression.pm `sub Mratio`
+// (Fortran by W. S. Hlavacek 2018; Perl by L. A. Harris 2019).
+//
+// Uses Gauss's continued fraction for the ratio of contiguous Kummer 1F1
+// functions, evaluated by the modified Lentz method
+// [Lentz 1976 Applied Optics 15:668-671; Thompson & Barnett 1986 J Comput
+// Phys 64:490-509].
+//
+// CF coefficients (q_j = 1 for all j; q_0 = 0):
+//   p_1 = 1
+//   p_2 = z * [a - (b+0)] / [(b+0) * (b+1)]
+//   p_3 = z * (a + 1)     / [(b+1) * (b+2)]
+//   p_4 = z * [a - (b+1)] / [(b+2) * (b+3)]
+//   p_5 = z * (a + 2)     / [(b+3) * (b+4)]
+//   ...
+//
+// Why Lentz rather than the direct power-series for M: Lentz works with
+// the per-step ratio Δ_j = C_j·D_j ≈ 1 and never accumulates the partial
+// sums of M(a,b,z) and M(a+1,b+1,z) themselves. For BNG inputs with large
+// negative-integer `a` and large `|z|` (e.g. test_Mratio_1: a=-1000, b=9001,
+// z=-10000) the equivalent series partial sums peak around 1.5e308 — past
+// double's representable range — and the ratio becomes inf/inf = nan. Lentz
+// stays O(1) throughout and converges in a few hundred iterations even on
+// those inputs.
 static double mratio_impl(double a, double b, double z) {
-    // M(a+1,b+1,z)/M(a,b,z) via continued fraction (Gauss).
-    // The continued fraction for the ratio of contiguous 1F1 functions:
-    //   M(a+1,b+1,z)/M(a,b,z) = 1/(1 - az/b(b+1) / (1 - (a+1)z/(b+1)(b+2) / ...))
-    //
-    // Evaluated using the modified Lentz algorithm.
+    constexpr double eps = 1.0e-16;
+    constexpr double tiny = 1.0e-32;
+    // Safety cap so a pathological non-converging case fails loud rather
+    // than hanging. BNG's reference has no cap; in practice the supported
+    // parameter ranges converge in well under this bound.
+    constexpr int max_iter = 100000;
 
-    const double tiny = 1.0e-30;
-    const double eps = 1.0e-15;
-    const int max_iter = 10000;
+    // Initialize per the modified-Lentz recipe: f_0 = q_0, but q_0 = 0
+    // here, so substitute `tiny`. C_0 = f_0, D_0 = 0.
+    double fsave = tiny;
+    double Csave = fsave;
+    double Dsave = 0.0;
+    double err = 1.0 + eps;
 
-    // Use the recurrence: M(a+1,b+1,z)/M(a,b,z)
-    // via the continued fraction representation.
-    // Reference: Abramowitz & Stegun 13.5; DLMF 13.2.
-    //
-    // The CF coefficients for the ratio r = M(a+1,b+1,z)/M(a,b,z):
-    //   r = b/(b - z + ...) with specific CF terms.
-    //
-    // Using the simpler series ratio approach from BNG:
-    // Compute ratio via Lentz method on the CF:
-    //   f = b/(b-z + CF)
-    // where CF has terms a_n/b_n.
+    // Parity bookkeeping: even-indexed and odd-indexed CF terms use
+    // different formulas for p_j. The flags alternate after every step.
+    int odd = 1;
+    int even = 0;
+    int iodd = 0;
+    int ieven = 0;
+    double f = 0.0;
 
-    // Direct implementation matching BNG's Util::Mratio:
-    // Use the Gauss continued fraction for the ratio of Kummer functions.
-    //
-    // The ratio M(a+1,b+1,z)/M(a,b,z) can be expressed as:
-    //   b / (b - z * M(a+1,b+2,z)/M(a+1,b+1,z))
-    //
-    // This leads to the CF:
-    //   r = b / (b - z * (a+1)/(b+1) / (1 + z*(b-a)/(b+1)(b+2) / (1 + ...)))
-    //
-    // We use the standard Lentz algorithm.
-
-    // Actually, let's use the direct series computation which is more robust
-    // for the parameter ranges encountered in BNG models.
-
-    // Compute M(a,b,z) and M(a+1,b+1,z) by series and take ratio.
-    // M(a,b,z) = sum_{n=0}^{inf} (a)_n / (b)_n * z^n / n!
-
-    double term0 = 1.0; // running term for M(a,b,z)
-    double sum0 = 1.0;  // partial sum for M(a,b,z)
-    double term1 = 1.0; // running term for M(a+1,b+1,z)
-    double sum1 = 1.0;  // partial sum for M(a+1,b+1,z)
-
-    for (int n = 1; n <= max_iter; ++n) {
-        double nn = static_cast<double>(n);
-        term0 *= (a + nn - 1.0) / (b + nn - 1.0) * z / nn;
-        sum0 += term0;
-        term1 *= (a + nn) / (b + nn) * z / nn;
-        sum1 += term1;
-
-        // Check convergence of both series
-        if (std::abs(term0) < eps * std::abs(sum0) && std::abs(term1) < eps * std::abs(sum1)) {
-            return sum1 / sum0;
+    int j = 0;
+    while (err > eps) {
+        ++j;
+        if (j > max_iter) {
+            throw std::runtime_error("mratio: modified-Lentz continued fraction failed to converge "
+                                     "within " +
+                                     std::to_string(max_iter) +
+                                     " iterations "
+                                     "(a=" +
+                                     std::to_string(a) + ", b=" + std::to_string(b) +
+                                     ", z=" + std::to_string(z) + ")");
         }
+
+        double p;
+        if (j == 1) {
+            p = 1.0;
+        } else {
+            const double den = (b + (j - 2)) * (b + (j - 1));
+            double num;
+            if (odd == 1) {
+                ++iodd;
+                num = z * (a + iodd);
+            } else {
+                ++ieven;
+                num = z * (a - (b + (ieven - 1)));
+            }
+            p = num / den;
+        }
+        constexpr double q = 1.0;
+
+        double D = q + p * Dsave;
+        if (std::abs(D) < tiny) {
+            D = tiny;
+        }
+        double C = q + p / Csave;
+        if (std::abs(C) < tiny) {
+            C = tiny;
+        }
+        D = 1.0 / D;
+
+        const double Delta = C * D;
+        f = Delta * fsave;
+        err = std::abs(Delta - 1.0);
+
+        fsave = f;
+        Csave = C;
+        Dsave = D;
+        std::swap(odd, even);
+    }
+    return f;
+}
+
+// ─── Non-finite return diagnostic ─────────────────────────────────────────────
+//
+// Custom functions handed to ExprTk that return nan/inf produce silent
+// propagation through every downstream expression — exactly how issue #42
+// went undiagnosed for so long (mratio overflowed to nan, and U1_U0 /
+// C_mean / C_sdev / C_theory all just became nan with no logging).
+//
+// This helper traps the next such bug by stamping a one-time warning on
+// stderr whenever a registered function returns a non-finite value, then
+// deduplicating by (function name + argument bit-pattern) so that a
+// long-running ODE that repeatedly evaluates the same bad input prints
+// once rather than once-per-step. Argument bits are compared verbatim
+// (no value equality), so nan-valued inputs deduplicate cleanly.
+//
+// Lives on ExprTkEvaluator::Impl; each adapter holds a back-pointer that
+// is null only in default-constructed temporaries.
+class NonFiniteWarningSet {
+  public:
+    void warn_if_nonfinite(const char *fname, std::initializer_list<double> args, double result) {
+        if (std::isfinite(result)) {
+            return;
+        }
+        std::string key(fname);
+        for (double a : args) {
+            std::uint64_t bits;
+            std::memcpy(&bits, &a, sizeof(bits));
+            char buf[20];
+            std::snprintf(buf, sizeof(buf), ":%016llx", static_cast<unsigned long long>(bits));
+            key.append(buf);
+        }
+        if (!seen_.insert(std::move(key)).second) {
+            return;
+        }
+        std::cerr << "bngsim: warning: '" << fname << "(";
+        const char *sep = "";
+        for (double a : args) {
+            std::cerr << sep << a;
+            sep = ", ";
+        }
+        std::cerr << ")' returned " << result
+                  << "; the value will propagate through any expression that "
+                     "references this call. Further occurrences with the same "
+                     "arguments will be silent."
+                  << std::endl;
     }
 
-    // If we didn't converge, return best estimate
-    return sum1 / sum0;
-}
+  private:
+    std::unordered_set<std::string> seen_;
+};
 
 // ─── ExprTk custom function adapters ─────────────────────────────────────────
 //
-// ExprTk requires inheriting from ifunction for custom functions.
+// ExprTk requires inheriting from ifunction for custom functions. Each
+// adapter holds a back-pointer to a NonFiniteWarningSet so a function
+// that returns nan/inf is surfaced once on stderr instead of silently
+// propagating (issue #42 follow-up).
 
 // 3-arg: mratio(a, b, z)
 template <typename T> struct MratioFunction : public exprtk::ifunction<T> {
+    NonFiniteWarningSet *warner = nullptr;
     MratioFunction() : exprtk::ifunction<T>(3) {
         exprtk::ifunction<T>::allow_zero_parameters() = false;
     }
     T operator()(const T &a, const T &b, const T &z) override {
-        return static_cast<T>(
-            mratio_impl(static_cast<double>(a), static_cast<double>(b), static_cast<double>(z)));
+        const double da = static_cast<double>(a);
+        const double db = static_cast<double>(b);
+        const double dz = static_cast<double>(z);
+        const double r = mratio_impl(da, db, dz);
+        if (warner) {
+            warner->warn_if_nonfinite("mratio", {da, db, dz}, r);
+        }
+        return static_cast<T>(r);
     }
 };
 
 // 1-arg aliases for backward compat
 template <typename T> struct LnFunction : public exprtk::ifunction<T> {
+    NonFiniteWarningSet *warner = nullptr;
     LnFunction() : exprtk::ifunction<T>(1) {}
-    T operator()(const T &x) override { return std::log(x); }
+    T operator()(const T &x) override {
+        const double dx = static_cast<double>(x);
+        const double r = std::log(dx);
+        if (warner) {
+            warner->warn_if_nonfinite("ln", {dx}, r);
+        }
+        return static_cast<T>(r);
+    }
 };
 
 template <typename T> struct RintFunction : public exprtk::ifunction<T> {
+    NonFiniteWarningSet *warner = nullptr;
     RintFunction() : exprtk::ifunction<T>(1) {}
-    T operator()(const T &x) override { return std::round(x); }
+    T operator()(const T &x) override {
+        const double dx = static_cast<double>(x);
+        const double r = std::round(dx);
+        if (warner) {
+            warner->warn_if_nonfinite("rint", {dx}, r);
+        }
+        return static_cast<T>(r);
+    }
 };
 
 template <typename T> struct SignFunction : public exprtk::ifunction<T> {
+    NonFiniteWarningSet *warner = nullptr;
     SignFunction() : exprtk::ifunction<T>(1) {}
-    T operator()(const T &x) override { return (x > 0.0) ? 1.0 : ((x < 0.0) ? -1.0 : 0.0); }
+    T operator()(const T &x) override {
+        const double dx = static_cast<double>(x);
+        const double r = (dx > 0.0) ? 1.0 : ((dx < 0.0) ? -1.0 : 0.0);
+        if (warner) {
+            warner->warn_if_nonfinite("sign", {dx}, r);
+        }
+        return static_cast<T>(r);
+    }
 };
 
-// 0-arg: time() — reads from a bound double*
+// 0-arg: time() — reads from a bound double*. No warner: the simulator
+// owns the time pointer and a non-finite t would be a higher-level bug
+// flagged by the integrator, not by this layer.
 template <typename T> struct TimeFunction : public exprtk::ifunction<T> {
     double *time_ptr = nullptr;
     TimeFunction() : exprtk::ifunction<T>(0) {
@@ -135,34 +263,73 @@ template <typename T> struct TimeFunction : public exprtk::ifunction<T> {
     T operator()() override { return time_ptr ? static_cast<T>(*time_ptr) : T(0); }
 };
 
-// Adapter for std::function-based custom functions (0-3 args)
+// Adapter for std::function-based custom functions (0-3 args). The
+// user-supplied function name is stored so the warning message can
+// identify the offender — define_function() copies it from the
+// registration argument.
 template <typename T> struct StdFunc0Adapter : public exprtk::ifunction<T> {
     std::function<double()> fn;
+    NonFiniteWarningSet *warner = nullptr;
+    std::string fname;
     StdFunc0Adapter(std::function<double()> f) : exprtk::ifunction<T>(0), fn(std::move(f)) {
         exprtk::ifunction<T>::allow_zero_parameters() = true;
     }
-    T operator()() override { return static_cast<T>(fn()); }
+    T operator()() override {
+        const double r = fn();
+        if (warner) {
+            warner->warn_if_nonfinite(fname.c_str(), {}, r);
+        }
+        return static_cast<T>(r);
+    }
 };
 
 template <typename T> struct StdFunc1Adapter : public exprtk::ifunction<T> {
     std::function<double(double)> fn;
+    NonFiniteWarningSet *warner = nullptr;
+    std::string fname;
     StdFunc1Adapter(std::function<double(double)> f) : exprtk::ifunction<T>(1), fn(std::move(f)) {}
-    T operator()(const T &x) override { return static_cast<T>(fn(x)); }
+    T operator()(const T &x) override {
+        const double dx = static_cast<double>(x);
+        const double r = fn(dx);
+        if (warner) {
+            warner->warn_if_nonfinite(fname.c_str(), {dx}, r);
+        }
+        return static_cast<T>(r);
+    }
 };
 
 template <typename T> struct StdFunc2Adapter : public exprtk::ifunction<T> {
     std::function<double(double, double)> fn;
+    NonFiniteWarningSet *warner = nullptr;
+    std::string fname;
     StdFunc2Adapter(std::function<double(double, double)> f)
         : exprtk::ifunction<T>(2), fn(std::move(f)) {}
-    T operator()(const T &x, const T &y) override { return static_cast<T>(fn(x, y)); }
+    T operator()(const T &x, const T &y) override {
+        const double dx = static_cast<double>(x);
+        const double dy = static_cast<double>(y);
+        const double r = fn(dx, dy);
+        if (warner) {
+            warner->warn_if_nonfinite(fname.c_str(), {dx, dy}, r);
+        }
+        return static_cast<T>(r);
+    }
 };
 
 template <typename T> struct StdFunc3Adapter : public exprtk::ifunction<T> {
     std::function<double(double, double, double)> fn;
+    NonFiniteWarningSet *warner = nullptr;
+    std::string fname;
     StdFunc3Adapter(std::function<double(double, double, double)> f)
         : exprtk::ifunction<T>(3), fn(std::move(f)) {}
     T operator()(const T &x, const T &y, const T &z) override {
-        return static_cast<T>(fn(x, y, z));
+        const double dx = static_cast<double>(x);
+        const double dy = static_cast<double>(y);
+        const double dz = static_cast<double>(z);
+        const double r = fn(dx, dy, dz);
+        if (warner) {
+            warner->warn_if_nonfinite(fname.c_str(), {dx, dy, dz}, r);
+        }
+        return static_cast<T>(r);
     }
 };
 
@@ -191,7 +358,8 @@ template <typename T> struct StdFunc3Adapter : public exprtk::ifunction<T> {
 static const std::unordered_set<std::string> &exprtk_reserved_identifiers() {
     static const std::unordered_set<std::string> reserved = [] {
         std::unordered_set<std::string> names;
-        names.reserve(exprtk::details::reserved_words_size + exprtk::details::reserved_symbols_size);
+        names.reserve(exprtk::details::reserved_words_size +
+                      exprtk::details::reserved_symbols_size);
         for (std::size_t i = 0; i < exprtk::details::reserved_words_size; ++i) {
             names.insert(exprtk::details::reserved_words[i]);
         }
@@ -271,6 +439,12 @@ struct ExprTkEvaluator::Impl {
 
     // User-registered custom functions (owned, heap-allocated)
     std::vector<std::unique_ptr<exprtk::ifunction<double>>> user_functions;
+
+    // Diagnostic state: every custom-function adapter carries a back-pointer
+    // to this set, so a function that returns nan/inf gets one warning on
+    // stderr the first time a given (name, args) tuple misbehaves. Per
+    // evaluator (no globals); not copied across clone_empty().
+    NonFiniteWarningSet nonfinite_warner;
 
     // Names that were mangled at registration to avoid ExprTk reserved-word
     // collisions (key: original BNG name, value: ExprTk symbol-table key).
@@ -395,6 +569,13 @@ struct ExprTkEvaluator::Impl {
         add_remapped_constant("_h", 6.62607015e-34);
         add_remapped_constant("_F", 96485.33212331002);
 
+        // Wire the non-finite-return diagnostic into every owned adapter.
+        // time_func is intentionally omitted (see TimeFunction comment).
+        mratio_func.warner = &nonfinite_warner;
+        ln_func.warner = &nonfinite_warner;
+        rint_func.warner = &nonfinite_warner;
+        sign_func.warner = &nonfinite_warner;
+
         // Register backward-compatible aliases
         symbol_table.add_function("ln", ln_func);
         symbol_table.add_function("rint", rint_func);
@@ -462,24 +643,32 @@ void ExprTkEvaluator::define_constant(const std::string &name, double value) {
 
 void ExprTkEvaluator::define_function(const std::string &name, Func0 fn) {
     auto adapter = std::make_unique<StdFunc0Adapter<double>>(std::move(fn));
+    adapter->warner = &impl_->nonfinite_warner;
+    adapter->fname = name;
     impl_->symbol_table.add_function(name, *adapter);
     impl_->user_functions.push_back(std::move(adapter));
 }
 
 void ExprTkEvaluator::define_function(const std::string &name, Func1 fn) {
     auto adapter = std::make_unique<StdFunc1Adapter<double>>(std::move(fn));
+    adapter->warner = &impl_->nonfinite_warner;
+    adapter->fname = name;
     impl_->symbol_table.add_function(name, *adapter);
     impl_->user_functions.push_back(std::move(adapter));
 }
 
 void ExprTkEvaluator::define_function(const std::string &name, Func2 fn) {
     auto adapter = std::make_unique<StdFunc2Adapter<double>>(std::move(fn));
+    adapter->warner = &impl_->nonfinite_warner;
+    adapter->fname = name;
     impl_->symbol_table.add_function(name, *adapter);
     impl_->user_functions.push_back(std::move(adapter));
 }
 
 void ExprTkEvaluator::define_function(const std::string &name, Func3 fn) {
     auto adapter = std::make_unique<StdFunc3Adapter<double>>(std::move(fn));
+    adapter->warner = &impl_->nonfinite_warner;
+    adapter->fname = name;
     impl_->symbol_table.add_function(name, *adapter);
     impl_->user_functions.push_back(std::move(adapter));
 }
