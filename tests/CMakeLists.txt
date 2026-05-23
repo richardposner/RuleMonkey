@@ -134,6 +134,7 @@ add_test(
     NAME species_methods_test
     COMMAND species_methods_test
         ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
+        ${_rulemonkey_test_dir}/cpp/species_order_model.xml
 )
 
 # Species enumeration + `.species` output (issue #9 §2): exercises the

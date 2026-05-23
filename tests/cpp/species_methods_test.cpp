@@ -126,6 +126,45 @@ void test_ssa_runs_after_mutation(rulemonkey::RuleMonkeySimulator& sim) {
   check(sim.get_species_count(kMonomer) >= 0, "get_species_count is callable post-simulate");
 }
 
+// Issue #13: get/match must be component-order-insensitive, consistent
+// with the add path.  The species_order model declares X with a
+// stateful `p~0~1` and a stateless `y`, seeded with 5000 X(p~0,y).  An
+// exact pattern written with the components in either order denotes the
+// same species, so get_species_count must return 5000 for both — and
+// set_species_count must reach an exact target regardless of the order
+// the caller wrote the pattern in (the silent wrong-baseline bug).
+void test_component_order_insensitive(const std::string& order_xml) {
+  rulemonkey::RuleMonkeySimulator sim(order_xml);
+  sim.initialize(/*seed=*/11);
+
+  const int n = sim.get_species_count("X(p~0,y)");
+  check(n == 5000, "X(p~0,y) seeds 5000 copies");
+  check(sim.get_species_count("X(y,p~0)") == n,
+        "get_species_count is component-order-insensitive: X(y,p~0) == X(p~0,y)");
+
+  // Mutate the *other* species (X(p~1,y)) through both orders and
+  // confirm the match path tracks it either way.
+  sim.add_species("X(y,p~1)", 25); // non-canonical order on the add path
+  check(sim.get_species_count("X(p~1,y)") == 25,
+        "add_species with swapped components creates the species the canonical order matches");
+  check(sim.get_species_count("X(y,p~1)") == 25, "...and the swapped-order query agrees");
+
+  // set_species_count with a NON-canonical order must reach exactly N,
+  // not diff against a wrong-order baseline of 0 and overshoot.
+  sim.set_species_count("X(p~1,y)", 100); // canonical order
+  check(sim.get_species_count("X(y,p~1)") == 100, "set to 100 via canonical order lands on 100");
+  sim.set_species_count("X(y,p~1)", 40); // non-canonical order, drives down
+  check(sim.get_species_count("X(p~1,y)") == 40,
+        "set_species_count with swapped components reaches the exact target");
+
+  // remove_species via the swapped order targets the right species.
+  sim.remove_species("X(y,p~1)", 40);
+  check(sim.get_species_count("X(p~1,y)") == 0,
+        "remove_species with swapped components removes the matched species");
+
+  sim.destroy_session();
+}
+
 void test_error_surface(const std::string& xml) {
   rulemonkey::RuleMonkeySimulator sim(xml);
 
@@ -154,11 +193,12 @@ void test_error_surface(const std::string& xml) {
 } // namespace
 
 int main(int argc, char* argv[]) {
-  if (argc < 2) {
-    std::fprintf(stderr, "Usage: species_methods_test <A_plus_A.xml>\n");
+  if (argc < 3) {
+    std::fprintf(stderr, "Usage: species_methods_test <A_plus_A.xml> <species_order_model.xml>\n");
     return 2;
   }
   const std::string xml = argv[1];
+  const std::string order_xml = argv[2];
 
   try {
     rulemonkey::RuleMonkeySimulator sim(xml);
@@ -171,6 +211,7 @@ int main(int argc, char* argv[]) {
     sim.destroy_session();
 
     test_error_surface(xml);
+    test_component_order_insensitive(order_xml);
   } catch (const std::exception& e) {
     std::fprintf(stderr, "EXCEPTION: %s\n", e.what());
     return 2;

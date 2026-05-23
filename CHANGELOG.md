@@ -5,6 +5,28 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.1] — 2026-05-23
+
+### Fixed
+
+- **Exact-species pattern methods are now component-order-insensitive.**
+  The `#9` session methods `get_species_count` / `remove_species` /
+  `set_species_count` matched a species only when its components were
+  written in RuleMonkey's own canonical order; a semantically identical
+  pattern with the components swapped (e.g. `X(p~0,y)` for the canonical
+  `X(y,p~0)`) silently matched nothing and returned 0. The `add_species`
+  path, by contrast, already placed components by molecule-type
+  declaration index, so it *did* canonicalize — leaving
+  `set_species_count` with a non-canonical pattern diffing against a
+  wrong baseline of 0 and overshooting its target. The fix routes the
+  match path through the same declaration-order placement
+  (`pattern_to_complex_graph` now orders each molecule's components by
+  `comp_type_index` and remaps bond endpoints accordingly), matching
+  `extract_complex` and NFsim's order-insensitive exact-species matcher.
+  Closes [#13](https://github.com/richardposner/RuleMonkey/issues/13);
+  follow-up to
+  [#9](https://github.com/richardposner/RuleMonkey/issues/9).
+
 ## [3.2.0] — 2026-05-18
 
 ### Added

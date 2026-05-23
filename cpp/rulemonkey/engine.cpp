@@ -7774,29 +7774,43 @@ canonical::ComplexGraph extract_complex(const AgentPool& pool, const Model& mode
 // Build a ComplexGraph straight from a parsed species Pattern (issue #9
 // §1) — the parse-side analogue of extract_complex.  `pat` is an exact,
 // fully-specified species from parse_species_pattern, so each pattern
-// molecule carries every component (in listed order) with a concrete
-// state, and pat.bonds gives the edges by flat component index.  The
-// graph is isomorphic to the one extract_complex builds for the same
-// physical species, so canonical_label yields the same string — that
-// is what makes pattern-keyed species_count a byte-equal lookup.
+// molecule carries every component (once) with a concrete state, and
+// pat.bonds gives the edges by flat component index.  The graph is
+// isomorphic to the one extract_complex builds for the same physical
+// species, so canonical_label yields the same string — that is what
+// makes pattern-keyed species_count a byte-equal lookup.
+//
+// Components are placed in molecule-type DECLARATION order (by
+// comp_type_index), exactly as extract_complex feeds the pool's
+// components.  canonical_label preserves the input's component-name
+// slot layout (canonical.cpp §3.3 "component-order contract"), so a
+// pattern listed in a non-canonical component order — e.g. "X(p~0,y)"
+// for the canonical "X(y,p~0)" — must be reordered here, or it yields a
+// different label and silently matches nothing while the add path
+// (instantiate_pattern_complex, which already keys by comp_type_index)
+// does match.  That divergence was issue #13.
 canonical::ComplexGraph pattern_to_complex_graph(const Pattern& pat) {
   canonical::ComplexGraph g;
   for (const auto& pm : pat.molecules) {
-    std::vector<std::pair<std::string, std::string>> comps;
-    comps.reserve(pm.components.size());
+    // Slot i carries the molecule type's i-th declared component.  The
+    // pattern is fully specified (every type component listed exactly
+    // once), so comp_type_index is a bijection onto [0, n) and every
+    // slot is filled.
+    std::vector<std::pair<std::string, std::string>> comps(pm.components.size());
     for (const auto& pc : pm.components)
-      comps.emplace_back(pc.name, pc.required_state); // "" for a stateless component
+      comps[pc.comp_type_index] = {pc.name, pc.required_state}; // "" if stateless
     g.add_molecule(pm.type_name, comps);
   }
-  // pat.bonds endpoints are flat component indices; map each back to its
-  // (molecule index, local component index) — components were fed to
-  // add_molecule in the same listed order pat.flat_index() counts in.
+  // pat.bonds endpoints are flat indices in the pattern's *listed* order;
+  // map each back to (molecule index, declaration-order local index) so
+  // the bond lands on the reordered component above.
   const auto flat_to_loc = [&pat](int flat) -> std::pair<int, int> {
     int acc = 0;
     for (int mi = 0; mi < static_cast<int>(pat.molecules.size()); ++mi) {
-      const int n = static_cast<int>(pat.molecules[mi].components.size());
+      const auto& mol = pat.molecules[mi];
+      const int n = static_cast<int>(mol.components.size());
       if (flat < acc + n)
-        return {mi, flat - acc};
+        return {mi, mol.components[flat - acc].comp_type_index};
       acc += n;
     }
     throw std::runtime_error("pattern_to_complex_graph: flat-index overflow");
