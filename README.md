@@ -1,4 +1,4 @@
-<p align="center">
+<p align="left">
   <img src="docs/rulemonkey-macaque-logo/rulemonkey-readme-card.svg" alt="RuleMonkey" width="65%">
 </p>
 
