@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/rulemonkey-macaque-logo/rulemonkey-readme-card.svg" alt="RuleMonkey" width="100%">
+</p>
+
 # RuleMonkey
 
 A network-free stochastic simulator for rule-based biochemical models written
