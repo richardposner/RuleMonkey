@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/rulemonkey-macaque-logo/rulemonkey-readme-card.svg" alt="RuleMonkey" width="100%">
+  <img src="docs/rulemonkey-macaque-logo/rulemonkey-readme-card.svg" alt="RuleMonkey" width="65%">
 </p>
 
 # RuleMonkey
