@@ -5,11 +5,11 @@
     "name": "BNGsim",
     "repo_remote": "git@github.com:wshlavacek/PyBNF-Private.git",
     "repo_subdir": "bngsim",
-    "branch_or_ref": "330cfcc4913a98bd45f2dc80da047621a2ed8092",
+    "branch_or_ref": "1a1d49da13f8cd723be213774c2a81f0da538c84",
     "current_branch": "feature/bngsim",
-    "commit": "330cfcc4913a98bd45f2dc80da047621a2ed8092"
+    "commit": "1a1d49da13f8cd723be213774c2a81f0da538c84"
   },
-  "imported_at_utc": "2026-05-23T19:17:39+00:00",
+  "imported_at_utc": "2026-06-20T02:10:39+00:00",
   "files": {
     "exprtk_header": {
       "path": "third_party/exprtk/exprtk.hpp",
@@ -25,11 +25,18 @@
       "bytes": 5032,
       "description": "BNGsim ExprTkEvaluator public wrapper header"
     },
+    "expr_compat_header": {
+      "path": "third_party/bngsim_expr/include/bngsim/expr_compat.hpp",
+      "source_path": "include/bngsim/expr_compat.hpp",
+      "sha256": "00c6944497d5405c03a11d92c6295452963d70f304378e5be9561af58762ed7b",
+      "bytes": 2778,
+      "description": "BNGsim BNG<->ExprTk compatibility primitives (GH #49)"
+    },
     "expression_source": {
       "path": "third_party/bngsim_expr/src/expression.cpp",
       "source_path": "src/expression.cpp",
-      "sha256": "4a7bf502cdd6be1e381e754140e35f0bf57a3fc9e778a5723db9b7909ca03a64",
-      "bytes": 33050,
+      "sha256": "9b54169c75e672e74fe6ca3825e5dcd027f7dee463821fc767991ccf775962fd",
+      "bytes": 36878,
       "description": "BNGsim ExprTkEvaluator implementation"
     }
   },

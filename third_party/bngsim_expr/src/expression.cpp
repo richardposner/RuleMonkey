@@ -19,6 +19,7 @@
 #define exprtk_disable_caseinsensitivity
 #include "exprtk.hpp"
 
+#include "bngsim/expr_compat.hpp"
 #include "bngsim/expression.hpp"
 
 #include <algorithm>
@@ -62,7 +63,11 @@ namespace bngsim {
 // double's representable range — and the ratio becomes inf/inf = nan. Lentz
 // stays O(1) throughout and converges in a few hundred iterations even on
 // those inputs.
-static double mratio_impl(double a, double b, double z) {
+//
+// This is the single source of truth for mratio across BNGsim: the host
+// MratioFunction adapter below and the vendored NFsim mu::Parser ExprTk shim
+// both call it (the shim via <bngsim/expr_compat.hpp>). See issue #49.
+double expr_compat::mratio(double a, double b, double z) {
     constexpr double eps = 1.0e-16;
     constexpr double tiny = 1.0e-32;
     // Safety cap so a pathological non-converging case fails loud rather
@@ -204,7 +209,7 @@ template <typename T> struct MratioFunction : public exprtk::ifunction<T> {
         const double da = static_cast<double>(a);
         const double db = static_cast<double>(b);
         const double dz = static_cast<double>(z);
-        const double r = mratio_impl(da, db, dz);
+        const double r = expr_compat::mratio(da, db, dz);
         if (warner) {
             warner->warn_if_nonfinite("mratio", {da, db, dz}, r);
         }
@@ -376,7 +381,22 @@ static const std::unordered_set<std::string> &bngsim_exprtk_aliases() {
     return aliases;
 }
 
-static bool is_exprtk_reserved(const std::string &name) {
+// Registration keys occupied by bngsim's built-in constants. init_builtins()
+// registers each "_X" constant (Planck's `_h`, Avogadro's `_NA`, …) under the
+// ExprTk key "u_X" because ExprTk rejects a leading '_'. A user parameter
+// named literally "u_h" / "u_pi" / … maps to that same key (it does not start
+// with '_', so compute_registration_name() would leave it unchanged) and
+// would collide with the constant slot at registration (GH #90: Chitnis2012
+// / BIOMD0000000950 has a parameter `u_h`). Treat these keys as reserved so
+// such names take the r_ mangling path like any other reserved-word collision.
+// Must stay in sync with the "_X" constants registered in init_builtins().
+static const std::unordered_set<std::string> &bngsim_remapped_constant_keys() {
+    static const std::unordered_set<std::string> keys = {"u_pi", "u_e", "u_kB", "u_NA",
+                                                         "u_R",  "u_h", "u_F"};
+    return keys;
+}
+
+bool expr_compat::is_exprtk_reserved(const std::string &name) {
     // Names that, if registered as a user variable, would collide with
     // a name already taken by the symbol table. Two sources:
     //
@@ -395,19 +415,35 @@ static bool is_exprtk_reserved(const std::string &name) {
     //      the `sign` collision in practice — but we mangle all five
     //      for symmetry and to handle hand-crafted .net inputs.
     //
+    //   3. The registration keys bngsim's built-in constants occupy after the
+    //      unconditional "_X" → "u_X" remap (`u_pi`, …, `u_h`, `u_F`). A user
+    //      parameter named literally `u_h` would otherwise alias Planck's
+    //      constant slot and fail to register (GH #90).
+    //
     // Comparison is exact (case-sensitive) because we build with
     // exprtk_disable_caseinsensitivity, so e.g. `Const` is not reserved.
     const auto &exprtk_reserved = exprtk_reserved_identifiers();
     const auto &bngsim_aliases = bngsim_exprtk_aliases();
+    const auto &constant_keys = bngsim_remapped_constant_keys();
     return exprtk_reserved.find(name) != exprtk_reserved.end() ||
-           bngsim_aliases.find(name) != bngsim_aliases.end();
+           bngsim_aliases.find(name) != bngsim_aliases.end() ||
+           constant_keys.find(name) != constant_keys.end();
+}
+
+// Unconditional leading-underscore remap "_X" → "u_X" (see expr_compat.hpp).
+std::string expr_compat::remap_name(const std::string &name) {
+    if (!name.empty() && name[0] == '_') {
+        return "u_" + name.substr(1);
+    }
+    return name;
 }
 
 // Compute the symbol-table key for `name` at registration time.
 // Combines the unconditional underscore remap with reserved-word mangling.
-static std::string compute_registration_name(const std::string &name) {
-    if (!name.empty() && name[0] == '_') {
-        return "u_" + name.substr(1);
+std::string expr_compat::compute_registration_name(const std::string &name) {
+    std::string underscore_mapped = remap_name(name);
+    if (underscore_mapped != name) {
+        return underscore_mapped;
     }
     if (is_exprtk_reserved(name)) {
         return "r_" + name;
@@ -466,8 +502,9 @@ struct ExprTkEvaluator::Impl {
     // that were actually registered on this evaluator, so built-in tokens
     // (sin, if, time, ...) pass through unchanged.
     std::string remap_token(const std::string &name) const {
-        if (!name.empty() && name[0] == '_') {
-            return "u_" + name.substr(1);
+        std::string underscore_mapped = expr_compat::remap_name(name);
+        if (underscore_mapped != name) {
+            return underscore_mapped;
         }
         auto it = mangled_user_names.find(name);
         if (it != mangled_user_names.end()) {
@@ -540,7 +577,37 @@ struct ExprTkEvaluator::Impl {
                        (std::isalnum(static_cast<unsigned char>(expr[i])) || expr[i] == '_')) {
                     i++;
                 }
-                result += remap_token(expr.substr(start, i - start));
+                const std::string token = expr.substr(start, i - start);
+                // A declared symbol that collides with an ExprTk reserved name
+                // and is *also* used in call form (`frac(x)`) is genuinely
+                // ambiguous in a single flat namespace — raise the same clear,
+                // deterministic error the NFsim mu::Parser shim does, rather
+                // than rewriting to r_<name> and letting ExprTk emit a cryptic
+                // "not a function" message. strip_empty_parens() has already
+                // removed legitimate zero-arg scalar calls (`obs()`), so any
+                // `name(` left for a mangled symbol is a real call form. Only
+                // reserved-mangled names are tracked in mangled_user_names;
+                // underscore remaps are not, so they fall through untouched.
+                if (mangled_user_names.count(token)) {
+                    size_t j = i;
+                    while (j < expr.size() && std::isspace(static_cast<unsigned char>(expr[j]))) {
+                        j++;
+                    }
+                    if (j < expr.size() && expr[j] == '(') {
+                        throw std::runtime_error(
+                            "identifier '" + token +
+                            "' is both a declared model "
+                            "symbol and used as a function call '" +
+                            token +
+                            "(...)'; "
+                            "ExprTk reserves '" +
+                            token +
+                            "' as a built-in and a single "
+                            "flat namespace cannot hold both meanings — rename the "
+                            "model symbol");
+                    }
+                }
+                result += remap_token(token);
                 continue;
             }
             result += expr[i];
@@ -550,7 +617,7 @@ struct ExprTkEvaluator::Impl {
     }
 
     void add_remapped_constant(const std::string &name, double value) {
-        std::string mapped = compute_registration_name(name);
+        std::string mapped = expr_compat::compute_registration_name(name);
         if (mapped != name && name[0] != '_') {
             mangled_user_names[name] = mapped;
         }
@@ -612,9 +679,9 @@ ExprTkEvaluator::ExprTkEvaluator() : impl_(std::make_unique<Impl>()) {}
 ExprTkEvaluator::~ExprTkEvaluator() = default;
 
 void ExprTkEvaluator::define_variable(const std::string &name, double *addr) {
-    std::string mapped = compute_registration_name(name);
+    std::string mapped = expr_compat::compute_registration_name(name);
     if (!impl_->symbol_table.add_variable(mapped, *addr)) {
-        const bool reserved = is_exprtk_reserved(name);
+        const bool reserved = expr_compat::is_exprtk_reserved(name);
         std::string detail;
         if (reserved) {
             // The mangled form already exists — most often because another

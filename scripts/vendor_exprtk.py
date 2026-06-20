@@ -35,7 +35,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
 RM_ROOT = Path(__file__).resolve().parents[1]
 VENDOR_DIR = RM_ROOT / "third_party" / "bngsim_expr"
 VENDOR_NOTE = VENDOR_DIR / "VENDOR"
@@ -55,6 +54,11 @@ FILES = {
         "source_path": "include/bngsim/expression.hpp",
         "description": "BNGsim ExprTkEvaluator public wrapper header",
     },
+    "expr_compat_header": {
+        "path": "third_party/bngsim_expr/include/bngsim/expr_compat.hpp",
+        "source_path": "include/bngsim/expr_compat.hpp",
+        "description": "BNGsim BNG<->ExprTk compatibility primitives (GH #49)",
+    },
     "expression_source": {
         "path": "third_party/bngsim_expr/src/expression.cpp",
         "source_path": "src/expression.cpp",
@@ -67,8 +71,7 @@ def run(cmd: list[str], *, text: bool = True) -> subprocess.CompletedProcess:
     return subprocess.run(
         cmd,
         check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        capture_output=True,
         text=text,
     )
 
@@ -224,10 +227,7 @@ def build_metadata(
 
 
 def source_bytes_at_commit(bngsim: Path, commit: str) -> dict[str, bytes]:
-    return {
-        key: git_show(bngsim, commit, spec["source_path"])
-        for key, spec in FILES.items()
-    }
+    return {key: git_show(bngsim, commit, spec["source_path"]) for key, spec in FILES.items()}
 
 
 def write_vendor_note(metadata: dict[str, Any]) -> None:
@@ -311,8 +311,7 @@ def local_metadata_drift(metadata: dict[str, Any] | None) -> list[str]:
             continue
         if source_path != spec["source_path"]:
             drift.append(
-                f"files.{key}.source_path: expected {spec['source_path']!r}, "
-                f"found {source_path!r}"
+                f"files.{key}.source_path: expected {spec['source_path']!r}, found {source_path!r}"
             )
 
         path = RM_ROOT / spec["path"]
@@ -324,13 +323,11 @@ def local_metadata_drift(metadata: dict[str, Any] | None) -> list[str]:
         actual_bytes = len(data)
         if record.get("sha256") != actual_sha:
             drift.append(
-                f"files.{key}.sha256: expected {record.get('sha256')!r}, "
-                f"found {actual_sha!r}"
+                f"files.{key}.sha256: expected {record.get('sha256')!r}, found {actual_sha!r}"
             )
         if record.get("bytes") != actual_bytes:
             drift.append(
-                f"files.{key}.bytes: expected {record.get('bytes')!r}, "
-                f"found {actual_bytes!r}"
+                f"files.{key}.bytes: expected {record.get('bytes')!r}, found {actual_bytes!r}"
             )
 
     if not metadata_commit(metadata):
@@ -344,9 +341,7 @@ def source_drift(bngsim: Path, commit: str) -> list[str]:
         source_data = git_show(bngsim, commit, spec["source_path"])
         local_data = (RM_ROOT / spec["path"]).read_bytes()
         if source_data != local_data:
-            drift.append(
-                f"{spec['path']} differs from BNGsim {commit}:./{spec['source_path']}"
-            )
+            drift.append(f"{spec['path']} differs from BNGsim {commit}:./{spec['source_path']}")
     return drift
 
 
@@ -446,7 +441,7 @@ def main() -> int:
     metadata = build_metadata(bngsim, checkout_info, ref, commit, source_bytes)
     write_refresh(source_bytes, metadata)
     print(
-        "vendor_exprtk: refreshed 3 files plus VENDOR.json/VENDOR "
+        f"vendor_exprtk: refreshed {len(FILES)} files plus VENDOR.json/VENDOR "
         f"from BNGsim {ref} ({commit})"
     )
     return 0

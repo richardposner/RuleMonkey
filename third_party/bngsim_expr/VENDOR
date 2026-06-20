@@ -9,12 +9,13 @@ target instead.
 
 Source repo  : git@github.com:wshlavacek/PyBNF-Private.git
 Source subdir: bngsim
-Pinned commit: 330cfcc4913a98bd45f2dc80da047621a2ed8092
+Pinned commit: 1a1d49da13f8cd723be213774c2a81f0da538c84
 Metadata     : third_party/bngsim_expr/VENDOR.json
 
 Vendored files (copied verbatim, no edits):
   third_party/exprtk/exprtk.hpp <- bngsim third_party/exprtk/exprtk.hpp
   third_party/bngsim_expr/include/bngsim/expression.hpp <- bngsim include/bngsim/expression.hpp
+  third_party/bngsim_expr/include/bngsim/expr_compat.hpp <- bngsim include/bngsim/expr_compat.hpp
   third_party/bngsim_expr/src/expression.cpp <- bngsim src/expression.cpp
 
 Refresh / drift-check
