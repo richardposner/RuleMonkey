@@ -2063,7 +2063,7 @@ struct RuleMonkeySimulator::Impl {
           // the same seed: as in BNG, the seed is run-level, not
           // per-point, so points share a random stream.
           Engine engine(model, seed, molecule_limit);
-          r = engine.run(TimeSpec{per_point.t_start, per_point.t_end, per_point.n_points});
+          r = engine.run(TimeSpec{per_point.t_start, per_point.t_end, per_point.n_points, {}});
         } else {
           // Carry-over chain: point 0 starts from seed species; every
           // later point resumes the prior point's pool + RNG state.
@@ -2075,7 +2075,7 @@ struct RuleMonkeySimulator::Impl {
             session->load_state(tmp.string());
           }
           const double t0 = session->current_time();
-          r = session->run(TimeSpec{t0, t0 + duration, per_point.n_points});
+          r = session->run(TimeSpec{t0, t0 + duration, per_point.n_points, {}});
           if (k + 1 < values.size()) {
             session->save_state(tmp.string());
             tmp_written = true;

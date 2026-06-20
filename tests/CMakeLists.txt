@@ -281,6 +281,23 @@ add_test(
         ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_nested_functions.xml
 )
 
+# Explicit output-time (sample_times) regression (issue #16): pins down
+# that TimeSpec::sample_times overrides the uniform n_points grid — an
+# explicit subset of the uniform grid is bit-identical to the full run at
+# the shared instants (sampling is non-invasive and event_count is
+# unchanged), arbitrary non-uniform instants are echoed verbatim with one
+# row each, and an out-of-order list throws.  Uses A+A<->AA so the
+# observable values are exact integer counts and the bit-identical check is
+# a true equality test.
+add_executable(sample_times_test cpp/sample_times_test.cpp)
+target_link_libraries(sample_times_test PRIVATE rulemonkey)
+
+add_test(
+    NAME sample_times_test
+    COMMAND sample_times_test
+        ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
+)
+
 # rm_scan CLI smoke + `.scan` header regressions (issue #8).  Like the
 # rm_driver function-column tests, these assert output shape directly
 # via PASS/FAIL regexes.  Guarded on the rm_scan target so a tests-only

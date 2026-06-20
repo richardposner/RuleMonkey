@@ -215,6 +215,30 @@ if (any_errors) {
 auto result = sim.run({0.0, t_end, n_points}, seed);
 ```
 
+### Recording at explicit output times
+
+`TimeSpec` samples a uniform `t_start..t_end / n_points` grid by default.
+To record at an explicit, possibly non-uniform list of instants instead
+— typically an experimental dataset's time points, so an embedder can fit
+against them directly — set `TimeSpec::sample_times` to a sorted-ascending
+vector; it overrides the `n_points` grid:
+
+```cpp
+rulemonkey::TimeSpec ts;
+ts.t_start = 0.0;
+ts.t_end   = 120.0;            // still bounds the run
+ts.sample_times = {0.0, 5.0, 15.0, 30.0, 60.0, 120.0};  // ascending
+auto result = sim.run(ts, seed);   // result.time == sample_times
+```
+
+Sampling is non-invasive: output times never draw from the RNG or perturb
+reaction selection, so the realization (and `result.event_count`) is
+bit-identical to the uniform-grid run at any instants the two schedules
+share. `t_end` still bounds the SSA loop, so set it to at least the largest
+sample time; times at/after `t_end` (and any below `t_start`) are still
+emitted, recorded at the final/initial state. An out-of-order list throws
+`std::runtime_error`. This mirrors BNG2.pl's `simulate_nf` `sample_times`.
+
 ## Open work tracked elsewhere
 
 - Compartment volume scaling — open work, no scheduled implementation.

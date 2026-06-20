@@ -63,7 +63,7 @@ rulemonkey::ScanSpec range_spec(const std::string& param, double lo, double hi, 
   spec.par_max = hi;
   spec.n_points = n;
   spec.log_scale = log_scale;
-  spec.per_point = rulemonkey::TimeSpec{0.0, t_end, 4};
+  spec.per_point = rulemonkey::TimeSpec{0.0, t_end, 4, {}};
   return spec;
 }
 
@@ -116,7 +116,7 @@ void test_explicit_values(const std::string& xml) {
   rulemonkey::ScanSpec spec;
   spec.parameter = "kp";
   spec.values = {0.005, 0.001, 0.003}; // out of order on purpose
-  spec.per_point = rulemonkey::TimeSpec{0.0, 8.0, 2};
+  spec.per_point = rulemonkey::TimeSpec{0.0, 8.0, 2, {}};
   auto r = sim.parameter_scan(spec);
   check(r.n_points() == 3, "explicit values: 3 points");
   if (r.n_points() == 3)

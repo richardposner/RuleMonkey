@@ -52,7 +52,7 @@ int main(int argc, char* argv[]) {
     }
 
     // One-shot run: stateless, repeatable for a given seed.
-    rulemonkey::TimeSpec ts{/*t_start=*/0.0, t_end, n_points};
+    rulemonkey::TimeSpec ts{/*t_start=*/0.0, t_end, n_points, /*sample_times=*/{}};
     auto result = sim.run(ts, seed);
 
     // Print final time-point as a sanity-check trajectory summary.

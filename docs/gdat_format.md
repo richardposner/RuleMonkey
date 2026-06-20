@@ -130,6 +130,12 @@ Two header-parsing notes:
   `step_to(time)` API uses this internally and discards the
   resulting trajectory, so the *caller* sees no output but the
   endpoints are still computed.
+- **Explicit output times**: the in-process `TimeSpec::sample_times`
+  field (issue #16) overrides the uniform `n_points` grid with an
+  explicit sorted list of instants — `Result::time` then echoes that
+  list and there is one output row per requested time.  The CLI always
+  emits the uniform grid; explicit times are an embedder-only feature
+  (see `model_semantics.md`).
 
 ## See also
 

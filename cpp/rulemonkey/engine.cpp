@@ -7126,9 +7126,23 @@ struct Engine::Impl {
         result.function_data[i].push_back(fvals[i]);
     };
 
-    // Compute sample times
+    // Compute sample times.  An explicit `ts.sample_times` list (issue #16)
+    // overrides the uniform grid entirely; the recorder below walks a generic
+    // sorted vector either way, so only the construction of `sample_times`
+    // changes here.
     std::vector<double> sample_times;
-    if (ts.n_points > 0) {
+    if (!ts.sample_times.empty()) {
+      // Honor the caller's exact output instants (e.g. an experimental
+      // dataset's time points).  The recorder advances a single cursor and
+      // never looks back, so the list must be sorted ascending — validate and
+      // throw rather than silently dropping or mis-ordering samples.
+      for (std::size_t i = 1; i < ts.sample_times.size(); ++i) {
+        if (ts.sample_times[i] < ts.sample_times[i - 1])
+          throw std::runtime_error("TimeSpec::sample_times must be sorted in "
+                                   "ascending order");
+      }
+      sample_times = ts.sample_times;
+    } else if (ts.n_points > 0) {
       double const dt = (ts.t_end - ts.t_start) / ts.n_points;
       for (int i = 0; i <= ts.n_points; ++i)
         sample_times.push_back(ts.t_start + (i * dt));

@@ -205,7 +205,7 @@ int main(int argc, char* argv[]) {
     spec.n_points = n_points;
     spec.log_scale = log_scale;
     spec.reset_conc = reset_conc;
-    spec.per_point = rulemonkey::TimeSpec{t_start, t_end, n_steps};
+    spec.per_point = rulemonkey::TimeSpec{t_start, t_end, n_steps, {}};
 
     rulemonkey::RuleMonkeySimulator sim(xml_path);
     sim.set_block_same_complex_binding(bscb);

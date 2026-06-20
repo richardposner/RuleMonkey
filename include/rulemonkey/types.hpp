@@ -37,6 +37,32 @@ struct TimeSpec {
   double t_start = 0.0;
   double t_end = 0.0;
   int n_points = 0;
+
+  // Explicit, possibly non-uniform output instants.  When non-empty this
+  // OVERRIDES the uniform `n_points` grid: the engine records output at
+  // exactly these times instead of at `t_start + i*(t_end - t_start)/n_points`.
+  // The list is the network-free analogue of BNG2.pl's `simulate_nf`
+  // sample_times branch — the typical use is recording at an experimental
+  // dataset's independent-variable points so an embedder (e.g. PyBNF via
+  // BNGsim) can fit against them directly.
+  //
+  // Contract:
+  //   * Must be sorted ascending — the SSA recorder advances a single cursor
+  //     through this vector and never looks back, so an out-of-order list
+  //     throws std::runtime_error rather than silently mis-sampling.  Equal
+  //     adjacent times are allowed (they record the same instant twice).
+  //   * Times are absolute, on the same clock as `t_start` / `t_end`.
+  //   * `t_end` still bounds the run: the SSA loop stops at `t_end`, so set
+  //     `t_end` to at least the largest sample time you care about.  Times at
+  //     or beyond `t_end` (and any below `t_start`) are still emitted, recorded
+  //     at the final / initial state respectively, so the output row count
+  //     always equals `sample_times.size()`.
+  //
+  // Sampling is non-invasive: output times never draw from the RNG or perturb
+  // reaction selection, so a run with explicit `sample_times` is bit-identical
+  // to the uniform-grid run at any instants the two schedules share, and
+  // `Result::event_count` is unaffected.
+  std::vector<double> sample_times;
 };
 
 // Plain data carrier for one simulation run's output.

@@ -5,6 +5,30 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.3.0] — 2026-06-19
+
+### Added
+
+- **Explicit output times: `TimeSpec::sample_times`.** `run()` (and any
+  path through `Engine::run_ssa`) can now record output at an explicit,
+  possibly non-uniform list of instants instead of the uniform
+  `t_start..t_end / n_points` grid. Set the new
+  `std::vector<double> TimeSpec::sample_times` to a sorted-ascending
+  vector and it overrides `n_points`; `Result::time` then echoes the
+  requested list, one row per instant. This is the network-free analogue
+  of BNG2.pl's `simulate_nf` `sample_times` branch — the motivating use is
+  recording at an experimental dataset's time points so an embedder
+  (PyBNF via [bngsim](https://github.com/wshlavacek/PyBNF-Private)) can fit
+  against them directly, without the per-segment `step_to` workaround that
+  rebases the propensity sum and drops `event_count`. Sampling is
+  non-invasive: output times never draw from the RNG or perturb reaction
+  selection, so a run with explicit `sample_times` is bit-identical to the
+  uniform-grid run at any shared instants and `event_count` is unchanged.
+  `t_end` still bounds the SSA loop; times at/after `t_end` (or below
+  `t_start`) are recorded at the final/initial state, and an out-of-order
+  list throws `std::runtime_error`.
+  Closes [#16](https://github.com/richardposner/RuleMonkey/issues/16).
+
 ## [3.2.1] — 2026-05-23
 
 ### Fixed
