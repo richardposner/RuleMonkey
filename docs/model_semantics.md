@@ -86,6 +86,19 @@ The runtime severity model is two-level:
     continuous-ODE rate law verbatim into a BNGL rule, audit for this
     and split before either engine will give you physically meaningful
     trajectories.
+- **`FunctionProduct`** — NFsim's DOR2: the rule rate is the product of
+  two per-reactant local-function factors, each evaluated in the context
+  of a different tagged reactant (`%x:A(..) + %y:B(..) -> ...
+  FunctionProduct("f1(x)", "f2(y)")`, what BNG2 emits for an explicit
+  product of two per-instance local functions). RM realizes the propensity
+  as `S1·S2` where `S1 = Σ_a w_a·f1(a)` over reactant-A matches and
+  `S2 = Σ_b w_b·f2(b)` over reactant-B matches — the local-rate analogue of
+  an ordinary bimolecular rule's `a_eff·b_eff·k`. Each reactant draw is
+  weighted by its own factor; same-molecule pairs are rejected by the
+  sampler as null events (exact for distinct-type reactants, statistically
+  exact otherwise), matching NFsim's `DOR2RxnClass`. Each factor honors
+  per-molecule or complex-wide scope independently, like a single local
+  `Function`.
 - **`MM(kcat, Km)`** — Michaelis-Menten via NFsim's QSS formula:
   `sFree = 0.5·((S − Km − E) + √((S − Km − E)² + 4·Km·S))`,
   `a = kcat·sFree·E/(Km + sFree)`. Mirrors `MMRxnClass::update_a` in
@@ -171,7 +184,6 @@ treat at least one of these as a signal to refuse the model.
 | Any rule with `RateLaw type="Arrhenius"` | eBNGL energy-pattern rate derivation is not implemented; rate constants would be silently wrong. (A bare `<ListOfEnergyPatterns>` with `Function`-type rate laws that inline the Boltzmann factors is fine — only `Arrhenius` is the trigger.) |
 | Any rule with `RateLaw type="Sat"` | Deprecated; rewrite as `MM(kcat, Km)`. |
 | Any rule with `RateLaw type="Hill"` | Network-only; use `generate_network()` + ODE/SSA instead of network-free. |
-| Any rule with `RateLaw type="FunctionProduct"` | Not implemented; rewrite as a single multi-factor `Function`. |
 | Any `<MoleculeType population="1">` | Hybrid particle-population SSA not implemented; would be silently treated as ordinary particles with diverging trajectories. |
 | Multi-molecule or bonded `<Species Fixed="1">` | RM currently supports only single-molecule, unbonded Fixed species. |
 | Two or more `<Species Fixed="1">` of the same `MoleculeType` | RM currently allows at most one Fixed species per molecule type to avoid matching-overlap ambiguity. |

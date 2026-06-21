@@ -1,0 +1,77 @@
+# Feature: FunctionProduct rate law (NFsim's DOR2 — per-instance product of
+#          two per-reactant local-function factors)
+# Tests: a bimolecular binding rule whose rate is FunctionProduct("k*rateA(x)",
+#        "rateB(y)"), where each factor is a local function evaluated in the
+#        context of a different tagged reactant.  Higher methylation states
+#        bind faster, so the per-instance factor genuinely varies across the
+#        population (a uniform-rate engine would diverge).
+# Tier: network-free (NFsim reference only — DOR2 is inherently network-free)
+# Expected: methylation distributions shift toward m~3 (favored by the rate),
+#           Complex rises to a binding/unbinding steady state
+# invariant: conserved A_total = 100
+# invariant: conserved B_total = 100
+# invariant: balance A_free = B_free
+
+begin model
+begin parameters
+    k_base   0.002   # base per-pair binding scale (lives inside factor 1)
+    n0       100     # initial count of each receptor
+    kr       0.1     # unbinding rate
+    kfwd     0.5     # forward methylation rate
+    krev     0.2     # reverse methylation rate
+end parameters
+
+begin molecule types
+    A(m~0~1~2~3,bind)
+    B(m~0~1~2~3,bind)
+end molecule types
+
+begin seed species
+    A(m~1,bind)  n0
+    B(m~2,bind)  n0
+end seed species
+
+begin observables
+    Molecules  A_m1     A(m~1)
+    Molecules  A_m2     A(m~2)
+    Molecules  A_m3     A(m~3)
+    Molecules  B_m1     B(m~1)
+    Molecules  B_m2     B(m~2)
+    Molecules  B_m3     B(m~3)
+    Molecules  Complex  A(bind!1).B(bind!1)
+    Molecules  A_free   A(bind)
+    Molecules  B_free   B(bind)
+    Molecules  A_total  A()
+    Molecules  B_total  B()
+end observables
+
+begin functions
+    # Per-instance factors: binding propensity grows with methylation level.
+    rateA(x) = 1 + A_m1(x) + 2*A_m2(x) + 3*A_m3(x)
+    rateB(y) = 1 + B_m1(y) + 2*B_m2(y) + 3*B_m3(y)
+end functions
+
+begin reaction rules
+    # DOR2: each factor evaluated on its own tagged reactant, then multiplied.
+    %x:A(bind) + %y:B(bind) -> A(bind!1).B(bind!1)  FunctionProduct("k_base*rateA(x)", "rateB(y)")
+    A(bind!1).B(bind!1) -> A(bind) + B(bind)  kr
+
+    # Methylation dynamics so the per-instance factors actually move.
+    A(m~0) -> A(m~1) kfwd
+    A(m~1) -> A(m~2) kfwd
+    A(m~2) -> A(m~3) kfwd
+    A(m~3) -> A(m~2) krev
+    A(m~2) -> A(m~1) krev
+    A(m~1) -> A(m~0) krev
+    B(m~0) -> B(m~1) kfwd
+    B(m~1) -> B(m~2) kfwd
+    B(m~2) -> B(m~3) kfwd
+    B(m~3) -> B(m~2) krev
+    B(m~2) -> B(m~1) krev
+    B(m~1) -> B(m~0) krev
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>10,n_steps=>50})
+end actions

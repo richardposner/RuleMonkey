@@ -9,10 +9,11 @@ header comments, and the model-semantics doc.
 ### "ERROR: Unsupported BNGL feature: …"
 
 `rm_driver` refuses by default if the model uses a BNGL construct RM
-cannot honor (compartments, Arrhenius rate laws, Sat / Hill /
-FunctionProduct, `population` molecule types, multi-molecule Fixed
-species, …).  Each refusal names the offending element and gives
-per-feature guidance.
+cannot honor (compartments, Arrhenius rate laws, Sat / Hill rate laws,
+`population` molecule types, multi-molecule Fixed species, …).  Each
+refusal names the offending element and gives per-feature guidance.
+(`FunctionProduct` rate laws are now implemented — see
+[`model_semantics.md`](model_semantics.md).)
 
 Two ways forward:
 

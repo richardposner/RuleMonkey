@@ -9,6 +9,7 @@
 #include "bngsim/expression.hpp"
 
 #include <algorithm>
+#include <array>
 #include <atomic>
 #include <cctype>
 #include <cmath>
@@ -1372,6 +1373,83 @@ Model load_model(const std::string& xml_path,
               }
             }
           }
+        } else if (rl_type == "FunctionProduct") {
+          // NFsim's DOR2: two per-reactant local-function factors, multiplied.
+          // <RateLaw type="FunctionProduct" name1=".." name2="..">
+          //   <ListOfArguments1><Argument id=".." value="<reactant>"/></..>
+          //   <ListOfArguments2><Argument id=".." value="<reactant>"/></..>
+          // Each factor's argument `value` points at a ReactantPattern (id in
+          // reactant_pattern_ids -> complex-wide scope) or a tagged molecule
+          // inside one (-> per-molecule scope), exactly like a single local
+          // Function.  We map whichever factor references reactant pattern 0
+          // to the A-side fields and the one referencing pattern 1 to the
+          // B-side fields so the engine's fixed A/B sampler slots line up.
+          rule.rate_law.type = RateLawType::FunctionProduct;
+          rule.rate_law.is_dynamic = true;
+
+          // Resolve an Argument `value` to (reactant-pattern-index, per_mol).
+          auto resolve_factor = [&](const std::string& argval, int& out_rp_idx, bool& out_per_mol) {
+            out_rp_idx = -1;
+            out_per_mol = false;
+            // Direct ReactantPattern-id match -> complex-wide scope.
+            for (int k = 0; k < static_cast<int>(rp_id_list.size()); ++k) {
+              if (rp_id_list[k] == argval) {
+                out_rp_idx = k;
+                out_per_mol = false;
+                return;
+              }
+            }
+            // Otherwise a tagged molecule id -> per-molecule scope; locate its
+            // owning reactant pattern by molecule offset.
+            auto it = reactant_id_map.find(argval);
+            if (it != reactant_id_map.end()) {
+              int const mol_off = it->second.first;
+              for (int k = 0; k < static_cast<int>(rule.reactant_pattern_starts.size()); ++k) {
+                if (rule.reactant_pattern_starts[k] <= mol_off)
+                  out_rp_idx = k;
+              }
+              out_per_mol = (reactant_pattern_ids.find(argval) == reactant_pattern_ids.end());
+            }
+          };
+
+          auto first_arg_value = [&](const char* list_name) -> std::string {
+            auto* al = find_child(*rl_node, list_name);
+            if (al) {
+              for (auto& an : al->children) {
+                if (an.name == "Argument")
+                  return opt_attr(an, "value");
+              }
+            }
+            return "";
+          };
+
+          struct Factor {
+            std::string fn;
+            int rp_idx = -1;
+            bool per_mol = false;
+          };
+          std::array<Factor, 2> factors;
+          factors[0].fn = opt_attr(*rl_node, "name1");
+          factors[1].fn = opt_attr(*rl_node, "name2");
+          resolve_factor(first_arg_value("ListOfArguments1"), factors[0].rp_idx,
+                         factors[0].per_mol);
+          resolve_factor(first_arg_value("ListOfArguments2"), factors[1].rp_idx,
+                         factors[1].per_mol);
+
+          // Assign the pattern-0 factor to the A-side and pattern-1 to the
+          // B-side.  Default to declaration order if a reference can't be
+          // resolved (single-reactant edge cases).
+          int a_factor = 0, b_factor = 1;
+          if (factors[0].rp_idx == 1 || factors[1].rp_idx == 0) {
+            a_factor = 1;
+            b_factor = 0;
+          }
+          rule.rate_law.function_name = factors[a_factor].fn;
+          rule.rate_law.is_local = true;
+          rule.rate_law.local_arg_is_molecule = factors[a_factor].per_mol;
+          rule.rate_law.function_name_b = factors[b_factor].fn;
+          rule.rate_law.is_local_b = true;
+          rule.rate_law.local_arg_is_molecule_b = factors[b_factor].per_mol;
         } else if (rl_type == "MM") {
           rule.rate_law.type = RateLawType::MM;
           auto* rc_list = find_child(*rl_node, "ListOfRateConstants");
@@ -1467,6 +1545,8 @@ Model load_model(const std::string& xml_path,
     for (auto& rule : model.rules) {
       if (!rule.rate_law.function_name.empty())
         seeds.insert(rule.rate_law.function_name);
+      if (!rule.rate_law.function_name_b.empty())
+        seeds.insert(rule.rate_law.function_name_b);
       if (rule.rate_law.uses_tfun &&
           rule.rate_law.tfun_counter_source == TfunCounterSource::Observable)
         seeds.insert(rule.rate_law.tfun_counter_name);
@@ -1644,22 +1724,20 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
 
   // ERROR-level: legacy/unimplemented rate-law types.  BNG2 still parses
   // these but RM's rule loader (cpp/rulemonkey/simulator.cpp:~1157)
-  // recognises only Ele, Function, and MM.  Anything else falls through
-  // to the default rate_law (type=Ele, rate_value=0.0), so the rule
-  // never fires — silently producing wrong trajectories.
+  // recognises only Ele, Function, MM, and FunctionProduct.  Anything else
+  // falls through to the default rate_law (type=Ele, rate_value=0.0), so the
+  // rule never fires — silently producing wrong trajectories.
   //
   //   Sat:             NFsim itself rejects this type explicitly with
   //                    "use MM instead"; we follow that policy.
   //   Hill:            no NFsim handler at all; only ODE/SSA networks.
-  //   FunctionProduct: NFsim has a handler; RM does not implement it.
+  //   (FunctionProduct is now implemented — see RateLawType::FunctionProduct.)
   for (const auto& [type_name, advice] : std::initializer_list<std::pair<const char*, const char*>>{
            {"Sat", "Sat() is deprecated; rewrite the rule to use MM(kcat,Km) — "
                    "NFsim itself rejects Sat with the same recommendation."},
            {"Hill", "Hill() rate laws are network-only (no NFsim handler); "
                     "use generate_network() + simulate({method=>\"ode\"}) instead "
-                    "of network-free simulation."},
-           {"FunctionProduct", "FunctionProduct() rate laws are not implemented in RM; "
-                               "rewrite as a single Function that multiplies the two factors."}}) {
+                    "of network-free simulation."}}) {
     auto rule_id = first_rule_with_ratelaw_type(model_node, type_name);
     if (!rule_id.empty()) {
       std::string const msg = "Rate law type '" + std::string(type_name) + "' on rule '" + rule_id +

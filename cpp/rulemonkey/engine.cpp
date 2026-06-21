@@ -2283,6 +2283,11 @@ struct PerMolRuleData {
   double ab_both = 0;            // binding sites matching both A and B
   double local_rate = 0.0;       // per-molecule rate (for local function rules)
   double local_propensity = 0.0; // count_a * local_rate
+  // FunctionProduct (DOR2) B-side factor.  For a molecule matching reactant
+  // pattern B, local_rate_b = f2(mol) and local_propensity_b = count_b * f2.
+  // Unused (left 0) for ordinary local-rate and non-local rules.
+  double local_rate_b = 0.0;
+  double local_propensity_b = 0.0;
   // P1 cache (step 2): set true after the first full recompute of this
   // (rule, molecule) entry, so incremental_update can tell "valid cached
   // value" from "default-initialized sentinel".  Bumped back to true on
@@ -2305,7 +2310,10 @@ struct RuleState {
   double ab_both_sq_total = 0;
   double propensity = 0;
   bool has_local_rates = false;        // rule uses local functions
-  double local_propensity_total = 0.0; // sum of per-mol local_propensity
+  double local_propensity_total = 0.0; // sum of per-mol local_propensity (S1, A side)
+  // FunctionProduct (DOR2): sum of per-mol local_propensity_b over reactant-B
+  // matches (S2, B side).  Realized propensity is S1·S2.  0 for other rules.
+  double local_propensity_b_total = 0.0;
   double embedding_correction_a = 1.0; // overcounting correction for pattern A
   double embedding_correction_b = 1.0; // overcounting correction for pattern B
   FenwickTree fenwick_a;               // O(log N) sampler for slot A (if active)
@@ -2693,6 +2701,10 @@ struct Engine::Impl {
   bool any_needs_complex_expansion_ = false;
   // Reusable cache for local rate values (persists bucket storage across steps)
   std::unordered_map<int, double> local_rate_cache;
+  // Companion cache for the FunctionProduct B-side factor (f2), keyed by
+  // complex id.  Kept separate from local_rate_cache because the A- and
+  // B-side factors are distinct functions over the same complex ids.
+  std::unordered_map<int, double> local_rate_cache_b;
 
   // P1 cache (step 2): per-event record of which components of which
   // molecules were mutated by the current firing.  Populated by fire_rule
@@ -3295,6 +3307,28 @@ struct Engine::Impl {
     bind_infos.resize(n_rules);
     rule_fire_counts.assign(n_rules, 0);
 
+    // Precompute local_obs_indices: all observable indices referenced by any
+    // local function, resolved via observable_index.  MUST run before the
+    // per-rule rescan loop below — rescan_all_molecules_for_rule evaluates
+    // local-rate / FunctionProduct propensities through evaluate_local_factor,
+    // which localizes exactly these observable slots.  If this set were empty
+    // at rescan time, those observables would be read globally and the initial
+    // propensity would be wildly wrong (e.g. a free monomer's local count read
+    // as the whole-system count).
+    {
+      std::unordered_set<int> idx_set;
+      for (auto& gf : model.functions) {
+        if (gf.is_local()) {
+          for (auto& obs_name : gf.local_observable_names) {
+            auto it = model.observable_index.find(obs_name);
+            if (it != model.observable_index.end())
+              idx_set.insert(it->second);
+          }
+        }
+      }
+      local_obs_indices.assign(idx_set.begin(), idx_set.end());
+    }
+
     for (int ri = 0; ri < n_rules; ++ri) {
       auto& rule = model.rules[ri];
       bind_infos[ri] = find_bind_info(rule);
@@ -3597,22 +3631,6 @@ struct Engine::Impl {
       }
     }
 
-    // Precompute local_obs_indices (Fix 2): collect all observable indices
-    // referenced by any local function, resolved via observable_index map.
-    {
-      std::unordered_set<int> idx_set;
-      for (auto& gf : model.functions) {
-        if (gf.is_local()) {
-          for (auto& obs_name : gf.local_observable_names) {
-            auto it = model.observable_index.find(obs_name);
-            if (it != model.observable_index.end())
-              idx_set.insert(it->second);
-          }
-        }
-      }
-      local_obs_indices.assign(idx_set.begin(), idx_set.end());
-    }
-
     // Establish a clean baseline for the delta-updated total_propensity.
     // The per-rule rescans above already credited each rs.propensity to
     // total_propensity via set_rule_propensity, but a fresh sum here makes
@@ -3773,7 +3791,50 @@ struct Engine::Impl {
     // Compute propensity
     rs.has_local_rates = rule.rate_law.is_local;
     double new_propensity;
-    if (rs.has_local_rates && rule.molecularity <= 1) {
+    if (rule.rate_law.type == RateLawType::FunctionProduct) {
+      // FunctionProduct (DOR2): propensity = S1·S2 where S1 = Σ_a w_a·f1(a)
+      // over reactant-A matches and S2 = Σ_b w_b·f2(b) over reactant-B
+      // matches.  This is the local-rate analogue of an ordinary bimolecular
+      // rule's `a_eff·b_eff·k`; same-molecule pairs are rejected by the
+      // sampler as null events (exact for distinct-type reactants).
+      rs.local_propensity_total = 0;   // S1 (A side)
+      rs.local_propensity_b_total = 0; // S2 (B side)
+      auto& pm_a_loc = rule.reactant_pattern.molecules[seed_a];
+      for (int const mid : pool.molecules_of_type(pm_a_loc.type_index)) {
+        if (!pool.molecule(mid).active)
+          continue;
+        if (mid >= static_cast<int>(rs.mol_data.size()))
+          continue;
+        auto& md = rs.mol_data[mid];
+        if (md.count_a > 0) {
+          md.local_rate = std::max<double>(evaluate_local_rate(rule, mid), 0);
+          md.local_propensity = (md.count_a / rs.embedding_correction_a) * md.local_rate;
+        } else {
+          md.local_rate = 0;
+          md.local_propensity = 0;
+        }
+        rs.local_propensity_total += md.local_propensity;
+      }
+      if (seed_b >= 0 && seed_b < static_cast<int>(rule.reactant_pattern.molecules.size())) {
+        auto& pm_b_loc = rule.reactant_pattern.molecules[seed_b];
+        for (int const mid : pool.molecules_of_type(pm_b_loc.type_index)) {
+          if (!pool.molecule(mid).active)
+            continue;
+          if (mid >= static_cast<int>(rs.mol_data.size()))
+            continue;
+          auto& md = rs.mol_data[mid];
+          if (md.count_b > 0) {
+            md.local_rate_b = std::max<double>(evaluate_local_rate_b(rule, mid), 0);
+            md.local_propensity_b = (md.count_b / rs.embedding_correction_b) * md.local_rate_b;
+          } else {
+            md.local_rate_b = 0;
+            md.local_propensity_b = 0;
+          }
+          rs.local_propensity_b_total += md.local_propensity_b;
+        }
+      }
+      new_propensity = rs.local_propensity_total * rs.local_propensity_b_total;
+    } else if (rs.has_local_rates && rule.molecularity <= 1) {
       // Local-rate rule: propensity = sum of per-molecule (count_a * local_rate)
       rs.local_propensity_total = 0;
       int const seed_a_loc =
@@ -4958,6 +5019,22 @@ struct Engine::Impl {
   // For pattern-level argument binding: evaluates observables across the
   // molecule's entire complex (complex-wide scope).
   double evaluate_local_rate(const Rule& rule, int mol_id) {
+    return evaluate_local_factor(rule.rate_law.function_name, rule.rate_law.local_arg_is_molecule,
+                                 mol_id);
+  }
+
+  // FunctionProduct B-side factor f2 evaluated at a reactant-B molecule.
+  double evaluate_local_rate_b(const Rule& rule, int mol_id) {
+    return evaluate_local_factor(rule.rate_law.function_name_b,
+                                 rule.rate_law.local_arg_is_molecule_b, mol_id);
+  }
+
+  // Evaluate one named local-function factor at a molecule.  Backs both the
+  // single-local-function rate law (evaluate_local_rate) and each of the two
+  // FunctionProduct factors.  `per_molecule` selects per-molecule vs
+  // complex-wide observable scope; `fn_name` selects which local function's
+  // value to return after re-evaluating the local dependency chain.
+  double evaluate_local_factor(const std::string& fn_name, bool per_molecule, int mol_id) {
     bool elr_sampled = false;
     std::chrono::steady_clock::time_point elr_t0;
     if constexpr (kExprEvalProfile) {
@@ -4970,8 +5047,6 @@ struct Engine::Impl {
       }
     }
     update_eval_vars();
-
-    bool const per_molecule = rule.rate_law.local_arg_is_molecule;
 
     // Save global values for the slots we are about to perturb.  A
     // follow-up rate eval (next rule in incremental_update, or this
@@ -5037,7 +5112,7 @@ struct Engine::Impl {
                                       .count());
     }
 
-    auto fit = model.function_index.find(rule.rate_law.function_name);
+    auto fit = model.function_index.find(fn_name);
     double const result =
         (fit != model.function_index.end()) ? eval_vars_flat[eval_gf_main_slot[fit->second]] : 0.0;
 
@@ -5208,6 +5283,7 @@ struct Engine::Impl {
       // be reused for a different rule that touches the same complex —
       // wrong (it made AN/ANx fail the corpus tier; issue #10).
       local_rate_cache.clear();
+      local_rate_cache_b.clear();
       if constexpr (kIncrUpdateProfile)
         incr_profile_.rule_local_rate_cache_clears++;
 
@@ -5334,6 +5410,8 @@ struct Engine::Impl {
           rs.ab_both_sq_total -= old.ab_both * old.ab_both;
         if (rs.has_local_rates)
           rs.local_propensity_total -= old.local_propensity;
+        if (rule.rate_law.type == RateLawType::FunctionProduct)
+          rs.local_propensity_b_total -= old.local_propensity_b;
 
         if constexpr (kIncrUpdateProfile) {
           if (prof_inner_sample) {
@@ -5451,6 +5529,24 @@ struct Engine::Impl {
             nd.local_propensity = (nd.count_a / rs.embedding_correction_a) * nd.local_rate;
           }
 
+          // FunctionProduct B-side factor f2, mirroring the A-side path above
+          // but keyed off count_b and the dedicated complex cache.
+          if (rule.rate_law.type == RateLawType::FunctionProduct && nd.count_b > 0) {
+            if (!rule.rate_law.local_arg_is_molecule_b) {
+              int const cx = pool.complex_of(mid);
+              auto cit = local_rate_cache_b.find(cx);
+              if (cit != local_rate_cache_b.end()) {
+                nd.local_rate_b = cit->second;
+              } else {
+                nd.local_rate_b = std::max(evaluate_local_rate_b(rule, mid), 0.0);
+                local_rate_cache_b[cx] = nd.local_rate_b;
+              }
+            } else {
+              nd.local_rate_b = std::max(evaluate_local_rate_b(rule, mid), 0.0);
+            }
+            nd.local_propensity_b = (nd.count_b / rs.embedding_correction_b) * nd.local_rate_b;
+          }
+
           if constexpr (kIncrUpdateProfile) {
             if (prof_inner_sample) {
               auto now = iup_clock::now();
@@ -5470,6 +5566,8 @@ struct Engine::Impl {
           rs.ab_both_sq_total += nd.ab_both * nd.ab_both;
         if (rs.has_local_rates)
           rs.local_propensity_total += nd.local_propensity;
+        if (rule.rate_law.type == RateLawType::FunctionProduct)
+          rs.local_propensity_b_total += nd.local_propensity_b;
 
         if constexpr (kIncrUpdateProfile) {
           if (prof_inner_sample) {
@@ -5547,7 +5645,9 @@ struct Engine::Impl {
       if constexpr (kIncrUpdateProfile)
         incr_profile_.propensity_recomputes++;
       double new_propensity;
-      if (rs.has_local_rates) {
+      if (rule.rate_law.type == RateLawType::FunctionProduct) {
+        new_propensity = rs.local_propensity_total * rs.local_propensity_b_total;
+      } else if (rs.has_local_rates) {
         new_propensity = rs.local_propensity_total;
       } else {
         double const rate = evaluate_rate(rule);
@@ -5756,8 +5856,14 @@ struct Engine::Impl {
       // For non-same_components rules the historical `mol_a == mol_b` null
       // event stays — its propensity is the inflated form and rejection rate
       // matches it exactly.
+      // FunctionProduct (DOR2): draw each reactant weighted by its own local
+      // factor (local_propensity for A, local_propensity_b for B) instead of
+      // by raw embedding count.  The propensity S1·S2 includes same-molecule
+      // pairs, which the same-molecule null-event rejection below removes —
+      // exact for distinct-type reactants, statistically exact otherwise.
+      bool const is_function_product = (rule.rate_law.type == RateLawType::FunctionProduct);
       int mol_a = -1, mol_b = -1;
-      if (rule.same_components) {
+      if (rule.same_components && !is_function_product) {
         constexpr int kMaxRetries = 64;
         bool got_distinct = false;
         for (int retry = 0; retry < kMaxRetries; ++retry) {
@@ -5781,8 +5887,13 @@ struct Engine::Impl {
           return match;
         }
       } else {
-        mol_a = sample_molecule_weighted(pm_a.type_index, rs, true);
-        mol_b = sample_molecule_weighted(pm_b.type_index, rs, false);
+        if (is_function_product) {
+          mol_a = sample_molecule_by_local_propensity(pm_a.type_index, rs, /*use_b=*/false);
+          mol_b = sample_molecule_by_local_propensity(pm_b.type_index, rs, /*use_b=*/true);
+        } else {
+          mol_a = sample_molecule_weighted(pm_a.type_index, rs, true);
+          mol_b = sample_molecule_weighted(pm_b.type_index, rs, false);
+        }
         if (mol_a < 0 || mol_b < 0) {
           sr_finish(SrProfile::kPathBimol, /*outcome=*/0);
           return match;
@@ -6091,24 +6202,27 @@ struct Engine::Impl {
     return mols.back(); // rounding fallback
   }
 
-  // Sample a molecule weighted by per-molecule local propensity (for local-rate rules).
-  int sample_molecule_by_local_propensity(int type_index, const RuleState& rs) {
+  // Sample a molecule weighted by per-molecule local propensity (for local-rate
+  // rules).  `use_b` selects the FunctionProduct B-side weights
+  // (local_propensity_b / local_propensity_b_total) instead of the A-side.
+  int sample_molecule_by_local_propensity(int type_index, const RuleState& rs, bool use_b = false) {
     if constexpr (kSelectReactantsProfile)
       sr_profile_.sampler_local_prop_calls++;
     auto& mols = pool.molecules_of_type(type_index);
     if (mols.empty())
       return -1;
 
-    if (rs.local_propensity_total <= 0)
+    double const total = use_b ? rs.local_propensity_b_total : rs.local_propensity_total;
+    if (total <= 0)
       return -1;
 
-    double const r = uniform() * rs.local_propensity_total;
+    double const r = uniform() * total;
     double cum = 0;
     for (int const mid : mols) {
       if (!pool.molecule(mid).active)
         continue;
       if (mid < static_cast<int>(rs.mol_data.size())) {
-        cum += rs.mol_data[mid].local_propensity;
+        cum += use_b ? rs.mol_data[mid].local_propensity_b : rs.mol_data[mid].local_propensity;
         if (r < cum)
           return mid;
       }

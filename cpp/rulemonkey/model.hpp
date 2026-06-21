@@ -150,7 +150,7 @@ struct RuleOp {
 
 // ---- Rate law --------------------------------------------------------------
 
-enum class RateLawType { Ele, Function, MM };
+enum class RateLawType { Ele, Function, MM, FunctionProduct };
 
 enum class TfunCounterSource { None, Time, Parameter, Observable, Function };
 
@@ -174,6 +174,17 @@ struct RateLaw {
   bool is_local = false;              // has local molecule/species arguments
   bool local_arg_is_molecule = false; // true = arg bound to molecule (per-mol eval)
                                       // false = arg bound to pattern (complex-wide eval)
+
+  // For FunctionProduct (NFsim's DOR2): the rate is the product of two
+  // per-reactant local-function factors, each evaluated in the context of
+  // a different tagged reactant.  `function_name`/`is_local`/
+  // `local_arg_is_molecule` above describe the factor bound to reactant
+  // pattern A (seed index 0); the `_b` fields below describe the factor
+  // bound to reactant pattern B (seed index 1).  Realized propensity is
+  // `(Σ_a w_a·f1(a)) · (Σ_b w_b·f2(b))` — see Engine::Impl DOR2 handling.
+  std::string function_name_b; // second factor's local function
+  bool is_local_b = false;
+  bool local_arg_is_molecule_b = false;
 
   // For MM
   double mm_Km = 0.0;
