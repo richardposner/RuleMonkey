@@ -5,6 +5,44 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.4.0] — 2026-06-20
+
+### Added
+
+- **`FunctionProduct` rate laws (NFsim's DOR2).** RuleMonkey now runs
+  rules whose rate is `RateLaw type="FunctionProduct"` — the per-instance
+  product of two per-reactant local-function factors, each evaluated in
+  the context of a different tagged reactant (what BNG2 emits for
+  `%x:A(..) + %y:B(..) -> ... FunctionProduct("f1(x)", "f2(y)")`). RM
+  previously refused these at Tier-0, which broke `method=>"nf"` ↔
+  `method=>"rm"` interchange for the ~6–8% of network-free corpus models
+  that use the idiom. The propensity is realized as `S1·S2`, where
+  `S1 = Σ_a w_a·f1(a)` over reactant-A matches and `S2 = Σ_b w_b·f2(b)`
+  over reactant-B matches — the local-rate analogue of an ordinary
+  bimolecular rule's `a_eff·b_eff·k`. Each reactant draw is weighted by
+  its own factor, and same-molecule pairs reject as null events (exact for
+  distinct-type reactants, statistically exact otherwise), matching
+  NFsim's `DOR2RxnClass`. Each factor honors per-molecule or complex-wide
+  scope independently. Validated against NFsim 2.9.3 (300–400-rep
+  ensembles) on the issue reproducer, a pure-binding isolation, and a
+  discriminating methylation+unbinding model — all within SSA noise
+  (maxAbsDiff < 1.1, RMSE < 0.5). Adds the `nf_function_product`
+  feature-coverage model (NFsim-only reference).
+  Closes [#19](https://github.com/richardposner/RuleMonkey/issues/19).
+
+### Fixed
+
+- **Local observables were read globally during initial propensity
+  setup.** `local_obs_indices` (the set of observable slots a local
+  function localizes) was populated *after* the first per-rule propensity
+  rescan in `init_rule_states`, so at `t=0` a local-function rule's
+  observables were evaluated over the whole system instead of the tagged
+  molecule's scope (e.g. a free monomer's local count read as the
+  system-wide count), giving a wildly wrong initial propensity until the
+  first incremental update partially corrected it. Surfaced by the
+  `FunctionProduct` transient; the fix (computing `local_obs_indices`
+  before the rescan loop) also hardens the single-local-function path.
+
 ## [3.3.0] — 2026-06-19
 
 ### Added
