@@ -298,6 +298,20 @@ add_test(
         ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
 )
 
+# Session counterpart of sample_times_test: the stateful simulate(const
+# TimeSpec&) overload honors TimeSpec::sample_times bit-identically to a
+# uniform session run at the shared instants, works mid-protocol (continuing
+# the trajectory after a prior segment), and validates that the segment start
+# matches the current session time.
+add_executable(session_sample_times_test cpp/session_sample_times_test.cpp)
+target_link_libraries(session_sample_times_test PRIVATE rulemonkey)
+
+add_test(
+    NAME session_sample_times_test
+    COMMAND session_sample_times_test
+        ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
+)
+
 # rm_scan CLI smoke + `.scan` header regressions (issue #8).  Like the
 # rm_driver function-column tests, these assert output shape directly
 # via PASS/FAIL regexes.  Guarded on the rm_scan target so a tests-only

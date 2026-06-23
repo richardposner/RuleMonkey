@@ -119,6 +119,17 @@ public:
   Result simulate(double t_start, double t_end, int n_points,
                   const CancelCallback& should_continue = {});
 
+  // Samples a segment from the active session honoring an explicit `TimeSpec`
+  // — in particular `ts.sample_times`, recording at exactly those sorted
+  // output instants in a single SSA pass.  This is the stateful counterpart of
+  // `run(TimeSpec)`: it continues from the current session state (no re-seed /
+  // reset) and routes through the same `run_ssa` path, which already honors
+  // `TimeSpec::sample_times` (see issue #16).  The segment must start at the
+  // current session time: `ts.sample_times.front()` — or `ts.t_start` when
+  // `sample_times` is empty — must equal `current_time()`.  `should_continue`
+  // has the same cooperative-cancellation semantics as the other session calls.
+  Result simulate(const TimeSpec& ts, const CancelCallback& should_continue = {});
+
   // Adds `count` default, unbound molecules of the named imported
   // `MoleculeType` to the active session.
   void add_molecules(const std::string& molecule_type_name, int count);

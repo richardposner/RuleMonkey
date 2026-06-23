@@ -5,6 +5,25 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.5.0] — 2026-06-22
+
+### Added
+
+- **`simulate(const TimeSpec&)` on the stateful session API.** The session now
+  has an explicit-`TimeSpec` overload alongside
+  `simulate(t_start, t_end, n_points)`, so a live, continuing session can
+  record at exactly `TimeSpec::sample_times` (the arbitrary, possibly
+  non-uniform output instants honored by `run_ssa` since issue #16) instead of
+  only a uniform grid. It is the stateful counterpart of `run(TimeSpec)`: it
+  continues from the current session state (no re-seed / reset) and routes
+  through the same `run_ssa` path. The segment must start at the current
+  session time (`sample_times.front()`, or `t_start` when `sample_times` is
+  empty, must equal `current_time()`); a disagreeing start throws, mirroring
+  the convenience overload. This lets in-process hosts (e.g. BNGsim) sample a
+  network-free protocol at a dataset's exact time points mid-run. Covered by
+  `session_sample_times_test` (bit-identical to a uniform session run at the
+  shared instants, mid-protocol continuation, start-alignment validation).
+
 ## [3.4.0] — 2026-06-20
 
 ### Added

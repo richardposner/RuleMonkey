@@ -2399,6 +2399,37 @@ Result RuleMonkeySimulator::simulate(double t_start, double t_end, int n_points,
   return impl_->session->run(ts, should_continue);
 }
 
+Result RuleMonkeySimulator::simulate(const TimeSpec& ts, const CancelCallback& should_continue) {
+  if (!impl_->session)
+    throw std::runtime_error("No active session (call initialize first)");
+
+  // Like the (t_start, t_end, n_points) overload, the segment must start at
+  // the current session time -- a disagreeing start is a caller bug (going
+  // backwards is meaningless; a forward gap silently discards a burn-in
+  // window).  With explicit ts.sample_times the segment start is the first
+  // requested instant; otherwise it is ts.t_start.  The engine's run_ssa
+  // honors ts.sample_times directly (records at exactly those sorted instants
+  // in one pass), so no extra sampling logic is needed here.
+  const double seg_start = ts.sample_times.empty() ? ts.t_start : ts.sample_times.front();
+  const double session_t = impl_->session->current_time();
+  const double tol = 1e-9 * std::max(1.0, std::fabs(session_t));
+  if (std::fabs(seg_start - session_t) > tol) {
+    std::ostringstream msg;
+    msg << "simulate(TimeSpec): segment start " << seg_start
+        << " disagrees with current session time " << session_t
+        << "; pass the current session time as t_start / sample_times[0]"
+           " (or destroy_session/initialize to restart at 0)";
+    throw std::runtime_error(msg.str());
+  }
+  const double seg_end = ts.sample_times.empty() ? ts.t_end : ts.sample_times.back();
+  if (seg_end < session_t)
+    throw std::runtime_error("simulate(TimeSpec): segment end (" + std::to_string(seg_end) +
+                             ") is earlier than current session time (" +
+                             std::to_string(session_t) + ")");
+
+  return impl_->session->run(ts, should_continue);
+}
+
 void RuleMonkeySimulator::save_state(const std::string& path) const {
   if (!impl_->session)
     throw std::runtime_error("No active session (call initialize first)");
