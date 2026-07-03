@@ -253,9 +253,13 @@ emitted, recorded at the final/initial state. An out-of-order list throws
 
 ## Open work tracked elsewhere
 
-- Compartment volume scaling — open work, no scheduled implementation.
-- Arrhenius / energy-pattern rate derivation — same.
-- Hybrid particle-population SSA — same.
+- Compartment volume scaling (cBNGL) — tracked in
+  [#21](https://github.com/richardposner/RuleMonkey/issues/21);
+  foundational, no scheduled implementation.
+- Arrhenius / energy-pattern rate derivation (eBNGL) — tracked in
+  [#20](https://github.com/richardposner/RuleMonkey/issues/20); NFsim
+  gained this in Apr 2026, so it is now a live parity gap.
+- Hybrid particle-population SSA — open work, no scheduled implementation.
 - Multi-molecule Fixed species — would require pattern-based
   re-instantiation; not currently implemented (refused at Tier 0).
 - Pattern canonical labeling (nauty integration) — flagged in
