@@ -1,0 +1,44 @@
+# Feature: eBNGL Arrhenius energy rate law (load-time rule expansion)
+# Tests: 2-reactant binding energy rule with a single "always" energy pattern
+# Tier: base
+# Expected: A+B<->AB equilibrium follows the Arrhenius rates derived from Gf
+# Note: no context conditions — the energy pattern is exactly the reaction
+#       center bond, so the rule expands to one forward + one reverse rule.
+#       k_fwd = exp(-(Ea0 + phi*Gf)/RT), k_rev = exp(-(Ea0 + (phi-1)*Gf)/RT).
+
+begin model
+begin parameters
+  phi  0.5
+  RT   1.0
+  Ea0  1.0
+  Gf   2.0
+end parameters
+
+begin molecule types
+  A(b)
+  B(a)
+end molecule types
+
+begin seed species
+  A(b)  100
+  B(a)  100
+end seed species
+
+begin observables
+  Molecules AB     A(b!1).B(a!1)
+  Molecules A_free A(b)
+  Molecules B_free B(a)
+end observables
+
+begin energy patterns
+  A(b!1).B(a!1)  Gf
+end energy patterns
+
+begin reaction rules
+  A(b) + B(a) <-> A(b!1).B(a!1)  Arrhenius(phi, Ea0)
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>20,n_steps=>100})
+end actions

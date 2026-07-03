@@ -181,7 +181,7 @@ treat at least one of these as a signal to refuse the model.
 | Trigger | Why refused |
 |---|---|
 | `<ListOfCompartments>` non-empty | RM does not implement compartment volume scaling — bimolecular rate constants would be silently incorrect. |
-| Any rule with `RateLaw type="Arrhenius"` | eBNGL energy-pattern rate derivation is not implemented; rate constants would be silently wrong. (A bare `<ListOfEnergyPatterns>` with `Function`-type rate laws that inline the Boltzmann factors is fine — only `Arrhenius` is the trigger.) |
+| An `RateLaw type="Arrhenius"` rule that is **not** a 2-reactant binding rule | eBNGL energy rules are expanded at load time (see "Energy-based BNGL" below), but only for the 2-reactant binding case — matching NFsim's own coverage. State-change energy rules, intramolecular ring-closure binding, and >2-reactant rules would be silently dropped, so they are refused. (2-reactant binding Arrhenius rules, and a bare `<ListOfEnergyPatterns>` with `Function`-type rate laws, are both fully supported and are **not** triggers.) |
 | Any rule with `RateLaw type="Sat"` | Deprecated; rewrite as `MM(kcat, Km)`. |
 | Any rule with `RateLaw type="Hill"` | Network-only; use `generate_network()` + ODE/SSA instead of network-free. |
 | Any `<MoleculeType population="1">` | Hybrid particle-population SSA not implemented; would be silently treated as ordinary particles with diverging trajectories. |
@@ -201,6 +201,64 @@ These are emitted as `Severity::Warn` and the run proceeds.
 |---|---|
 | Any rule with `MoveConnected` operation | Requires compartments; emitted as a warning because RM ignores the operation entirely. |
 | Any rule with a `priority` attribute | Honored as ordinary rule firing; the priority modifier is ignored. |
+
+## Energy-based BNGL (eBNGL)
+
+RM supports energy rules written with the `Arrhenius(phi, Ea0)` rate law
+for the **2-reactant binding** case, matching NFsim's own coverage
+(RuleWorld/nfsim commit `c4f1bb2`). No runtime free-energy computation
+happens; instead the model loader expands each energy rule at load time
+into a finite set of conventional rules with pre-computed rate constants
+(Sekar 2015, *Rule-based Modeling of Cell Signaling*, Ch. 3), which then
+run through the ordinary SSA loop unchanged. The port lives in
+`cpp/rulemonkey/energy_expand.{hpp,cpp}`.
+
+For a binding rule `mt1(s1) + mt2(s2) <-> mt1(s1!1).mt2(s2!1)`:
+
+- The energy patterns that overlap the reaction-center bond are the only
+  ones whose match count changes when the bond forms, so only they
+  contribute to ΔG (Sekar Corollary 3.3-43).
+- Patterns that pin only the reaction center are "always" contributors;
+  patterns that additionally require context (another bound site, or a
+  third molecule) are "conditional" and gate on that context.
+- The rule expands into `2^n` context variants (n = number of distinct
+  context conditions), each a conventional binding or unbinding rule whose
+  reactant templates carry the context as extra bound/free component
+  constraints, and whose rate is
+  `k_fwd = exp(-(Ea0 + phi·ΔG)/RT)` (binding) or
+  `k_rev = exp(-(Ea0 + (phi-1)·ΔG)/RT)` (unbinding). Each direction is
+  taken from its own BNG2-emitted `ReactionRule` (forward = AddBond,
+  reverse = DeleteBond), so the forward and reverse halves are expanded
+  independently.
+- `RT` is read from the `RT` parameter (default 2.478); `phi`/`Ea0` are
+  the two `Arrhenius` rate constants. Energy-pattern values come from
+  the `<EnergyPattern expression="...">` attribute.
+
+Each expanded rate is stored as a symbolic expression of the energy
+parameters, so `set_param` on `Ea0`, `phi`, `RT`, or an energy-pattern
+`Gf` **does** re-resolve the baked rates on the next run (same path as
+ordinary `Ele` rate constants).
+
+**Deferred** (refused at Tier 0, matching NFsim's binding-only coverage):
+state-change energy rules, intramolecular ring-closure binding, rules with
+more than two reactants, **same-type homodimer binding** (`A + A <-> A.A`;
+the context reactant attribution and the molecularity-1 symmetry factor are
+not handled for automorphic reactants), rules that **couple binding to
+another operation** (state change, molecule add/delete), and rules carrying
+**exclude/include constraints**. Energy patterns paired with `Function`-type
+rate laws that inline the Boltzmann factors by hand (e.g.
+`isingspin_localfcn`, `ft_energy_patterns`) are a separate, long-supported
+path and need no expansion.
+
+**NFsim-parity quirks** (faithfully reproduced, so RM matches NFsim even
+where NFsim's expansion is incomplete relative to BNG2's network
+generation): an energy pattern that requires *two or more* context bonds is
+included in a variant's ΔG when *any* one of those bonds is present
+(OR-union, not AND); and an energy pattern gated purely by a non-center
+*internal-state* constraint (rather than a bond) contributes no ΔG term.
+Both mirror NFsim exactly. RM's supported test models avoid these shapes;
+if you need BNG2-network-exact behavior on such patterns, use
+`generate_network()` + ODE/SSA.
 
 ## Embedder integration pattern
 
@@ -256,9 +314,11 @@ emitted, recorded at the final/initial state. An out-of-order list throws
 - Compartment volume scaling (cBNGL) — tracked in
   [#21](https://github.com/richardposner/RuleMonkey/issues/21);
   foundational, no scheduled implementation.
-- Arrhenius / energy-pattern rate derivation (eBNGL) — tracked in
-  [#20](https://github.com/richardposner/RuleMonkey/issues/20); NFsim
-  gained this in Apr 2026, so it is now a live parity gap.
+- Energy-based BNGL (eBNGL) beyond 2-reactant binding — the binding case
+  is implemented (see below); state-change energy rules and >2-reactant
+  energy rules remain deferred (they are also unsupported by NFsim's
+  current eBNGL). Tracked in
+  [#20](https://github.com/richardposner/RuleMonkey/issues/20).
 - Hybrid particle-population SSA — open work, no scheduled implementation.
 - Multi-molecule Fixed species — would require pattern-based
   re-instantiation; not currently implemented (refused at Tier 0).

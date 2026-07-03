@@ -199,8 +199,8 @@ CMake snippets for both consumption modes).
   BNGL model to RuleMonkey trajectories.
 - [`docs/model_semantics.md`](docs/model_semantics.md) — reference for
   "will my BNGL model run on RM?".  Lists every supported BNGL
-  construct, every Tier-0 refusal (compartments, Arrhenius / Sat /
-  Hill / FunctionProduct rate laws, population types, multi-molecule
+  construct, every Tier-0 refusal (compartments, Sat / Hill rate laws,
+  non-binding Arrhenius energy rules, population types, multi-molecule
   fixed species), and the best-effort warnings the engine emits at
   load time.
 - [`docs/gdat_format.md`](docs/gdat_format.md) — the `.gdat` output

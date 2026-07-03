@@ -19,6 +19,8 @@
 | FunctionProduct (DOR2) | RateLaw/@type="FunctionProduct" | nf_function_product | PASS |
 | Conditional if() | Expression with if() | ft_conditional_rate | PASS |
 | Energy patterns | compiled to local functions | ft_energy_patterns | PASS |
+| eBNGL Arrhenius (binding) | RateLaw/@type="Arrhenius" + energy patterns | ft_energy_arrhenius | PASS |
+| eBNGL Arrhenius (context) | cooperative energy-pattern context conditions | ft_energy_arrhenius_coop | PASS |
 | Molecules observable | Observable/@type="Molecules" | all models | PASS |
 | Species observable | Observable/@type="Species" | ft_species_vs_molecules | PASS |
 | MatchOnce | Observable/@MatchOnce | ft_match_once | PASS |
@@ -63,7 +65,7 @@ Tests that appear to pass for these features are FALSE POSITIVES.**
 
 | Feature | Notes |
 |---------|-------|
-| Sat(), Hill(), Arrhenius() rate laws | generate_network only |
+| Sat(), Hill() rate laws | generate_network only (Arrhenius energy rules are now supported for 2-reactant binding — see the eBNGL Arrhenius rows above) |
 | Pattern quantifiers (==, >=, <) | Not in NFsim XML format |
 | Table functions (tfun/TFUN) | BNG2.pl side; not in standard XML |
 | time() in functions | BNG2.pl can't generate XML with it |

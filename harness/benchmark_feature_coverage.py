@@ -157,6 +157,17 @@ NFSIM_UNRELIABLE = {
     # upstream in NFsim PR #60 (not in our pinned release).  BNG2 ODE
     # correctly handles Fixed via species_deriv = 0.
     "ft_clamped_species_strict",
+    # eBNGL Arrhenius energy rules.  NFsim's energy support (upstream commit
+    # c4f1bb2, not in our pinned release) is also *seed-invariant*: every
+    # -seed value yields a byte-identical trajectory, so a multi-rep NFsim
+    # "ensemble" collapses to a single realization with zero variance — a
+    # useless z-score reference.  BNG2 network-generates the same energy
+    # expansion (identical rate constants; verified against NFsim's printed
+    # k_fwd/k_rev in energy_expand_test) and its ODE integrates the mean
+    # exactly, so ODE is the verdict reference.  RM's load-time expansion is
+    # unit-tested against NFsim's own numbers separately.
+    "ft_energy_arrhenius",
+    "ft_energy_arrhenius_coop",
 }
 
 # Models for which no third-party simulator produces a usable

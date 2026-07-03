@@ -5,6 +5,54 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.0] — 2026-07-03
+
+### Added
+
+- **Energy-based BNGL (eBNGL) `Arrhenius` rate laws via load-time rule
+  expansion (issue #20).** RM now natively runs 2-reactant binding energy
+  rules — the `A(s1) + B(s2) <-> A(s1!1).B(s2!1)  Arrhenius(phi, Ea0)` form
+  paired with a `begin energy patterns` block — matching NFsim's own eBNGL
+  coverage (RuleWorld/nfsim commit `c4f1bb2`, Kutuva & Faeder). Previously
+  any `RateLaw type="Arrhenius"` was a Tier-0 refusal.
+
+  The implementation is a faithful port of NFsim's Sekar (2015, Ch. 3)
+  expansion algorithm (`cpp/rulemonkey/energy_expand.{hpp,cpp}`): at model
+  load each energy rule is expanded into a finite set of conventional rules
+  with pre-computed rate constants, so the hot SSA loop is untouched. Only
+  energy patterns overlapping the reaction-center bond contribute to ΔG
+  (Sekar Corollary 3.3-43); patterns adding extra context gate `2^n` rule
+  variants whose reactant templates carry the context as bound/free
+  component constraints, with rates
+  `k_fwd = exp(-(Ea0 + phi·ΔG)/RT)`, `k_rev = exp(-(Ea0 + (phi-1)·ΔG)/RT)`.
+  Each direction is expanded independently from its own BNG2-emitted
+  `ReactionRule`. Rates are stored symbolically, so `set_param` on an energy
+  parameter (`Ea0`, `phi`, `RT`, or an energy-pattern `Gf`) re-resolves the
+  baked rates on the next run — verified by `set_param_test`.
+
+  Validated four ways: `energy_expand_test` pins the ported expansion to
+  NFsim's own printed `k_fwd`/`k_rev` for the reference `v40` model and the
+  cooperative scaffold; and two new feature-coverage models
+  (`ft_energy_arrhenius`, `ft_energy_arrhenius_coop`) match BNG2's
+  independent network expansion under both ODE (verdict) and SSA, and NFsim
+  at steady state to within ~0.03 particles. BNG2, NFsim, and RM produce
+  identical expanded rate constants.
+
+  Scope (Phase 1, matching NFsim): 2-reactant heterodimer binding only.
+  Shapes RM does not expand are refused as Tier-0 errors (recorded during
+  expansion, where the fully-parsed rule is available) with a specific
+  message: state-change energy rules, intramolecular ring-closure binding,
+  >2-reactant rules, same-type homodimer binding, rules coupling binding to
+  another operation, and rules carrying exclude/include constraints. Two
+  NFsim-parity quirks (multi-context-bond OR-union, state-gated patterns) are
+  reproduced faithfully and documented. See `docs/model_semantics.md` →
+  "Energy-based BNGL (eBNGL)".
+
+  The two eBNGL models are added to the harness `NFSIM_UNRELIABLE` set:
+  NFsim's eBNGL path is seed-invariant (every `-seed` yields a byte-identical
+  trajectory), so its multi-rep "ensemble" collapses to a single realization
+  and is useless as a z-score reference; the verdict uses BNG2 ODE instead.
+
 ## [3.5.0] — 2026-06-22
 
 ### Added

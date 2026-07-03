@@ -1,5 +1,6 @@
 #include "rulemonkey/simulator.hpp"
 
+#include "energy_expand.hpp"
 #include "engine.hpp"
 #include "expr_eval.hpp"
 #include "model.hpp"
@@ -505,6 +506,367 @@ Pattern parse_pattern(const XmlNode& pat_node, const Model& model,
   }
 
   return pat;
+}
+
+// ---- eBNGL energy-rule expansion helpers ----------------------------------
+// Support for `Arrhenius` energy rate laws: at model load, each energy rule
+// is expanded into a finite set of conventional rules with pre-computed rate
+// constants (Sekar 2015, ported from NFsim — see energy_expand.hpp).  These
+// helpers convert parsed energy patterns and synthesize the expanded binding
+// / unbinding Rule structs.  The SSA loop is untouched.
+
+// Convert a parsed RM Pattern (from an <EnergyPattern>) into the lightweight
+// EnergyPatternInfo the expansion analysis consumes.
+EnergyPatternInfo pattern_to_energy_info(const std::string& id, double energy,
+                                         const std::string& energy_expr, const Pattern& pat) {
+  EnergyPatternInfo ep;
+  ep.id = id;
+  ep.energy_value = energy;
+  ep.energy_expr = energy_expr;
+  for (const auto& pm : pat.molecules) {
+    EpMolecule m;
+    m.type_name = pm.type_name;
+    for (const auto& pc : pm.components) {
+      EpComponent c;
+      c.name = pc.name;
+      // A component is "bound" for expansion purposes if the pattern pins it
+      // to a specific partner (BoundTo) or to any partner (Bound / `!+`).
+      c.is_bound = (pc.bond_constraint == BondConstraint::Bound ||
+                    pc.bond_constraint == BondConstraint::BoundTo);
+      c.state_constraint = pc.required_state;
+      m.components.push_back(std::move(c));
+    }
+    ep.molecules.push_back(std::move(m));
+  }
+  auto locate = [&pat](int flat, int& mol, int& comp) {
+    int running = 0;
+    for (int mi = 0; mi < static_cast<int>(pat.molecules.size()); ++mi) {
+      int const nc = static_cast<int>(pat.molecules[mi].components.size());
+      if (flat >= running && flat < running + nc) {
+        mol = mi;
+        comp = flat - running;
+        return;
+      }
+      running += nc;
+    }
+    mol = -1;
+    comp = -1;
+  };
+  for (const auto& b : pat.bonds) {
+    EnergyPatternInfo::Bond eb;
+    locate(b.comp_flat_a, eb.mol1, eb.comp1);
+    locate(b.comp_flat_b, eb.mol2, eb.comp2);
+    if (eb.mol1 >= 0 && eb.mol2 >= 0)
+      ep.bonds.push_back(eb);
+  }
+  return ep;
+}
+
+// Build one PatternComponent with resolved type/state indices.
+PatternComponent make_energy_component(const Model& model, int type_index, const std::string& cname,
+                                       BondConstraint bc, int bond_label) {
+  PatternComponent pc;
+  pc.name = cname;
+  pc.comp_type_index =
+      (type_index >= 0) ? model.molecule_types[type_index].comp_index_by_name(cname) : -1;
+  pc.bond_constraint = bc;
+  pc.bond_label = bond_label;
+  return pc;
+}
+
+// Append this variant's context components (bound-to-anything or free) for
+// reactant `reactant_idx` onto `mol`.  Binding and unbinding builds add the
+// same context on both reactant and product sides so the reactant→product
+// map stays the identity.
+void add_energy_context(const Model& model, int type_index, int reactant_idx,
+                        const std::vector<EnergyContextConstraint>& constraints,
+                        PatternMolecule& mol) {
+  for (const auto& cc : constraints) {
+    if (cc.reactant_idx != reactant_idx)
+      continue;
+    mol.components.push_back(
+        make_energy_component(model, type_index, cc.comp_name,
+                              cc.must_be_bound ? BondConstraint::Bound : BondConstraint::Free, -1));
+  }
+}
+
+// Synthesize the forward (binding) conventional rule for one expanded
+// variant: molType1(site1) + molType2(site2) -> molType1(site1!1).molType2(site2!1)
+// with the variant's context constraints and pre-computed rate.
+Rule build_energy_binding_rule(const Model& model, const std::string& name,
+                               const std::string& t1_name, const std::string& site1,
+                               const std::string& t2_name, const std::string& site2,
+                               const EnergyExpandedVariant& v, const std::string& rate_expr) {
+  Rule r;
+  r.name = name;
+  r.id = name;
+  int const t1 = model.mol_type_index(t1_name);
+  int const t2 = model.mol_type_index(t2_name);
+
+  // Reactant side: two separate single-molecule patterns, binding site free.
+  PatternMolecule m0;
+  m0.type_name = t1_name;
+  m0.type_index = t1;
+  m0.components.push_back(make_energy_component(model, t1, site1, BondConstraint::Free, -1));
+  add_energy_context(model, t1, 0, v.constraints, m0);
+  int const site2_flat = static_cast<int>(m0.components.size()); // first comp of m1
+  PatternMolecule m1;
+  m1.type_name = t2_name;
+  m1.type_index = t2;
+  m1.components.push_back(make_energy_component(model, t2, site2, BondConstraint::Free, -1));
+  add_energy_context(model, t2, 1, v.constraints, m1);
+  r.reactant_pattern.molecules.push_back(std::move(m0));
+  r.reactant_pattern.molecules.push_back(std::move(m1));
+  r.reactant_pattern_starts = {0, 1};
+  r.molecularity = 2;
+
+  // Product side: one complex, the two molecules bonded.
+  PatternMolecule pm0;
+  pm0.type_name = t1_name;
+  pm0.type_index = t1;
+  pm0.components.push_back(make_energy_component(model, t1, site1, BondConstraint::BoundTo, 0));
+  add_energy_context(model, t1, 0, v.constraints, pm0);
+  PatternMolecule pm1;
+  pm1.type_name = t2_name;
+  pm1.type_index = t2;
+  pm1.components.push_back(make_energy_component(model, t2, site2, BondConstraint::BoundTo, 0));
+  add_energy_context(model, t2, 1, v.constraints, pm1);
+  r.product_pattern.molecules.push_back(std::move(pm0));
+  r.product_pattern.molecules.push_back(std::move(pm1));
+  PatternBond pb;
+  pb.comp_flat_a = 0;          // site1 on product molecule 0
+  pb.comp_flat_b = site2_flat; // site2 on product molecule 1
+  r.product_pattern.bonds.push_back(pb);
+  r.product_pattern_starts = {0};
+  r.n_product_patterns = 1;
+
+  RuleOp op;
+  op.type = OpType::AddBond;
+  op.comp_flat_a = 0;
+  op.comp_flat_b = site2_flat;
+  r.operations.push_back(op);
+
+  // Identity reactant→product map (layouts match component-for-component).
+  int const n = r.reactant_pattern.flat_comp_count();
+  r.reactant_to_product_map.assign(n, -1);
+  for (int i = 0; i < n; ++i)
+    r.reactant_to_product_map[i] = i;
+
+  r.same_components = (t1_name == t2_name && site1 == site2);
+  r.rate_law.type = RateLawType::Ele;
+  r.rate_law.rate_value = v.fwd_rate;
+  r.rate_law.rate_expr = rate_expr; // re-resolved on set_param of an energy param
+  return r;
+}
+
+// Synthesize the reverse (unbinding) conventional rule for one expanded
+// variant: molType1(site1!1).molType2(site2!1) -> molType1(site1) + molType2(site2).
+Rule build_energy_unbinding_rule(const Model& model, const std::string& name,
+                                 const std::string& t1_name, const std::string& site1,
+                                 const std::string& t2_name, const std::string& site2,
+                                 const EnergyExpandedVariant& v, const std::string& rate_expr) {
+  Rule r;
+  r.name = name;
+  r.id = name;
+  int const t1 = model.mol_type_index(t1_name);
+  int const t2 = model.mol_type_index(t2_name);
+
+  // Reactant side: one complex with the two molecules bonded.
+  PatternMolecule m0;
+  m0.type_name = t1_name;
+  m0.type_index = t1;
+  m0.components.push_back(make_energy_component(model, t1, site1, BondConstraint::BoundTo, 0));
+  add_energy_context(model, t1, 0, v.constraints, m0);
+  int const site2_flat = static_cast<int>(m0.components.size());
+  PatternMolecule m1;
+  m1.type_name = t2_name;
+  m1.type_index = t2;
+  m1.components.push_back(make_energy_component(model, t2, site2, BondConstraint::BoundTo, 0));
+  add_energy_context(model, t2, 1, v.constraints, m1);
+  r.reactant_pattern.molecules.push_back(std::move(m0));
+  r.reactant_pattern.molecules.push_back(std::move(m1));
+  PatternBond pb;
+  pb.comp_flat_a = 0;
+  pb.comp_flat_b = site2_flat;
+  r.reactant_pattern.bonds.push_back(pb);
+  r.reactant_pattern_starts = {0};
+  r.molecularity = 1;
+
+  // Product side: two separate single-molecule patterns, binding site free.
+  PatternMolecule pm0;
+  pm0.type_name = t1_name;
+  pm0.type_index = t1;
+  pm0.components.push_back(make_energy_component(model, t1, site1, BondConstraint::Free, -1));
+  add_energy_context(model, t1, 0, v.constraints, pm0);
+  PatternMolecule pm1;
+  pm1.type_name = t2_name;
+  pm1.type_index = t2;
+  pm1.components.push_back(make_energy_component(model, t2, site2, BondConstraint::Free, -1));
+  add_energy_context(model, t2, 1, v.constraints, pm1);
+  r.product_pattern.molecules.push_back(std::move(pm0));
+  r.product_pattern.molecules.push_back(std::move(pm1));
+  r.product_pattern_starts = {0, 1};
+  r.n_product_patterns = 2;
+
+  RuleOp op;
+  op.type = OpType::DeleteBond;
+  op.comp_flat_a = 0;
+  op.comp_flat_b = site2_flat;
+  r.operations.push_back(op);
+
+  int const n = r.reactant_pattern.flat_comp_count();
+  r.reactant_to_product_map.assign(n, -1);
+  for (int i = 0; i < n; ++i)
+    r.reactant_to_product_map[i] = i;
+
+  r.same_components = (t1_name == t2_name && site1 == site2);
+  r.rate_law.type = RateLawType::Ele;
+  r.rate_law.rate_value = v.rev_rate;
+  r.rate_law.rate_expr = rate_expr; // re-resolved on set_param of an energy param
+  return r;
+}
+
+// Handle a ReactionRule that carries a `RateLaw type="Arrhenius"` (eBNGL).
+// Always returns true: the Arrhenius rule is consumed here so the caller
+// skips normal finalization.
+//
+// Each direction is processed independently — a forward (AddBond) rule emits
+// the binding rules with forward rates; a reverse (DeleteBond) rule emits the
+// unbinding rules with reverse rates.  For a reversible energy rule BNG2
+// emits both a forward and a reverse ReactionRule, so this reconstructs the
+// exact same rule set NFsim's "forward generates both" expansion does, while
+// also handling a standalone unbinding rule correctly.
+//
+// Shapes beyond Phase 1 (matching NFsim's binding-only coverage) are NOT
+// expanded: their id is appended to `unsupported_ids` so load_model raises a
+// Tier-0 error, and no (broken) rule is emitted.  Refused shapes: any coupled
+// operation (state change, molecule add/delete, or a mixed bond op), an
+// intramolecular / ring-closure bond, a same-type homodimer (the context
+// reactant attribution and molecularity-1 symmetry factor are not handled for
+// automorphic reactants), and rules carrying exclude/include constraints.
+bool try_expand_arrhenius(const Rule& base, const XmlNode& rl_node, const EnergyFunction& efn,
+                          Model& model, bngsim::ExprTkEvaluator& ev,
+                          std::unordered_map<std::string, int>& ev_ids,
+                          std::vector<std::string>& unsupported_ids) {
+  auto refuse = [&]() {
+    unsupported_ids.push_back(base.name.empty() ? base.id : base.name);
+    return true;
+  };
+
+  // The only supported shapes are a pure binding (a single AddBond) or a pure
+  // unbinding (a single DeleteBond) — nothing else in the operation list.
+  const RuleOp* add_bond = nullptr;
+  const RuleOp* delete_bond = nullptr;
+  int n_add = 0;
+  int n_delete = 0;
+  int n_other = 0;
+  for (const auto& op : base.operations) {
+    if (op.type == OpType::AddBond) {
+      ++n_add;
+      add_bond = &op;
+    } else if (op.type == OpType::DeleteBond) {
+      ++n_delete;
+      delete_bond = &op;
+    } else {
+      ++n_other;
+    }
+  }
+  if (n_other != 0 || n_add + n_delete != 1)
+    return refuse();
+  if (!base.constraints.empty())
+    return refuse();
+
+  bool const is_forward = (add_bond != nullptr);
+  const RuleOp* bond_op = is_forward ? add_bond : delete_bond;
+  if (bond_op->comp_flat_a < 0 || bond_op->comp_flat_b < 0)
+    return refuse();
+
+  // Resolve each bond endpoint to (molecule type, site, reactant-pattern idx).
+  auto locate = [&base](int flat, std::string& mtype, std::string& site, int& rp) -> bool {
+    int running = 0;
+    for (int mi = 0; mi < static_cast<int>(base.reactant_pattern.molecules.size()); ++mi) {
+      const auto& pm = base.reactant_pattern.molecules[mi];
+      int const nc = static_cast<int>(pm.components.size());
+      if (flat >= running && flat < running + nc) {
+        mtype = pm.type_name;
+        site = pm.components[flat - running].name;
+        rp = 0;
+        for (int k = 0; k < static_cast<int>(base.reactant_pattern_starts.size()); ++k)
+          if (base.reactant_pattern_starts[k] <= mi)
+            rp = k;
+        return true;
+      }
+      running += nc;
+    }
+    return false;
+  };
+  std::string t1;
+  std::string s1;
+  std::string t2;
+  std::string s2;
+  int rp1 = -1;
+  int rp2 = -1;
+  if (!locate(bond_op->comp_flat_a, t1, s1, rp1) || !locate(bond_op->comp_flat_b, t2, s2, rp2))
+    return refuse();
+
+  if (is_forward) {
+    // A binding rule joins two distinct reactant complexes.
+    if (base.molecularity != 2 || rp1 == rp2)
+      return refuse();
+  } else if (base.molecularity != 1) {
+    // An unbinding rule breaks a bond inside a single reactant complex.
+    return refuse();
+  }
+  if (t1 == t2)
+    return refuse(); // same-type homodimer — deferred
+
+  // Arrhenius(phi, Ea0): capture both the resolved value (for the baked rate)
+  // and the raw source string (for a set_param-re-resolvable symbolic rate).
+  double phi = 1.0;
+  double ea0 = 0.0;
+  std::string phi_expr = "1";
+  std::string ea0_expr = "0";
+  if (auto* rc_list = find_child(rl_node, "ListOfRateConstants")) {
+    int idx = 0;
+    for (const auto& rcn : rc_list->children) {
+      if (rcn.name != "RateConstant")
+        continue;
+      auto val = need_attr(rcn, "value");
+      double const resolved = resolve_cached(val, ev, ev_ids);
+      if (idx == 0) {
+        phi = resolved;
+        phi_expr = val;
+      } else if (idx == 1) {
+        ea0 = resolved;
+        ea0_expr = val;
+      }
+      ++idx;
+    }
+  }
+
+  // RT is symbolic when the model declares it, so overriding RT re-resolves.
+  std::string const rt_expr =
+      (model.parameters.count("RT") != 0) ? std::string("RT") : std::to_string(efn.rt());
+
+  // fwd: exp(-(Ea0 + phi·ΔG)/RT);  rev: exp(-(Ea0 + (phi-1)·ΔG)/RT).
+  auto rate_expr = [&](bool forward, const std::string& dg) -> std::string {
+    std::string const coeff = forward ? ("(" + phi_expr + ")") : ("((" + phi_expr + ")-1)");
+    return "exp(-((" + ea0_expr + ")+(" + coeff + "*(" + dg + ")))/(" + rt_expr + "))";
+  };
+
+  auto variants = efn.expand_binding(t1, s1, t2, s2, ea0, phi);
+  for (std::size_t i = 0; i < variants.size(); ++i) {
+    std::string const nm = base.name + "_arr_v" + std::to_string(i);
+    if (is_forward)
+      model.rules.push_back(build_energy_binding_rule(model, nm + "_fwd", t1, s1, t2, s2,
+                                                      variants[i],
+                                                      rate_expr(true, variants[i].delta_g_expr)));
+    else
+      model.rules.push_back(
+          build_energy_unbinding_rule(model, nm + "_rev", t1, s1, t2, s2, variants[i],
+                                      rate_expr(false, variants[i].delta_g_expr)));
+  }
+  return true;
 }
 
 // Parse TFUN CSV values
@@ -1031,6 +1393,37 @@ Model load_model(const std::string& xml_path,
                                                   obs_name_set, model.function_index);
   }
 
+  // ---- 5b. EnergyPatterns (eBNGL) ----
+  // Parse <ListOfEnergyPatterns> into an EnergyFunction so that any
+  // `Arrhenius` energy rules can be expanded into conventional rules in the
+  // ReactionRules loop below (Sekar load-time expansion — see
+  // energy_expand.hpp).  A bare energy-pattern block paired with
+  // Function-type rate laws (which inline the Boltzmann factors) needs no
+  // expansion and is unaffected: the function is only consulted when a rule
+  // declares RateLaw type="Arrhenius".
+  double energy_rt = 2.478; // NFsim default: R·T ≈ 2.478 kJ/mol at 298 K
+  if (auto rt_it = model.parameters.find("RT"); rt_it != model.parameters.end())
+    energy_rt = rt_it->second;
+  EnergyFunction energy_fn(energy_rt);
+  // Arrhenius energy rules whose shape RM does not expand (see
+  // try_expand_arrhenius); surfaced as Tier-0 errors below.
+  std::vector<std::string> unsupported_arrhenius_ids;
+  if (auto* ep_list = find_child(*model_node, "ListOfEnergyPatterns")) {
+    for (auto& epn : ep_list->children) {
+      if (epn.name != "EnergyPattern")
+        continue;
+      auto ep_id = opt_attr(epn, "id");
+      auto ep_expr = opt_attr(epn, "expression");
+      double const energy = resolve_cached(ep_expr, load_eval, load_eval_ids);
+      // The graph lives under a <Pattern> child (BNG 2.9.3) or, in older
+      // emit conventions, directly as <ListOfMolecules>/<ListOfBonds>.
+      auto* pat_node = find_child(epn, "Pattern");
+      std::unordered_map<std::string, std::pair<int, int>> ep_id_map;
+      const Pattern pat = parse_pattern(pat_node != nullptr ? *pat_node : epn, model, &ep_id_map);
+      energy_fn.add_pattern(pattern_to_energy_info(ep_id, energy, ep_expr, pat));
+    }
+  }
+
   // ---- 6. ReactionRules ----
   auto* rr_list = find_child(*model_node, "ListOfReactionRules");
   if (rr_list) {
@@ -1329,6 +1722,16 @@ Model load_model(const std::string& xml_path,
         auto totalrate = opt_attr(*rl_node, "totalrate");
         rule.rate_law.is_total_rate = (totalrate == "1");
 
+        if (rl_type == "Arrhenius") {
+          // eBNGL energy rule: expand this direction into conventional rules
+          // with pre-computed rates and push them directly, then skip the
+          // normal single-rule finalization.  Unsupported shapes append their
+          // id to unsupported_arrhenius_ids (surfaced as Tier-0 errors).
+          try_expand_arrhenius(rule, *rl_node, energy_fn, model, load_eval, load_eval_ids,
+                               unsupported_arrhenius_ids);
+          continue;
+        }
+
         if (rl_type == "Ele") {
           rule.rate_law.type = RateLawType::Ele;
           auto* rc_list = find_child(*rl_node, "ListOfRateConstants");
@@ -1597,8 +2000,23 @@ Model load_model(const std::string& xml_path,
   }
 
   // Scan for unsupported features if requested
-  if (unsupported_out)
+  if (unsupported_out) {
     *unsupported_out = scan_unsupported(*model_node);
+    // Arrhenius energy rules whose shape RM does not expand (recorded by
+    // try_expand_arrhenius above): the rule was silently NOT expanded, so
+    // refuse the model rather than run it missing that reaction.
+    for (const auto& rid : unsupported_arrhenius_ids)
+      unsupported_out->push_back(
+          {Severity::Error, "RateLaw@type=Arrhenius",
+           "Arrhenius energy rule '" + rid +
+               "' is not a supported 2-reactant binding/unbinding shape — RM "
+               "(like NFsim) only expands energy binding rules. Coupled "
+               "operations (state change / molecule add/delete), intramolecular "
+               "ring-closure binding, same-type homodimer binding, >2-reactant "
+               "rules, and rules with exclude/include constraints are deferred; "
+               "the rule would be silently dropped. Pass --ignore-unsupported to "
+               "run anyway without that rule."});
+  }
 
   return model;
 }
@@ -1662,13 +2080,6 @@ std::string first_rule_with_ratelaw_type(const XmlNode& model_node, const std::s
   return "";
 }
 
-// True iff any rule uses an Arrhenius rate law — the eBNGL energy-based
-// kinetic form that derives rate constants at runtime from free-energy
-// sums over pattern matches.  RM does not implement that derivation.
-bool any_rule_has_arrhenius_ratelaw(const XmlNode& model_node) {
-  return !first_rule_with_ratelaw_type(model_node, "Arrhenius").empty();
-}
-
 std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
   std::vector<UnsupportedFeature> warnings;
 
@@ -1697,30 +2108,14 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
                           "well-mixed (volume=1) interpretation."});
   }
 
-  // ERROR-level: energy-based BNGL (eBNGL) — Arrhenius rate laws derive
-  // their rate constants at runtime from a sum over energy-pattern
-  // matches (ΔG computation per Sekar 2015).  RM does not implement
-  // that derivation; running such a model would silently use whatever
-  // fallback interpretation the rate-law parser applies, producing
-  // incorrect trajectories.
-  //
-  // A bare <ListOfEnergyPatterns> is NOT a trigger on its own: many
-  // BNGL models declare energy patterns purely for BNG2's ODE/SSA
-  // generation and then use `Function`-type rate laws whose local
-  // expressions inline the Boltzmann factors.  RM evaluates those
-  // local functions faithfully, so the model simulates correctly
-  // without runtime energy-pattern handling (e.g. isingspin_localfcn,
-  // feature_coverage/ft_energy_patterns).  Only the Arrhenius rate
-  // law needs runtime ΔG, so that is the precise trigger.
-  if (any_rule_has_arrhenius_ratelaw(model_node)) {
-    warnings.push_back({Severity::Error, "RateLaw@type=Arrhenius",
-                        "Arrhenius rate law declared (eBNGL) — RM does not "
-                        "implement runtime ΔG derivation from energy "
-                        "patterns; rate constants would be silently "
-                        "incorrect. Pass --ignore-unsupported to run "
-                        "anyway with the Ea parameter treated as a bare "
-                        "rate constant (no Boltzmann correction)."});
-  }
+  // NOTE: eBNGL Arrhenius energy rules are handled in load_model, not here.
+  // Supported 2-reactant binding rules are expanded (Sekar load-time
+  // expansion — see energy_expand.hpp / try_expand_arrhenius); any shape RM
+  // does not expand is recorded there and surfaced as a Tier-0 error, because
+  // deciding support needs the fully-parsed rule (operation set, molecule
+  // types, reactant-pattern membership) rather than a raw XML scan.  A bare
+  // <ListOfEnergyPatterns> with `Function`-type rate laws (e.g.
+  // isingspin_localfcn, feature_coverage/ft_energy_patterns) is not a trigger.
 
   // ERROR-level: legacy/unimplemented rate-law types.  BNG2 still parses
   // these but RM's rule loader (cpp/rulemonkey/simulator.cpp:~1157)

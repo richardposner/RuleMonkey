@@ -382,13 +382,40 @@ void test_out_of_order_cascade(const std::string& xml) {
         "out-of-order: C should re-resolve to 2*B=40 after sync_parameters fixed point");
 }
 
+// eBNGL Arrhenius energy rules bake their rate constants at load time, but
+// from a SYMBOLIC expression of the energy parameters (rate_expr), so
+// set_param on an energy parameter must re-resolve those baked rates in
+// apply_overrides.  Were it a silent no-op, the three runs below would be
+// bit-identical.  Model: A(b)+B(a)<->A(b!1).B(a!1) Arrhenius(phi,Ea0) with
+// energy pattern A(b!1).B(a!1)=Gf; the equilibrium constant is exp(-Gf/RT),
+// so more-negative Gf binds more, more-positive Gf binds less.
+void test_energy_setparam(const std::string& xml) {
+  auto ab = [](const rulemonkey::Result& r) { return final_value(r, "AB"); };
+
+  auto r_default = run_with(xml, {}, 40.0, 41, /*seed=*/1);             // Gf=2 → ~76/100
+  auto r_strong = run_with(xml, {{"Gf", -12.0}}, 40.0, 41, /*seed=*/1); // near-fully bound
+  auto r_weak = run_with(xml, {{"Gf", 12.0}}, 40.0, 41, /*seed=*/1);    // near-fully unbound
+
+  check(ab(r_strong) > ab(r_default) + 5.0,
+        "energy set_param: Gf=-12 should bind far more than default Gf=2 (got " +
+            std::to_string(ab(r_strong)) + " vs " + std::to_string(ab(r_default)) + ")");
+  check(ab(r_weak) < ab(r_default) - 5.0,
+        "energy set_param: Gf=+12 should bind far less than default (got " +
+            std::to_string(ab(r_weak)) + " vs " + std::to_string(ab(r_default)) + ")");
+
+  // Overriding Ea0 must re-resolve the exp(...) rate expression without error.
+  auto r_ea = run_with(xml, {{"Ea0", 3.0}}, 40.0, 41, /*seed=*/1);
+  check(r_ea.n_times() > 0 && ab(r_ea) >= 0.0,
+        "energy set_param: Ea0 override should re-resolve the rate expression and run cleanly");
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
-  if (argc < 5) {
+  if (argc < 6) {
     std::fprintf(stderr,
                  "usage: %s <A_plus_A.xml> <ft_mm_ratelaw.xml> <derived_param_model.xml> "
-                 "<out_of_order_param_model.xml>\n",
+                 "<out_of_order_param_model.xml> <ft_energy_arrhenius.xml>\n",
                  argv[0]);
     return 2;
   }
@@ -396,6 +423,7 @@ int main(int argc, char* argv[]) {
   const std::string mm_model = argv[2];
   const std::string derived = argv[3];
   const std::string out_of_order = argv[4];
+  const std::string energy_model = argv[5];
 
   try {
     test_ele_rate(a_plus_a);
@@ -410,6 +438,7 @@ int main(int argc, char* argv[]) {
     test_derived_parameter_cascade(derived);
     test_out_of_order_cascade(out_of_order);
     test_simulate_t_start_validation(a_plus_a);
+    test_energy_setparam(energy_model);
   } catch (const std::exception& e) {
     std::fprintf(stderr, "ERROR: %s\n", e.what());
     return 2;
@@ -419,8 +448,8 @@ int main(int argc, char* argv[]) {
     std::fprintf(stderr, "\n%d assertion(s) failed\n", g_failures);
     return 1;
   }
-  std::fprintf(stderr, "OK: set_param reaches Ele/MM/initial-conc, get_parameter is coherent, "
-                       "unknown names throw, derived parameters cascade in declaration "
-                       "and reverse-dependency order\n");
+  std::fprintf(stderr, "OK: set_param reaches Ele/MM/initial-conc/eBNGL-energy rates, "
+                       "get_parameter is coherent, unknown names throw, derived parameters "
+                       "cascade in declaration and reverse-dependency order\n");
   return 0;
 }

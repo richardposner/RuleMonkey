@@ -1,0 +1,58 @@
+# Feature: eBNGL Arrhenius energy rate law with cooperative context conditions
+# Tests: energy-pattern context expansion — a binding rate that depends on the
+#        occupancy of the OTHER site (Sekar 2015 cooperative scaffold, Ch. 3)
+# Tier: base
+# Expected: each binding rule expands into 2 context variants (other site
+#           free / bound); the doubly-bound energy pattern Gf_SAB shifts the
+#           rate when the partner site is occupied.
+# Note: reaction center S.a-A.s sees Gf_SA always and Gf_SAB when S.b is bound
+#       (and symmetrically for S.b-B.s).  Gf_SAB > 0 makes double occupancy
+#       unfavorable (anti-cooperative): a site binds well when the other is
+#       free (Keq~2.7) and poorly when it is occupied (Keq~0.37), so the
+#       context conditions matter at steady state — the equilibrium stays
+#       partial (mostly singly-bound S) rather than saturating.
+
+begin model
+begin parameters
+  phi    0.5
+  RT     1.0
+  Ea0    1.0
+  Gf_SA  -1.0
+  Gf_SB  -1.0
+  Gf_SAB  2.0
+end parameters
+
+begin molecule types
+  S(a,b)
+  A(s)
+  B(s)
+end molecule types
+
+begin seed species
+  S(a,b)  100
+  A(s)    150
+  B(s)    150
+end seed species
+
+begin observables
+  Molecules Sa_bound  S(a!1).A(s!1)
+  Molecules Sb_bound  S(b!1).B(s!1)
+  Molecules S_both    S(a!1,b!2).A(s!1).B(s!2)
+  Molecules S_free    S(a,b)
+end observables
+
+begin energy patterns
+  S(a!1).A(s!1)              Gf_SA
+  S(b!1).B(s!1)              Gf_SB
+  S(a!1,b!2).A(s!1).B(s!2)  Gf_SAB
+end energy patterns
+
+begin reaction rules
+  S(a) + A(s) <-> S(a!1).A(s!1)  Arrhenius(phi, Ea0)
+  S(b) + B(s) <-> S(b!1).B(s!1)  Arrhenius(phi, Ea0)
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>20,n_steps=>100})
+end actions

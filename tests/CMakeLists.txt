@@ -24,6 +24,7 @@ add_test(
         ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_mm_ratelaw.xml
         ${_rulemonkey_test_dir}/cpp/derived_param_model.xml
         ${_rulemonkey_test_dir}/cpp/out_of_order_param_model.xml
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_energy_arrhenius.xml
 )
 
 # Homodimer rate parity: small-N steady state of A+A<->AA must match the
@@ -107,6 +108,15 @@ target_link_libraries(canonical_test PRIVATE rulemonkey)
 target_include_directories(canonical_test PRIVATE ${_rulemonkey_private_include_dir})
 
 add_test(NAME canonical_test COMMAND canonical_test)
+
+# eBNGL energy-rule expansion: pins the Sekar port (energy_expand.{hpp,cpp})
+# to the reference NFsim's pre-computed rate constants for the v40 test-suite
+# model, plus the cooperative-scaffold always/conditional classification.
+add_executable(energy_expand_test cpp/energy_expand_test.cpp)
+target_link_libraries(energy_expand_test PRIVATE rulemonkey)
+target_include_directories(energy_expand_test PRIVATE ${_rulemonkey_private_include_dir})
+
+add_test(NAME energy_expand_test COMMAND energy_expand_test)
 
 # Runtime pattern-parser unit test (issue #9 §1 step 2).  Pure unit
 # test: parse_species_pattern is string + Model -> Pattern with no
