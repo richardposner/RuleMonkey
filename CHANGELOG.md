@@ -123,7 +123,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   requested list, one row per instant. This is the network-free analogue
   of BNG2.pl's `simulate_nf` `sample_times` branch — the motivating use is
   recording at an experimental dataset's time points so an embedder
-  (PyBNF via [bngsim](https://github.com/wshlavacek/PyBNF-Private)) can fit
+  (PyBNF via [bngsim](https://github.com/lanl/bngsim)) can fit
   against them directly, without the per-segment `step_to` workaround that
   rebases the propensity sum and drops `event_count`. Sampling is
   non-invasive: output times never draw from the RNG or perturb reaction
