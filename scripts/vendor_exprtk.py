@@ -208,7 +208,10 @@ def build_metadata(
         "source": {
             "name": "BNGsim",
             "repo_remote": checkout_info["origin_remote"],
-            "repo_subdir": "bngsim",
+            # BNGsim is the repository root of lanl/bngsim (no subdir). The
+            # legacy "bngsim" value described BNGsim living under a bngsim/
+            # subdir of the retired wshlavacek/PyBNF-Private monorepo.
+            "repo_subdir": ".",
             "branch_or_ref": ref,
             "current_branch": checkout_info["current_branch"],
             "commit": commit,

@@ -40,6 +40,16 @@ class ExpressionEvaluator {
 
     // Evaluate a previously compiled expression by ID.
     virtual double evaluate(int expr_id) = 0;
+
+    // Return the addresses of the bound model variables (species
+    // concentrations / parameter values registered via define_variable) that a
+    // compiled expression references. Used to classify event triggers for
+    // forward-sensitivity support (GH #212): a trigger referencing a species is
+    // state-dependent, and one referencing a requested sensitivity parameter
+    // has a parameter-dependent crossing time — both are beyond Phase-1
+    // (fixed-time) event sensitivity and keep raising. Constants and built-in
+    // functions (e.g. time()) are not variables and are not reported.
+    virtual std::vector<const double *> referenced_variable_addresses(int expr_id) const = 0;
 };
 
 // ─── ExprTk-based implementation ─────────────────────────────────────────────
@@ -73,6 +83,7 @@ class ExprTkEvaluator : public ExpressionEvaluator {
 
     int compile(const std::string &expr) override;
     double evaluate(int expr_id) override;
+    std::vector<const double *> referenced_variable_addresses(int expr_id) const override;
 
     // Bind the time() and t() functions to a double* that tracks simulation time.
     // Must be called after construction, before compiling time-dependent expressions.

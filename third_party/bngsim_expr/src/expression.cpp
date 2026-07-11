@@ -257,6 +257,22 @@ template <typename T> struct SignFunction : public exprtk::ifunction<T> {
     }
 };
 
+// tgamma(x) = Γ(x); the SBML loader emits ``tgamma((n)+1)`` for MathML
+// factorial(n) (ExprTk has no gamma builtin). std::tgamma matches the C
+// library form native codegen emits, so interpreted and codegen agree.
+template <typename T> struct TgammaFunction : public exprtk::ifunction<T> {
+    NonFiniteWarningSet *warner = nullptr;
+    TgammaFunction() : exprtk::ifunction<T>(1) {}
+    T operator()(const T &x) override {
+        const double dx = static_cast<double>(x);
+        const double r = std::tgamma(dx);
+        if (warner) {
+            warner->warn_if_nonfinite("tgamma", {dx}, r);
+        }
+        return static_cast<T>(r);
+    }
+};
+
 // 0-arg: time() — reads from a bound double*. No warner: the simulator
 // owns the time pointer and a non-finite t would be a higher-level bug
 // flagged by the integrator, not by this layer.
@@ -471,6 +487,7 @@ struct ExprTkEvaluator::Impl {
     LnFunction<double> ln_func;
     RintFunction<double> rint_func;
     SignFunction<double> sign_func;
+    TgammaFunction<double> tgamma_func;
     TimeFunction<double> time_func;
 
     // User-registered custom functions (owned, heap-allocated)
@@ -642,11 +659,13 @@ struct ExprTkEvaluator::Impl {
         ln_func.warner = &nonfinite_warner;
         rint_func.warner = &nonfinite_warner;
         sign_func.warner = &nonfinite_warner;
+        tgamma_func.warner = &nonfinite_warner;
 
         // Register backward-compatible aliases
         symbol_table.add_function("ln", ln_func);
         symbol_table.add_function("rint", rint_func);
         symbol_table.add_function("sign", sign_func);
+        symbol_table.add_function("tgamma", tgamma_func);
 
         // Register built-in functions
         // Note: ExprTk has a built-in `if` keyword (grammar-level) that handles
@@ -806,6 +825,35 @@ const std::string &ExprTkEvaluator::preprocessed_expr(int expr_id) const {
     return impl_->preprocessed_strings[expr_id];
 }
 
+std::vector<const double *> ExprTkEvaluator::referenced_variable_addresses(int expr_id) const {
+    std::vector<const double *> out;
+    if (expr_id < 0 || expr_id >= static_cast<int>(impl_->preprocessed_strings.size())) {
+        return out;
+    }
+    // Collect the variable identifiers referenced by the (already remapped)
+    // preprocessed string, then resolve each through this evaluator's symbol
+    // table to the address it was bound to via define_variable. Names not
+    // registered as variables (constants, functions) resolve to null and are
+    // skipped, so the result contains only model-variable addresses.
+    std::vector<std::string> names;
+    // Pass the symbol table so the collector resolves built-in/user functions
+    // (e.g. time()) instead of bailing out when it meets an unknown token — the
+    // symbol-table-less overload returns nothing for a trigger like
+    // `time() >= t_dose`, which would silently hide a parameter reference.
+    if (!exprtk::collect_variables(impl_->preprocessed_strings[expr_id], impl_->symbol_table,
+                                   names)) {
+        return out;
+    }
+    out.reserve(names.size());
+    for (const std::string &nm : names) {
+        auto *var = impl_->symbol_table.get_variable(nm);
+        if (var != nullptr) {
+            out.push_back(&var->ref());
+        }
+    }
+    return out;
+}
+
 int ExprTkEvaluator::n_expressions() const { return static_cast<int>(impl_->expressions.size()); }
 
 double ExprTkEvaluator::evaluate(int expr_id) {
@@ -836,11 +884,11 @@ std::unique_ptr<ExprTkEvaluator> ExprTkEvaluator::clone_empty() const {
 ReservedNames reserved_names() {
     ReservedNames names;
     names.constants = {"_pi", "_e", "_kB", "_NA", "_R", "_h", "_F"};
-    names.functions = {"time",  "sin",   "cos",   "tan",   "asin",  "acos", "atan",  "sinh",
-                       "cosh",  "tanh",  "asinh", "acosh", "atanh", "exp",  "log",   "ln",
-                       "log2",  "log10", "sqrt",  "abs",   "floor", "ceil", "round", "rint",
-                       "trunc", "min",   "max",   "clamp", "avg",   "sum",  "erf",   "erfc",
-                       "sign",  "sgn",   "if",    "mratio"};
+    names.functions = {"time",  "sin",   "cos",   "tan",    "asin",  "acos", "atan",  "sinh",
+                       "cosh",  "tanh",  "asinh", "acosh",  "atanh", "exp",  "log",   "ln",
+                       "log2",  "log10", "sqrt",  "abs",    "floor", "ceil", "round", "rint",
+                       "trunc", "min",   "max",   "clamp",  "avg",   "sum",  "erf",   "erfc",
+                       "sign",  "sgn",   "if",    "mratio", "tgamma"};
     return names;
 }
 
