@@ -3,13 +3,13 @@
   "vendored_path": "third_party/bngsim_expr",
   "source": {
     "name": "BNGsim",
-    "repo_remote": "git@github.com:wshlavacek/PyBNF-Private.git",
-    "repo_subdir": "bngsim",
-    "branch_or_ref": "1a1d49da13f8cd723be213774c2a81f0da538c84",
-    "current_branch": "feature/bngsim",
-    "commit": "1a1d49da13f8cd723be213774c2a81f0da538c84"
+    "repo_remote": "git@github.com:lanl/bngsim.git",
+    "repo_subdir": ".",
+    "branch_or_ref": "5ce19a4f76f236030566b49ee5afa47733b9ba39",
+    "current_branch": "main",
+    "commit": "5ce19a4f76f236030566b49ee5afa47733b9ba39"
   },
-  "imported_at_utc": "2026-06-20T02:10:39+00:00",
+  "imported_at_utc": "2026-07-11T03:18:22+00:00",
   "files": {
     "exprtk_header": {
       "path": "third_party/exprtk/exprtk.hpp",
@@ -21,8 +21,8 @@
     "expression_header": {
       "path": "third_party/bngsim_expr/include/bngsim/expression.hpp",
       "source_path": "include/bngsim/expression.hpp",
-      "sha256": "d1ab141722d4073cc33bad09fa00b22bc1e5d47543c4e639470c3d4a75087a6a",
-      "bytes": 5032,
+      "sha256": "ddbc1f8cba3050f1da4d85415b7b3e9104127b3a2bef30475bd205832bfb1fb7",
+      "bytes": 5823,
       "description": "BNGsim ExprTkEvaluator public wrapper header"
     },
     "expr_compat_header": {
@@ -35,8 +35,8 @@
     "expression_source": {
       "path": "third_party/bngsim_expr/src/expression.cpp",
       "source_path": "src/expression.cpp",
-      "sha256": "9b54169c75e672e74fe6ca3825e5dcd027f7dee463821fc767991ccf775962fd",
-      "bytes": 36878,
+      "sha256": "d72a2b77b155282e551ccb57d3fb8e68dc7e2ecf0987ea50058ff7aa3e27f668",
+      "bytes": 39062,
       "description": "BNGsim ExprTkEvaluator implementation"
     }
   },

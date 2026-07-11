@@ -7,9 +7,9 @@ from BNGsim and are compiled only in standalone RuleMonkey builds;
 inside a BNGsim build, RuleMonkey links the host bngsim::expression
 target instead.
 
-Source repo  : git@github.com:wshlavacek/PyBNF-Private.git
-Source subdir: bngsim
-Pinned commit: 1a1d49da13f8cd723be213774c2a81f0da538c84
+Source repo  : git@github.com:lanl/bngsim.git
+Source subdir: .
+Pinned commit: 5ce19a4f76f236030566b49ee5afa47733b9ba39
 Metadata     : third_party/bngsim_expr/VENDOR.json
 
 Vendored files (copied verbatim, no edits):

@@ -134,3 +134,38 @@ jobs:
             build/feature_coverage_report.md
             build/feature_coverage_console.log
           if-no-files-found: warn
+
+  vendor_check:
+    # Guards the vendored BNGsim expression layer (issues #6 / #11) against
+    # drift.  scripts/vendor_exprtk.py --check byte-compares the four vendored
+    # files (exprtk.hpp + bngsim expression.hpp / expr_compat.hpp /
+    # expression.cpp) against their pinned lanl/bngsim commit.  Version skew
+    # between RuleMonkey's standalone copy and BNGsim's expression layer is an
+    # ODR violation, so any drift here is a build failure.
+    #
+    # This job was blocked until BNGsim went public: --check has to clone the
+    # source repo, and the old wshlavacek/PyBNF-Private monorepo was private
+    # (would have needed a stored deploy key / PAT).  lanl/bngsim is public, so
+    # the clone needs no credential.  fetch-depth: 0 pulls full history, so the
+    # pinned commit stays reachable even after BNGsim's HEAD advances past it.
+    # Purely additive: no build, no NFsim/BNG2, ~stdlib-only Python.
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout RuleMonkey
+        uses: actions/checkout@v4
+
+      - name: Checkout lanl/bngsim (full history for the pinned commit)
+        uses: actions/checkout@v4
+        with:
+          repository: lanl/bngsim
+          path: bngsim
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Drift-check vendored BNGsim expression layer
+        run: python3 scripts/vendor_exprtk.py --check --bngsim-repo bngsim

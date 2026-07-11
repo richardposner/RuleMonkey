@@ -5,6 +5,41 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.6.1] — 2026-07-10
+
+### Changed
+
+- **Re-pinned the vendored BNGsim expression layer to public `lanl/bngsim`
+  (issue #11).** The ExprTk swap (issue #6) vendored four files under
+  `third_party/` (`exprtk.hpp` + `bngsim_expr/{include,src}`), pinned by
+  `third_party/bngsim_expr/VENDOR{,.json}`. That pin referenced a commit on
+  the now-retired private `wshlavacek/PyBNF-Private` monorepo, where BNGsim
+  lived under a `bngsim/` subdir. BNGsim is now published standalone at the
+  public `lanl/bngsim`, whose history does not carry the old private commit,
+  so the pin has been moved to `lanl/bngsim@5ce19a4`. Provenance in
+  `VENDOR`/`VENDOR.json` now records the public remote and drops the stale
+  `bngsim` subdir.
+
+  Two of the four files advanced in the public tree and were refreshed to
+  match the new pin: `expression.hpp`/`expression.cpp` gain a `tgamma`
+  built-in (SBML factorial support) and a `referenced_variable_addresses`
+  accessor (BNGsim forward-sensitivity work, GH #212). Neither is used by
+  RuleMonkey, and the remainder is clang-format only — the change is a
+  behavioral no-op for RM, confirmed by the full 80-model feature-coverage
+  suite (80 PASS / 0 FAIL at `--reps 5`) and the 26-test unit suite.
+
+### Added
+
+- **CI drift-guard for the vendored BNGsim expression layer (issue #11).** A
+  new `vendor_check` job in `.github/workflows/ci.yml` clones `lanl/bngsim`
+  (public, no credential) with full history and runs
+  `scripts/vendor_exprtk.py --check --bngsim-repo bngsim`, byte-comparing the
+  vendored files against their pinned commit. Version skew between
+  RuleMonkey's standalone copy and BNGsim's expression layer is an ODR
+  violation, so drift now fails the build. This was blocked until BNGsim went
+  public: the previous private source repo would have required a stored
+  deploy key to clone.
+
 ## [3.6.0] — 2026-07-03
 
 ### Added
