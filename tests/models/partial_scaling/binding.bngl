@@ -1,0 +1,57 @@
+# Reversible bimolecular binding — A(b) + B(a) <-> A(b!1).B(a!1).
+# Partial-scaling validation model for the bimolecular *association* (AddBond)
+# and *dissociation* (DeleteBond) batch-fire paths (plan Phase 2).
+#
+#     A(b) + B(a)   ->^kf  A(b!1).B(a!1)   (second-order association, AddBond)
+#     A(b!1).B(a!1) ->^kr  A(b) + B(a)     (first-order dissociation, DeleteBond)
+#
+# Well-mixed mass action: association propensity = kf * N_Afree * N_Bfree,
+# dissociation propensity = kr * N_AB.  With totals A_tot = B_tot = 200 and
+# kf = 0.01, kr = 1.0 the deterministic equilibrium solves
+#     kf*(A_tot - x)^2 = kr*x   =>   x^2 - 500 x + 40000 = 0   =>   x = 100,
+# so at steady state N_AB = 100 and N_Afree = N_Bfree = 100.  The seed sits at
+# that equilibrium, so the ensemble is stationary from t = 0 and any first-
+# moment bias in the scaled path shows up as a drift of the observable mean.
+#
+# Minimum reactant population at equilibrium = 100 (free A / free B for the
+# association; dimer count for the dissociation), so a critical size Nc gives
+# batch size K = floor(100 / Nc):  Nc=10 -> K=10,  Nc=20 -> K=5,  Nc=50 -> K=2.
+#
+# Oracle for the scaled (Nc > 0) path: the analytic equilibrium x = 100, the
+# exact-RM ensemble, the `nfa` prototype, and BNG2 (ODE/SSA).  NFsim has no
+# partial scaling and is NOT an oracle for it.
+
+begin parameters
+    kf        0.01
+    kr        1.0
+    A_tot     200
+    B_tot     200
+    AB_ss     100      # equilibrium bound count (seed at steady state)
+    Afree_ss  100      # A_tot - AB_ss
+    Bfree_ss  100      # B_tot - AB_ss
+end parameters
+
+begin molecule types
+    A(b)
+    B(a)
+end molecule types
+
+begin seed species
+    A(b)            Afree_ss
+    B(a)            Bfree_ss
+    A(b!1).B(a!1)   AB_ss
+end seed species
+
+begin observables
+    Molecules  Afree   A(b)
+    Molecules  Abound  A(b!+)
+end observables
+
+begin reaction rules
+    bind:    A(b) + B(a) -> A(b!1).B(a!1)   kf
+    unbind:  A(b!1).B(a!1) -> A(b) + B(a)   kr
+end reaction rules
+
+begin actions
+    simulate({method=>"nf",t_end=>10,n_steps=>100})
+end actions

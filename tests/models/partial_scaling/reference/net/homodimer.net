@@ -1,0 +1,19 @@
+# Created by BioNetGen 2.9.3
+begin parameters
+    1 kf         0.002  # Constant
+    2 kr         1.0  # Constant
+    3 Xfree_ss   500  # Constant
+    4 Xdimer_ss  250  # Constant
+end parameters
+begin species
+    1 X(d) Xfree_ss
+    2 X(d!1).X(d!1) Xdimer_ss
+end species
+begin reactions
+    1 1,1 2 0.5*kf #dimerize
+    2 2 1,1 kr #split
+end reactions
+begin groups
+    1 Xfree                1
+    2 Xbound               2*2
+end groups

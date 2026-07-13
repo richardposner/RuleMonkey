@@ -3082,7 +3082,17 @@ struct Engine::Impl {
   int rule_batch_size(const RuleState& rs) const {
     if (Nc <= 0 || !rs.ps_batchable)
       return 1;
-    double const n_r = rs.a_total / rs.embedding_correction_a;
+    // n_r = minimum matching population across the rule's reactant patterns
+    // (plan §1).  Unimolecular and dissociation (a molecularity-1 rule sampled
+    // from a single frozen reactant complex) ride on the A-side count; a
+    // bimolecular association takes the min of its two reactant pools so the
+    // batch never draws more pairs than the scarcer reactant can supply.  rs is
+    // always an element of rule_states, so the pointer offset recovers its
+    // index (same idiom as set_rule_propensity).
+    auto const ri = static_cast<size_t>(&rs - rule_states.data());
+    double n_r = rs.a_total / rs.embedding_correction_a;
+    if (model.rules[ri].molecularity >= 2)
+      n_r = std::min(n_r, rs.b_total / rs.embedding_correction_b);
     int const k = static_cast<int>(n_r / static_cast<double>(Nc)); // floor for n_r>=0
     return k < 1 ? 1 : k;
   }
@@ -3624,12 +3634,19 @@ struct Engine::Impl {
         }
       }
 
-      // Partial-scaling Phase-1 batch eligibility.  Only the simplest rules —
-      // single-molecule unimolecular mass-action, no bond ops, no local/DOR2
-      // rate, no complex-expansion pattern — may be fired in a scaled batch of
-      // K distinct seed molecules with one deferred incremental_update.
-      // Everything else (bimolecular, dissociation, total-rate, MM, multi-mol
-      // or disjoint patterns, local functions) keeps K_r=1 until later phases.
+      // Partial-scaling batch eligibility (opt-in, Lin/Feng/Hlavacek 2019).
+      // Phase 1 admitted only single-molecule unimolecular mass-action rules
+      // with no bond ops.  Phase 2 additionally admits:
+      //   (i)  bimolecular association — two single-molecule reactant patterns,
+      //        whether it forms a bond (A(b)+B(a)->A(b!1).B(a!1)) or is a
+      //        reaction-style homodimer (X1()+X1()->X2()); no bond breaking;
+      //   (ii) dissociation — a molecularity-1 rule whose body breaks a bond
+      //        and separates into >1 product pattern.  Its reactant is a single
+      //        connected (possibly multi-molecule) complex, sampled by the
+      //        unimolecular seed+BFS path; the product-molecularity /
+      //        ensure_connected checks run per sampled match inside the batch.
+      // Local/DOR2, total-rate, MM, constrained, and disjoint multi-molecule
+      // (complex-expansion) rules stay K_r=1 until Phase 3.
       //
       // MUST be set before rescan_all_molecules_for_rule below: the rescan
       // writes the rule's initial propensity through set_rule_propensity,
@@ -3640,22 +3657,34 @@ struct Engine::Impl {
       // the static rule.rate_law.is_local (rs.has_local_rates is only set
       // inside the rescan, so we cannot read it yet).
       {
-        bool batchable = (rule.molecularity == 1) &&
-                         (rule.reactant_pattern.molecules.size() == 1) && !rs.use_multi_mol_count &&
-                         !rs.needs_complex_expansion && !rule.rate_law.is_local &&
-                         !rule.rate_law.is_total_rate && (rule.rate_law.type != RateLawType::MM) &&
-                         rule.constraints.empty();
-        if (batchable) {
-          // Reject bond-changing ops: an AddBond/DeleteBond on a
-          // single-molecule reactant touches a partner molecule outside the
-          // sampled seed, which the Phase-1 distinct-seed batch does not model
-          // (that is Phase-2 association/dissociation).
-          for (auto& op : rule.operations) {
-            if (op.type == OpType::AddBond || op.type == OpType::DeleteBond) {
-              batchable = false;
-              break;
-            }
-          }
+        bool const common_ok = !rs.needs_complex_expansion && !rule.rate_law.is_local &&
+                               !rule.rate_law.is_total_rate &&
+                               (rule.rate_law.type != RateLawType::MM) && rule.constraints.empty();
+
+        bool has_add_bond = false, has_del_bond = false;
+        for (auto& op : rule.operations) {
+          if (op.type == OpType::AddBond)
+            has_add_bond = true;
+          else if (op.type == OpType::DeleteBond)
+            has_del_bond = true;
+        }
+
+        bool batchable = false;
+        if (common_ok) {
+          // Phase-1 unimolecular: single-molecule reactant, no bond ops.
+          bool const is_uni_nonbond = (rule.molecularity == 1) &&
+                                      (rule.reactant_pattern.molecules.size() == 1) &&
+                                      !rs.use_multi_mol_count && !has_add_bond && !has_del_bond;
+          // Dissociation: molecularity-1, breaks a bond, yields >1 product
+          // pattern.  A bond-swapping rule (also adds a bond) is deferred.
+          bool const is_dissociation = (rule.molecularity == 1) && has_del_bond && !has_add_bond &&
+                                       (rule.n_product_patterns > 1);
+          // Bimolecular association: two single-molecule reactant patterns,
+          // no bond breaking (bond-forming AddBond is allowed, as is the
+          // no-bond homodimer reaction path).
+          bool const is_bimol = (rule.molecularity == 2) &&
+                                (rule.reactant_pattern.molecules.size() == 2) && !has_del_bond;
+          batchable = is_uni_nonbond || is_dissociation || is_bimol;
         }
         rs.ps_batchable = batchable;
       }
@@ -7199,39 +7228,79 @@ struct Engine::Impl {
     int fired = 0;
   };
 
-  // Partial-scaling batched fire for a Phase-1 unimolecular rule (plan §3b).
-  // Samples up to K distinct seed molecules from the frozen match list
-  // (weighted without replacement, reusing select_reactants), advances the
-  // event epoch once, applies all firings deferring match-list maintenance,
-  // and returns the union of affected molecules so the caller runs a single
-  // incremental_update.  The caller must have verified rs.ps_batchable and
-  // K>1.  Because ps_batchable rules are single-molecule, non-bonded and
-  // unconstrained, distinct seeds guarantee K non-overlapping firings and no
-  // pre-fire constraint/connectivity checks are needed.
+  // Partial-scaling batched fire (plan §3b) — Phase 2: unimolecular,
+  // bimolecular association, and dissociation.  Samples up to K reactant sets
+  // from the frozen match lists (reusing select_reactants, so RM's exact
+  // same-molecule / same-complex / embedding rejections apply per draw),
+  // advances the event epoch once, applies all firings deferring match-list
+  // maintenance, and returns the union of affected molecules so the caller runs
+  // a single incremental_update.  The caller must have verified rs.ps_batchable
+  // and K>1.
+  //
+  // Two rejections govern a draw, and they preserve the moments differently:
+  //   * Without-replacement — any of a draw's molecules is already consumed by
+  //     an earlier accepted firing in this batch.  A frozen-state batch fires K
+  //     *distinct* reactions, so a reused molecule is redrawn (not counted).
+  //     Keeping E[fired]=K is what makes the scaled propensity a_r/K over K
+  //     firings reproduce the mean flux a_r — i.e. keeps the FIRST moment
+  //     unbiased.
+  //   * Genuine null — select_reactants returns empty (RM's inflated
+  //     bimolecular propensity includes same-mol / same-complex slack) or a
+  //     dissociation match fails passes_bond_separation_checks.  These are
+  //     rejected exactly as the single-fire path rejects them and are NOT
+  //     redrawn, so the realized rate stays a_r·P(accept), matching exact.
+  // For a single-molecule unimolecular rule m.mol_ids holds just the seed, so
+  // this reduces to Phase 1's distinct-seed loop bit-for-bit.
   BatchFireResult fire_rule_batch(int rule_idx, int K) {
     auto& rule = model.rules[rule_idx];
-    int const seed_a =
-        (!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0;
 
-    // 1. Sample K distinct seed molecules while the pool is frozen (no firing
-    //    yet).  Rejection: redraw when select_reactants returns a seed already
-    //    taken.  For the Phase-1 batchable set K < (# distinct matches)
-    //    always, so this terminates well within the defensive attempt cap.
+    bool has_delete_bond = false;
+    for (auto& op : rule.operations)
+      if (op.type == OpType::DeleteBond) {
+        has_delete_bond = true;
+        break;
+      }
+
+    // 1. Sample K non-overlapping reactant sets while the pool is frozen (no
+    //    firing yet).  `consumed` holds every molecule used by an accepted
+    //    match — both reactants of a bimolecular pair, both molecules of a
+    //    dissociating complex — so a later draw that reuses one is redrawn.  A
+    //    null draw (empty match) is a genuine rejection: it consumes an attempt
+    //    but produces no firing (no redraw), matching the single-fire path.
     std::vector<ReactionMatch> matches;
     matches.reserve(K);
-    std::unordered_set<int> chosen_seeds;
+    std::unordered_set<int> consumed;
     int const max_attempts = (16 * K) + 64;
-    for (int attempt = 0; attempt < max_attempts && static_cast<int>(matches.size()) < K;
-         ++attempt) {
+    // A "slot" is one of the K reactions this batch draws from the frozen state.
+    // A genuine null and an accepted firing each consume a slot; a reused-
+    // molecule draw does not (it is redrawn), so E[fired]=K·P(accept) — see the
+    // moment discussion above.  For the current batchable set genuine nulls do
+    // not occur in practice (distinct-type or free-reactant sampling, and the
+    // homodimer's same-molecule case is retried inside select_reactants), so
+    // this reduces to Phase 1's distinct-draw loop.
+    int slots = 0;
+    for (int attempt = 0; attempt < max_attempts && slots < K; ++attempt) {
       ReactionMatch m = select_reactants(rule_idx);
-      if (m.mol_ids.empty())
-        continue; // null draw (empty match list) — retry
-      int const seed = (seed_a < static_cast<int>(m.mol_ids.size())) ? m.mol_ids[seed_a] : -1;
-      if (seed < 0)
+      if (m.mol_ids.empty()) {
+        // Genuine null draw (same-mol / same-complex / empty match — the slack
+        // in RM's inflated bimolecular propensity).  Consume the slot with no
+        // firing, NOT redrawn: the single-fire path rejects these identically.
+        ++slots;
         continue;
-      if (!chosen_seeds.insert(seed).second)
-        continue; // seed already sampled — reject and redraw
+      }
+      bool reuse = false;
+      for (int const mid : m.mol_ids)
+        if (mid >= 0 && consumed.count(mid)) {
+          reuse = true;
+          break;
+        }
+      if (reuse)
+        continue; // a molecule is already spoken for in this batch — redraw
+      for (int const mid : m.mol_ids)
+        if (mid >= 0)
+          consumed.insert(mid);
       matches.push_back(std::move(m));
+      ++slots;
     }
 
     // 2. Advance the epoch once for the whole batch.
@@ -7242,10 +7311,10 @@ struct Engine::Impl {
     BatchFireResult out;
     for (auto& m : matches) {
       // Within-batch overlap guard: skip a match if an earlier firing already
-      // consumed a molecule it references.  Never triggers for the Phase-1
-      // non-bonded single-molecule set (distinct seeds are independent) but
-      // keeps a stale-id fire from corrupting the pool if the batchable
-      // predicate is ever loosened.
+      // consumed a molecule it references.  Without-replacement sampling makes
+      // accepted matches molecule-disjoint, so this never triggers for the
+      // current batchable set, but it keeps a stale-id fire from corrupting the
+      // pool defensively.
       bool valid = true;
       for (int const mid : m.mol_ids) {
         if (mid < 0)
@@ -7257,6 +7326,14 @@ struct Engine::Impl {
       }
       if (!valid)
         continue;
+      // Per-match dissociation checks (product-molecularity / ensureConnected):
+      // a dissociation batch breaks K bonds from one frozen snapshot, so each
+      // firing must be validated individually — a failed check is a null firing
+      // (skipped), mirroring the single-fire path.  Molecule-disjoint matches
+      // keep the endpoints' connectivity unchanged by other firings, so this
+      // running-state evaluation agrees with a draw-time one.
+      if (has_delete_bond && !passes_bond_separation_checks(rule_idx, m))
+        continue;
       auto fr = fire_rule(rule_idx, m, /*advance_epoch=*/false);
       out.bond_changed = out.bond_changed || fr.bond_changed;
       for (int const mid : fr.affected)
@@ -7264,6 +7341,203 @@ struct Engine::Impl {
       ++out.fired;
     }
     return out;
+  }
+
+  // Per-match bond-separation checks for a DeleteBond ("dissociation") firing,
+  // factored out of run_ssa's single-fire path so the partial-scaling batch can
+  // apply the SAME null-event rejection to every sampled match.  A scaled batch
+  // fires K matches drawn from one frozen snapshot, so each must be validated
+  // individually (the single-fire path runs these once per event).  Returns
+  // false iff the match must be rejected as a null event:
+  //   1. Product-molecularity (`+` between product patterns, gated on
+  //      block_same_complex_binding): breaking the bond must actually separate
+  //      the two endpoints into different connected components (else a ring
+  //      bond break leaves them joined and the `+` cannot be satisfied).
+  //   2. ensureConnected (`.` same-complex product constraint): the two
+  //      endpoints must remain connected through another path after the NET
+  //      effect of all the rule's bond deletions and additions.
+  // Pure — reads the pool, no RNG, no mutation; a rule with no DeleteBond op
+  // trivially returns true.  This is the single source of truth for both paths.
+  bool passes_bond_separation_checks(int rule_idx, const ReactionMatch& match) {
+    auto& rule = model.rules[rule_idx];
+
+    // 1. Product-molecularity check.
+    if (model.block_same_complex_binding && rule.molecularity <= 1 && rule.n_product_patterns > 1) {
+      for (auto& op : rule.operations) {
+        if (op.type != OpType::DeleteBond)
+          continue;
+        if (op.comp_flat_a < 0 || op.comp_flat_a >= static_cast<int>(match.comp_ids.size()))
+          continue;
+        int const comp_a = match.comp_ids[op.comp_flat_a];
+        if (comp_a < 0)
+          continue;
+        int const partner = pool.component(comp_a).bond_partner;
+        if (partner < 0)
+          continue;
+        int const mol_a = pool.mol_of_comp(comp_a);
+        int const mol_b = pool.mol_of_comp(partner);
+        if (mol_a == mol_b)
+          return false;
+        // Tree complex: breaking any single bond necessarily disconnects its
+        // endpoints, so the BFS is guaranteed to fall out with found_b==false.
+        int const cx = pool.complex_of(mol_a);
+        bool const tree = (pool.cycle_bond_count(cx) == 0);
+        if (tree && !kProductMolInvariant)
+          continue;
+
+        std::unordered_set<int> visited;
+        std::queue<int> q;
+        visited.insert(mol_a);
+        q.push(mol_a);
+        bool found_b = false;
+        while (!q.empty() && !found_b) {
+          int const cur = q.front();
+          q.pop();
+          auto& mol = pool.molecule(cur);
+          for (int const cid : mol.comp_ids) {
+            if (cid == comp_a || cid == partner)
+              continue; // skip broken bond
+            int const p = pool.component(cid).bond_partner;
+            if (p < 0)
+              continue;
+            int const nb = pool.mol_of_comp(p);
+            if (nb == mol_b) {
+              found_b = true;
+              break;
+            }
+            if (!visited.count(nb)) {
+              visited.insert(nb);
+              q.push(nb);
+            }
+          }
+        }
+        if (kProductMolInvariant && tree && found_b) {
+          std::fprintf(stderr,
+                       "[ProductMol mismatch] rule=%d cycle_bond_count=%d "
+                       "but BFS reached mol_b (mol_a=%d mol_b=%d comp_a=%d "
+                       "partner=%d cx=%d)\n",
+                       rule_idx, pool.cycle_bond_count(cx), mol_a, mol_b, comp_a, partner, cx);
+          std::abort();
+        }
+        if (found_b)
+          return false;
+      }
+    }
+
+    // 2. ensureConnected check.
+    bool has_ensure_connected = false;
+    for (auto& op : rule.operations)
+      if (op.type == OpType::DeleteBond && op.ensure_connected) {
+        has_ensure_connected = true;
+        break;
+      }
+    if (!has_ensure_connected)
+      return true;
+
+    // Collect deleted bond edges (as comp_id pairs).
+    std::set<std::pair<int, int>> deleted_edges;
+    for (auto& op : rule.operations) {
+      if (op.type != OpType::DeleteBond)
+        continue;
+      if (op.comp_flat_a < 0 || op.comp_flat_a >= static_cast<int>(match.comp_ids.size()))
+        continue;
+      int const ca = match.comp_ids[op.comp_flat_a];
+      if (ca < 0)
+        continue;
+      int const cb = pool.component(ca).bond_partner;
+      if (cb < 0)
+        continue;
+      deleted_edges.insert({std::min(ca, cb), std::max(ca, cb)});
+    }
+
+    // Collect added bond edges (as mol_id pairs, for existing molecules).
+    std::set<std::pair<int, int>> added_mol_edges;
+    for (auto& op : rule.operations) {
+      if (op.type != OpType::AddBond)
+        continue;
+      if (op.product_mol_a >= 0 || op.product_mol_b >= 0)
+        continue;
+      if (op.comp_flat_a < 0 || op.comp_flat_b < 0)
+        continue;
+      if (op.comp_flat_a >= static_cast<int>(match.comp_ids.size()) ||
+          op.comp_flat_b >= static_cast<int>(match.comp_ids.size()))
+        continue;
+      int const ca = match.comp_ids[op.comp_flat_a];
+      int const cb = match.comp_ids[op.comp_flat_b];
+      if (ca < 0 || cb < 0)
+        continue;
+      int const ma = pool.mol_of_comp(ca);
+      int const mb = pool.mol_of_comp(cb);
+      if (ma != mb)
+        added_mol_edges.insert({std::min(ma, mb), std::max(ma, mb)});
+    }
+
+    for (auto& op : rule.operations) {
+      if (op.type != OpType::DeleteBond || !op.ensure_connected)
+        continue;
+      if (op.comp_flat_a < 0 || op.comp_flat_a >= static_cast<int>(match.comp_ids.size()))
+        continue;
+      int const comp_a = match.comp_ids[op.comp_flat_a];
+      if (comp_a < 0)
+        continue;
+      int const partner = pool.component(comp_a).bond_partner;
+      if (partner < 0)
+        continue;
+      int const mol_a = pool.mol_of_comp(comp_a);
+      int const mol_b = pool.mol_of_comp(partner);
+      if (mol_a == mol_b)
+        continue; // self-bond: always connected
+
+      std::unordered_set<int> visited;
+      std::queue<int> q;
+      visited.insert(mol_a);
+      q.push(mol_a);
+      bool found_b = false;
+      while (!q.empty() && !found_b) {
+        int const cur = q.front();
+        q.pop();
+        auto& mol = pool.molecule(cur);
+        for (int const cid : mol.comp_ids) {
+          int const p = pool.component(cid).bond_partner;
+          if (p < 0)
+            continue;
+          int const lo = std::min(cid, p), hi = std::max(cid, p);
+          if (deleted_edges.count({lo, hi}))
+            continue;
+          int const nb = pool.mol_of_comp(p);
+          if (nb == mol_b) {
+            found_b = true;
+            break;
+          }
+          if (!visited.count(nb)) {
+            visited.insert(nb);
+            q.push(nb);
+          }
+        }
+        if (found_b)
+          break;
+        for (auto& ae : added_mol_edges) {
+          int nb = -1;
+          if (ae.first == cur)
+            nb = ae.second;
+          else if (ae.second == cur)
+            nb = ae.first;
+          else
+            continue;
+          if (nb == mol_b) {
+            found_b = true;
+            break;
+          }
+          if (!visited.count(nb)) {
+            visited.insert(nb);
+            q.push(nb);
+          }
+        }
+      }
+      if (!found_b)
+        return false;
+    }
+    return true;
   }
 
   // --- Fixed-species clamping ---
@@ -7724,235 +7998,16 @@ struct Engine::Impl {
         continue;
       }
 
-      // Product molecularity check: for a unimolecular rule with multiple
-      // product patterns and a DeleteBond, verify that breaking the bond
-      // actually separates the molecules into different connected components.
-      // If they remain connected through another path (e.g., a ring bond),
-      // the `+` between products cannot be satisfied, so reject as null.
-      //
-      // This enforces the RHS-`+` half of strict BNGL semantics.  It is
-      // gated on `block_same_complex_binding` so that both halves of the
-      // `+` check (LHS binding and RHS unbinding) toggle together, matching
-      // NFsim's `-bscb` (which implies `-cb` and enables both checks).
-      if (model.block_same_complex_binding) {
-        auto& rule = model.rules[selected];
-        if (rule.molecularity <= 1 && rule.n_product_patterns > 1) {
-          bool reject = false;
-          for (auto& op : rule.operations) {
-            if (op.type != OpType::DeleteBond)
-              continue;
-            if (op.comp_flat_a < 0 || op.comp_flat_a >= static_cast<int>(match.comp_ids.size()))
-              continue;
-            int const comp_a = match.comp_ids[op.comp_flat_a];
-            if (comp_a < 0)
-              continue;
-            int const partner = pool.component(comp_a).bond_partner;
-            if (partner < 0)
-              continue;
-            int const mol_a = pool.mol_of_comp(comp_a);
-            int const mol_b = pool.mol_of_comp(partner);
-            if (mol_a == mol_b) {
-              reject = true;
-              break;
-            }
-            // P7: when the reactant complex has zero cycle bonds (tree),
-            // removing any single bond necessarily disconnects its two
-            // endpoints — the BFS below is guaranteed to fall out with
-            // found_b == false.  Skip it.  With kProductMolInvariant we
-            // also run the BFS and assert agreement.
-            int const cx = pool.complex_of(mol_a);
-            bool const tree = (pool.cycle_bond_count(cx) == 0);
-            if (tree && !kProductMolInvariant)
-              continue;
-
-            // BFS from mol_a avoiding the comp_a-partner edge; if we reach
-            // mol_b, the molecules stay connected after breaking this bond.
-            std::unordered_set<int> visited;
-            std::queue<int> q;
-            visited.insert(mol_a);
-            q.push(mol_a);
-            bool found_b = false;
-            while (!q.empty() && !found_b) {
-              int const cur = q.front();
-              q.pop();
-              auto& mol = pool.molecule(cur);
-              for (int const cid : mol.comp_ids) {
-                if (cid == comp_a || cid == partner)
-                  continue; // skip broken bond
-                int const p = pool.component(cid).bond_partner;
-                if (p < 0)
-                  continue;
-                int const nb = pool.mol_of_comp(p);
-                if (nb == mol_b) {
-                  found_b = true;
-                  break;
-                }
-                if (!visited.count(nb)) {
-                  visited.insert(nb);
-                  q.push(nb);
-                }
-              }
-            }
-            if (kProductMolInvariant && tree && found_b) {
-              std::fprintf(stderr,
-                           "[ProductMol mismatch] rule=%d cycle_bond_count=%d "
-                           "but BFS reached mol_b (mol_a=%d mol_b=%d comp_a=%d "
-                           "partner=%d cx=%d)\n",
-                           selected, pool.cycle_bond_count(cx), mol_a, mol_b, comp_a, partner, cx);
-              std::abort();
-            }
-            if (found_b) {
-              reject = true;
-              break;
-            }
-          }
-          if (reject) {
-            timing_sample += std::chrono::duration<double>(t1 - t0).count();
-            ++null_event_count;
-            continue;
-          }
-        }
-      }
-
-      // ensureConnected check: for DeleteBond operations with
-      // ensure_connected=true, the bond break may only fire if the
-      // two molecules remain connected through another path.
-      // This encodes the `.` (same-complex) product constraint from BNGL.
-      //
-      // Must consider the NET effect of ALL bond operations: bonds removed
-      // by DeleteBond AND bonds added by AddBond.  A rule like
-      //   P(f!1).F(f!1,next!2).F(prev!2,f) -> P(f!3).F(f,next!2).F(prev!2,f!3)
-      // deletes P-F0 but adds P-F1, keeping the complex connected.
-      {
-        bool has_ensure_connected = false;
-        auto& rule = model.rules[selected];
-        for (auto& op : rule.operations)
-          if (op.type == OpType::DeleteBond && op.ensure_connected) {
-            has_ensure_connected = true;
-            break;
-          }
-
-        if (has_ensure_connected) {
-          // Collect deleted bond edges (as comp_id pairs)
-          std::set<std::pair<int, int>> deleted_edges;
-          for (auto& op : rule.operations) {
-            if (op.type != OpType::DeleteBond)
-              continue;
-            if (op.comp_flat_a < 0 || op.comp_flat_a >= static_cast<int>(match.comp_ids.size()))
-              continue;
-            int const ca = match.comp_ids[op.comp_flat_a];
-            if (ca < 0)
-              continue;
-            int const cb = pool.component(ca).bond_partner;
-            if (cb < 0)
-              continue;
-            deleted_edges.insert({std::min(ca, cb), std::max(ca, cb)});
-          }
-
-          // Collect added bond edges (as mol_id pairs, for existing molecules)
-          std::set<std::pair<int, int>> added_mol_edges;
-          for (auto& op : rule.operations) {
-            if (op.type != OpType::AddBond)
-              continue;
-            // Only consider bonds between existing reactant molecules
-            if (op.product_mol_a >= 0 || op.product_mol_b >= 0)
-              continue;
-            if (op.comp_flat_a < 0 || op.comp_flat_b < 0)
-              continue;
-            if (op.comp_flat_a >= static_cast<int>(match.comp_ids.size()) ||
-                op.comp_flat_b >= static_cast<int>(match.comp_ids.size()))
-              continue;
-            int const ca = match.comp_ids[op.comp_flat_a];
-            int const cb = match.comp_ids[op.comp_flat_b];
-            if (ca < 0 || cb < 0)
-              continue;
-            int const ma = pool.mol_of_comp(ca);
-            int const mb = pool.mol_of_comp(cb);
-            if (ma != mb)
-              added_mol_edges.insert({std::min(ma, mb), std::max(ma, mb)});
-          }
-
-          // For each ensureConnected DeleteBond, check connectivity considering
-          // all deletions and additions.
-          bool reject = false;
-          for (auto& op : rule.operations) {
-            if (op.type != OpType::DeleteBond || !op.ensure_connected)
-              continue;
-            if (op.comp_flat_a < 0 || op.comp_flat_a >= static_cast<int>(match.comp_ids.size()))
-              continue;
-            int const comp_a = match.comp_ids[op.comp_flat_a];
-            if (comp_a < 0)
-              continue;
-            int const partner = pool.component(comp_a).bond_partner;
-            if (partner < 0)
-              continue;
-            int const mol_a = pool.mol_of_comp(comp_a);
-            int const mol_b = pool.mol_of_comp(partner);
-            if (mol_a == mol_b)
-              continue; // self-bond: always connected
-
-            // BFS from mol_a, excluding all deleted bond edges and
-            // including all added bond edges.
-            std::unordered_set<int> visited;
-            std::queue<int> q;
-            visited.insert(mol_a);
-            q.push(mol_a);
-            bool found_b = false;
-            while (!q.empty() && !found_b) {
-              int const cur = q.front();
-              q.pop();
-              auto& mol = pool.molecule(cur);
-              // Traverse existing bonds (minus deleted ones)
-              for (int const cid : mol.comp_ids) {
-                int const p = pool.component(cid).bond_partner;
-                if (p < 0)
-                  continue;
-                // Skip if this bond is being deleted
-                int const lo = std::min(cid, p), hi = std::max(cid, p);
-                if (deleted_edges.count({lo, hi}))
-                  continue;
-                int const nb = pool.mol_of_comp(p);
-                if (nb == mol_b) {
-                  found_b = true;
-                  break;
-                }
-                if (!visited.count(nb)) {
-                  visited.insert(nb);
-                  q.push(nb);
-                }
-              }
-              if (found_b)
-                break;
-              // Traverse added bond edges
-              for (auto& ae : added_mol_edges) {
-                int nb = -1;
-                if (ae.first == cur)
-                  nb = ae.second;
-                else if (ae.second == cur)
-                  nb = ae.first;
-                else
-                  continue;
-                if (nb == mol_b) {
-                  found_b = true;
-                  break;
-                }
-                if (!visited.count(nb)) {
-                  visited.insert(nb);
-                  q.push(nb);
-                }
-              }
-            }
-            if (!found_b) {
-              reject = true;
-              break;
-            }
-          }
-          if (reject) {
-            timing_sample += std::chrono::duration<double>(t1 - t0).count();
-            ++null_event_count;
-            continue;
-          }
-        }
+      // Per-match bond-separation checks (product-molecularity + ensureConnected)
+      // — the RHS-`+` and `.` product-pattern constraints of strict BNGL for
+      // DeleteBond firings.  Factored into passes_bond_separation_checks so the
+      // partial-scaling batch path applies the identical per-match rejection
+      // (see that helper for the two checks; it is a pure no-op for a rule with
+      // no DeleteBond op, e.g. every non-dissociation rule).
+      if (!passes_bond_separation_checks(selected, match)) {
+        timing_sample += std::chrono::duration<double>(t1 - t0).count();
+        ++null_event_count;
+        continue;
       }
 
       auto fire_result = fire_rule(selected, match);

@@ -1,0 +1,62 @@
+# Reversible homodimerization — X(d) + X(d) <-> X(d!1).X(d!1).
+# Partial-scaling validation for the *homodimer* (same_components) bimolecular
+# association + dissociation batch paths at a LARGE population, where the first
+# moment must stay unbiased (plan Phase 2).  This complements lin2019_toy, whose
+# X1 ~ 10 is small enough that aggressive scaling shows the inherent (nfa-shared)
+# small-population bias — here X ~ hundreds so the batch mechanism is exercised
+# in its designed regime.
+#
+#     X(d) + X(d)   ->^kf  X(d!1).X(d!1)   (homodimer association, AddBond)
+#     X(d!1).X(d!1) ->^kr  X(d) + X(d)     (dissociation, DeleteBond)
+#
+# Well-mixed mass action (BNG folds the 1/2 homodimer statistical factor):
+# association propensity = kf * Nfree*(Nfree-1)/2, dissociation = kr * Ndimer.
+# With total monomers X_tot = 1000, kf = 0.002, kr = 1.0 the deterministic
+# equilibrium solves  0.002*Nf^2 + 0.998*Nf - 1000 = 0  =>  Nf = 500, so
+# Ndimer = (1000-500)/2 = 250.  The seed sits at that equilibrium (500 free
+# monomers + 250 dimers), so the ensemble is stationary from t = 0 and any
+# first-moment bias in the scaled path shows up as a drift of the mean.
+#
+# The homodimer's association propensity is QUADRATIC in Nfree, so — unlike the
+# heterodimer binding model — its scaled first moment carries the leading-order
+# O(1/Nc) bias that partial scaling's excess variance feeds through the
+# propensity curvature (plan §12).  A large population keeps that bias small
+# while still batching: min reactant population Nfree = 500 (association) /
+# Ndimer = 250 (dissociation), so K = floor(min/Nc) gives, for the association,
+# Nc=50 -> K=10, Nc=100 -> K=5, Nc=200 -> K=2 — real batching with a first
+# moment that is statistically unbiased at these Nc and whose (small) residual
+# bias and excess variance both shrink as Nc grows.
+#
+# Oracle for the scaled (Nc > 0) path: the analytic equilibrium, the exact-RM
+# ensemble, and BNG2 (ODE/SSA).  NFsim has no partial scaling and is NOT an
+# oracle for it.
+
+begin parameters
+    kf         0.002
+    kr         1.0
+    Xfree_ss   500      # free monomers at equilibrium
+    Xdimer_ss  250      # dimers at equilibrium (500 bound monomers)
+end parameters
+
+begin molecule types
+    X(d)
+end molecule types
+
+begin seed species
+    X(d)            Xfree_ss
+    X(d!1).X(d!1)   Xdimer_ss
+end seed species
+
+begin observables
+    Molecules  Xfree   X(d)
+    Molecules  Xbound  X(d!+)
+end observables
+
+begin reaction rules
+    dimerize:  X(d) + X(d) -> X(d!1).X(d!1)   kf
+    split:     X(d!1).X(d!1) -> X(d) + X(d)   kr
+end reaction rules
+
+begin actions
+    simulate({method=>"nf",t_end=>10,n_steps=>100})
+end actions

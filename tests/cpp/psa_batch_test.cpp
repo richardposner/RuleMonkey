@@ -1,25 +1,29 @@
-// Partial-scaling (opt-in) Phase-1 behavioral test.
+// Partial-scaling (opt-in) Phase-1 + Phase-2 behavioral test.
 //
 // Exercises the scaled batch-fire path that `set_critical_population(Nc)`
 // enables (Lin, Feng & Hlavacek 2019).  The exact/large-Nc byte-identity
 // contract is pinned in api_coverage_test; here we drive the *scaled* path and
 // assert the properties that make it correct and useful:
 //
-//   1. Unimolecular batching actually happens (ps_reaction_firings exceeds the
-//      SSA step count on a large-population unimolecular model).
+//   1. Batching actually happens (ps_reaction_firings exceeds the SSA step
+//      count) for both the unimolecular (Phase 1) and the bimolecular
+//      association + dissociation (Phase 2) paths.
 //   2. First moment stays unbiased: the ensemble mean of the scaled run agrees
-//      with the analytic Poisson mean and with the exact-SSA ensemble.
-//   3. Per-rule multiplier telemetry is sane: the batched unimolecular rule has
-//      a time-averaged multiplier > 1, the zeroth-order rule stays at 1.
+//      with the analytic mean (Poisson for birth_death, binding equilibrium
+//      for the reversible dimer) and with the exact-SSA ensemble.
+//   3. Per-rule multiplier telemetry is sane: a batched rule has a time-
+//      averaged multiplier > 1, a zeroth-order rule stays at 1.
 //   4. The Nc-too-small guard throws on a model whose only channel is the
 //      scaled rule when Nc is aggressive enough to collapse the run.
 //
 // Under Debug / ASan builds the partial-scaling batch self-check
 // (kBatchInvariant, plan §5) runs inside every scaled batch here, so this test
-// also exercises the epoch-cache reconciliation invariant in CI.
+// also exercises the epoch-cache reconciliation invariant in CI — for the
+// bimolecular association + dissociation batches too.
 //
 // argv[1] = birth_death.xml   (0 -> A ; A -> 0, k_death=1, A0=100 => Poisson(100))
 // argv[2] = psa_pure_death.xml (A -> 0 only; no source)
+// argv[3] = binding.xml        (A(b)+B(a)<->A(b!1).B(a!1); equilibrium Abound=100)
 
 #include "rulemonkey/simulator.hpp"
 
@@ -149,16 +153,78 @@ void test_nc_too_small_guard(const std::string& xml) {
   }
 }
 
+// binding: A(b) + B(a) <-> A(b!1).B(a!1).  Reversible heterodimer at its
+// analytic equilibrium (Abound = 100), so the ensemble is stationary and any
+// first-moment bias in the scaled bimolecular association / dissociation batch
+// shows up as a drift of the mean.  Exercises BOTH new Phase-2 batch paths in
+// one model: `bind` (bimolecular association, AddBond) and `unbind`
+// (dissociation, DeleteBond).
+void test_binding_scaled(const std::string& xml) {
+  constexpr int kNc = 20; // K ~ floor(100/20) = 5 at equilibrium
+  constexpr int kReps = 80;
+  constexpr int kAboundObs = 1; // observables: {Afree, Abound}
+
+  double sum = 0.0;
+  int64_t total_firings = 0, total_steps = 0;
+  std::vector<double> mult;
+  for (int s = 0; s < kReps; ++s) {
+    rulemonkey::RuleMonkeySimulator sim(xml);
+    sim.set_critical_population(kNc);
+    auto r = sim.run({0.0, 10.0, 100}, /*seed=*/2000 + s);
+    sum += final_obs(r, kAboundObs);
+    total_firings += r.ps_reaction_firings;
+    total_steps += r.event_count;
+    mult = r.ps_multipliers;
+  }
+  double const scaled_mean = sum / kReps;
+
+  // 1. Batching happened: more reactions fired than SSA steps.  Both bind and
+  //    unbind batch, so the excess is substantial.
+  check(total_firings > total_steps,
+        "binding scaled run must fire more reactions than SSA steps (bimolecular "
+        "batching active)");
+
+  // 2. First moment unbiased vs the analytic equilibrium Abound = 100.
+  check(std::fabs(scaled_mean - 100.0) < 8.0,
+        "binding scaled ensemble mean (Abound) must stay near the analytic "
+        "equilibrium 100 (got " +
+            std::to_string(scaled_mean) + ")");
+
+  // 3. Telemetry: BOTH rules batch (association + dissociation), so both
+  //    multipliers exceed 1.
+  check(mult.size() == 2, "binding should expose 2 per-rule multipliers");
+  if (mult.size() == 2) {
+    check(mult[0] > 1.2 && mult[1] > 1.2,
+          "both binding rules (bind + unbind) must carry a batch multiplier > 1 "
+          "(got " +
+              std::to_string(mult[0]) + ", " + std::to_string(mult[1]) + ")");
+  }
+
+  // 4. Cross-check against an exact-SSA ensemble on the same seeds.
+  double exact_sum = 0.0;
+  for (int s = 0; s < kReps; ++s) {
+    rulemonkey::RuleMonkeySimulator sim(xml);
+    auto r = sim.run({0.0, 10.0, 100}, /*seed=*/2000 + s);
+    exact_sum += final_obs(r, kAboundObs);
+  }
+  double const exact_mean = exact_sum / kReps;
+  check(std::fabs(scaled_mean - exact_mean) < 8.0,
+        "binding scaled and exact ensemble means must agree (scaled=" +
+            std::to_string(scaled_mean) + " exact=" + std::to_string(exact_mean) + ")");
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
-  if (argc < 3) {
-    std::fprintf(stderr, "Usage: psa_batch_test <birth_death.xml> <psa_pure_death.xml>\n");
+  if (argc < 4) {
+    std::fprintf(stderr,
+                 "Usage: psa_batch_test <birth_death.xml> <psa_pure_death.xml> <binding.xml>\n");
     return 2;
   }
   try {
     test_birth_death_scaled(argv[1]);
     test_nc_too_small_guard(argv[2]);
+    test_binding_scaled(argv[3]);
   } catch (const std::exception& e) {
     std::fprintf(stderr, "EXCEPTION: %s\n", e.what());
     return 2;

@@ -180,6 +180,8 @@ def _read_tsv_header(path: str) -> list[str]:
 MODEL_SPECS = {
     "lin2019_toy": (5.0, 100),
     "birth_death": (10.0, 100),
+    "binding": (10.0, 100),
+    "homodimer": (10.0, 100),
 }
 
 
