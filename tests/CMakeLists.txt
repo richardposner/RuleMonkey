@@ -70,6 +70,23 @@ add_test(
         ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
 )
 
+# Partial-scaling (opt-in) Phase-1 behavioral test.  Drives the scaled
+# batch-fire path enabled by set_critical_population(Nc): batching actually
+# happens, first moments stay unbiased (analytic Poisson + exact-SSA
+# cross-check), per-rule multiplier telemetry is sane, and the Nc-too-small
+# guard throws.  Under Debug/ASan the batch self-check (kBatchInvariant, plan
+# §5) runs inside every scaled batch, so this also exercises the epoch-cache
+# reconciliation invariant.  Uses the committed partial_scaling XML fixtures.
+add_executable(psa_batch_test cpp/psa_batch_test.cpp)
+target_link_libraries(psa_batch_test PRIVATE rulemonkey)
+
+add_test(
+    NAME psa_batch_test
+    COMMAND psa_batch_test
+        ${_rulemonkey_test_dir}/models/partial_scaling/xml/birth_death.xml
+        ${_rulemonkey_test_dir}/models/partial_scaling/xml/psa_pure_death.xml
+)
+
 # Direct unit tests for RuleMonkey's expression layer (issue #6): the
 # expr::collect_variables dependency scanner and the ExprTk semantics RM
 # depends on (unary-minus precedence, ^ associativity, bit-exact == / !=,

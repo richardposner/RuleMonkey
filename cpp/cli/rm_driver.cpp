@@ -1,7 +1,13 @@
 // RuleMonkey batch driver: run a model from XML and output .gdat format.
 // Usage: rm_driver <xml_path> <t_end> <n_steps> [seed] [-no-bscb]
 //        [--ignore-unsupported] [--save-state <path>] [--load-state <path>]
-//        [--t-start <time>] [--print-functions] [--species <path>]
+//        [--t-start <time>] [--print-functions] [--species <path>] [--nc <N>]
+//
+// Partial scaling (opt-in, approximate acceleration; Lin/Feng/Hlavacek 2019):
+//   --nc <N>   Critical population.  N<=0 (default) = exact SSA.  A positive N
+//              enables per-rule batch firing (K_r = floor(n_r/N)); the run is
+//              then APPROXIMATE (first moments unbiased, second-moment bias
+//              shrinks as N grows).
 // Output: tab-separated .gdat to stdout (# header, then time +
 //         observables; global-function columns appended only with
 //         --print-functions)
@@ -76,7 +82,7 @@ int main(int argc, char* argv[]) {
     std::cerr << "Usage: rm_driver <xml_path> <t_end> <n_steps> [seed] [-no-bscb]"
                  " [--ignore-unsupported] [--save-state <path>]"
                  " [--load-state <path>] [--t-start <time>] [--print-functions]"
-                 " [--species <path>]\n";
+                 " [--species <path>] [--nc <N>]\n";
     return 1;
   }
 
@@ -100,6 +106,7 @@ int main(int argc, char* argv[]) {
     std::string species_path;
     double t_start = 0.0;
     bool t_start_set = false;
+    int nc = -1; // partial-scaling critical population; <=0 = exact (default)
 
     // Parse remaining args: seed (positional, may appear at most once) and
     // flags (named).  Reject unknown `--*` / `-*` flags up front so a typo
@@ -139,6 +146,12 @@ int main(int argc, char* argv[]) {
         }
         t_start = parse_double(argv[i], "--t-start");
         t_start_set = true;
+      } else if (std::strcmp(argv[i], "--nc") == 0) {
+        if (++i >= argc) {
+          std::cerr << "--nc requires an integer (partial-scaling critical population)\n";
+          return 1;
+        }
+        nc = parse_int(argv[i], "--nc");
       } else if (argv[i][0] == '-') {
         std::cerr << "rm_driver: unknown flag '" << argv[i]
                   << "'.  See usage above for the supported set.\n";
@@ -155,6 +168,9 @@ int main(int argc, char* argv[]) {
 
     rulemonkey::RuleMonkeySimulator sim(xml_path);
     sim.set_block_same_complex_binding(bscb);
+    // Opt-in partial scaling (approximate acceleration).  nc<=0 keeps exact SSA.
+    if (nc > 0)
+      sim.set_critical_population(nc);
 
     // Check for unsupported BNGL features
     bool has_errors = false;

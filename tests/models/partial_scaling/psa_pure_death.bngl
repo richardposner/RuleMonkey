@@ -1,0 +1,25 @@
+# Pure first-order decay A -> 0 with NO zeroth-order source.  Every reaction
+# channel is the single scalable unimolecular rule, so at an aggressive Nc the
+# scaled total propensity collapses and the run would degenerate to one step —
+# this is the model that exercises the partial-scaling Nc-too-small guard
+# (plan §3d).  Small rate keeps the absolute propensity low so the guard trips
+# at a moderate Nc within a normal window.
+begin parameters
+    k_death  0.001
+    A_init   1000
+end parameters
+begin molecule types
+    A()
+end molecule types
+begin seed species
+    A()   A_init
+end seed species
+begin observables
+    Molecules  A  A()
+end observables
+begin reaction rules
+    death:  A() -> 0   k_death  DeleteMolecules
+end reaction rules
+begin actions
+    simulate({method=>"nf",t_end=>10,n_steps=>10})
+end actions

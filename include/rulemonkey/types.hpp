@@ -93,7 +93,17 @@ struct Result {
   std::vector<std::vector<double>> observable_data;
   std::vector<std::string> function_names;
   std::vector<std::vector<double>> function_data;
-  int64_t event_count = 0; // SSA events fired during this run.
+  int64_t event_count = 0; // SSA steps taken during this run (one per Gillespie
+                           // iteration; a partial-scaling batch counts as one).
+
+  // Partial-scaling (opt-in) telemetry.  Zero / empty for an exact run
+  // (Nc disabled).  `ps_reaction_firings` is the total number of rule firings
+  // (Σ K over all steps); it equals `event_count` when unscaled and exceeds it
+  // when batches fire.  `ps_multipliers` is the per-rule time-averaged scaling
+  // multiplier m_r = <K_r>_t (parallel to the model's rule order), the datum
+  // every downstream partial-scaling method consumes (plan §9 item 7 / §12).
+  int64_t ps_reaction_firings = 0;
+  std::vector<double> ps_multipliers;
 
   std::size_t n_times() const noexcept { return time.size(); }
   std::size_t n_observables() const noexcept { return observable_names.size(); }

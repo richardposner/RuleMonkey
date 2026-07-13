@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created by BioNetGen 2.9.3  -->
+<sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
+  <model id="psa_pure_death">
+    <ListOfParameters>
+      <Parameter id="k_death" type="Constant" value="0.001" expr="0.001"/>
+      <Parameter id="A_init" type="Constant" value="1000" expr="1000"/>
+    </ListOfParameters>
+    <ListOfMoleculeTypes>
+      <MoleculeType id="A"/>
+    </ListOfMoleculeTypes>
+    <ListOfCompartments>
+    </ListOfCompartments>
+    <ListOfSpecies>
+      <Species id="S1"  concentration="A_init" name="A()">
+        <ListOfMolecules>
+          <Molecule id="S1_M1" name="A"/>
+        </ListOfMolecules>
+      </Species>
+    </ListOfSpecies>
+    <ListOfReactionRules>
+      <ReactionRule id="RR1" name="death" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR1_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP1_M1" name="A"/>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+        </ListOfProductPatterns>
+        <RateLaw id="RR1_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="k_death"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR1_RP1_M1"/>
+        </Map>
+        <ListOfOperations>
+          <Delete id="RR1_RP1_M1" DeleteMolecules="1"/>
+        </ListOfOperations>
+      </ReactionRule>
+    </ListOfReactionRules>
+    <ListOfObservables>
+      <Observable id="O1" name="A" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O1_P1">
+            <ListOfMolecules>
+              <Molecule id="O1_P1_M1" name="A"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+    </ListOfObservables>
+    <ListOfFunctions>
+    </ListOfFunctions>
+  </model>
+</sbml>

@@ -196,6 +196,19 @@ if(RULEMONKEY_ENABLE_ASAN OR CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 # ---------------------------------------------------------------------------
+# Partial-scaling batch self-check (plan §5).  The scaled batch path fires K
+# reactions and defers match-list maintenance to a single incremental_update
+# over the union of affected molecules.  Correctness of that epoch-cache
+# reconciliation is proven by an invariant: the incrementally-maintained rule
+# aggregates + total_propensity must equal a from-scratch full recompute.
+# Compiled IN for Debug and ASan, OUT of Release.  Only fires when Nc>0, so it
+# never touches the exact corpus.
+# ---------------------------------------------------------------------------
+if(RULEMONKEY_ENABLE_ASAN OR CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_definitions(rulemonkey PRIVATE RULEMONKEY_PSA_BATCH_SELFCHECK)
+endif()
+
+# ---------------------------------------------------------------------------
 # Examples (off by default — host projects opt in)
 # ---------------------------------------------------------------------------
 option(RULEMONKEY_BUILD_EXAMPLES "Build the C++ embedding examples" OFF)

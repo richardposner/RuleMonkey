@@ -2323,6 +2323,13 @@ struct RuleState {
   bool use_multi_mol_count = false;     // true for multi-mol reactant A has >1 molecule
   bool use_multi_mol_count_b = false;   // true for multi-mol bimolecular reactant B
   bool needs_complex_expansion = false; // true if multi-mol pattern has disjoint molecules
+  // Partial-scaling (opt-in, Lin/Feng/Hlavacek 2019) Phase-1 batch eligibility.
+  // True iff this rule may be fired in a scaled batch of K_r firings: a simple
+  // single-molecule unimolecular mass-action rule with no bond operations, no
+  // local/DOR2 rate, and no complex-expansion pattern.  Everything else keeps
+  // K_r=1 (exact) until later phases.  Computed once in init_rule_states;
+  // read only when Nc>0.  See rule_batch_size / fire_rule_batch.
+  bool ps_batchable = false;
 
   PatternAdj pat_adj_a; // pre-computed adjacency for reactant A's sub-pattern
   PatternAdj pat_adj_b; // pre-computed adjacency for reactant B's sub-pattern
@@ -2625,9 +2632,16 @@ struct Engine::Impl {
   int molecule_limit;
   // Partial-scaling critical population (plan §3c). `Nc <= 0` = disabled
   // ⇒ exact SSA. A positive value selects the opt-in approximate
-  // batch-fire path. Inert until Phase 1 wires the scaled propensity and
-  // batched fire_rule; carried here now so the config surface is stable.
+  // batch-fire path (scaled propensity + batched fire).
   int Nc;
+  // Partial-scaling telemetry (plan §9 item 7 / §12 hook).  Accumulated only
+  // when Nc>0: `ps_m_dt_sum[ri]` is Σ K_r(t)·Δt over SSA steps and
+  // `ps_time_sum` is Σ Δt, so the time-averaged multiplier is
+  // m_r = ps_m_dt_sum[ri] / ps_time_sum.  Purely additive; never affects the
+  // trajectory.  Exposed on Result at end of run.
+  std::vector<double> ps_m_dt_sum;
+  double ps_time_sum = 0.0;
+  int64_t ps_reaction_firings = 0; // Σ K over all batches (== event_count when unscaled)
   std::mt19937_64 rng;
   bool initialized = false;
 
@@ -3051,6 +3065,31 @@ struct Engine::Impl {
   static constexpr int64_t kPropensityRebaselineInterval = 4096;
   int64_t events_since_propensity_rebaseline = 0;
 
+  // --- Partial scaling (opt-in) arithmetic ---
+  //
+  // Port of `nfa/src/nfa/scaling.py`.  For a batchable rule with minimum
+  // reactant population n_r, the batch size is K_r = max(1, floor(n_r / Nc))
+  // and the scale factor is λ_r = 1/K_r.  Scaling the propensity by λ_r and
+  // firing the rule K_r times per selection leaves the mean flux
+  // λ_r·a_r·K_r = a_r unchanged (first moments unbiased); the frozen-state
+  // batch introduces a bounded second-moment error that vanishes as Nc→∞.
+  //
+  // Non-batchable rules and small populations (n_r < Nc) return K_r=1, i.e.
+  // exact behavior with λ_r = 1.0 (a bit-exact identity multiply).  With
+  // Nc<=0 (disabled) every rule returns 1 and the engine is byte-identical to
+  // the exact path.  For the Phase-1 batchable set (single-molecule
+  // unimolecular, embedding_correction_a==1) n_r = a_total.
+  int rule_batch_size(const RuleState& rs) const {
+    if (Nc <= 0 || !rs.ps_batchable)
+      return 1;
+    double const n_r = rs.a_total / rs.embedding_correction_a;
+    int const k = static_cast<int>(n_r / static_cast<double>(Nc)); // floor for n_r>=0
+    return k < 1 ? 1 : k;
+  }
+  double rule_scale_factor(const RuleState& rs) const {
+    return 1.0 / static_cast<double>(rule_batch_size(rs));
+  }
+
   void set_rule_propensity(RuleState& rs, double new_value) {
     if (new_value < 0 && !rs.clamp_warned) {
       rs.clamp_warned = true;
@@ -3067,6 +3106,16 @@ struct Engine::Impl {
               (fn[0] != 0 ? "'" : ""), new_value, current_time);
     }
     new_value = std::max<double>(new_value, 0);
+    // Partial scaling (opt-in): scale the stored propensity by λ_r = 1/K_r so
+    // the delta-updated total_propensity and the Gillespie selection see the
+    // scaled rate.  This is the single choke point every propensity write
+    // flows through, so it uniformly covers the mass-action, dynamic-rate and
+    // (excluded-from-batching, hence λ_r=1) local/DOR2 paths.  Gated on Nc>0:
+    // when disabled this branch is skipped entirely and the value is stored
+    // verbatim, keeping the exact path byte-identical.  For a K_r=1 rule
+    // (unscaled or small population) λ_r=1.0, a bit-exact identity multiply.
+    if (Nc > 0)
+      new_value *= rule_scale_factor(rs);
     total_propensity += new_value - rs.propensity;
     rs.propensity = new_value;
   }
@@ -3311,6 +3360,9 @@ struct Engine::Impl {
     rule_states.resize(n_rules);
     bind_infos.resize(n_rules);
     rule_fire_counts.assign(n_rules, 0);
+    ps_m_dt_sum.assign(n_rules, 0.0);
+    ps_time_sum = 0.0;
+    ps_reaction_firings = 0;
 
     // Precompute local_obs_indices: all observable indices referenced by any
     // local function, resolved via observable_index.  MUST run before the
@@ -3570,6 +3622,42 @@ struct Engine::Impl {
             }
           }
         }
+      }
+
+      // Partial-scaling Phase-1 batch eligibility.  Only the simplest rules —
+      // single-molecule unimolecular mass-action, no bond ops, no local/DOR2
+      // rate, no complex-expansion pattern — may be fired in a scaled batch of
+      // K distinct seed molecules with one deferred incremental_update.
+      // Everything else (bimolecular, dissociation, total-rate, MM, multi-mol
+      // or disjoint patterns, local functions) keeps K_r=1 until later phases.
+      //
+      // MUST be set before rescan_all_molecules_for_rule below: the rescan
+      // writes the rule's initial propensity through set_rule_propensity,
+      // which scales by λ_r=1/K_r and therefore reads rs.ps_batchable.  If we
+      // set it after the rescan, the initial propensity (and the Nc-too-small
+      // guard that reads it) would be computed unscaled.  use_multi_mol_count
+      // / needs_complex_expansion are finalized above; local-rate status is
+      // the static rule.rate_law.is_local (rs.has_local_rates is only set
+      // inside the rescan, so we cannot read it yet).
+      {
+        bool batchable = (rule.molecularity == 1) &&
+                         (rule.reactant_pattern.molecules.size() == 1) && !rs.use_multi_mol_count &&
+                         !rs.needs_complex_expansion && !rule.rate_law.is_local &&
+                         !rule.rate_law.is_total_rate && (rule.rate_law.type != RateLawType::MM) &&
+                         rule.constraints.empty();
+        if (batchable) {
+          // Reject bond-changing ops: an AddBond/DeleteBond on a
+          // single-molecule reactant touches a partner molecule outside the
+          // sampled seed, which the Phase-1 distinct-seed batch does not model
+          // (that is Phase-2 association/dissociation).
+          for (auto& op : rule.operations) {
+            if (op.type == OpType::AddBond || op.type == OpType::DeleteBond) {
+              batchable = false;
+              break;
+            }
+          }
+        }
+        rs.ps_batchable = batchable;
       }
 
       rescan_all_molecules_for_rule(ri);
@@ -6777,7 +6865,13 @@ struct Engine::Impl {
     bool bond_changed; // true if any AddBond or DeleteBond fired
   };
 
-  FireResult fire_rule(int rule_idx, const ReactionMatch& match) {
+  // `advance_epoch` is true for a normal one-firing-per-event call (the exact
+  // path).  The partial-scaling batch path passes false and advances
+  // `event_epoch` once for the whole batch, so the K firings accumulate their
+  // per-molecule change masks under a single epoch and one deferred
+  // incremental_update over the union of affected molecules sees every change
+  // (plan §5 epoch-cache reconciliation).
+  FireResult fire_rule(int rule_idx, const ReactionMatch& match, bool advance_epoch = true) {
     auto& rule = model.rules[rule_idx];
     std::unordered_set<int> affected;
     std::vector<int> deleted_mols; // track deletions for count bookkeeping
@@ -6796,8 +6890,11 @@ struct Engine::Impl {
     }
 
     // P1 cache: advance the per-event epoch.  Any mol whose stored epoch
-    // doesn't match `event_epoch` is treated as unchanged this event.
-    ++event_epoch;
+    // doesn't match `event_epoch` is treated as unchanged this event.  A
+    // partial-scaling batch advances the epoch once for all K firings
+    // (advance_epoch=false here) so their change masks accumulate.
+    if (advance_epoch)
+      ++event_epoch;
 
     auto ensure_mask_capacity = [&](int mid) {
       if (mid >= static_cast<int>(event_mol_change_mask.size())) {
@@ -7092,6 +7189,83 @@ struct Engine::Impl {
     return {std::move(expanded), bond_changed};
   }
 
+  // Result of a partial-scaling batch: the union of affected molecules and
+  // whether any bond changed, plus the number of firings actually applied
+  // (<= K; a firing is skipped only if an earlier firing in the batch consumed
+  // a molecule it referenced — impossible for the Phase-1 non-bonded set).
+  struct BatchFireResult {
+    std::unordered_set<int> affected;
+    bool bond_changed = false;
+    int fired = 0;
+  };
+
+  // Partial-scaling batched fire for a Phase-1 unimolecular rule (plan §3b).
+  // Samples up to K distinct seed molecules from the frozen match list
+  // (weighted without replacement, reusing select_reactants), advances the
+  // event epoch once, applies all firings deferring match-list maintenance,
+  // and returns the union of affected molecules so the caller runs a single
+  // incremental_update.  The caller must have verified rs.ps_batchable and
+  // K>1.  Because ps_batchable rules are single-molecule, non-bonded and
+  // unconstrained, distinct seeds guarantee K non-overlapping firings and no
+  // pre-fire constraint/connectivity checks are needed.
+  BatchFireResult fire_rule_batch(int rule_idx, int K) {
+    auto& rule = model.rules[rule_idx];
+    int const seed_a =
+        (!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0;
+
+    // 1. Sample K distinct seed molecules while the pool is frozen (no firing
+    //    yet).  Rejection: redraw when select_reactants returns a seed already
+    //    taken.  For the Phase-1 batchable set K < (# distinct matches)
+    //    always, so this terminates well within the defensive attempt cap.
+    std::vector<ReactionMatch> matches;
+    matches.reserve(K);
+    std::unordered_set<int> chosen_seeds;
+    int const max_attempts = (16 * K) + 64;
+    for (int attempt = 0; attempt < max_attempts && static_cast<int>(matches.size()) < K;
+         ++attempt) {
+      ReactionMatch m = select_reactants(rule_idx);
+      if (m.mol_ids.empty())
+        continue; // null draw (empty match list) — retry
+      int const seed = (seed_a < static_cast<int>(m.mol_ids.size())) ? m.mol_ids[seed_a] : -1;
+      if (seed < 0)
+        continue;
+      if (!chosen_seeds.insert(seed).second)
+        continue; // seed already sampled — reject and redraw
+      matches.push_back(std::move(m));
+    }
+
+    // 2. Advance the epoch once for the whole batch.
+    ++event_epoch;
+
+    // 3. Fire each sampled match, deferring match-list maintenance, and union
+    //    the affected sets.
+    BatchFireResult out;
+    for (auto& m : matches) {
+      // Within-batch overlap guard: skip a match if an earlier firing already
+      // consumed a molecule it references.  Never triggers for the Phase-1
+      // non-bonded single-molecule set (distinct seeds are independent) but
+      // keeps a stale-id fire from corrupting the pool if the batchable
+      // predicate is ever loosened.
+      bool valid = true;
+      for (int const mid : m.mol_ids) {
+        if (mid < 0)
+          continue;
+        if (mid >= pool.molecule_count() || !pool.molecule(mid).active) {
+          valid = false;
+          break;
+        }
+      }
+      if (!valid)
+        continue;
+      auto fr = fire_rule(rule_idx, m, /*advance_epoch=*/false);
+      out.bond_changed = out.bond_changed || fr.bond_changed;
+      for (int const mid : fr.affected)
+        out.affected.insert(mid);
+      ++out.fired;
+    }
+    return out;
+  }
+
   // --- Fixed-species clamping ---
 
   // Restore each declared Fixed species' population to its target count
@@ -7316,6 +7490,38 @@ struct Engine::Impl {
       ++next_sample;
     }
 
+    // Partial-scaling Nc-too-small guard (plan §3d; port of nfa `_check_nc`).
+    // When scaling is active, the total propensity has already been scaled down
+    // by the per-rule λ_r.  If it is so small that the expected time to the
+    // next reaction (1/total) already spans the whole remaining window, the run
+    // would collapse to a single step and produce garbage — fail loudly with
+    // guidance instead.  total_propensity<=0 is a genuine absorbing state and
+    // is handled inside the loop, so only guard the positive case.  Only run
+    // the guard when scaling is actually active (some rule has K_r>1): a huge
+    // Nc leaves every rule at K_r=1 (an exact run), and a model whose natural
+    // propensity already implies a large dt is the user's own dynamics, not a
+    // scaling artifact — the guard must not fire there.
+    bool ps_active = false;
+    if (Nc > 0)
+      for (auto& rs : rule_states)
+        if (rule_batch_size(rs) > 1) {
+          ps_active = true;
+          break;
+        }
+    if (ps_active && total_propensity > 0.0) {
+      double const expected_dt = 1.0 / total_propensity;
+      double const window = ts.t_end - current_time;
+      if (window > 0.0 && expected_dt >= window) {
+        std::ostringstream msg;
+        msg << "Partial scaling: Nc=" << Nc << " is too small for this model — the "
+            << "scaled total propensity " << total_propensity << " implies an expected step "
+            << "dt=" << expected_dt << "s, which meets or exceeds the remaining window " << window
+            << "s (t_end=" << ts.t_end << "). The run would collapse to a single "
+            << "step. Increase Nc.";
+        throw std::runtime_error(msg.str());
+      }
+    }
+
     // Main SSA loop
     while (current_time < ts.t_end) {
       // Cooperative cancellation: between-event safe point.  Throwing
@@ -7380,6 +7586,16 @@ struct Engine::Impl {
       current_time = next_time;
       ++eval_vars_gen; // time advanced → invalidate cached eval_vars_flat
 
+      // Partial-scaling telemetry (plan §9 item 7): accumulate the time-
+      // averaged per-rule multiplier m_r = <K_r>_t.  Weighted by the dwell
+      // time dt of this step, using the frozen pre-fire rule states.  Additive
+      // only; gated on Nc>0 so the exact path is untouched.
+      if (Nc > 0) {
+        ps_time_sum += dt;
+        for (int ri = 0; ri < static_cast<int>(rule_states.size()); ++ri)
+          ps_m_dt_sum[ri] += static_cast<double>(rule_batch_size(rule_states[ri])) * dt;
+      }
+
       // Select reaction
       double const u2 = uniform() * total_propensity;
       double cum = 0;
@@ -7415,6 +7631,77 @@ struct Engine::Impl {
         // selection.
         if (selected < 0) {
           recompute_total_propensity();
+          continue;
+        }
+      }
+
+      // Partial-scaling batch dispatch (opt-in, plan §3b).  When the selected
+      // rule is batchable at the current population, fire it K>1 times as one
+      // frozen-state batch and run a single incremental_update over the union
+      // of affected molecules, then advance to the next SSA step.  K==1 falls
+      // through to the ordinary single-fire path below, which stays
+      // byte-identical when Nc is off (this whole block is Nc>0-gated).
+      if (Nc > 0) {
+        int const K = rule_batch_size(rule_states[selected]);
+        if (K > 1) {
+          auto tb0 = std::chrono::steady_clock::now();
+          auto batch = fire_rule_batch(selected, K);
+          if (batch.fired == 0) {
+            // No firing landed (every sampled seed was consumed within the
+            // batch — impossible for the non-bonded Phase-1 set).  Treat as a
+            // null event and re-draw next iteration.
+            timing_fire +=
+                std::chrono::duration<double>(std::chrono::steady_clock::now() - tb0).count();
+            ++null_event_count;
+            continue;
+          }
+          auto& affected = batch.affected;
+
+          if (!model.fixed_species.empty())
+            replenish_fixed_species(affected);
+
+          // Complex-expansion of the affected set (mirrors the single-fire
+          // path).  Never triggers for the Phase-1 batchable set (no bond
+          // ops ⇒ bond_changed false), but kept for forward compatibility.
+          if (any_needs_complex_expansion_ && batch.bond_changed) {
+            std::unordered_set<int> cx_expanded;
+            std::unordered_set<int> seen_cx;
+            for (int const mid : affected) {
+              if (mid < 0 || mid >= pool.molecule_count() || !pool.molecule(mid).active)
+                continue;
+              int const cx = pool.complex_of(mid);
+              if (!seen_cx.insert(cx).second)
+                continue;
+              for (int const m : pool.molecules_in_complex(cx))
+                if (pool.molecule(m).active)
+                  cx_expanded.insert(m);
+            }
+            affected = std::move(cx_expanded);
+          }
+
+          rule_fire_counts[selected] += static_cast<uint64_t>(batch.fired);
+          ps_reaction_firings += batch.fired;
+          auto tb1 = std::chrono::steady_clock::now();
+
+          if (molecule_limit > 0 && pool.active_molecule_count() > molecule_limit)
+            break;
+
+          if (use_incremental_obs)
+            incremental_update_observables(affected);
+          if (!rate_dep_obs_indices.empty())
+            compute_rate_dependent_observables();
+          auto tb2 = std::chrono::steady_clock::now();
+
+          incremental_update(affected);
+
+          if constexpr (kBatchInvariant)
+            verify_batch_consistency(selected, K, batch.fired);
+
+          auto tb3 = std::chrono::steady_clock::now();
+          timing_fire += std::chrono::duration<double>(tb1 - tb0).count();
+          timing_obs += std::chrono::duration<double>(tb2 - tb1).count();
+          timing_update += std::chrono::duration<double>(tb3 - tb2).count();
+          ++event_count;
           continue;
         }
       }
@@ -7749,6 +8036,7 @@ struct Engine::Impl {
       timing_update += std::chrono::duration<double>(t4 - t3).count();
 
       ++event_count;
+      ++ps_reaction_firings; // one firing per exact/single-fire event
     }
 
     // Record remaining samples
@@ -7841,7 +8129,89 @@ struct Engine::Impl {
       report_expr_eval(expr_eval_profile_, timing_wall);
 
     result.event_count = event_count;
+    // Partial-scaling telemetry.  Left at defaults for an exact run (Nc<=0):
+    // ps_reaction_firings still equals event_count (one firing per step) but
+    // the multiplier vector is uniformly 1, so we only populate it when
+    // scaling is active to keep exact-run Results minimal.
+    result.ps_reaction_firings = ps_reaction_firings;
+    if (Nc > 0) {
+      int const n_rules = static_cast<int>(model.rules.size());
+      result.ps_multipliers.assign(n_rules, 1.0);
+      if (ps_time_sum > 0.0)
+        for (int ri = 0; ri < n_rules; ++ri)
+          result.ps_multipliers[ri] = ps_m_dt_sum[ri] / ps_time_sum;
+    }
     return result;
+  }
+
+  // Partial-scaling batch self-check (plan §5, gated by kBatchInvariant, built
+  // in only for Debug/ASan).  After a scaled batch + one deferred
+  // incremental_update, verify that the incrementally-maintained rule
+  // aggregates and total_propensity equal a from-scratch full recompute over
+  // the post-batch pool.  A mismatch means the epoch-cache reconciliation
+  // (single update over the union of affected molecules) missed a molecule or
+  // mis-accumulated a change mask — abort loudly with a diagnostic.
+  void verify_batch_consistency(int rule_idx, int K, int fired) {
+    int const n_rules = static_cast<int>(model.rules.size());
+
+    // Snapshot the incrementally-maintained per-rule propensity + aggregates
+    // and the running total, then recompute every rule from scratch and
+    // compare.  rescan_all_molecules_for_rule rewrites rs.mol_data / a_total /
+    // b_total / propensity from the live pool (also crediting the fresh
+    // propensity to total_propensity via set_rule_propensity), so after the
+    // rescan loop a bare recompute_total_propensity gives the reference total.
+    std::vector<double> ref_prop(n_rules), ref_a(n_rules), ref_b(n_rules);
+    std::vector<double> inc_prop(n_rules), inc_a(n_rules), inc_b(n_rules);
+    for (int ri = 0; ri < n_rules; ++ri) {
+      inc_prop[ri] = rule_states[ri].propensity;
+      inc_a[ri] = rule_states[ri].a_total;
+      inc_b[ri] = rule_states[ri].b_total;
+    }
+    double const inc_total = total_propensity;
+
+    // Snapshot the full rule states + running total so the from-scratch
+    // recompute is purely observational: restore afterwards so the debug run's
+    // trajectory is identical to the release run's for the same seed.
+    std::vector<RuleState> const saved_rule_states = rule_states;
+    double const saved_total = total_propensity;
+
+    for (int ri = 0; ri < n_rules; ++ri)
+      rescan_all_molecules_for_rule(ri);
+    recompute_total_propensity();
+    for (int ri = 0; ri < n_rules; ++ri) {
+      ref_prop[ri] = rule_states[ri].propensity;
+      ref_a[ri] = rule_states[ri].a_total;
+      ref_b[ri] = rule_states[ri].b_total;
+    }
+    double const ref_total = total_propensity;
+
+    rule_states = saved_rule_states;
+    total_propensity = saved_total;
+
+    auto mismatch = [](double x, double y) {
+      double const d = std::fabs(x - y);
+      return d > (1e-9 * std::max({1.0, std::fabs(x), std::fabs(y)}));
+    };
+    bool bad = mismatch(inc_total, ref_total);
+    for (int ri = 0; ri < n_rules && !bad; ++ri)
+      bad = mismatch(inc_prop[ri], ref_prop[ri]) || mismatch(inc_a[ri], ref_a[ri]) ||
+            mismatch(inc_b[ri], ref_b[ri]);
+    if (bad) {
+      std::fprintf(stderr,
+                   "[PSA batch invariant FAIL] t=%g rule=%d K=%d fired=%d\n"
+                   "  total: incremental=%.10g  recompute=%.10g\n",
+                   current_time, rule_idx, K, fired, inc_total, ref_total);
+      for (int ri = 0; ri < n_rules; ++ri) {
+        if (mismatch(inc_prop[ri], ref_prop[ri]) || mismatch(inc_a[ri], ref_a[ri]) ||
+            mismatch(inc_b[ri], ref_b[ri]))
+          std::fprintf(stderr,
+                       "  rule %d (%s): prop inc=%.10g ref=%.10g | a inc=%.10g ref=%.10g | "
+                       "b inc=%.10g ref=%.10g\n",
+                       ri, model.rules[ri].name.c_str(), inc_prop[ri], ref_prop[ri], inc_a[ri],
+                       ref_a[ri], inc_b[ri], ref_b[ri]);
+      }
+      std::abort();
+    }
   }
 };
 

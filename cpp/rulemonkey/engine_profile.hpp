@@ -188,6 +188,22 @@ inline constexpr bool kLocalObsTrackInvariant = true;
 inline constexpr bool kLocalObsTrackInvariant = false;
 #endif
 
+// Partial-scaling batch self-check (plan §5, the epoch-cache reconciliation
+// risk).  After a scaled batch of K firings + one deferred incremental_update,
+// every rule's incrementally-maintained aggregates (a_total/b_total/propensity)
+// and total_propensity must equal a from-scratch full recompute over the
+// post-batch pool — i.e. the single batched update landed exactly where K
+// separate full updates would.  When on, run_ssa's batch path recomputes all
+// rule states into shadow copies and std::abort()s on any mismatch.  Only
+// active when Nc>0 (a batch actually fires), so it is zero-cost for the exact
+// corpus even when compiled in.  Build-type driven like the two selfchecks
+// above: IN for Debug and ASan, OUT of Release.
+#ifdef RULEMONKEY_PSA_BATCH_SELFCHECK
+inline constexpr bool kBatchInvariant = true;
+#else
+inline constexpr bool kBatchInvariant = false;
+#endif
+
 // ===========================================================================
 // Profile struct definitions
 // ---------------------------------------------------------------------------
