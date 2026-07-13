@@ -2320,6 +2320,11 @@ struct RuleMonkeySimulator::Impl {
   std::string xml_path_str;
   std::unordered_map<std::string, double> param_overrides;
   int molecule_limit = -1;
+  // Partial-scaling critical population, forwarded to every Engine this
+  // simulator builds. -1 (<= 0) keeps the exact SSA path; a positive
+  // value opts into approximate partial scaling. Set via
+  // set_critical_population; mirrors molecule_limit.
+  int Nc = -1;
 
   std::unique_ptr<Engine> session;
 
@@ -2535,16 +2540,16 @@ struct RuleMonkeySimulator::Impl {
           // Fresh, independent run from seed species.  Every point uses
           // the same seed: as in BNG, the seed is run-level, not
           // per-point, so points share a random stream.
-          Engine engine(model, seed, molecule_limit);
+          Engine engine(model, seed, molecule_limit, Nc);
           r = engine.run(TimeSpec{per_point.t_start, per_point.t_end, per_point.n_points, {}});
         } else {
           // Carry-over chain: point 0 starts from seed species; every
           // later point resumes the prior point's pool + RNG state.
           if (k == 0) {
-            session = std::make_unique<Engine>(model, seed, molecule_limit);
+            session = std::make_unique<Engine>(model, seed, molecule_limit, Nc);
             session->initialize();
           } else {
-            session = std::make_unique<Engine>(model, 0, molecule_limit);
+            session = std::make_unique<Engine>(model, 0, molecule_limit, Nc);
             session->load_state(tmp.string());
           }
           const double t0 = session->current_time();
@@ -2664,6 +2669,12 @@ void RuleMonkeySimulator::set_molecule_limit(int limit) {
   impl_->molecule_limit = limit;
 }
 
+void RuleMonkeySimulator::set_critical_population(int Nc) {
+  if (impl_->session)
+    throw std::runtime_error("Cannot set_critical_population during active session");
+  impl_->Nc = Nc;
+}
+
 void RuleMonkeySimulator::set_block_same_complex_binding(bool value) {
   if (impl_->session)
     throw std::runtime_error("Cannot set_block_same_complex_binding during active session");
@@ -2677,7 +2688,7 @@ void RuleMonkeySimulator::set_block_same_complex_binding(bool value) {
 Result RuleMonkeySimulator::run(const TimeSpec& ts, std::uint64_t seed,
                                 const CancelCallback& should_continue) {
   impl_->apply_overrides();
-  Engine engine(impl_->model, seed, impl_->molecule_limit);
+  Engine engine(impl_->model, seed, impl_->molecule_limit, impl_->Nc);
   return engine.run(ts, should_continue);
 }
 
@@ -2746,7 +2757,7 @@ BifurcateResult RuleMonkeySimulator::bifurcate(const ScanSpec& spec, std::uint64
 
 void RuleMonkeySimulator::initialize(std::uint64_t seed) {
   impl_->apply_overrides();
-  impl_->session = std::make_unique<Engine>(impl_->model, seed, impl_->molecule_limit);
+  impl_->session = std::make_unique<Engine>(impl_->model, seed, impl_->molecule_limit, impl_->Nc);
   impl_->session->initialize();
 }
 
@@ -2834,7 +2845,7 @@ void RuleMonkeySimulator::save_state(const std::string& path) const {
 void RuleMonkeySimulator::load_state(const std::string& path) {
   impl_->apply_overrides();
   // Create engine with seed=0 (will be overwritten by loaded RNG state)
-  impl_->session = std::make_unique<Engine>(impl_->model, 0, impl_->molecule_limit);
+  impl_->session = std::make_unique<Engine>(impl_->model, 0, impl_->molecule_limit, impl_->Nc);
   impl_->session->load_state(path);
 }
 

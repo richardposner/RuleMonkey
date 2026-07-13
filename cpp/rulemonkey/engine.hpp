@@ -14,7 +14,13 @@ namespace rulemonkey {
 
 class Engine {
 public:
-  Engine(const Model& model, uint64_t seed, int molecule_limit = -1);
+  // `Nc` is the partial-scaling critical population (opt-in approximate
+  // acceleration; Lin, Feng & Hlavacek 2019).  `Nc <= 0` disables it and
+  // the engine runs the exact SSA path unchanged — that is the default,
+  // and every existing caller keeps exact behavior.  A positive `Nc`
+  // makes the run approximate.  Plumbed but inert until the batch-fire
+  // path lands.
+  Engine(const Model& model, uint64_t seed, int molecule_limit = -1, int Nc = -1);
   ~Engine();
 
   // Engine owns a unique_ptr<Impl> with PIMPL semantics — copying it

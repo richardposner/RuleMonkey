@@ -2623,6 +2623,11 @@ struct Engine::Impl {
   int64_t event_count = 0;
   int64_t null_event_count = 0;
   int molecule_limit;
+  // Partial-scaling critical population (plan §3c). `Nc <= 0` = disabled
+  // ⇒ exact SSA. A positive value selects the opt-in approximate
+  // batch-fire path. Inert until Phase 1 wires the scaled propensity and
+  // batched fire_rule; carried here now so the config surface is stable.
+  int Nc;
   std::mt19937_64 rng;
   bool initialized = false;
 
@@ -2875,8 +2880,8 @@ struct Engine::Impl {
   // from `m` — declaration order guarantees `model` is constructed
   // before `pool`, so AgentPool::model_ references the engine's own
   // copy and outlives the input reference.
-  Impl(Model m, uint64_t seed, int mol_limit)
-      : model(std::move(m)), pool(model), molecule_limit(mol_limit), rng(seed) {
+  Impl(Model m, uint64_t seed, int mol_limit, int nc)
+      : model(std::move(m)), pool(model), molecule_limit(mol_limit), Nc(nc), rng(seed) {
     init_eval_layout();
   }
 
@@ -7844,8 +7849,8 @@ struct Engine::Impl {
 // Engine public interface
 // ===========================================================================
 
-Engine::Engine(const Model& model, uint64_t seed, int molecule_limit)
-    : impl_(std::make_unique<Impl>(model, seed, molecule_limit)) {}
+Engine::Engine(const Model& model, uint64_t seed, int molecule_limit, int Nc)
+    : impl_(std::make_unique<Impl>(model, seed, molecule_limit, Nc)) {}
 
 Engine::~Engine() = default;
 

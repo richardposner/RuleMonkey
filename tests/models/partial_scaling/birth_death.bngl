@@ -1,0 +1,45 @@
+# Unimolecular birth-death (immigration-death) process.  Partial-scaling
+# validation model for the unimolecular batch-fire path (plan Phase 1).
+#
+#     0  ->^k_birth  A       (zeroth-order immigration)
+#     A  ->^k_death  0       (first-order removal)
+#
+# The stationary distribution is exactly Poisson(lambda) with
+#     lambda = k_birth / k_death = 100,
+# so the mean and variance are both 100 (std = 10) in closed form — an
+# analytic first- AND second-moment oracle for the scaled path.  The only
+# scalable rule is the unimolecular `death` (reactant population n_r = N_A,
+# batch size K = floor(N_A / Nc)); `birth` is zeroth order and never
+# scaled.  The seed is the stationary mean, so the ensemble is at steady
+# state from t = 0.
+#
+# Oracle for the scaled (Nc > 0) path: the analytic Poisson moments, plus
+# nfa + BNG2 (ODE/SSA).  NFsim has no partial scaling and is NOT an oracle
+# for it.
+
+begin parameters
+    k_birth  100      # /s
+    k_death  1        # /s
+    A_init   100      # = k_birth/k_death (Poisson mean)
+end parameters
+
+begin molecule types
+    A()
+end molecule types
+
+begin seed species
+    A()   A_init
+end seed species
+
+begin observables
+    Molecules  A  A()
+end observables
+
+begin reaction rules
+    birth:  0 -> A()   k_birth
+    death:  A() -> 0   k_death  DeleteMolecules
+end reaction rules
+
+begin actions
+    simulate({method=>"nf",t_end=>10,n_steps=>100})
+end actions

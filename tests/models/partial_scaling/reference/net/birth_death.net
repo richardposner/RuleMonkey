@@ -1,0 +1,16 @@
+# Created by BioNetGen 2.9.3
+begin parameters
+    1 k_birth  100  # Constant
+    2 k_death  1  # Constant
+    3 A_init   100  # Constant
+end parameters
+begin species
+    1 A() A_init
+end species
+begin reactions
+    1 0 1 k_birth #birth
+    2 1 0 k_death #death
+end reactions
+begin groups
+    1 A                    1
+end groups

@@ -12,6 +12,8 @@
 //   set_block_same_complex_binding     — behavioral effect on a model where
 //                                         BSCB toggle changes equilibrium
 //   set_molecule_limit                 — caps add_molecules
+//   set_critical_population            — partial-scaling knob; large Nc
+//                                         stays byte-identical to exact
 
 #include "rulemonkey/simulator.hpp"
 
@@ -218,6 +220,42 @@ void test_set_molecule_limit(const std::string& xml) {
   sim_active.destroy_session();
 }
 
+// set_critical_population(Nc) selects the opt-in partial-scaling mode.
+// A large `Nc` yields K_r = 1 for every rule, i.e. the exact SSA — so a
+// run with a large `Nc` must be byte-identical to the `Nc`-unset run.
+// This invariant is the phase-0 "plumbing is inert" contract and it also
+// survives into phase 1 (large Nc ⇒ exact).  Negative path: setting Nc
+// during an active session throws.
+void test_set_critical_population(const std::string& xml) {
+  rulemonkey::RuleMonkeySimulator sim_exact(xml);
+  auto r_exact = sim_exact.run({0.0, 1.0, 2}, /*seed=*/1);
+
+  // Nc far above any reachable population ⇒ K_r = 1 everywhere ⇒ exact.
+  rulemonkey::RuleMonkeySimulator sim_nc(xml);
+  sim_nc.set_critical_population(1'000'000);
+  auto r_nc = sim_nc.run({0.0, 1.0, 2}, /*seed=*/1);
+
+  check(r_nc.observable_names == r_exact.observable_names,
+        "set_critical_population should not change observable schema");
+  check(r_nc.time == r_exact.time, "large-Nc run should share the exact run's time grid");
+  bool const trajectory_identical = r_nc.observable_data == r_exact.observable_data &&
+                                    r_nc.function_data == r_exact.function_data;
+  check(trajectory_identical,
+        "large-Nc run must be byte-identical to the exact run (plumbing inert)");
+
+  // Throws during active session.
+  rulemonkey::RuleMonkeySimulator sim_active(xml);
+  sim_active.initialize(/*seed=*/1);
+  bool threw = false;
+  try {
+    sim_active.set_critical_population(100);
+  } catch (const std::runtime_error&) {
+    threw = true;
+  }
+  check(threw, "set_critical_population should throw during active session");
+  sim_active.destroy_session();
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -236,6 +274,7 @@ int main(int argc, char* argv[]) {
     test_get_observable_values(xml);
     test_set_block_same_complex_binding(xml);
     test_set_molecule_limit(xml);
+    test_set_critical_population(xml);
   } catch (const std::exception& e) {
     std::fprintf(stderr, "EXCEPTION: %s\n", e.what());
     return 2;

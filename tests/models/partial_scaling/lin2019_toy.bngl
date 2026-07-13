@@ -1,0 +1,64 @@
+# Lin, Feng & Hlavacek toy model — J. Chem. Phys. 150, 244101 (2019),
+# Eq. 1 / Fig. 1.  Birth / dimerize / death.  The canonical partial-scaling
+# validation model (bimolecular association batch path, plan Phase 2).
+#
+#     0        ->^k_birth  X1        (zeroth-order injection)
+#     X1 + X1  ->^k_dim     X2        (second-order dimerization)
+#     X2       ->^k_death   0         (first-order removal)
+#
+# Intensive rate constants (paper): kappa1 = 3, kappa2 = 300, kappa3 = 1.5.
+# At system size Omega = 100 the stochastic constants are
+#     k_birth = kappa1 * Omega = 300
+#     k_dim   = kappa2 / Omega = 3.0   (BNG folds in the 1/2 homodimer
+#                                       statistical factor: net dimerize
+#                                       propensity = k_dim * N1*(N1-1)/2)
+#     k_death = kappa3 = 1.5
+# The seed is the deterministic steady state (so the ensemble sits at
+# steady state from t = 0):
+#     n1_ss = sqrt(kappa1/kappa2) = 0.1  -> X1 = round(n1_ss*Omega) = 10
+#     n2_ss = kappa2*n1_ss^2/(2*kappa3) = 1.0 -> X2 = round(n2_ss*Omega) = 100
+# Check: dN1/dt = k_birth - k_dim*N1^2 = 300 - 3.0*100 = 0;
+#        dN2/dt = 0.5*k_dim*N1^2 - k_death*N2 = 150 - 150 = 0.
+#
+# Parameters and initial condition match the `nfa` prototype's
+# paper_toy_model(omega=100) exactly, so RM's scaled path can be
+# z-tested against nfa directly.  Oracle for the scaled (Nc > 0) path is
+# nfa + BNG2 (ODE/SSA); NFsim has no partial scaling and is NOT an oracle
+# for it.
+
+begin parameters
+    Omega    100
+    kappa1   3
+    kappa2   300
+    kappa3   1.5
+    k_birth  kappa1*Omega       # 300
+    k_dim    kappa2/Omega       # 3.0
+    k_death  kappa3             # 1.5
+    X1_init  10
+    X2_init  100
+end parameters
+
+begin molecule types
+    X1()
+    X2()
+end molecule types
+
+begin seed species
+    X1()   X1_init
+    X2()   X2_init
+end seed species
+
+begin observables
+    Molecules  X1  X1()
+    Molecules  X2  X2()
+end observables
+
+begin reaction rules
+    birth:     0 -> X1()             k_birth
+    dimerize:  X1() + X1() -> X2()   k_dim
+    death:     X2() -> 0             k_death  DeleteMolecules
+end reaction rules
+
+begin actions
+    simulate({method=>"nf",t_end=>5,n_steps=>100})
+end actions

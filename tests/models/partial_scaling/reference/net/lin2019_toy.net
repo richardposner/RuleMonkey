@@ -1,0 +1,25 @@
+# Created by BioNetGen 2.9.3
+begin parameters
+    1 Omega    100  # Constant
+    2 kappa1   3  # Constant
+    3 kappa2   300  # Constant
+    4 kappa3   1.5  # Constant
+    5 k_birth  kappa1*Omega  # ConstantExpression
+    6 k_dim    kappa2/Omega  # ConstantExpression
+    7 k_death  kappa3  # ConstantExpression
+    8 X1_init  10  # Constant
+    9 X2_init  100  # Constant
+end parameters
+begin species
+    1 X1() X1_init
+    2 X2() X2_init
+end species
+begin reactions
+    1 0 1 k_birth #birth
+    2 1,1 2 0.5*k_dim #dimerize
+    3 2 0 k_death #death
+end reactions
+begin groups
+    1 X1                   1
+    2 X2                   2
+end groups

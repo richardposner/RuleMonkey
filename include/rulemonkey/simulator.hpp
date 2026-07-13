@@ -331,6 +331,20 @@ public:
   // Throws std::runtime_error if a session is currently active.
   void set_molecule_limit(int limit);
 
+  // Sets the partial-scaling critical population `Nc` for subsequent runs
+  // and future `initialize()` calls (instance-local, mirrors
+  // set_molecule_limit).
+  //
+  // IMPORTANT: this selects an APPROXIMATE acceleration mode.  When a
+  // rule's reactant population is large relative to `Nc`, the engine
+  // scales that rule's propensity down and fires it in batches (partial
+  // scaling; Lin, Feng & Hlavacek, J. Chem. Phys. 150, 244101, 2019).
+  // First moments stay unbiased; second-moment error is bounded and
+  // shrinks as `Nc` grows.  `Nc <= 0` (the default) disables it entirely
+  // and the run is the exact SSA.
+  // Throws std::runtime_error if a session is currently active.
+  void set_critical_population(int Nc);
+
   // When true, bimolecular rules only fire between molecules in different
   // complexes (equivalent to NFsim's -bscb flag).  Default: true (strict
   // BNGL semantics).
