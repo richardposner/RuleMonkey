@@ -3753,6 +3753,34 @@ struct Engine::Impl {
       }
     }
 
+    // Partial-scaling correctness gate (Phase 2 boundary).  A bond-changing
+    // scaled batch (bimolecular association / dissociation) drives run_ssa's
+    // affected-set complex-expansion, which is gated on
+    // any_needs_complex_expansion_.  That batched expansion is only correct once
+    // Phase 3 handles disjoint-pattern (needs_complex_expansion) rules: when the
+    // MODEL contains any such rule, an AddBond/DeleteBond batch that merges or
+    // splits complexes can leave a needs_complex_expansion rule's embedding
+    // counts stale relative to a full recompute (kBatchInvariant catches this on
+    // e.g. TLBR-rings).  Until Phase 3, withdraw batch eligibility from every
+    // bond-changing rule in such a model — they run exact (K=1).  Non-bonded
+    // unimolecular batching (Phase 1) is unaffected, and models without any
+    // disjoint-pattern rule (binding, homodimer, ring_closure_polymer,
+    // A_plus_B_rings) keep full bimolecular/dissociation batching.  Lifting this
+    // gate is the first Phase-3 step.
+    if (any_needs_complex_expansion_) {
+      for (size_t ri = 0; ri < rule_states.size(); ++ri) {
+        auto& rs = rule_states[ri];
+        if (!rs.ps_batchable)
+          continue;
+        for (auto& op : model.rules[ri].operations) {
+          if (op.type == OpType::AddBond || op.type == OpType::DeleteBond) {
+            rs.ps_batchable = false;
+            break;
+          }
+        }
+      }
+    }
+
     // Establish a clean baseline for the delta-updated total_propensity.
     // The per-rule rescans above already credited each rs.propensity to
     // total_propensity via set_rule_propensity, but a fresh sum here makes
