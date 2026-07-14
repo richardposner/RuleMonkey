@@ -1,0 +1,87 @@
+# Disjoint intramolecular ring closure within a finite A-B complex —
+# the Phase-3 counterpart of the TLBR ring-closure rule, but with a bounded
+# (non-gelling) reaction network so BNG2 can enumerate an exact oracle.
+#
+# Two bivalent molecules A(p,q), B(p,q).  A p-p bond joins them into a dimer;
+# a q-q bond then closes intramolecularly into a two-bond ring.  No free sites
+# remain once both bonds form and cross-linking is impossible (a dimer has no
+# free p), so the network is FINITE: exactly four complex species —
+#     A(p,q),  B(p,q),  A(p!1,q).B(p!1,q),  A(p!1,q!2).B(p!1,q!2).
+#
+#   bind:    A(p) + B(p)         ->^kf1  A(p!1).B(p!1)      (bimolecular assoc)
+#   unbind:  A(p!1).B(p!1)       ->^kr1  A(p) + B(p)        (dissociation)
+#   close:   A(q).B(q)           ->^kf2  A(q!1).B(q!1)      (DISJOINT ring
+#                                                            closure, needs
+#                                                            complex expansion)
+#   open:    A(q!1).B(q!1)       ->^kr2  A(q).B(q)          (ring opening — the
+#                                                            A-B pair stays
+#                                                            connected via the
+#                                                            p-bond)
+#
+# `close` is the Phase-3 disjoint multi-molecule ring closure (`A(q).B(q)` is a
+# disconnected reactant pattern → the two molecules must be in the SAME complex,
+# i.e. already joined by the p-bond).  `open` is the ring-opening reverse: it
+# breaks the q-bond but the A-B pair stays connected through the p-bond, so its
+# product is the connected `A(q).B(q)` (n_product_patterns == 1, DeleteBond that
+# keeps the complex whole).  Both fire only inside an existing A-B complex, so a
+# scaled batch of either exercises the same-complex within-batch interaction the
+# gate used to forbid.  `unbind`'s `+` product only separates a SINGLE-bonded
+# dimer (a closed ring stays connected through the q-bond), so its
+# product-molecularity check must run per sampled match in the batch.
+#
+# Well-mixed mass action.  Writing Af=Bf (free A/B), S (single p-bond dimer),
+# D (closed ring), with A_tot=B_tot: conservation Af + S + D = A_tot, and
+#   kf1*Af*Bf = kr1*S     (bind/unbind)
+#   kf2*S     = kr2*D     (close/open).
+# With A_tot=B_tot=600, kf1=0.01, kr1=2.0, kf2=1.0, kr2=1.0 the equilibrium is
+#   Af = Bf = S = D = 200.
+# The seed sits there, so the ensemble is stationary and any first-moment bias
+# in a scaled batch (bind / unbind / close / open) drifts the mean.
+#
+# Minimum reactant population at equilibrium is 200 for every rule (free A/B for
+# bind; S for unbind and close; D for open), so K = floor(200/Nc):
+# Nc=20 -> K=10, Nc=50 -> K=4, Nc=100 -> K=2.
+#
+# Oracle for the scaled (Nc > 0) path: the analytic equilibrium (all 200), the
+# exact-RM ensemble, and BNG2 (ODE/SSA over the finite network).  NFsim has no
+# partial scaling and is NOT an oracle for it.
+
+begin parameters
+    kf1     0.01
+    kr1     2.0
+    kf2     1.0
+    kr2     1.0
+    Af_ss   200      # free A at equilibrium (= free B)
+    Bf_ss   200
+    S_ss    200      # single p-bond dimers
+    D_ss    200      # closed rings (double bond)
+end parameters
+
+begin molecule types
+    A(p,q)
+    B(p,q)
+end molecule types
+
+begin seed species
+    A(p,q)                     Af_ss
+    B(p,q)                     Bf_ss
+    A(p!1,q).B(p!1,q)          S_ss
+    A(p!1,q!2).B(p!1,q!2)      D_ss
+end seed species
+
+begin observables
+    Molecules  Afree    A(p,q)
+    Molecules  Ssingle  A(p!1,q).B(p!1,q)
+    Molecules  Dring    A(p!1,q!2).B(p!1,q!2)
+end observables
+
+begin reaction rules
+    bind:    A(p) + B(p)          -> A(p!1).B(p!1)       kf1
+    unbind:  A(p!1).B(p!1)        -> A(p) + B(p)         kr1
+    close:   A(q).B(q)            -> A(q!1).B(q!1)       kf2
+    open:    A(q!1).B(q!1)        -> A(q).B(q)           kr2
+end reaction rules
+
+begin actions
+    simulate({method=>"nf",t_end=>10,n_steps=>100})
+end actions

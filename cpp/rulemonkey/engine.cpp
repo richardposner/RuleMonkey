@@ -223,7 +223,9 @@ public:
 
     mol.active = false;
     mol.comp_ids.clear();
-    free_mol_ids_.push_back(mol_id);
+    // Partial-scaling batch: park the freed id if a batch is in flight so it is
+    // not reused mid-batch (see defer_mol_frees_).  Otherwise reuse immediately.
+    (defer_mol_frees_ ? deferred_free_mol_ids_ : free_mol_ids_).push_back(mol_id);
   }
 
   void set_state(int comp_id, int new_state) {
@@ -690,7 +692,31 @@ private:
   std::vector<int> free_mol_ids_;
   std::vector<int> free_comp_ids_;
 
+  // Partial-scaling batch support (plan §5).  A scaled batch fires K rules with a
+  // single deferred incremental_update, so per-molecule rule state (mol_data,
+  // keyed by molecule id) is FROZEN across the batch.  If a molecule id freed by
+  // one firing were reused by a later AddMolecule in the same batch, the reused
+  // slot would carry the deleted molecule's stale mol_data / type into the single
+  // update — which the affected-set + type-dispatch machinery cannot reconcile
+  // (the slot's type has changed, so the deleted molecule's rules may never be
+  // marked "needed", and a re-deleted reused slot can be stranded out of the
+  // affected set).  While `defer_mol_frees_` is set, delete_molecule parks freed
+  // ids here instead of the reuse list, so AddMolecule always draws fresh ids
+  // within a batch; flush_deferred_mol_frees() returns them for reuse AFTER the
+  // batch's incremental_update has flushed every deleted slot to zero.  Inert
+  // (never set) on the exact Nc-off path, so molecule-id allocation there is
+  // byte-identical.
+  bool defer_mol_frees_ = false;
+  std::vector<int> deferred_free_mol_ids_;
+
 public:
+  void set_defer_mol_frees(bool d) { defer_mol_frees_ = d; }
+  void flush_deferred_mol_frees() {
+    for (int const id : deferred_free_mol_ids_)
+      free_mol_ids_.push_back(id);
+    deferred_free_mol_ids_.clear();
+  }
+
   // Cx IDs that died (via merge or last-member delete) since the
   // observer (species-obs tracker) last consumed this list.  Cheap
   // side-channel so flush can iterate only the handful of dead cxs
@@ -7947,11 +7973,20 @@ struct Engine::Impl {
         int const K = rule_batch_size(rule_states[selected]);
         if (K > 1) {
           auto tb0 = std::chrono::steady_clock::now();
+          // Park molecule ids freed during the batch so no AddMolecule reuses a
+          // slot mid-batch (its frozen mol_data / type would leak into the single
+          // deferred incremental_update — see AgentPool::defer_mol_frees_).
+          // Flushed for reuse only after incremental_update has zeroed every
+          // deleted slot.  Reset on EVERY exit path so the exact single-fire path
+          // that follows never inherits the deferral.
+          pool.set_defer_mol_frees(true);
           auto batch = fire_rule_batch(selected, K);
           if (batch.fired == 0) {
             // No firing landed (every sampled seed was consumed within the
             // batch — impossible for the non-bonded Phase-1 set).  Treat as a
             // null event and re-draw next iteration.
+            pool.set_defer_mol_frees(false);
+            pool.flush_deferred_mol_frees();
             timing_fire +=
                 std::chrono::duration<double>(std::chrono::steady_clock::now() - tb0).count();
             ++null_event_count;
@@ -7985,8 +8020,11 @@ struct Engine::Impl {
           ps_reaction_firings += batch.fired;
           auto tb1 = std::chrono::steady_clock::now();
 
-          if (molecule_limit > 0 && pool.active_molecule_count() > molecule_limit)
+          if (molecule_limit > 0 && pool.active_molecule_count() > molecule_limit) {
+            pool.set_defer_mol_frees(false);
+            pool.flush_deferred_mol_frees();
             break;
+          }
 
           if (use_incremental_obs)
             incremental_update_observables(affected);
@@ -7995,6 +8033,11 @@ struct Engine::Impl {
           auto tb2 = std::chrono::steady_clock::now();
 
           incremental_update(affected);
+
+          // Every deleted slot is now flushed to zero, so parked ids are safe to
+          // reuse in later events.
+          pool.set_defer_mol_frees(false);
+          pool.flush_deferred_mol_frees();
 
           if constexpr (kBatchInvariant)
             verify_batch_consistency(selected, K, batch.fired);

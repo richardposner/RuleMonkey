@@ -1,0 +1,59 @@
+# Intramolecular ring closure / opening on a single molecule —
+# A(x,y) <-> A(x!1,y!1).  Partial-scaling validation for the Phase-3
+# *unimolecular intramolecular ring closure* (single-molecule AddBond, x bonded
+# to y on the SAME molecule) and *ring opening* (single-molecule DeleteBond that
+# keeps the molecule, n_product_patterns == 1) batch-fire paths.
+#
+#     A(x,y)       ->^kclose  A(x!1,y!1)   (intramolecular self-bond, AddBond)
+#     A(x!1,y!1)   ->^kopen   A(x,y)       (ring opening, DeleteBond)
+#
+# This is a two-state first-order reversible system (open monomer <-> closed
+# monomer); every molecule is its own singleton complex, so the K batched
+# firings are molecule-disjoint with NO same-complex interaction — the cleanest
+# possible intramolecular test.  Well-mixed mass action:
+#     d[closed]/dt = kclose*[open] - kopen*[closed] = 0
+#       =>  [closed]/[open] = kclose/kopen.
+# With kclose = kopen = 1 and A_tot = 1000 the equilibrium is
+# [open] = [closed] = 500.  The seed sits at that equilibrium, so the ensemble
+# is stationary from t = 0 and any first-moment bias in either scaled batch path
+# (the AddBond ring closure or the DeleteBond ring opening) shows up as a drift
+# of the observable mean.
+#
+# Minimum reactant population at equilibrium = 500 (open A for the closure /
+# closed A for the opening), so a critical size Nc gives K = floor(500/Nc):
+# Nc=50 -> K=10, Nc=100 -> K=5, Nc=200 -> K=2 — real batching with an analytic
+# first moment of exactly 500.
+#
+# Oracle for the scaled (Nc > 0) path: the analytic equilibrium (500/500), the
+# exact-RM ensemble, and BNG2 (ODE/SSA).  NFsim has no partial scaling and is
+# NOT an oracle for it.
+
+begin parameters
+    kclose     1.0
+    kopen      1.0
+    Aopen_ss   500      # open monomers at equilibrium
+    Aclosed_ss 500      # closed (self-looped) monomers at equilibrium
+end parameters
+
+begin molecule types
+    A(x,y)
+end molecule types
+
+begin seed species
+    A(x,y)        Aopen_ss
+    A(x!1,y!1)    Aclosed_ss
+end seed species
+
+begin observables
+    Molecules  Aopen    A(x,y)
+    Molecules  Aclosed  A(x!1,y!1)
+end observables
+
+begin reaction rules
+    close:  A(x,y)     -> A(x!1,y!1)  kclose
+    open:   A(x!1,y!1) -> A(x,y)      kopen
+end reaction rules
+
+begin actions
+    simulate({method=>"nf",t_end=>10,n_steps=>100})
+end actions
