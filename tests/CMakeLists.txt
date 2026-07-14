@@ -86,6 +86,8 @@ add_test(
         ${_rulemonkey_test_dir}/models/partial_scaling/xml/birth_death.xml
         ${_rulemonkey_test_dir}/models/partial_scaling/xml/psa_pure_death.xml
         ${_rulemonkey_test_dir}/models/partial_scaling/xml/binding.xml
+        ${_rulemonkey_test_dir}/models/partial_scaling/xml/intra_ring.xml
+        ${_rulemonkey_test_dir}/models/partial_scaling/xml/ab_ring.xml
 )
 
 # Direct unit tests for RuleMonkey's expression layer (issue #6): the

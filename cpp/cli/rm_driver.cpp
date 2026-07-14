@@ -262,6 +262,19 @@ int main(int argc, char* argv[]) {
       std::cout << "\n";
     }
 
+    // Partial-scaling telemetry to stderr (only when scaling was requested).
+    // ps_reaction_firings > event_count is positive evidence that batching
+    // actually happened (a scaled rule that stays K=1 fires once per step); the
+    // per-rule time-averaged multipliers show which rules batched.  Off by
+    // default so exact-path stderr is unchanged.
+    if (nc > 0) {
+      std::cerr << "[ps] nc=" << nc << " firings=" << result.ps_reaction_firings
+                << " steps=" << result.event_count << " mult=";
+      for (size_t i = 0; i < result.ps_multipliers.size(); ++i)
+        std::cerr << (i != 0 ? "," : "") << std::setprecision(4) << result.ps_multipliers[i];
+      std::cerr << "\n";
+    }
+
     // CPU time to stderr
     std::cerr << cpu_s << "\n";
 

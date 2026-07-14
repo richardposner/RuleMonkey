@@ -182,6 +182,8 @@ MODEL_SPECS = {
     "birth_death": (10.0, 100),
     "binding": (10.0, 100),
     "homodimer": (10.0, 100),
+    "intra_ring": (10.0, 100),  # Phase 3: uni ring close/open, analytic 500/500
+    "ab_ring": (10.0, 100),  # Phase 3: disjoint ring close/open + assoc/dissoc, all=200
 }
 
 

@@ -1,0 +1,19 @@
+# Created by BioNetGen 2.9.3
+begin parameters
+    1 kclose      1.0  # Constant
+    2 kopen       1.0  # Constant
+    3 Aopen_ss    500  # Constant
+    4 Aclosed_ss  500  # Constant
+end parameters
+begin species
+    1 A(x,y) Aopen_ss
+    2 A(x!1,y!1) Aclosed_ss
+end species
+begin reactions
+    1 1 2 kclose #close
+    2 2 1 kopen #open
+end reactions
+begin groups
+    1 Aopen                1
+    2 Aclosed              2
+end groups

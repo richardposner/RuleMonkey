@@ -213,18 +213,137 @@ void test_binding_scaled(const std::string& xml) {
             std::to_string(scaled_mean) + " exact=" + std::to_string(exact_mean) + ")");
 }
 
+// intra_ring: A(x,y) <-> A(x!1,y!1).  Unimolecular intramolecular ring closure
+// (kind 1, AddBond) + ring opening (kind 4, DeleteBond n_product==1) on a single
+// molecule.  Every molecule is its own singleton complex, so the K batched
+// firings are molecule-disjoint — the cleanest Phase-3 test.  Reversible
+// two-state system at its analytic equilibrium (Aopen = Aclosed = 500), so the
+// ensemble is stationary and any first-moment bias in either scaled batch path
+// drifts the mean.
+void test_intra_ring_scaled(const std::string& xml) {
+  // Kept lean: the debug kBatchInvariant runs a full O(rules*mols) recompute
+  // after every batch, so a short window / modest ensemble keeps this a CI smoke
+  // check (the tight N=300 z-tests live in dev/psa_harness/validate_psa.py).
+  constexpr int kNc = 50; // K ~ floor(500/50) = 10 for both close and open
+  constexpr int kReps = 40;
+  constexpr int kAclosedObs = 1; // observables: {Aopen, Aclosed}
+
+  double sum = 0.0;
+  int64_t total_firings = 0, total_steps = 0;
+  std::vector<double> mult;
+  for (int s = 0; s < kReps; ++s) {
+    rulemonkey::RuleMonkeySimulator sim(xml);
+    sim.set_critical_population(kNc);
+    auto r = sim.run({0.0, 3.0, 30}, /*seed=*/9000 + s);
+    sum += final_obs(r, kAclosedObs);
+    total_firings += r.ps_reaction_firings;
+    total_steps += r.event_count;
+    mult = r.ps_multipliers;
+  }
+  double const scaled_mean = sum / kReps;
+
+  check(total_firings > total_steps,
+        "intra_ring scaled run must fire more reactions than SSA steps (ring "
+        "close/open batching active)");
+  check(std::fabs(scaled_mean - 500.0) < 30.0,
+        "intra_ring scaled ensemble mean (Aclosed) must stay near the analytic "
+        "equilibrium 500 (got " +
+            std::to_string(scaled_mean) + ")");
+  // Telemetry: BOTH rules batch (close = kind 1 AddBond, open = kind 4
+  // DeleteBond) — positive proof the ring-close/open kinds are admitted.
+  check(mult.size() == 2, "intra_ring should expose 2 per-rule multipliers");
+  if (mult.size() == 2)
+    check(mult[0] > 1.2 && mult[1] > 1.2,
+          "both intra_ring rules (close + open) must carry a batch multiplier > 1 "
+          "(got " +
+              std::to_string(mult[0]) + ", " + std::to_string(mult[1]) + ")");
+
+  double exact_sum = 0.0;
+  for (int s = 0; s < kReps; ++s) {
+    rulemonkey::RuleMonkeySimulator sim(xml);
+    auto r = sim.run({0.0, 3.0, 30}, /*seed=*/9000 + s);
+    exact_sum += final_obs(r, kAclosedObs);
+  }
+  double const exact_mean = exact_sum / kReps;
+  check(std::fabs(scaled_mean - exact_mean) < 30.0,
+        "intra_ring scaled and exact ensemble means must agree (scaled=" +
+            std::to_string(scaled_mean) + " exact=" + std::to_string(exact_mean) + ")");
+}
+
+// ab_ring: finite A-B double-bond network.  Exercises the DISJOINT
+// multi-molecule ring closure (kind 3, close: A(q).B(q)->A(q!1).B(q!1), a
+// needs_complex_expansion rule) + ring opening (kind 4, open) + bimolecular
+// association (bind) + dissociation (unbind).  `close`/`open` fire inside an
+// existing A-B complex, so a scaled batch exercises the same-complex within-batch
+// interaction the Phase-2 gate used to forbid.  Analytic equilibrium: every
+// observable = 200, ensemble stationary, so a biased scaled batch drifts the
+// mean.
+void test_ab_ring_scaled(const std::string& xml) {
+  // Kept lean (see intra_ring): the kind-3 ncx complex-expansion makes each
+  // scaled ab_ring step the most expensive in the debug kBatchInvariant, so use
+  // a short window / modest ensemble.  Analytic-vs-scaled precision is checked
+  // at N=300 in validate_psa.py; here we smoke-test batching + no gross bias.
+  constexpr int kNc = 40; // K ~ floor(200/40) = 5 for every rule
+  constexpr int kReps = 40;
+  constexpr int kDringObs = 2; // observables: {Afree, Ssingle, Dring}
+
+  double sum = 0.0;
+  int64_t total_firings = 0, total_steps = 0;
+  std::vector<double> mult;
+  for (int s = 0; s < kReps; ++s) {
+    rulemonkey::RuleMonkeySimulator sim(xml);
+    sim.set_critical_population(kNc);
+    auto r = sim.run({0.0, 3.0, 30}, /*seed=*/11000 + s);
+    sum += final_obs(r, kDringObs);
+    total_firings += r.ps_reaction_firings;
+    total_steps += r.event_count;
+    mult = r.ps_multipliers;
+  }
+  double const scaled_mean = sum / kReps;
+
+  check(total_firings > total_steps,
+        "ab_ring scaled run must fire more reactions than SSA steps (disjoint "
+        "ring-close batching active)");
+  check(std::fabs(scaled_mean - 200.0) < 25.0,
+        "ab_ring scaled ensemble mean (Dring) must stay near the analytic "
+        "equilibrium 200 (got " +
+            std::to_string(scaled_mean) + ")");
+  // Telemetry: all four rules batch (bind assoc, unbind dissoc, close = kind 3
+  // disjoint ring close, open = kind 4).  The `close` multiplier > 1 is the
+  // positive proof the disjoint-pattern (needs_complex_expansion) ring-closure
+  // rule is admitted to batching.
+  check(mult.size() == 4, "ab_ring should expose 4 per-rule multipliers");
+  if (mult.size() == 4)
+    for (size_t i = 0; i < mult.size(); ++i)
+      check(mult[i] > 1.1, "every ab_ring rule must carry a batch multiplier > 1 (rule " +
+                               std::to_string(i) + " got " + std::to_string(mult[i]) + ")");
+
+  double exact_sum = 0.0;
+  for (int s = 0; s < kReps; ++s) {
+    rulemonkey::RuleMonkeySimulator sim(xml);
+    auto r = sim.run({0.0, 3.0, 30}, /*seed=*/11000 + s);
+    exact_sum += final_obs(r, kDringObs);
+  }
+  double const exact_mean = exact_sum / kReps;
+  check(std::fabs(scaled_mean - exact_mean) < 25.0,
+        "ab_ring scaled and exact ensemble means must agree (scaled=" +
+            std::to_string(scaled_mean) + " exact=" + std::to_string(exact_mean) + ")");
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
-  if (argc < 4) {
-    std::fprintf(stderr,
-                 "Usage: psa_batch_test <birth_death.xml> <psa_pure_death.xml> <binding.xml>\n");
+  if (argc < 6) {
+    std::fprintf(stderr, "Usage: psa_batch_test <birth_death.xml> <psa_pure_death.xml> "
+                         "<binding.xml> <intra_ring.xml> <ab_ring.xml>\n");
     return 2;
   }
   try {
     test_birth_death_scaled(argv[1]);
     test_nc_too_small_guard(argv[2]);
     test_binding_scaled(argv[3]);
+    test_intra_ring_scaled(argv[4]);
+    test_ab_ring_scaled(argv[5]);
   } catch (const std::exception& e) {
     std::fprintf(stderr, "EXCEPTION: %s\n", e.what());
     return 2;

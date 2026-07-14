@@ -1,0 +1,28 @@
+# Created by BioNetGen 2.9.3
+begin parameters
+    1 kf1      0.01  # Constant
+    2 kr1      2.0  # Constant
+    3 kf2      1.0  # Constant
+    4 kr2      1.0  # Constant
+    5 Af_ss    200  # Constant
+    6 Bf_ss    200  # Constant
+    7 S_ss     200  # Constant
+    8 D_ss     200  # Constant
+end parameters
+begin species
+    1 A(p,q) Af_ss
+    2 B(p,q) Bf_ss
+    3 A(p!1,q).B(p!1,q) S_ss
+    4 A(p!1,q!2).B(p!1,q!2) D_ss
+end species
+begin reactions
+    1 1,2 3 kf1 #bind
+    2 3 1,2 kr1 #unbind
+    3 3 4 kf2 #close
+    4 4 3 kr2 #open
+end reactions
+begin groups
+    1 Afree                1
+    2 Ssingle              3
+    3 Dring                4
+end groups

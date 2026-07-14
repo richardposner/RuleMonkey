@@ -3671,8 +3671,21 @@ struct Engine::Impl {
       //        connected (possibly multi-molecule) complex, sampled by the
       //        unimolecular seed+BFS path; the product-molecularity /
       //        ensure_connected checks run per sampled match inside the batch.
-      // Local/DOR2, total-rate, MM, constrained, and disjoint multi-molecule
-      // (complex-expansion) rules stay K_r=1 until Phase 3.
+      // Phase 3 additionally admits the intramolecular / ring / complex kinds:
+      //   (iii) ring closure — a molecularity-1 rule that adds a bond, breaking
+      //         none, closing a ring on one molecule (A(x,y)->A(x!1,y!1), kind
+      //         1), across a connected multi-molecule reactant (kind 2), or
+      //         across a DISJOINT multi-molecule reactant (kind 3, the
+      //         intramolecular ring closure, needs_complex_expansion — the one
+      //         kind gated on rate_ok instead of conn_ok);
+      //   (iv)  ring opening — a molecularity-1 rule that breaks a bond but
+      //         leaves ONE product pattern (n_product_patterns==1), i.e. the
+      //         complex stays connected through another path; the ensureConnected
+      //         check runs per sampled match inside the batch (kind 4);
+      //   (v)   bimolecular association with a multi-molecule reactant — a
+      //         connected complex + a free molecule (kind 5, folded into is_bimol
+      //         by relaxing its molecules.size()==2 restriction).
+      // Local/DOR2, total-rate, MM, and constrained rules stay K_r=1.
       //
       // MUST be set before rescan_all_molecules_for_rule below: the rescan
       // writes the rule's initial propensity through set_rule_propensity,
@@ -3683,9 +3696,14 @@ struct Engine::Impl {
       // the static rule.rate_law.is_local (rs.has_local_rates is only set
       // inside the rescan, so we cannot read it yet).
       {
-        bool const common_ok = !rs.needs_complex_expansion && !rule.rate_law.is_local &&
-                               !rule.rate_law.is_total_rate &&
-                               (rule.rate_law.type != RateLawType::MM) && rule.constraints.empty();
+        // rate_ok: rate-law / constraint gate common to every batchable kind.
+        // conn_ok additionally requires a connected (non-disjoint) reactant
+        // pattern — the kinds whose batch semantics were validated only for
+        // connected/single-molecule reactants keep it; the ring-closure kinds
+        // (which include the disjoint intramolecular case) relax to rate_ok.
+        bool const rate_ok = !rule.rate_law.is_local && !rule.rate_law.is_total_rate &&
+                             (rule.rate_law.type != RateLawType::MM) && rule.constraints.empty();
+        bool const conn_ok = rate_ok && !rs.needs_complex_expansion;
 
         bool has_add_bond = false, has_del_bond = false;
         for (auto& op : rule.operations) {
@@ -3696,7 +3714,7 @@ struct Engine::Impl {
         }
 
         bool batchable = false;
-        if (common_ok) {
+        if (conn_ok) {
           // Phase-1 unimolecular: single-molecule reactant, no bond ops.
           bool const is_uni_nonbond = (rule.molecularity == 1) &&
                                       (rule.reactant_pattern.molecules.size() == 1) &&
@@ -3705,12 +3723,44 @@ struct Engine::Impl {
           // pattern.  A bond-swapping rule (also adds a bond) is deferred.
           bool const is_dissociation = (rule.molecularity == 1) && has_del_bond && !has_add_bond &&
                                        (rule.n_product_patterns > 1);
-          // Bimolecular association: two single-molecule reactant patterns,
-          // no bond breaking (bond-forming AddBond is allowed, as is the
-          // no-bond homodimer reaction path).
-          bool const is_bimol = (rule.molecularity == 2) &&
-                                (rule.reactant_pattern.molecules.size() == 2) && !has_del_bond;
-          batchable = is_uni_nonbond || is_dissociation || is_bimol;
+          // Bimolecular association (Phase 2 + Phase-3 kind 5): two reactant
+          // patterns, no bond breaking (bond-forming AddBond allowed, as is the
+          // no-bond homodimer reaction path).  Phase 2 admitted two
+          // single-molecule reactants; Phase-3 kind 5 relaxes the
+          // molecules.size()==2 restriction so a reactant may be a connected
+          // multi-molecule complex (a complex + a free molecule, e.g. TCR/ERK
+          // receptor assembly).  select_reactants' resolve_pattern_context fills
+          // match.mol_ids for EVERY matched molecule of the complex reactant, so
+          // the consumed-mol guard in fire_rule_batch rejects any later match
+          // that reuses one — two firings never react the same site.  The
+          // disjoint-complex-reactant case (needs_complex_expansion on the
+          // A-side pattern) stays out via conn_ok (kept conservative).
+          bool const is_bimol = (rule.molecularity == 2) && !has_del_bond;
+          // Phase-3 kind 4 — ring opening: molecularity-1, breaks a bond, adds
+          // none, and the product stays a single connected pattern
+          // (n_product_patterns==1).  passes_bond_separation_checks enforces the
+          // ensureConnected constraint per sampled match in the batch (the two
+          // endpoints must remain joined through another path).  Covers both the
+          // single-molecule self-bond open (A(x!1,y!1)->A(x,y)) and the connected
+          // multi-molecule open (A(q!1).B(q!1)->A(q).B(q), still joined by p).
+          bool const is_ringopen = (rule.molecularity == 1) && has_del_bond && !has_add_bond &&
+                                   (rule.n_product_patterns == 1);
+          batchable = is_uni_nonbond || is_dissociation || is_bimol || is_ringopen;
+        }
+        if (rate_ok) {
+          // Phase-3 kinds 1/2/3 — ring closure: molecularity-1, adds a bond,
+          // breaks none.  Covers the single-molecule self-bond (kind 1), a
+          // connected multi-molecule reactant (kind 2), and a disjoint
+          // multi-molecule reactant (kind 3 = the intramolecular ring closure,
+          // needs_complex_expansion — the reason this kind relaxes to rate_ok
+          // rather than conn_ok).  run_ssa's affected-set complex-expansion
+          // (gated on any_needs_complex_expansion_ && bond_changed) recomputes
+          // the ncx rule's embedding counts after the batch; kBatchInvariant
+          // verifies it.  A batch is molecule-disjoint (the consumed-mol guard
+          // in fire_rule_batch rejects a match reusing any molecule of an
+          // earlier firing), so no two firings touch the same reacting site.
+          bool const is_ringclose = (rule.molecularity == 1) && has_add_bond && !has_del_bond;
+          batchable = batchable || is_ringclose;
         }
         rs.ps_batchable = batchable;
       }
@@ -3779,33 +3829,18 @@ struct Engine::Impl {
       }
     }
 
-    // Partial-scaling correctness gate (Phase 2 boundary).  A bond-changing
-    // scaled batch (bimolecular association / dissociation) drives run_ssa's
-    // affected-set complex-expansion, which is gated on
-    // any_needs_complex_expansion_.  That batched expansion is only correct once
-    // Phase 3 handles disjoint-pattern (needs_complex_expansion) rules: when the
-    // MODEL contains any such rule, an AddBond/DeleteBond batch that merges or
-    // splits complexes can leave a needs_complex_expansion rule's embedding
-    // counts stale relative to a full recompute (kBatchInvariant catches this on
-    // e.g. TLBR-rings).  Until Phase 3, withdraw batch eligibility from every
-    // bond-changing rule in such a model — they run exact (K=1).  Non-bonded
-    // unimolecular batching (Phase 1) is unaffected, and models without any
-    // disjoint-pattern rule (binding, homodimer, ring_closure_polymer,
-    // A_plus_B_rings) keep full bimolecular/dissociation batching.  Lifting this
-    // gate is the first Phase-3 step.
-    if (any_needs_complex_expansion_) {
-      for (size_t ri = 0; ri < rule_states.size(); ++ri) {
-        auto& rs = rule_states[ri];
-        if (!rs.ps_batchable)
-          continue;
-        for (auto& op : model.rules[ri].operations) {
-          if (op.type == OpType::AddBond || op.type == OpType::DeleteBond) {
-            rs.ps_batchable = false;
-            break;
-          }
-        }
-      }
-    }
+    // Phase-3 note: the Phase-2 correctness gate that lived here withdrew batch
+    // eligibility from every bond-changing rule whenever the MODEL contained any
+    // disjoint-pattern (needs_complex_expansion) rule.  It was proven
+    // over-conservative — the batched affected-set complex-expansion in run_ssa
+    // (gated on any_needs_complex_expansion_ && bond_changed) is already correct
+    // (a full t_end=1000 TLBR-rings run of 1825 bond-changing batches trips zero
+    // kBatchInvariant aborts).  The Phase-2 "divergence" it was patching was a
+    // separate molecule-deletion slot-reuse bug (now fixed by
+    // AgentPool::defer_mol_frees_).  The gate is lifted here: bond-changing
+    // assoc / dissociation / ring-close / ring-open batches run on ncx models
+    // too, and the ncx rules themselves become batchable via the ps_batchable
+    // predicates above.  corpus_invariant_sweep.py stays 0/180 under --nc.
 
     // Establish a clean baseline for the delta-updated total_propensity.
     // The per-rule rescans above already credited each rs.propensity to
