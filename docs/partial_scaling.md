@@ -62,14 +62,13 @@ positive signal that batching happened.
 
 ## What it buys
 
-Partial scaling reliably reduces the **SSA step count** — each batched step does
-the work of `K` reactions under one update. It does **not** reduce the *total*
-reaction work: the batched `incremental_update` runs over the union of all `K`
-firings' affected molecules, so batching **repackages** the per-reaction update
-cost rather than removing it. The wall-clock win is therefore the amortized
-per-*event* fixed cost (rule selection, RNG, epoch bookkeeping) spread over `K`
-firings — real, but modest on RuleMonkey's already-optimized C++ engine, and
-model-dependent.
+Partial scaling reduces the **SSA step count**, not the number of reactions. The
+same reactions fire either way; a batch just applies `K` of them under one
+bookkeeping update. So it amortizes the per-*step* overhead (rule selection,
+propensity bookkeeping) but not the per-*reaction* work (applying each reaction
+and updating its match counts). On RuleMonkey's C++ engine the per-reaction work
+dominates, so **the step-count reduction does not translate into a wall-clock
+speedup.**
 
 Measured on the RuleMonkey benchmark models at an aggressive critical
 population (`Nc = 5`; `Nc = 10` for the two ~500-copy ring toys), 5 reps each,
@@ -88,22 +87,10 @@ machine load):
 | `egfr_net`    |               9.9× |        1.01× |
 | `birth_death` |               1.9× |        1.04× |
 
-The pattern: **large step-count reduction, roughly wall-neutral (0.85–1.21×).**
-Models with many cheap rules (e.g. `tcr`) benefit most from the fixed-cost
-amortization; complex-heavy models with large per-reaction updates (e.g. `lat`,
-`machine`) see the update work dominate, so their wall time is nearly flat — and
-can even dip *below* 1× at moderate `Nc`, where the bigger union update outweighs
-the fixed-cost saving. The diagnostic is how much a batched step costs versus the
-firings it replaces: on `tcr` at `Nc=5` a batched step costs ~23× an exact step
-while doing the work of ~28 firings, and that gap is the fixed-cost saving you
-feel as the 1.21× speedup; on `machine` a batched step costs ~90× for ~96
-firings — essentially all repackaged, hence ~1.00×.
-
-> The Python `nfa` prototype this feature is ported from shows a *large*
-> wall-clock speedup, because an interpreted engine's per-event fixed cost is
-> enormous. RuleMonkey has already minimized that cost, so on RuleMonkey the
-> headline payoff is step-count reduction (and the foundation it lays for
-> future population-scaling work), not raw wall time.
+Wall speedup ranges **0.85–1.21×** and can fall below 1× (at moderate `Nc` the
+larger batched update can cost more than the per-step overhead it saves). Treat
+partial scaling as an approximation / step-count tool, **not** as a way to make
+RuleMonkey run faster.
 
 ## Accuracy: what you trade away
 

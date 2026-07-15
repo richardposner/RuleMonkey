@@ -14,12 +14,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   critical population `N` fires a batch of `K = ⌈population / N⌉` reactions under
   a single incremental update ("Level-A" particle batching), with its propensity
   scaled by `1/K` so the total propensity and time step stay consistent. This
-  reduces the SSA **step count** substantially (up to ~90× on large-population
-  models at aggressive `N`); wall-clock speedup is real but modest (≈1.05–1.5×)
-  and model-dependent, because the batched update repackages — rather than
-  removes — the per-reaction work, leaving only the per-event fixed cost to
-  amortize. **Off by default** (`N <= 0`): an unset critical population runs the
-  exact SSA, bit-for-bit identical to a build without the feature.
+  reduces the SSA **step count** substantially (up to ~350× on large-population
+  models at aggressive `N`) but does **not** speed RuleMonkey up: the same
+  reactions fire, and per-reaction work dominates, so wall-clock is roughly
+  neutral (measured 0.85–1.21×, occasionally below 1×). It is a step-count /
+  approximation tool, not a performance feature. **Off by default** (`N <= 0`):
+  an unset critical population runs the exact SSA, bit-for-bit identical to a
+  build without the feature.
 
   The mode is **approximate**: ensemble first moments (means) stay unbiased, but
   variance is inflated by `≈ C/N`, shrinking as `N` grows. It is not an oracle
