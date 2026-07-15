@@ -166,8 +166,12 @@ The runtime severity model is two-level:
 ### Functional surface
 
 - `set_param`, `clear_param_overrides`, `set_molecule_limit`,
-  `set_block_same_complex_binding` — applied at the next `run()` /
-  `initialize()` (throw if a session is currently active).
+  `set_critical_population`, `set_block_same_complex_binding` — applied
+  at the next `run()` / `initialize()` (throw if a session is currently
+  active). `set_critical_population(N)` enables opt-in, **approximate**
+  [partial scaling](partial_scaling.md) (`N <= 0`, the default, keeps the
+  exact SSA); it is the only one of these that changes results
+  approximately rather than exactly.
 - `save_state(path)` / `load_state(path)` — full pool, RNG, and
   bookkeeping snapshot. The XML used at `load_state` time must match
   the one used at `save_state` time.

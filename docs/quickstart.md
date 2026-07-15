@@ -40,6 +40,10 @@ build/release/rm_driver my_model.xml <t_end> <n_steps> [seed]
   `t_end`).
 - `seed` — optional uint64 RNG seed (default 42).
 
+Optional flags include `--nc <N>` for opt-in [partial
+scaling](partial_scaling.md) (approximate acceleration; off by
+default) — see the subsection below.
+
 `stdout` is `.gdat`-format trajectory data;  `stderr` is the wall-
 clock CPU time in seconds.  See [`gdat_format.md`](gdat_format.md)
 for the output spec.
@@ -66,6 +70,20 @@ state file cannot accidentally be loaded against the wrong XML.
 build/release/rm_driver model.xml 100 100 --save-state ckpt.bin
 build/release/rm_driver model.xml 200 100 --load-state ckpt.bin --t-start 100
 ```
+
+### Partial scaling (approximate acceleration)
+
+`--nc <N>` turns on an **opt-in, approximate** mode that fires reactions
+in batches to cut the SSA step count, at the cost of inflated ensemble
+variance (means stay unbiased). It is **off by default**; an unset `N`
+runs the exact SSA. Smaller `N` batches more aggressively.
+
+```bash
+build/release/rm_driver model.xml 10 100 7 --nc 50 > traj.gdat
+```
+
+See [`partial_scaling.md`](partial_scaling.md) for what it trades away,
+how to pick `N`, and the `Nc`-too-small guard.
 
 ## 4. Read the output
 

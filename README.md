@@ -217,6 +217,10 @@ CMake snippets for both consumption modes).
 - [`docs/timing_comparison.md`](docs/timing_comparison.md) — a
   173-model RM-vs-NFsim wall-time comparison with a "where does
   each engine win?" breakdown.
+- [`docs/partial_scaling.md`](docs/partial_scaling.md) — the opt-in,
+  approximate `--nc` / `set_critical_population` acceleration mode:
+  what it does, what accuracy it trades away, how to pick `Nc`, and
+  the `Nc`-too-small guard.
 - [`docs/internals.md`](docs/internals.md) — engine-internals reading
   guide for contributors about to modify `cpp/rulemonkey/engine.cpp`:
   SSA loop, pattern matching layers, complex tracking, the

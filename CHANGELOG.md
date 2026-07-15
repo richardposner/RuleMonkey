@@ -5,6 +5,32 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Partial scaling — opt-in, approximate acceleration** (`--nc <N>` /
+  `set_critical_population(N)`). A rule whose reactant population exceeds the
+  critical population `N` fires a batch of `K = ⌈population / N⌉` reactions under
+  a single incremental update ("Level-A" particle batching), with its propensity
+  scaled by `1/K` so the total propensity and time step stay consistent. This
+  reduces the SSA **step count** substantially (up to ~90× on large-population
+  models at aggressive `N`); wall-clock speedup is real but modest (≈1.05–1.5×)
+  and model-dependent, because the batched update repackages — rather than
+  removes — the per-reaction work, leaving only the per-event fixed cost to
+  amortize. **Off by default** (`N <= 0`): an unset critical population runs the
+  exact SSA, bit-for-bit identical to a build without the feature.
+
+  The mode is **approximate**: ensemble first moments (means) stay unbiased, but
+  variance is inflated by `≈ C/N`, shrinking as `N` grows. It is not an oracle
+  for NFsim parity (NFsim does not implement this method); the scaled path is
+  validated against exact RuleMonkey, analytic moments, the `nfa` prototype, and
+  BNG2 SSA/ODE ensembles. An `Nc`-too-small guard fails the run loudly (rather
+  than returning garbage) when the scaled propensity is so low that a run would
+  collapse to a single step. `rm_driver --nc` prints per-rule batch multipliers
+  and `firings`/`steps` telemetry to `stderr`. See
+  [`docs/partial_scaling.md`](docs/partial_scaling.md).
+
 ## [3.6.1] — 2026-07-10
 
 ### Changed
