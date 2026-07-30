@@ -126,16 +126,19 @@ directory.
 
 ## C++ smoke tests
 
-Three ctest tests run as part of every build:
+A ctest suite runs as part of every build.  The ones covering the
+model-configuration surface:
 
 | Test | What it checks |
 |---|---|
 | `smoke_test` | Engine loads `A_plus_A.xml` and steps a short simulation without crashing |
-| `set_param_test` | Parameter overrides reach the engine for Ele / MM / initial-conc paths; derived-parameter cascades work; unknown names throw; mid-session add_molecules conserves mass |
+| `set_param_test` | Parameter overrides reach the engine for Ele / MM / initial-conc / eBNGL-energy paths; derived-parameter cascades work in declaration and reverse-dependency order; BNG2 `expr=` derivations re-derive seed amounts; clearing an override un-bakes a prior run; unknown names throw; mid-session add_molecules conserves mass |
+| `param_expr_gate_test` | Corpus-wide: a no-op `set_param` switches the cascade onto `<Parameter expr=>`, and no model's parameters may drift off their loaded `<Parameter value=>` when it does (issue #23) |
+| `initial_amount_test` | Seed-species introspection and pin/release; pins outrank parameter derivations, reach the engine, cover literal `concentration=` and `Fixed="1"` clamp targets, and un-bake on clear |
 | `save_load_test` | save/load round-trip preserves trajectory; XML mismatch is refused via the schema fingerprint; pre-V2 state files are refused |
 
 ```bash
-ctest --preset release       # all three, ~2s
+ctest --preset release       # whole suite, ~20s
 ctest --preset asan          # same tests under AddressSanitizer + UBSan
 ```
 

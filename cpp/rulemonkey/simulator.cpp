@@ -19,6 +19,7 @@
 #include <filesystem>
 #include <fstream>
 #include <limits>
+#include <map>
 #include <memory>
 #include <sstream>
 #include <stdexcept>
@@ -964,7 +965,12 @@ Model load_model(const std::string& xml_path,
         model.parameter_names_ordered.push_back(id);
         load_eval.define_variable(id, &model.parameters[id]);
       }
-      model.parameter_exprs[id] = val_str;
+      model.parameter_value_attrs[id] = val_str;
+      // The symbolic twin, kept for the set_param cascade only (issue #23).
+      // Load-time resolution below stays on `value` for NFsim parity.
+      auto expr_str = opt_attr(pn, "expr");
+      if (!expr_str.empty())
+        model.parameter_expr_attrs[id] = expr_str;
     }
     // Phase 2: iterate to fixed point for forward references and chained
     // derivations.  BNG2 emits parameters in dependency order so a
@@ -978,7 +984,7 @@ Model load_model(const std::string& xml_path,
     for (int pass = 0; pass < kMaxResolvePasses; ++pass) {
       bool changed = false;
       for (auto& name : model.parameter_names_ordered) {
-        const auto& val_str = model.parameter_exprs[name];
+        const auto& val_str = model.parameter_value_attrs[name];
         try {
           double const resolved = resolve_cached(val_str, load_eval, load_eval_ids);
           if (resolved != model.parameters[name]) {
@@ -1010,7 +1016,7 @@ Model load_model(const std::string& xml_path,
     // a parameter with expression "0" or that legitimately evaluates
     // to 0 will not throw.
     for (auto& name : model.parameter_names_ordered) {
-      const auto& val_str = model.parameter_exprs[name];
+      const auto& val_str = model.parameter_value_attrs[name];
       try {
         (void)resolve_cached(val_str, load_eval, load_eval_ids);
       } catch (const std::exception& e) {
@@ -2319,6 +2325,15 @@ struct RuleMonkeySimulator::Impl {
   Method method = Method::NfExact;
   std::string xml_path_str;
   std::unordered_map<std::string, double> param_overrides;
+  // Direct seed-species amount overrides, keyed by index into
+  // `model.initial_species` (issue #23).  Applied by apply_overrides
+  // after the concentration-expression walk, so they take precedence
+  // over whatever a parameter override derives for the same species.
+  std::map<int, double> initial_amount_overrides;
+  // True while apply_overrides has left overridden numbers baked into
+  // the parsed model, so a later apply with no overrides still knows it
+  // must run one restoring pass.
+  bool overrides_applied_ = false;
   int molecule_limit = -1;
 
   std::unique_ptr<Engine> session;
@@ -2351,6 +2366,37 @@ struct RuleMonkeySimulator::Impl {
       param_eval_.define_variable(name, &model.parameters[name]);
   }
 
+  // Symbolic-cascade baseline: what each parameter's `<Parameter expr=>`
+  // resolves to with NO overrides in force, computed against the loaded
+  // `value` numbers.  Memoized on first use — it depends only on the
+  // parsed model.  A parameter whose expr fails to compile gets no entry
+  // and is skipped by the cascade below.
+  //
+  // This is the gate that lets sync_parameters re-derive from `expr`
+  // without perturbing anything an override does not actually touch: a
+  // parameter whose expr-resolved value is unmoved from this baseline
+  // keeps its loaded `value`, digit for digit.  Without it, merely
+  // calling set_param on an unrelated parameter would silently re-round
+  // every derived quantity in the model to expr precision (issue #23).
+  std::unordered_map<std::string, double> symbolic_base_;
+  bool symbolic_base_ready_ = false;
+
+  // Populate `symbolic_base_`.  MUST be called with model.parameters
+  // holding the un-overridden base values, which is exactly the state
+  // sync_parameters is in right after its reset-to-base loop.
+  void build_symbolic_baseline() {
+    if (symbolic_base_ready_)
+      return;
+    symbolic_base_ready_ = true;
+    for (const auto& [name, expr] : model.parameter_expr_attrs) {
+      try {
+        symbolic_base_[name] = resolve_cached(expr, param_eval_, param_eval_ids_);
+      } catch (...) { // NOLINT(bugprone-empty-catch)
+        // Unparseable expr — leave the parameter on its `value` source.
+      }
+    }
+  }
+
   // Rebuild model.parameters from base_parameters + param_overrides,
   // cascading derived parameter expressions so an override on a base
   // parameter propagates to any parameter that references it
@@ -2371,6 +2417,12 @@ struct RuleMonkeySimulator::Impl {
       if (bit != base_parameters.end())
         val = bit->second;
     }
+    // Snapshot the expr-resolved baseline while the map still holds base
+    // values (see build_symbolic_baseline).  Only needed once there is
+    // something to cascade.
+    if (!param_overrides.empty())
+      build_symbolic_baseline();
+
     for (auto& [name, val] : param_overrides) {
       auto it = model.parameters.find(name);
       if (it != model.parameters.end())
@@ -2381,6 +2433,16 @@ struct RuleMonkeySimulator::Impl {
     // overridden re-resolves its parsed expression against the
     // current (overridden) map.  Overridden parameters keep their
     // override regardless of expression.
+    //
+    // Two sources are in play per parameter.  `<Parameter expr=>` is the
+    // symbolic derivation and is the only one that can propagate an
+    // override; `<Parameter value=>` is BNG2's already-collapsed number,
+    // which re-resolves to itself and therefore cannot.  Prefer `expr`,
+    // but only where it moves the parameter off its symbolic baseline —
+    // i.e. where the override genuinely reaches it.  Everything else
+    // keeps the loaded `value` byte for byte, so a model simulated with
+    // an override on parameter X is numerically identical to the
+    // un-overridden model everywhere X does not reach (issue #23).
     //
     // Iterate to fixed point so a chain `C = 2*B; B = 2*A; A = ...`
     // declared in NON-dependency order still settles after a
@@ -2397,11 +2459,22 @@ struct RuleMonkeySimulator::Impl {
       for (auto& name : model.parameter_names_ordered) {
         if (param_overrides.count(name))
           continue;
-        auto eit = model.parameter_exprs.find(name);
-        if (eit == model.parameter_exprs.end())
-          continue;
         try {
-          double const resolved = resolve_cached(eit->second, param_eval_, param_eval_ids_);
+          double resolved = 0.0;
+          auto sit = symbolic_base_.find(name);
+          if (sit != symbolic_base_.end()) {
+            const double from_expr =
+                resolve_cached(model.parameter_expr_attrs.at(name), param_eval_, param_eval_ids_);
+            // Unmoved from baseline => no override reaches this
+            // parameter => keep the loaded `value`, not the expr
+            // re-rounding of it.
+            resolved = (from_expr == sit->second) ? base_parameters.at(name) : from_expr;
+          } else {
+            auto eit = model.parameter_value_attrs.find(name);
+            if (eit == model.parameter_value_attrs.end())
+              continue;
+            resolved = resolve_cached(eit->second, param_eval_, param_eval_ids_);
+          }
           if (resolved != model.parameters[name]) {
             model.parameters[name] = resolved;
             changed = true;
@@ -2424,6 +2497,52 @@ struct RuleMonkeySimulator::Impl {
                    "Stale parameter values may be used.\n",
                    max_passes, model.parameter_names_ordered.size());
     }
+
+    sync_initial_amounts();
+  }
+
+  // Re-resolve every seed-species amount against the current parameter
+  // map, then re-apply the direct pins on top.  Called from
+  // sync_parameters so `SpeciesInit::concentration` stays coherent with
+  // `model.parameters` between runs, the same contract get_parameter()
+  // already offers for parameters — which is what lets initial_species()
+  // and get_initial_amount() answer without a run in between.
+  void sync_initial_amounts() {
+    for (auto& si : model.initial_species) {
+      if (!si.concentration_expr.empty())
+        si.concentration = resolve_cached(si.concentration_expr, param_eval_, param_eval_ids_);
+    }
+    // Direct seed-amount overrides win over the re-resolved expression:
+    // set_initial_amount is the escape hatch for amounts that no
+    // parameter drives (a literal `concentration="1000"`), so it must not
+    // be undone by the walk above (issue #23).
+    for (const auto& [idx, amount] : initial_amount_overrides)
+      model.initial_species[idx].concentration = amount;
+  }
+
+  // Resolve a caller-supplied seed-species key to an index into
+  // `model.initial_species`.  Matches the BNGL `<Species name=>` pattern
+  // first — that is what initial_species() reports and what a modeller
+  // recognises — then falls back to the XML `<Species id=>` ("S1").
+  int resolve_initial_species(const std::string& key, const char* caller) const {
+    int by_name = -1;
+    for (int i = 0; i < static_cast<int>(model.initial_species.size()); ++i) {
+      if (model.initial_species[i].name != key)
+        continue;
+      if (by_name >= 0)
+        throw std::runtime_error(std::string(caller) + ": seed species name '" + key +
+                                 "' is declared more than once; use the XML <Species id=> instead");
+      by_name = i;
+    }
+    if (by_name >= 0)
+      return by_name;
+    for (int i = 0; i < static_cast<int>(model.initial_species.size()); ++i) {
+      if (model.initial_species[i].id == key)
+        return i;
+    }
+    throw std::runtime_error(std::string(caller) + ": '" + key +
+                             "' is not a seed species of the loaded XML (expected a <Species "
+                             "name=> BNGL pattern or a <Species id=>)");
   }
 
   // Full override application: parameter cascade + re-resolve every
@@ -2434,14 +2553,25 @@ struct RuleMonkeySimulator::Impl {
   void apply_overrides() {
     sync_parameters();
 
+    const bool have_overrides = !param_overrides.empty() || !initial_amount_overrides.empty();
+
     // No overrides → no re-resolution to do.  `load_model`'s parse-time
     // cascade already resolved every Ele/MM rate value and initial-species
     // concentration against `base_parameters`, and `base_parameters ==
     // model.parameters` when `param_overrides.empty()` (sync_parameters is
     // called from set_param / clear_param_overrides to maintain that
     // invariant), so the walk below would just rewrite the same values.
-    if (param_overrides.empty())
+    //
+    // The `overrides_applied_` latch is what makes clearing an override
+    // actually take effect: the walk below MUTATES the parsed model in
+    // place, so if a prior apply wrote overridden numbers into
+    // `rate_value` / `concentration`, skipping the walk now would leave
+    // those stale — the run would keep simulating the cleared override
+    // even though get_parameter() reports the restored value.  One more
+    // pass against the (already restored) parameter map puts them back.
+    if (!have_overrides && !overrides_applied_)
       return;
+    overrides_applied_ = have_overrides;
 
     // Ele/MM rate values are baked from `model.parameters` at parse time.
     // Re-resolve them here so set_param overrides actually reach Engine
@@ -2461,13 +2591,11 @@ struct RuleMonkeySimulator::Impl {
     }
 
     // Initial species concentrations are likewise baked at parse time
-    // (Engine reads SpeciesInit::concentration during init_species).
-    // FixedSpecies::target_count is derived from the same value during
-    // parse, so refresh it here from the (possibly re-resolved) source.
-    for (auto& si : model.initial_species) {
-      if (!si.concentration_expr.empty())
-        si.concentration = resolve_cached(si.concentration_expr, param_eval_, param_eval_ids_);
-    }
+    // (Engine reads SpeciesInit::concentration during init_species), but
+    // sync_parameters above already refreshed them via
+    // sync_initial_amounts.  FixedSpecies::target_count is derived from
+    // the same value during parse, so refresh it here from the
+    // (possibly re-resolved) source.
     for (auto& fs : model.fixed_species) {
       if (fs.source_init_idx >= 0 &&
           fs.source_init_idx < static_cast<int>(model.initial_species.size())) {
@@ -2655,6 +2783,45 @@ void RuleMonkeySimulator::clear_param_overrides() {
   if (impl_->session)
     throw std::runtime_error("Cannot clear_param_overrides during active session");
   impl_->param_overrides.clear();
+  impl_->sync_parameters();
+}
+
+std::vector<InitialSpeciesRow> RuleMonkeySimulator::initial_species() const {
+  std::vector<InitialSpeciesRow> rows;
+  rows.reserve(impl_->model.initial_species.size());
+  for (int i = 0; i < static_cast<int>(impl_->model.initial_species.size()); ++i) {
+    const auto& si = impl_->model.initial_species[i];
+    InitialSpeciesRow row;
+    row.id = si.id;
+    row.name = si.name;
+    row.concentration_expr = si.concentration_expr;
+    row.amount = si.concentration;
+    row.overridden = impl_->initial_amount_overrides.count(i) != 0;
+    rows.push_back(std::move(row));
+  }
+  return rows;
+}
+
+double RuleMonkeySimulator::get_initial_amount(const std::string& key) const {
+  int const idx = impl_->resolve_initial_species(key, "get_initial_amount");
+  return impl_->model.initial_species[idx].concentration;
+}
+
+void RuleMonkeySimulator::set_initial_amount(const std::string& key, double amount) {
+  if (impl_->session)
+    throw std::runtime_error("Cannot set_initial_amount during active session");
+  if (!std::isfinite(amount) || amount < 0.0)
+    throw std::runtime_error("set_initial_amount: amount for '" + key +
+                             "' must be a finite, non-negative molecule count");
+  int const idx = impl_->resolve_initial_species(key, "set_initial_amount");
+  impl_->initial_amount_overrides[idx] = amount;
+  impl_->sync_parameters();
+}
+
+void RuleMonkeySimulator::clear_initial_amount_overrides() {
+  if (impl_->session)
+    throw std::runtime_error("Cannot clear_initial_amount_overrides during active session");
+  impl_->initial_amount_overrides.clear();
   impl_->sync_parameters();
 }
 

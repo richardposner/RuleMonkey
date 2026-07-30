@@ -409,13 +409,128 @@ void test_energy_setparam(const std::string& xml) {
         "energy set_param: Ea0 override should re-resolve the rate expression and run cleanly");
 }
 
+// BNG2's writeXML emits BOTH `<Parameter value=>` — already collapsed to a
+// number — and `<Parameter expr=>`, the symbolic derivation.  RuleMonkey
+// resolves `value` at load time, deliberately, because that is what NFsim
+// reads and BNG2 sometimes writes fewer digits there than `expr` carries.
+// The trap (issue #23) was that the set_param cascade ALSO re-resolved
+// `value`: a collapsed number re-resolves to itself, so an override could
+// never reach a derived parameter.  A dose-response scan driven by
+// set_param silently reran the XML's default dose at every point, with no
+// error — the divergence only showed up against NFsim, whose bngsim
+// binding re-bakes the XML per point.
+//
+// The cascade now re-derives from `expr`, gated on the value actually
+// moving under the override, so anything the override does not reach keeps
+// its loaded `value` digit for digit.  Both halves are asserted below;
+// derived_param_model.xml cannot cover this because it is hand-authored
+// with the expression in `value=` and no `expr=` at all, which is exactly
+// how the bug hid from the existing tests.
+//
+// Fixture is real BNG2 output:
+//   AT_nM  value="1"           expr="1"                        (the dose knob)
+//   LT     value="1806.6422"   expr="((AT_nM*1e-9)*NA)*V_sim"  (derived)
+//   NA     value="6.0221408e+23" expr="6.02214076e23"          (round-tripped short)
+//   <Species concentration="LT" name="L(r1,r2)">
+void test_bng2_expr_derived_seed(const std::string& xml) {
+  const rulemonkey::RuleMonkeySimulator probe(xml);
+  check(probe.get_parameter("AT_nM") == 1.0, "fixture sanity: parsed AT_nM should be 1");
+  check(probe.get_parameter("LT") == 1806.6422,
+        "fixture sanity: parsed LT should be the XML's value= literal, not its expr=");
+
+  rulemonkey::RuleMonkeySimulator sim(xml);
+  sim.set_param("AT_nM", 68.0);
+
+  // The derivation re-runs against the model's own (loaded) inputs.
+  const double expected_lt =
+      ((68.0 * 1e-9) * probe.get_parameter("NA")) * probe.get_parameter("V_sim");
+  check(sim.get_parameter("LT") == expected_lt,
+        "BNG2 expr cascade: set_param(AT_nM, 68) should re-derive LT to " +
+            std::to_string(expected_lt) + " (got " + std::to_string(sim.get_parameter("LT")) + ")");
+  check(sim.get_parameter("LT") > 68.0 * 1806.0,
+        "BNG2 expr cascade: a 68x dose must not leave LT at its XML-time value");
+
+  // …and the seed population follows it.  Obs_L_tot counts L molecules, so
+  // at t=0 it is exactly the truncated LT (NFsim-parity truncation).
+  sim.initialize(/*seed=*/1);
+  const double l_at_zero = sim.get_observable_values()[0];
+  check(l_at_zero == std::trunc(expected_lt),
+        "BNG2 expr cascade: seeded L count should be trunc(LT)=" +
+            std::to_string(std::trunc(expected_lt)) + " (got " + std::to_string(l_at_zero) + ")");
+  sim.destroy_session();
+
+  // The gate: an override must not perturb anything outside its dependency
+  // cone.  Every other parameter keeps the loaded `value` BIT-identically —
+  // re-deriving them all from `expr` would silently re-round the model.
+  for (const auto& name : probe.parameter_names()) {
+    if (name == "AT_nM" || name == "LT")
+      continue;
+    check(sim.get_parameter(name) == probe.get_parameter(name),
+          "BNG2 expr cascade: unrelated parameter '" + name +
+              "' must keep its loaded value= bit-identically under an override");
+  }
+  // Sharpest instance of the above.  BNG2 wrote NA as value="6.0221408e+23"
+  // expr="6.02214076e23" — the two differ in the 9th digit, far beyond any
+  // rounding noise — so a gate-less cascade would visibly move NA (and with
+  // it every rate constant derived from NA) the moment ANY set_param call
+  // was made, anywhere in the model.  The loaded value must survive.
+  const double na_loaded = probe.get_parameter("NA");
+  const double na_from_expr = 6.02214076e23;
+  check(std::abs(na_loaded - na_from_expr) / na_loaded > 1e-10,
+        "fixture sanity: NA's value= and expr= should be distinguishably different doubles");
+  check(sim.get_parameter("NA") == na_loaded,
+        "BNG2 expr cascade: NA must stay on its loaded value=, not be re-rounded to its expr=");
+}
+
+// clear_param_overrides must restore the fields apply_overrides BAKED into
+// the parsed model, not just the parameter map.  The pre-existing
+// test_clear_param_overrides never ran between the set and the clear, so
+// nothing had been baked yet and the gap stayed hidden: apply_overrides
+// early-returned on an empty override map and left the previous run's
+// overridden seed concentration in place.  get_parameter() reported the
+// restored value while the engine kept simulating the cleared override.
+void test_clear_override_restores_after_run(const std::string& xml) {
+  rulemonkey::RuleMonkeySimulator sim(xml);
+  sim.set_block_same_complex_binding(true);
+
+  auto r_default = sim.run({0.0, 1.0, 2}, /*seed=*/1);
+  check(initial_value(r_default, "A_1") == 500.0, "fixture sanity: default A_tot seeds 500");
+
+  sim.set_param("A_base", 20.0); // A_tot = 20*5 = 100
+  auto r_over = sim.run({0.0, 1.0, 2}, /*seed=*/1);
+  check(initial_value(r_over, "A_1") == 100.0, "override run should seed 100");
+
+  sim.clear_param_overrides();
+  check(sim.get_parameter("A_tot") == 500.0, "clear should restore A_tot in get_parameter");
+  auto r_restored = sim.run({0.0, 1.0, 2}, /*seed=*/1);
+  check(initial_value(r_restored, "A_1") == 500.0,
+        "clear_param_overrides after a run should restore the seeded count to 500, not leave "
+        "the baked override at 100");
+
+  // Same contract for the rate constants baked into RateLaw::rate_value.
+  // kp_base=0 cascades to kp=0, so no dimer can form; after the clear the
+  // forward reaction must come back to life.
+  rulemonkey::RuleMonkeySimulator rate_sim(xml);
+  rate_sim.set_block_same_complex_binding(true);
+  rate_sim.set_param("kp_base", 0.0);
+  auto r_dead = rate_sim.run({0.0, 20.0, 21}, /*seed=*/1);
+  check(final_value(r_dead, "AA_1") == 0.0, "kp_base=0 run should produce no dimers");
+
+  rate_sim.clear_param_overrides();
+  auto r_alive = rate_sim.run({0.0, 20.0, 21}, /*seed=*/1);
+  check(final_value(r_alive, "AA_1") > 0.0,
+        "clear_param_overrides after a run should un-bake the zeroed rate constant, not leave "
+        "the forward reaction dead");
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
-  if (argc < 6) {
+  if (argc < 7) {
     std::fprintf(stderr,
                  "usage: %s <A_plus_A.xml> <ft_mm_ratelaw.xml> <derived_param_model.xml> "
-                 "<out_of_order_param_model.xml> <ft_energy_arrhenius.xml>\n",
+                 "<out_of_order_param_model.xml> <ft_energy_arrhenius.xml> "
+                 "<bench_blbr_cooperativity_posner2004.xml>\n",
                  argv[0]);
     return 2;
   }
@@ -424,6 +539,7 @@ int main(int argc, char* argv[]) {
   const std::string derived = argv[3];
   const std::string out_of_order = argv[4];
   const std::string energy_model = argv[5];
+  const std::string bng2_expr_model = argv[6];
 
   try {
     test_ele_rate(a_plus_a);
@@ -439,6 +555,8 @@ int main(int argc, char* argv[]) {
     test_out_of_order_cascade(out_of_order);
     test_simulate_t_start_validation(a_plus_a);
     test_energy_setparam(energy_model);
+    test_bng2_expr_derived_seed(bng2_expr_model);
+    test_clear_override_restores_after_run(derived);
   } catch (const std::exception& e) {
     std::fprintf(stderr, "ERROR: %s\n", e.what());
     return 2;
@@ -450,6 +568,8 @@ int main(int argc, char* argv[]) {
   }
   std::fprintf(stderr, "OK: set_param reaches Ele/MM/initial-conc/eBNGL-energy rates, "
                        "get_parameter is coherent, unknown names throw, derived parameters "
-                       "cascade in declaration and reverse-dependency order\n");
+                       "cascade in declaration and reverse-dependency order, BNG2 expr= "
+                       "derivations re-derive seed amounts without disturbing untouched "
+                       "parameters, and clearing an override un-bakes a prior run\n");
   return 0;
 }

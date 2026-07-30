@@ -5,6 +5,71 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.7.0] — 2026-07-29
+
+### Fixed
+
+- **`set_param` now reaches derived parameters, and through them the
+  seed-species populations (issue #23).** BNG2's `writeXML` records every
+  parameter twice — `<Parameter value="1806.6422">`, already collapsed to a
+  number, and `<Parameter expr="((AT_nM*1e-9)*NA)*V_sim">`, the symbolic
+  derivation. RuleMonkey read only `value`, deliberately, because that is
+  what NFsim reads and BNG2 sometimes writes fewer digits there than `expr`
+  carries. The trap was that the `set_param` override cascade *also*
+  re-resolved `value`: a collapsed number re-resolves to itself, so an
+  override on a base parameter could never move a parameter derived from
+  it, and any `<Species concentration="LT">` seeded from that derivation
+  stayed at its XML-time amount.
+
+  The failure was silent and only visible against another engine. A
+  dose-response scan written as one loaded model plus a `set_param` per
+  point ran the XML's default dose at *every* point without error or
+  warning — the reporter hit it through BNGsim's `RuleMonkeySession`, whose
+  NFsim twin re-bakes the XML per point and therefore tracked the dose.
+
+  The cascade now re-derives from `expr`, gated on the value actually
+  moving under the active overrides: a parameter the override does not
+  reach keeps its loaded `value` bit-for-bit. Without that gate, merely
+  calling `set_param` on an unrelated parameter would re-round every
+  derived quantity in the model to `expr` precision (`NA` alone differs in
+  its 9th digit between the two attributes, and every bimolecular rate
+  constant divides by it). Hand-authored XML with no `expr` attribute is
+  unaffected. The no-override path is untouched, confirmed by the full
+  three-corpus parity ladder.
+
+- **Clearing an override now un-bakes the previous run.** `apply_overrides`
+  mutates the parsed model in place, so once a run had baked overridden
+  numbers into `RateLaw::rate_value` / `SpeciesInit::concentration`, a
+  later `clear_param_overrides()` restored the parameter map but left those
+  fields stale — `get_parameter()` reported the default while the engine
+  kept simulating the cleared override. The existing regression test missed
+  it because it never ran between the set and the clear. Seed amounts are
+  now kept coherent with the parameter map between runs (the same contract
+  `get_parameter()` already offered), and a latch drives one restoring pass
+  over the baked rate constants when the last override is dropped.
+
+### Added
+
+- **Post-load control over seed-species amounts (issue #23).**
+  `initial_species()` reports one row per `<Species>` — XML id, BNGL
+  pattern, the `concentration` attribute verbatim, the amount the next run
+  would seed under current overrides, and whether it is pinned.
+  `get_initial_amount(key)` / `set_initial_amount(key, amount)` /
+  `clear_initial_amount_overrides()` read and pin that amount, keyed by the
+  BNGL pattern (`"L(r1,r2)"`) or the XML id (`"S1"`).
+
+  `set_param` remains the right entry point when a parameter drives the
+  amount — the derivation is the modeller's own. These cover what it
+  cannot reach: a bare `<Species concentration="1000">` with no parameter
+  behind it, and callers that would rather state the molecule count
+  outright. A pin outranks the `concentration` expression (including a
+  later `set_param`), a `Fixed="1"` species' clamp target follows it, and
+  amounts truncate toward zero at instantiation like any seed amount.
+
+  Together these close the upstream ask behind issue #23: a driver can
+  refresh initial populations in place and walk a scan on one loaded
+  model, instead of re-emitting and re-parsing an XML per point.
+
 ## [3.6.1] — 2026-07-10
 
 ### Changed
@@ -930,6 +995,7 @@ The legacy implementation, RuleMonkey 2.0.25, was introduced in:
 > RG. *RuleMonkey: software for stochastic simulation of rule-based
 > models.* BMC Bioinformatics 11:404 (2010). PMID: 20673321.
 
+[3.7.0]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.7.0
 [3.6.1]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.6.1
 [3.6.0]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.6.0
 [3.5.0]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.5.0

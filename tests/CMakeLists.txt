@@ -25,6 +25,34 @@ add_test(
         ${_rulemonkey_test_dir}/cpp/derived_param_model.xml
         ${_rulemonkey_test_dir}/cpp/out_of_order_param_model.xml
         ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_energy_arrhenius.xml
+        ${_rulemonkey_test_dir}/reference/nfsim/xml/bench_blbr_cooperativity_posner2004.xml
+)
+
+# Corpus-wide guard (issue #23): a no-op set_param switches the parameter
+# cascade onto the `<Parameter expr=>` source, and no model's parameters
+# may drift off their loaded `<Parameter value=>` when it does.  Load-only,
+# so the whole 180+ model tree sweeps in about a second.
+add_executable(param_expr_gate_test cpp/param_expr_gate_test.cpp)
+target_link_libraries(param_expr_gate_test PRIVATE rulemonkey)
+
+add_test(
+    NAME param_expr_gate_test
+    COMMAND param_expr_gate_test ${_rulemonkey_test_dir}
+)
+
+# Seed-species amount API (issue #23): introspection plus pin/release of
+# the initial population, so a driver can walk a dose-response curve on
+# one loaded model instead of re-baking an XML per point.  Covers the two
+# shapes set_param cannot reach — a literal <Species concentration=> with
+# no parameter behind it, and a Fixed="1" clamp target.
+add_executable(initial_amount_test cpp/initial_amount_test.cpp)
+target_link_libraries(initial_amount_test PRIVATE rulemonkey)
+
+add_test(
+    NAME initial_amount_test
+    COMMAND initial_amount_test
+        ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_clamped_species.xml
 )
 
 # Homodimer rate parity: small-N steady state of A+A<->AA must match the
