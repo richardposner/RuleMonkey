@@ -134,40 +134,83 @@ The runtime severity model is two-level:
 - `set_param(name, value)` rejects names not declared in the loaded XML
   (typos throw rather than silently no-op).
 - Overrides cascade through derived parameter expressions. If the BNGL
-  declares `B = 2*A` (i.e. the XML emits
-  `<Parameter id="B" value="2*A"/>`), `set_param("A", x)` recomputes
-  `B` to `2*x` for the next run AND for `get_parameter("B")` queries
-  in between runs. Overriding `B` directly wins over the cascade — the
-  expression for `B` is skipped, and parameters that derive from `B`
-  see the override.
-- Cascade order is the parameter declaration order in the XML.  At
-  load time the parser iterates parameter resolution to fixed point
-  (capped at `parameter_count + 4` passes), so an arbitrarily-deep
-  chain of forward references in the XML resolves correctly even if
-  the emitter does not deliver them in dependency order — cycles are
-  the only thing that won't resolve.  At `set_param` time the override
-  cascade is a single pass in declaration order: BNG2 emits parameters
-  in dependency order, so any chain a real model could produce
-  cascades on the first pass.
+  declares `B = 2*A`, `set_param("A", x)` recomputes `B` to `2*x` for
+  the next run AND for `get_parameter("B")` queries in between runs.
+  Overriding `B` directly wins over the cascade — the expression for
+  `B` is skipped, and parameters that derive from `B` see the override.
+- **Which XML attribute the cascade reads.** BNG2's `writeXML` records
+  every parameter twice: `value=` is the derivation already collapsed to
+  a number, `expr=` is the derivation itself.
+
+  ```xml
+  <Parameter id="LT" type="Constant" value="1806.6422" expr="((AT_nM*1e-9)*NA)*V_sim"/>
+  ```
+
+  Load-time resolution reads `value`, because that is what NFsim reads
+  and BNG2 does not always write the two to the same precision (`NA`
+  comes out as `value="6.0221408e+23"` against `expr="6.02214076e23"`).
+  The override cascade reads `expr`, because a collapsed number
+  re-resolves to itself and so could never propagate an override.
+
+  To keep those two sources from fighting, the cascade takes an
+  expr-derived value only where it actually *moves* the parameter off
+  its no-override baseline. A parameter the override does not reach
+  keeps its loaded `value` bit-for-bit, so a run with an override on
+  `X` is numerically identical to the un-overridden run everywhere `X`
+  does not reach. Hand-authored XML that puts the expression directly
+  in `value=` and omits `expr=` cascades off `value` as before.
+
+  Consequence worth stating plainly: a derived parameter *is*
+  overridable even though BNG2 emitted its `value` as a literal. That
+  was not true before 3.7.0 — see the issue #23 entry in the changelog.
+- Cascade order is the parameter declaration order in the XML, iterated
+  to fixed point (capped at `parameter_count + 4` passes) both at load
+  time and at `set_param` time.  An arbitrarily-deep chain of forward
+  references resolves correctly even if the emitter does not deliver
+  them in dependency order — `C = 2*B; B = 2*A; A = 1` declared in that
+  order settles after a `set_param("A", x)`. Cycles are the only thing
+  that won't resolve; they warn on stderr and leave stale values.
 - `get_parameter(name)` reflects the current overrides + cascade
   immediately, without requiring a `run()` or `initialize()` call.
+- `clear_param_overrides()` restores the parsed values, including in the
+  rate constants and seed concentrations a prior `run()` baked into the
+  parsed model — so it un-does an override that has already been
+  simulated, not just the override map. (Before 3.7.0 the baked fields
+  were left stale, so `get_parameter()` and the engine disagreed.)
 
 ### Initial state and live mutation
 
 - Seed species declared via `ListOfSpecies` with `concentration="N"` or
-  `concentration="param_name"` — parameter-backed concentrations
-  re-resolve through `set_param` overrides.
+  `concentration="<expression>"` — expression-backed concentrations
+  re-resolve through `set_param` overrides, including through a chain of
+  derived parameters (`concentration="LT"`, `LT = f(AT_nM, …)`).
+- Amounts are real-valued in the XML and **truncated toward zero** when
+  the engine instantiates molecules — NFsim parity, and several corpus
+  models depend on it (`NL = 421.5498` seeds 421, not 422).
+- `set_initial_amount(key, amount)` pins a seed amount directly, for the
+  case no parameter drives it (a bare `concentration="1000"`) or where
+  the caller would rather state the molecule count outright. Keyed by
+  the BNGL `<Species name=>` pattern or the XML `<Species id=>`. A pin
+  outranks the `concentration` expression — including a `set_param`
+  applied afterwards — until `clear_initial_amount_overrides()`.
+  `initial_species()` reports every seed species with the amount the
+  next run would use under the current overrides.
 - Single-molecule `Fixed` species (BNGL `$` prefix) — the engine
   replenishes them after each event so their count is held at the
-  initial value (matching BNG2's ODE semantics).
+  initial value (matching BNG2's ODE semantics). The clamp target
+  follows parameter overrides and direct pins.
 - `add_molecules(type_name, count)` for live perturbation between
   segments of a stateful session.
 
 ### Functional surface
 
-- `set_param`, `clear_param_overrides`, `set_molecule_limit`,
+- `set_param`, `clear_param_overrides`, `set_initial_amount`,
+  `clear_initial_amount_overrides`, `set_molecule_limit`,
   `set_block_same_complex_binding` — applied at the next `run()` /
   `initialize()` (throw if a session is currently active).
+- `get_parameter`, `get_initial_amount`, `initial_species` — read the
+  configuration the next run would use; callable with or without a live
+  session, since they describe the initial state rather than the pool.
 - `save_state(path)` / `load_state(path)` — full pool, RNG, and
   bookkeeping snapshot. The XML used at `load_state` time must match
   the one used at `save_state` time.
