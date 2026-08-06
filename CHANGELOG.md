@@ -9,10 +9,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Multi-molecule reactant patterns on n-ary rules (issue #26).** An n-ary
+  rule now accepts the same reactant patterns a bimolecular rule does: a
+  reactant may be a `.`-joined complex, not only a single molecule. The
+  issue's reproducer — `A(s,d!1).D(d!1) + A(s) + A(s) -> P()` with
+  `DeleteMolecules` — was refused at load before; it now simulates, and over
+  30 seeds RM makes 109-122 P (mean 117.4) against NFsim's 110-124
+  (mean 117.0) on the same XML.
+
+  Each slot spans `[reactant_pattern_starts[i], starts[i+1])` and is counted
+  by the same multi-molecule counter the bimolecular path uses, seeded on the
+  pattern's first molecule; the sampler resolves the rest of the slot's
+  molecules by walking its bonds, drawing among the seed embeddings that
+  reach a whole match rather than among all of them — an `A(d,d)` bonded to a
+  D and an E offers two embeddings of `A(d!1)` but only one extends to
+  `A(d!1).D(d!1)`, and calling the other a null event would halve the rate.
+
+  The propensity keeps the exact partition-lattice sum over *distinct seeds*,
+  which for multi-molecule patterns is an upper bound on the true count: a
+  molecule inside one slot's complex may be another slot's seed, or sit
+  inside another slot's complex, and firing on such a draw would consume it
+  twice. Those draws are rejected as null events, so the realized rate is the
+  injective count `D_inj` exactly — `D · k · sf · (D_inj/D) = D_inj · k · sf`
+  — the same inflated-propensity trick the bimolecular sampler already uses
+  for same-molecule and same-complex draws. On the overlap fixture, dropping
+  the rejection runs 25% hot (1124 events against the analytic 900).
+
+  One n-ary shape stays refused, and the refusal is new: a `.`-joined
+  reactant whose molecules are *not* bonded to each other (`A(s).D(d!+)`,
+  meaning "both, anywhere in the same complex"). The sampler reaches a
+  slot's non-seed molecules by following bonds, so it cannot place those —
+  the count would be non-zero and every draw a null event, which is the
+  silent inertness of #24 again. The engine gate and the load-time refusal
+  are updated together, as before.
+
+  Uni- and bimolecular trajectories are bit-identical, and so are n-ary
+  rules of single-molecule patterns: the injectivity check is skipped
+  outright for them and consumes no draws. All 180 corpus XMLs produce
+  byte-identical trajectories against the previous build. A new
+  feature-coverage model, `ft_nary_complex_reactant`, holds the NFsim parity
+  in CI: the complex population turns over through a binding rule, so the
+  per-slot counts are maintained incrementally rather than only at load.
+
 - **N-ary reactant rules (issue #24).** A rule may now carry three or more
   `+`-separated reactants — `A + A + A -> P`, `A + B + C -> P` — when every
   reactant pattern is a single molecule and the rate law is elementary. Up
-  to 6 patterns are supported.
+  to 6 patterns are supported. (The single-molecule restriction was lifted
+  by #26, above.)
 
   These rules take a path of their own, separate from the two reactant
   slots that serve uni- and bimolecular rules. The propensity is mass
@@ -57,10 +100,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every output time.
 
   The common shapes are now simulated (see Added above). The rest — a
-  multi-molecule reactant pattern, a `Function` rate law, or more than 6
-  patterns — are refused at Tier 0, naming the rule and which of the three
-  it hit, rather than going quietly inert. `--ignore-unsupported` runs them
-  anyway, with the rule still inert.
+  disconnected `.`-joined reactant pattern, a `Function` rate law, or more
+  than 6 patterns — are refused at Tier 0, naming the rule and which of the
+  three it hit, rather than going quietly inert. `--ignore-unsupported` runs
+  them anyway, with the rule still inert.
 
   Because that refusal is decided from the raw XML while the engine decides
   from the parsed rule, the engine additionally emits its own `WARN` for any

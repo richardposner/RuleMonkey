@@ -27,6 +27,7 @@
 | Fixed/clamped species ($) | (constant concentration) | ft_clamped_species | PASS |
 | Block-same-complex binding | -bscb flag | combo_symmetric_rings | PASS |
 | Multi-mol unimolecular | multi-molecule reactant pattern | combo_multimol_unimol | PASS |
+| N-ary rule with a complex reactant | 3 ReactantPatterns, one multi-molecule | ft_nary_complex_reactant | PASS |
 | Push-pull enzyme kinetics | Michaelis-Menten cycle pattern | ft_push_pull | PASS |
 | Ring closure | intramolecular bonds | ft_ring_closure | PASS |
 | Signaling cascade | multi-step recruitment | ft_signaling_cascade | PASS |

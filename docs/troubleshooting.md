@@ -28,17 +28,23 @@ Two ways forward:
 
 ### "Rule '…' has N reactant patterns, …"
 
-Rules with three or more `+`-separated reactants — `A + A + A -> P` — are
-simulated when every reactant pattern is a single molecule, the rate law is
-elementary, and there are at most 6 patterns.  See
-[`model_semantics.md`](model_semantics.md) for the propensity and sampler.
+Rules with three or more `+`-separated reactants — `A + A + A -> P`,
+`A(s,d!1).D(d!1) + A(s) + A(s) -> P` — are simulated when the rate law is
+elementary, there are at most 6 patterns, and each pattern is one connected
+piece: a single molecule or a `.`-joined complex whose molecules are bonded
+to each other.  See [`model_semantics.md`](model_semantics.md) for the
+propensity and sampler.
 
 This error means the rule falls *outside* that.  The message says which of
 the three it hit:
 
 - **"past the engine's n-ary limit of 6"** — split the rule.
-- **"one of them a multi-molecule complex"** — a reactant such as
-  `A(s,d!1).D(d!1)`.  The n-ary path tracks one seed molecule per pattern.
+- **"one of them a disconnected complex"** — a `.`-joined reactant whose
+  molecules share no bond, such as `A(s).D(d!+)`, which means "these two
+  molecules, anywhere in the same complex".  The n-ary path reaches a
+  pattern's non-seed molecules by following its bonds, so it cannot place
+  them.  Write the bond explicitly (`A(s,d!1).D(d!1)`) if that is what you
+  meant.
 - **"under a '…' rate law"** — in practice `Function`, i.e. a global or
   local rate function on a rule of 3+ reactants.  The n-ary path
   implements elementary (mass-action) rates only.  (`MM` cannot reach RM
