@@ -3853,12 +3853,33 @@ struct Engine::Impl {
     ns = NaryState{};
 
     int const n = rule.molecularity;
-    if (n < 3 || n > kMaxNarySlots)
+    if (n < 3)
       return;
-    if (static_cast<int>(rule.reactant_pattern_starts.size()) != n)
+
+    // Safety net for issue #24's actual failure mode.  A rule of >= 3
+    // reactant patterns that does NOT get an n-ary state falls through to
+    // the two-slot machinery, where slot B swallows patterns 2..n into one
+    // bond-free pattern that scores zero embeddings — the rule holds zero
+    // propensity and never fires, with mass still conserved, so the
+    // trajectory looks valid.  That is precisely the silence this issue was
+    // about.
+    //
+    // scan_unsupported() is expected to have refused such a model at load,
+    // but it reaches that verdict from the raw XML while the decision here
+    // is made on the parsed Rule.  Rather than trust the two to agree
+    // forever, say so on stderr unconditionally: if the load-time check
+    // ever misses a shape, the run is still loud instead of quietly wrong.
+    // (A throw would be wrong — it would break the documented
+    // --ignore-unsupported contract of running with the rule inert.)
+    if (!nary_shape_supported(rule)) {
+      fprintf(stderr,
+              "WARN: rule '%s' (%s) has %d reactant patterns in a shape the "
+              "engine does not implement — it will never fire. The rest of "
+              "the model still simulates, and mass stays conserved, so the "
+              "trajectory will look valid. See issue #24.\n",
+              rule.id.c_str(), rule.name.c_str(), n);
       return;
-    if (!nary_shape_supported(rule))
-      return;
+    }
 
     ns.enabled = true;
     ns.n_slots = n;

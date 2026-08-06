@@ -277,6 +277,27 @@ retried until the `n` molecules are distinct — which reproduces exactly the
 distribution the propensity integrates, so no null events are spent on
 coincidences.
 
+### What is and is not covered
+
+| Left-hand side | Handled? |
+|---|---|
+| `A + A + A`, `A + B + C`, `A + A + B` — 3 to 6 single-molecule patterns, elementary rate | **Yes**, simulated |
+| 7 or more reactant patterns | No — Tier-0 refusal |
+| Any pattern that is a multi-molecule complex, e.g. `A(s,d!1).D(d!1) + A(s) + A(s)` | No — Tier-0 refusal |
+| A `Function` (global or local) rate law on 3+ reactants | No — Tier-0 refusal |
+| `MM(kcat,Km)` on 3+ reactants | Cannot arise — BNG2 refuses to write the XML |
+
+A left-hand side in the "No" rows is refused at load: `rm_driver` exits 2
+and names the rule and which of the three it hit.  `--ignore-unsupported`
+runs the model anyway with that rule inert, and the engine then emits its
+own `WARN` line for the same rule, so the inertness is stated on both
+paths rather than inferred.
+
+That second, engine-side warning is deliberate belt-and-braces.  The
+load-time refusal decides from the raw XML, while the engine decides from
+the parsed rule; if those two ever disagree about a shape, the run stays
+loud instead of quietly producing a valid-looking trajectory.
+
 Before this was implemented such a rule was *silently inert*: it scored zero
 embeddings, held zero propensity, and never fired, while the rest of the
 model simulated normally and mass stayed conserved.

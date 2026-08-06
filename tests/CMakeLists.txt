@@ -243,6 +243,7 @@ add_test(
         ${_rulemonkey_test_dir}/cpp/trimolecular_model.xml
         ${_rulemonkey_test_dir}/cpp/trimolecular_rate_model.xml
         ${_rulemonkey_test_dir}/cpp/trimolecular_unsupported_model.xml
+        ${_rulemonkey_test_dir}/cpp/trimolecular_ratelaw_model.xml
 )
 
 # Global-function exposure regression (issue #7): pins down that

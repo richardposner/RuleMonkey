@@ -2206,9 +2206,13 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
         reason = "one of them a multi-molecule complex — the n-ary path tracks "
                  "a single seed molecule per pattern";
       } else if (rate_type != "Ele") {
+        // Reachable in practice for `Function` (a local or global rate
+        // function on a multi-reactant rule).  `MM` cannot get this far —
+        // BNG2 itself refuses to write XML for it: "Michaelis-Menton type
+        // ratelaw require exactly 2 reactants".
         reason = "under a '" + rate_type +
-                 "' rate law that is defined only for 1-2 reactants "
-                 "(NFsim requires exactly 2 for MM)";
+                 "' rate law — the n-ary path implements elementary "
+                 "(mass-action) rates only";
       } else {
         continue; // supported — the engine simulates this rule
       }

@@ -132,9 +132,11 @@ void test_rate_matches_closed_form(const std::string& xml) {
 }
 
 // (3) An n-ary shape outside the implemented path must still be refused,
-//     not silently dropped.  Here reactant pattern 0 is a two-molecule
-//     complex (A.D), which the path does not handle.
-void test_unsupported_shape_still_refused(const std::string& xml) {
+//     not silently dropped.  `expected_reason` is the distinguishing phrase
+//     the diagnostic has to carry, so a model author can tell which of the
+//     three exclusions they hit without reading the engine source.
+void test_unsupported_shape_still_refused(const std::string& xml,
+                                          const std::string& expected_reason) {
   const rulemonkey::RuleMonkeySimulator sim(xml);
 
   const rulemonkey::UnsupportedFeature* hit = nullptr;
@@ -145,31 +147,36 @@ void test_unsupported_shape_still_refused(const std::string& xml) {
     }
   }
 
-  check(hit != nullptr, "a 3-pattern rule with a multi-molecule pattern must still be reported");
+  check(hit != nullptr, "an unsupported n-ary shape must be reported (" + expected_reason + ")");
   if (hit != nullptr) {
     check(hit->severity == rulemonkey::Severity::Error,
           "unsupported n-ary shapes must be Error severity — a Warn would let the "
           "model run to a silently wrong trajectory");
     check(hit->feature.find("'r'") != std::string::npos,
           "diagnostic must name the offending rule so it is findable in a large model");
-    check(hit->feature.find("multi-molecule") != std::string::npos,
-          "diagnostic must say which shape it refused");
+    check(hit->feature.find(expected_reason) != std::string::npos,
+          "diagnostic must say which shape it refused (expected '" + expected_reason +
+              "'), got: " + hit->feature);
   }
 }
 
 } // namespace
 
 int main(int argc, char* argv[]) {
-  if (argc < 4) {
-    std::fprintf(stderr,
-                 "Usage: trimolecular_test <reproducer_xml> <rate_xml> <unsupported_xml>\n");
+  if (argc < 5) {
+    std::fprintf(stderr, "Usage: trimolecular_test <reproducer_xml> <rate_xml> "
+                         "<multimol_xml> <ratelaw_xml>\n");
     return 2;
   }
 
   try {
     test_reproducer_fires(argv[1]);
     test_rate_matches_closed_form(argv[2]);
-    test_unsupported_shape_still_refused(argv[3]);
+    // The two exclusions reachable from BNG2-written XML.  A third — more
+    // than 6 reactant patterns — shares the same code path.  (MM is not
+    // reachable: BNG2 refuses to write XML for MM with 3 reactants.)
+    test_unsupported_shape_still_refused(argv[3], "multi-molecule");
+    test_unsupported_shape_still_refused(argv[4], "rate law");
   } catch (const std::exception& e) {
     std::fprintf(stderr, "FAIL: exception: %s\n", e.what());
     ++g_failures;

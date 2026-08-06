@@ -39,8 +39,11 @@ the three it hit:
 - **"past the engine's n-ary limit of 6"** — split the rule.
 - **"one of them a multi-molecule complex"** — a reactant such as
   `A(s,d!1).D(d!1)`.  The n-ary path tracks one seed molecule per pattern.
-- **"under a '…' rate law"** — `MM`, local functions and the like are
-  defined for 1-2 reactants only.
+- **"under a '…' rate law"** — in practice `Function`, i.e. a global or
+  local rate function on a rule of 3+ reactants.  The n-ary path
+  implements elementary (mass-action) rates only.  (`MM` cannot reach RM
+  at all: BNG2 refuses to write XML for it, with "Michaelis-Menton type
+  ratelaw require exactly 2 reactants".)
 
 In every case, rewrite as a sequence of at most bimolecular steps:
 

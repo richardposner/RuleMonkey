@@ -57,10 +57,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every output time.
 
   The common shapes are now simulated (see Added above). The rest — a
-  multi-molecule reactant pattern, a non-elementary rate law, or more than
-  6 patterns — are refused at Tier 0, naming the rule and which of the
-  three it hit, rather than going quietly inert.
-  `--ignore-unsupported` runs them anyway, with the rule still inert.
+  multi-molecule reactant pattern, a `Function` rate law, or more than 6
+  patterns — are refused at Tier 0, naming the rule and which of the three
+  it hit, rather than going quietly inert. `--ignore-unsupported` runs them
+  anyway, with the rule still inert.
+
+  Because that refusal is decided from the raw XML while the engine decides
+  from the parsed rule, the engine additionally emits its own `WARN` for any
+  rule of 3+ reactant patterns it cannot represent. If the two checks ever
+  disagree about a shape, the run stays loud instead of quietly producing a
+  valid-looking trajectory — which was the entire failure mode here.
 
 ## [3.7.0] — 2026-07-29
 
