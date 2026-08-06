@@ -1,0 +1,59 @@
+# Feature: bimolecular rule on a multi-molecule reactant whose seed molecule
+#   offers embeddings that dead-end
+# Tests: `A(d!1).D(d!1) + X()` where A(d,d) carries a D on one `d` and an E on
+#   the other.  The pattern's seed molecule `A(d!1)` has two embeddings, one
+#   per bonded `d`, and only the one that lands on the D extends to a whole
+#   match.  The sampler weights A by the extending count and must draw among
+#   those embeddings; treating the dead end as a null event fires the rule at
+#   half its rate.  The D binding turns over during the run, so the counts are
+#   maintained incrementally rather than only at load.
+# Tier: base
+# Expected: P accumulates at k·N_AD·N_X with N_AD tracking the A-D binding
+#   equilibrium; the AD observable counts one per complex, not one per seed
+#   embedding.
+
+begin model
+begin parameters
+    A_tot   100
+    D_tot   100
+    X_tot   100
+    kf      0.002     # /s, A-D binding
+    kr      0.05      # /s, A-D unbinding
+    k3      1.0e-4    # /s, the multi-molecule reactant rule
+end parameters
+
+begin molecule types
+    A(d,d)
+    D(d)
+    E(d)
+    X()
+    P()
+end molecule types
+
+begin seed species
+    # Every A is capped by an E, so one `d` is always bonded to something the
+    # rule's pattern cannot use — that is what makes the dead-end embedding.
+    A(d!1,d!2).D(d!1).E(d!2)  A_tot
+    X()                       X_tot
+end seed species
+
+begin observables
+    Molecules  A_total  A()
+    Molecules  D_free   D(d)
+    Molecules  AD       A(d!1).D(d!1)
+    Molecules  X_total  X()
+    Molecules  P_made   P()
+end observables
+
+begin reaction rules
+    # A-D binding turns the dead-end structure over during the run
+    A(d!1).D(d!1) -> A(d) + D(d)   kr
+    A(d) + D(d) -> A(d!1).D(d!1)   kf
+    # The rule under test: seeded on the A, reaching the D through the bond
+    A(d!1).D(d!1) + X() -> A(d!1).D(d!1) + X() + P()  k3
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>200,n_steps=>100})
+end actions

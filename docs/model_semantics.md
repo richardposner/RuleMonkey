@@ -29,7 +29,11 @@ The runtime severity model is two-level:
   `Bound` (`x!+` or `x!?`), `BoundTo` (`x!1` shared label),
   `Wildcard` (component omitted).
 - Multi-molecule reactant patterns (`A(b!1).B(a!1)`), including
-  multi-bond rings.
+  multi-bond rings. The pattern is seeded on its first molecule and the
+  rest are reached through its bonds; the sampler draws among the seed
+  embeddings that reach a whole match, and rejects a draw in which two
+  patterns (or two molecules of one pattern) land on the same molecule —
+  see "Multi-molecule reactant patterns" below.
 - Three or more reactant patterns (`A + A + A -> P`,
   `A(s,d!1).D(d!1) + A(s) + A(s) -> P`) under an elementary rate law —
   see "N-ary reactant rules" below.
@@ -249,6 +253,33 @@ These are emitted as `Severity::Warn` and the run proceeds.
 | Any rule with `MoveConnected` operation | Requires compartments; emitted as a warning because RM ignores the operation entirely. |
 | Any rule with a `priority` attribute | Honored as ordinary rule firing; the priority modifier is ignored. |
 
+## Multi-molecule reactant patterns
+
+A reactant pattern may be a `.`-joined complex — `A(b!1).B(a!1)` — on a
+unimolecular, bimolecular, or n-ary rule. The pattern is *seeded* on its
+first molecule, the rest are reached by walking its bonds out of that seed,
+and the per-molecule count `c(m)` that weights the draw is the number of
+embeddings whose seed lands on `m` and which reach a whole match.
+
+Two things follow, and both are enforced in the sampler:
+
+- **The embedding is drawn among the ones that reach a whole match**, not
+  among all embeddings of the seed molecule alone. A seed can offer an
+  embedding that goes nowhere: an `A(d,d)` bonded to a D on one `d` and an E
+  on the other has two embeddings of `A(d!1)`, and only the one that lands
+  on the D extends to `A(d!1).D(d!1)`. Treating the dead end as a null event
+  instead would fire the rule slow by exactly the fraction that dead-ends —
+  a factor of 2 in that example.
+- **The whole assignment must be injective.** Rejecting same-molecule
+  *seeds* is not enough: a molecule pulled in through one pattern's bonds
+  can be another pattern's match as well (`A(s,d!1).A(s,d!1) + A(s)` can
+  draw the dimer's second A for the second slot), and firing on that
+  consumes one molecule twice — under `DeleteMolecules`, deleting it twice.
+  Such a draw is rejected as a null event. The propensity counts it, so the
+  rejection makes the realized rate the injective count exactly rather than
+  approximately. Under `-bscb` these draws are already gone: the two seeds
+  share a complex, so the same-complex check rejects them first.
+
 ## N-ary reactant rules
 
 A rule may carry three or more `+`-separated reactants — `A + A + A -> P`,
@@ -282,11 +313,8 @@ distribution the propensity integrates, so for a rule of single-molecule
 patterns no null events are spent on coincidences.
 
 Within a slot, the embedding is drawn from the seed embeddings that actually
-extend to a whole match — the ones `c_i(m)` counted. A seed molecule can
-offer an embedding that goes nowhere (an `A(d,d)` bonded to a D and an E has
-two embeddings of `A(d!1)` but only one reaches the D, so only one extends to
-`A(d!1).D(d!1)`), and treating that as a null event instead would dilute the
-rate by the fraction that dead-ends.
+extend to a whole match — the ones `c_i(m)` counted, as described under
+"Multi-molecule reactant patterns" above.
 
 A multi-molecule pattern needs one more step. Seed distinctness does not
 prevent a molecule pulled into one slot's complex from also being another

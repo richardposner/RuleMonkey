@@ -79,6 +79,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Bimolecular rules on a multi-molecule reactant fired slow.** The sampler
+  draws the seed molecule weighted by `count_a`, which `count_multi_mol_fast`
+  defines as the number of seed embeddings that reach a whole match (`c`). It
+  then chose among *all* `S >= c` embeddings of the seed molecule alone and
+  turned a choice that dead-ended into a null event, so the rule fired at
+  `c/S` of its rate — silently, with mass conserved and nothing in the
+  trajectory looking wrong.
+
+  `S > c` whenever the seed molecule has more than one way to satisfy the
+  pattern's own components but only some of them reach the rest of the
+  pattern. On `A(d!1).D(d!1) + X()` with `A(d,d)` bonded to a D on one `d`
+  and an E on the other, `A(d!1)` has two embeddings and one reaches the D:
+  RM produced 51.7 P over 10 seeds where NFsim produced 98.8 and the closed
+  form is 100. The sampler now filters to the embeddings that reach a whole
+  match before drawing, which puts that model at 100.0. A pattern with a
+  single seed embedding skips the filter — `c/S` is 0 or 1 there and no rate
+  is lost — so the common one-bond multi-molecule rules pay nothing.
+
+  The multi-molecule *unimolecular* selector always shuffled and took the
+  first extending embedding, and the n-ary path added in #26 filters; this
+  brings the bimolecular path in line with both.
+
+- **A bimolecular rule could consume one molecule twice.** `mol_a != mol_b`
+  separates the two *seeds* only. A molecule reached through one pattern's
+  bonds can be the other pattern's match as well — `A(s,d!1).A(s,d!1) +
+  A(s) -> P()` can draw the dimer's second A for the second slot — and
+  firing on that consumed it twice; under `DeleteMolecules` it was deleted
+  twice and mass balance broke. On a 5-dimer fixture, 33 of 60 seeds ended
+  with more P than the A budget allows. The sampler now rejects a
+  non-injective assignment as a null event, exactly as the n-ary path does,
+  which is statistically exact because the propensity counts those draws.
+
+  Reachable only with `-bscb` off: under the default the two seeds share a
+  complex, so the same-complex check rejects the draw first. That is why no
+  corpus model moved.
+
+  Both fixes leave every trajectory in the 181-model corpus byte-identical —
+  the filter is skipped where it cannot matter and neither check consumes a
+  `uniform()` draw. New feature-coverage model `ft_multimol_deadend_seed`
+  fails against its NFsim reference at tz=18.0 on the previous build and
+  passes at tz=1.5 now; `multimol_rate_test` pins both in ctest.
+
 - **Rules with three or more reactant patterns no longer fail silently
   (issue #24).** The engine carries exactly two reactant slots, and every
   consumer of `reactant_pattern_starts` treats slot B as the whole tail

@@ -1,24 +1,24 @@
 # Test corpora
 
 RuleMonkey's correctness story rests on three independent test suites
-totalling 181 BNGL models. Every parity check compares the RM
+totalling 182 BNGL models. Every parity check compares the RM
 trajectory against a gold-standard reference (NFsim ensemble, BNG2
 ODE, or hand-rolled Gillespie SSA) using a per-model time-integrated
 z-score threshold.
 
 | Suite | Models | Reference | Driver | Wall time |
 |---|---:|---|---|---|
-| `feature_coverage` | 81 | NFsim 20-rep + BNG2 ODE | `harness/benchmark_feature_coverage.py` | ~3 min |
+| `feature_coverage` | 82 | NFsim 20-rep + BNG2 ODE | `harness/benchmark_feature_coverage.py` | ~3 min |
 | `corpus` | 71 | NFsim 100-rep ensemble (with 2 SSA exceptions) | `harness/benchmark_full.py` | smoke 2 min / guard 15 min / full 3 h |
 | `nfsim_basicmodels` | 29 | NFsim 100-rep ensemble | `harness/basicmodels.py` | ~5 min |
 
-Current health (2026-08-06): **181 / 181 PASS** at the canonical
+Current health (2026-08-06): **182 / 182 PASS** at the canonical
 verdict thresholds. The CI job runs `feature_coverage` on every push
 to `main`.
 
 ## `feature_coverage` — the BNGL feature matrix
 
-81 small, fast models (`tests/models/feature_coverage/*.bngl`),
+82 small, fast models (`tests/models/feature_coverage/*.bngl`),
 designed to exercise every BNGL feature and every feature
 interaction RM has historically been wrong about.  Each model is
 ≤ 600 molecules and runs in seconds.  Reference data is vendored
@@ -28,7 +28,7 @@ Models break down by family:
 
 | Prefix | Count | Purpose |
 |---|---:|---|
-| `ft_*` | 45 | One feature per model — the breadth coverage |
+| `ft_*` | 46 | One feature per model — the breadth coverage |
 | `edg_*` | 20 | "Edge cases designed to break RM" — stress probes added in 3.1.0 |
 | `combo_*` | 8 | Feature combinations that have caused past regressions |
 | `ss_*` | 4 | Steady-state / longer-time-scale variants |
@@ -40,8 +40,8 @@ cross-checks both).  Per-model rationale lives in `EDG_RATIONALE.md`
 inside the model directory.
 
 ```bash
-python3 harness/benchmark_feature_coverage.py            # all 81, ~3 min
-python3 harness/benchmark_feature_coverage.py --tier base   # 45 base ft_* models only
+python3 harness/benchmark_feature_coverage.py            # all 82, ~3 min
+python3 harness/benchmark_feature_coverage.py --tier base   # 46 base ft_* models only
 python3 harness/benchmark_feature_coverage.py ft_bond_wildcards combo_strict_product_plus
 ```
 
@@ -153,7 +153,7 @@ Both presets are wired into CI (`.github/workflows/ci.yml`).
   pre-commit gate.
 - **Before declaring a release**: `--tier full` (3 h) plus
   `feature_coverage` plus `nfsim_basicmodels`.  This is the
-  181/181 verification that backs the release notes.
+  182/182 verification that backs the release notes.
 - **Adding a new feature**: write a `feature_coverage/ft_*` model
   for it and a `combo_*` or `edg_*` if it interacts with an
   existing feature in a non-obvious way.
@@ -163,7 +163,7 @@ Both presets are wired into CI (`.github/workflows/ci.yml`).
 ```
 tests/
   models/
-    feature_coverage/{ft,edg,combo,ss,nf}_*.bngl    # 81 BNGL sources
+    feature_coverage/{ft,edg,combo,ss,nf}_*.bngl    # 82 BNGL sources
     corpus/*.bngl                                    # 71 BNGL sources
     nfsim_basicmodels/v*.bngl                        # 29 BNGL sources
   reference/
