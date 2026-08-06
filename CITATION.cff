@@ -1,0 +1,48 @@
+cff-version: 1.2.0
+message: >-
+  If you use RuleMonkey in published work, please cite the original
+  RuleMonkey paper (see preferred-citation below).
+title: RuleMonkey
+abstract: >-
+  A network-free stochastic simulator for rule-based biochemical models
+  written in BNGL. RuleMonkey reads a BioNetGen-generated XML model and
+  runs an exact discrete-event simulation, producing observable
+  trajectories in .gdat format. This is the RuleMonkey 3.x cleanroom
+  C++17 rewrite, designed to be embedded as an in-process simulation
+  kernel.
+type: software
+version: 3.8.1
+date-released: '2026-08-06'
+license: MIT
+repository-code: 'https://github.com/richardposner/RuleMonkey'
+authors:
+  - family-names: Hlavacek
+    given-names: Bill
+preferred-citation:
+  type: article
+  title: 'RuleMonkey: software for stochastic simulation of rule-based models'
+  authors:
+    - family-names: Colvin
+      given-names: Joshua
+    - family-names: Monine
+      given-names: Michael I.
+    - family-names: Gutenkunst
+      given-names: Ryan N.
+    - family-names: Hlavacek
+      given-names: William S.
+    - family-names: Von Hoff
+      given-names: Daniel D.
+    - family-names: Posner
+      given-names: Richard G.
+  journal: BMC Bioinformatics
+  volume: 11
+  start: 404
+  year: 2010
+  doi: 10.1186/1471-2105-11-404
+  identifiers:
+    - type: other
+      value: 'PMID: 20673321'
+      description: PubMed identifier
+    - type: other
+      value: PMC2921409
+      description: PubMed Central identifier
