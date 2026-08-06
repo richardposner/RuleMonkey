@@ -11,8 +11,8 @@ header comments, and the model-semantics doc.
 `rm_driver` refuses by default if the model uses a BNGL construct RM
 cannot honor (compartments, Sat / Hill rate laws, non-binding Arrhenius
 energy rules, `population` molecule types, multi-molecule Fixed species,
-…).  Each refusal names the offending element and gives per-feature
-guidance.  (`FunctionProduct` rate laws and 2-reactant binding
+rules with three or more reactant patterns, …).  Each refusal names the
+offending element and gives per-feature guidance.  (`FunctionProduct` rate laws and 2-reactant binding
 `Arrhenius` energy rules are now implemented — see
 [`model_semantics.md`](model_semantics.md).)
 
@@ -25,6 +25,28 @@ Two ways forward:
   features are demoted to warnings.  The trajectory will run but
   may diverge from BNGL semantics — each warning explains exactly
   how.
+
+### "Rule '…' has N reactant patterns"
+
+RM implements uni- and bimolecular rules.  A rule with three or more
+`+`-separated reactants — `A + A + A -> P` — is refused (issue #24).
+
+Before this check existed such a rule was *silently* skipped: it scored
+zero embeddings, held zero propensity, and never fired, while every other
+rule in the model behaved normally.  Mass stayed conserved, so nothing in
+the trajectory looked wrong; the only way to notice was to run the same
+XML through NFsim, which does fire the rule.
+
+Rewrite the rule as a sequence of at most bimolecular steps:
+
+```
+# instead of:  r: A(s) + A(s) + A(s) -> P()  k
+r1: A(s) + A(s) <-> A2(a)      kf, kr
+r2: A2(a) + A(s) -> P()        k2
+```
+
+`--ignore-unsupported` runs the model anyway, with the rule still inert —
+useful only to confirm the rest of the model is unaffected.
 
 ### "Cannot resolve value '...'"
 

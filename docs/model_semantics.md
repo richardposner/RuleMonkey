@@ -225,6 +225,7 @@ treat at least one of these as a signal to refuse the model.
 |---|---|
 | `<ListOfCompartments>` non-empty | RM does not implement compartment volume scaling — bimolecular rate constants would be silently incorrect. |
 | An `RateLaw type="Arrhenius"` rule that is **not** a 2-reactant binding rule | eBNGL energy rules are expanded at load time (see "Energy-based BNGL" below), but only for the 2-reactant binding case — matching NFsim's own coverage. State-change energy rules, intramolecular ring-closure binding, and >2-reactant rules would be silently dropped, so they are refused. (2-reactant binding Arrhenius rules, and a bare `<ListOfEnergyPatterns>` with `Function`-type rate laws, are both fully supported and are **not** triggers.) |
+| A rule with three or more `<ReactantPattern>` children | RM implements uni- and bimolecular rules only. The engine's two reactant slots merge patterns 2..n into one bond-free slot-B pattern, which scores zero embeddings for free reactants — the rule would silently hold zero propensity and never fire, with mass still conserved so the trajectory looks valid (issue #24). Rewrite as a sequence of at most bimolecular steps. |
 | Any rule with `RateLaw type="Sat"` | Deprecated; rewrite as `MM(kcat, Km)`. |
 | Any rule with `RateLaw type="Hill"` | Network-only; use `generate_network()` + ODE/SSA instead of network-free. |
 | Any `<MoleculeType population="1">` | Hybrid particle-population SSA not implemented; would be silently treated as ordinary particles with diverging trajectories. |

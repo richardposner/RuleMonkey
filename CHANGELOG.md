@@ -5,6 +5,36 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Rules with three or more reactant patterns are now refused instead of
+  silently never firing (issue #24).** The engine carries exactly two
+  reactant slots, and every consumer of `reactant_pattern_starts` treats
+  slot B as the whole tail `[starts[1], molecules.size())`. A rule written
+  `A + A + A -> P` therefore collapsed its second and third patterns into
+  one bond-free slot-B pattern, which `count_multi_mol_fast_generic` can
+  only satisfy from inside the seed molecule's own complex — so three free
+  monomers scored zero embeddings, `b_total` stayed zero, and the rule's
+  propensity was identically zero. The cutoff was exactly at three: two
+  identical reactant patterns were, and remain, correct.
+
+  Nothing reported the loss. The rule simply behaved as if it were absent
+  while the rest of the model simulated normally, and because mass was
+  still conserved the trajectory looked entirely valid — the reporter only
+  found it by running the same XML through NFsim, which fires the rule
+  ~126 times over the same horizon. In the 194-rule model where it
+  surfaced, an unrelated first-order decay arm tracked its closed-form
+  solution to within 1% while one molecule sat at its seeded value of 50 at
+  every output time.
+
+  Such a model is now refused at Tier 0, naming the rule and its pattern
+  count, with the suggestion to rewrite it as a sequence of at most
+  bimolecular steps. `--ignore-unsupported` runs it anyway, with the rule
+  still inert. This is a diagnostic, not a capability: real n-ary reactant
+  support is separate work, and will lift the refusal.
+
 ## [3.7.0] — 2026-07-29
 
 ### Fixed

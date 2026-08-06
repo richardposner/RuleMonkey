@@ -226,6 +226,21 @@ add_test(
         ${CMAKE_CURRENT_BINARY_DIR}/negative_rate_clamp_stderr.txt
 )
 
+# Three-or-more-reactant-pattern diagnostic (issue #24): a rule such as
+# `A + A + A -> P` collapses its 2nd and 3rd patterns into the engine's
+# single slot-B tail, scores zero embeddings, and never fires — with mass
+# still conserved and nothing reported, so the trajectory looks valid.
+# Pins down that RM refuses such a model up front instead of running it.
+add_executable(trimolecular_test cpp/trimolecular_test.cpp)
+target_link_libraries(trimolecular_test PRIVATE rulemonkey)
+
+add_test(
+    NAME trimolecular_test
+    COMMAND trimolecular_test
+        ${_rulemonkey_test_dir}/cpp/trimolecular_model.xml
+        ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
+)
+
 # Global-function exposure regression (issue #7): pins down that
 # Result::function_names / function_data, RuleMonkeySimulator::function_names()
 # and get_function_values() expose BNGL global-function values, that the

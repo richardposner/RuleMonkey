@@ -2150,6 +2150,44 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
     }
   }
 
+  // ERROR-level: three or more ReactantPatterns on a single rule (issue #24).
+  // The engine carries exactly two reactant slots (RuleState's a_*/b_*
+  // fields), and every consumer of `reactant_pattern_starts` treats slot B
+  // as the whole tail `[starts[1], molecules.size())`.  With >= 3 patterns
+  // that tail merges patterns 2..n into one bond-free slot-B pattern, which
+  // count_multi_mol_fast_generic can only satisfy from within the seed's own
+  // complex — so free monomers score 0, b_total is 0, and the propensity is
+  // identically 0.  The rule never fires, mass is still conserved, and
+  // nothing is reported: the trajectory looks valid unless it is compared
+  // against another engine.  Refuse the model rather than skip the rule.
+  if (auto* rr_list = find_child(model_node, "ListOfReactionRules")) {
+    for (auto& rr : rr_list->children) {
+      if (rr.name != "ReactionRule")
+        continue;
+      auto* rp_list = find_child(rr, "ListOfReactantPatterns");
+      if (!rp_list)
+        continue;
+      int rp_count = 0;
+      for (auto& rpn : rp_list->children) {
+        if (rpn.name == "ReactantPattern")
+          ++rp_count;
+      }
+      if (rp_count < 3)
+        continue;
+      auto rule_name = opt_attr(rr, "name");
+      if (rule_name.empty())
+        rule_name = opt_attr(rr, "id");
+      std::string const msg = "Rule '" + rule_name + "' has " + std::to_string(rp_count) +
+                              " reactant patterns — RM implements at most 2 (uni- and "
+                              "bimolecular). The rule would silently have zero propensity and "
+                              "never fire, while the rest of the model simulates normally. "
+                              "Rewrite it as a sequence of at most bimolecular steps (e.g. "
+                              "A + A -> A2 followed by A2 + A -> P). Pass --ignore-unsupported "
+                              "to run anyway (this rule will not fire).";
+      warnings.push_back({Severity::Error, "ListOfReactantPatterns", msg});
+    }
+  }
+
   // ERROR-level: BNGL `population` keyword (hybrid particle-population SSA,
   // Hogg 2013).  NFsim treats `population`-typed molecule types as bulk
   // counters rather than tracked individuals, with restricted semantics
