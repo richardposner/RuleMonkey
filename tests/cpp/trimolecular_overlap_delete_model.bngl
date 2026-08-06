@@ -1,0 +1,25 @@
+begin model
+begin parameters
+  k 1.0e-6
+end parameters
+begin molecule types
+  A(s,d)
+  D(d)
+  P()
+end molecule types
+begin seed species
+  A(s,d!1).D(d!1) 200
+  A(s,d) 200
+end seed species
+begin observables
+  Molecules A_tot A()
+  Molecules D_tot D()
+  Molecules P_made P()
+end observables
+begin reaction rules
+  r: D(d!1).A(s,d!1) + A(s) + A(s) -> P()  k  DeleteMolecules
+end reaction rules
+end model
+begin actions
+  writeXML()
+end actions

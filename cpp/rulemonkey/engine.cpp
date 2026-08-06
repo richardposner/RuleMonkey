@@ -2296,15 +2296,22 @@ struct PerMolRuleData {
 };
 
 // ---------------------------------------------------------------------------
-// N-ary reactant support (issue #24)
+// N-ary reactant support (issues #24, #26)
 //
 // The two-slot machinery above (a_*/b_* fields, compute_shared_components,
 // the bimolecular sampler) is the hot path and stays exactly as it was.  A
 // rule with three or more reactant patterns takes this separate, general
 // path instead.
 //
+// Slots.  Slot i is reactant pattern i, spanning the pattern molecules
+// `[reactant_pattern_starts[i], reactant_pattern_starts[i+1])`.  A slot may
+// be a single molecule (`A(s)`) or a `.`-joined complex
+// (`A(s,d!1).D(d!1)`), exactly as a bimolecular slot may (issue #26); the
+// slot's *seed* is its first pattern molecule and `c_i(m)` below counts the
+// embeddings of the whole sub-pattern whose seed lands on molecule `m`.
+//
 // Propensity.  With `n` reactant patterns and per-molecule embedding counts
-// `c_i(m)` for slot i, mass action over *distinct* molecules is
+// `c_i(m)` for slot i, mass action over *distinct* seed molecules is
 //
 //     D = Σ_{(m_0..m_{n-1}) all distinct} Π_i c_i(m_i)
 //
@@ -2326,10 +2333,30 @@ struct PerMolRuleData {
 // partition sum stay small (Bell(6) = 203).
 //
 // Sampling.  Each slot is drawn independently ∝ c_i(·) and the tuple is
-// rejected unless all n molecules are distinct — which yields exactly the
-// distribution ∝ Π c_i(m_i) conditioned on distinctness, the same measure
-// the propensity above integrates.  No null events are needed for
-// coincidence; the SSA stays exact.
+// rejected unless all n *seed* molecules are distinct — which yields exactly
+// the distribution ∝ Π c_i(m_i) conditioned on seed distinctness, the same
+// measure `D` integrates.  For a rule of single-molecule slots that is the
+// whole story: no null events are spent on coincidence and the SSA is exact.
+//
+// Distinctness with multi-molecule slots (issue #26).  Seed distinctness is
+// no longer enough — a molecule pulled into slot i's complex may be the seed
+// of slot j, or sit inside slot j's complex too, and firing on such a draw
+// would consume one molecule twice.  `D` counts those tuples, so it is an
+// upper bound on the true count `D_inj` (the same sum restricted to draws
+// whose *whole* pattern-molecule assignment is injective).  The draw is
+// therefore rejected as a null event unless the full assignment is
+// injective, which realizes
+//
+//     D · k · sf · (D_inj / D)  =  D_inj · k · sf
+//
+// exactly — the standard inflated-propensity/null-event trick the
+// bimolecular sampler already uses for same-molecule and same-complex
+// draws.  The cost is wasted SSA cycles in proportion to how often the
+// patterns actually overlap, which is rare (and rarer still under
+// `-bscb`, which rejects same-complex seed pairs before this point).
+// Deflating `D` to `D_inj` exactly would mean expanding over which
+// *pattern molecules* coincide rather than which slots — combinatorially
+// far worse, for a correction that changes nothing statistically.
 // ---------------------------------------------------------------------------
 
 constexpr int kMaxNarySlots = 6;
@@ -2346,11 +2373,17 @@ struct NaryState {
   bool enabled = false;
   int n_slots = 0;
 
-  // Per-slot embedding counts, [slot][mol_id].  Slot i corresponds to
-  // reactant pattern i, whose seed (and only) molecule is pattern molecule
-  // `reactant_pattern_starts[i]`.
+  // Per-slot embedding counts, [slot][mol_id].  Slot i is reactant pattern
+  // i, spanning pattern molecules [slot_start[i], slot_end[i]); its seed is
+  // `slot_start[i]` and counts[i][m] is the number of embeddings of the
+  // whole sub-pattern that place that seed on molecule m.
   std::vector<std::vector<int>> counts;
-  std::vector<int> slot_type_index;             // molecule type per slot
+  std::vector<int> slot_start;
+  std::vector<int> slot_end;
+  std::vector<char> slot_multi;                 // span > 1: a `.`-joined complex
+  std::vector<PatternAdj> slot_adj;             // bond adjacency, multi-molecule slots
+  bool any_multi = false;                       // any slot spans > 1 molecule
+  std::vector<int> slot_type_index;             // molecule type of the seed, per slot
   std::vector<std::vector<int>> reacting_local; // per-slot reacting components
 
   // T_B for every subset mask in [0, 1<<n_slots).  Index 0 is unused.
@@ -2405,6 +2438,39 @@ std::vector<NaryPartition> build_nary_partitions(int n) {
   return out;
 }
 
+// Is every molecule of the pattern sub-range [start, end) reachable from
+// `start` along the pattern's own bonds?  A `.`-joined reactant whose
+// molecules are *not* bonded to each other — `A(x).B(y)` with no shared bond
+// label — means "these molecules, anywhere in the same complex".  The n-ary
+// sampler places a slot's non-seed molecules by walking bonds out of the
+// seed (resolve_pattern_context), so it cannot realize such a draw, while
+// the count would still be non-zero: the rule would hold propensity and
+// null-event every firing.  That is the silent inertness of #24 again, so
+// the shape is refused rather than run.
+bool nary_slot_connected(const Pattern& pat, int start, int end) {
+  if (end - start <= 1)
+    return true;
+  PatternAdj const pa = build_pattern_adjacency(pat, start, end);
+  std::vector<char> seen(pat.molecules.size(), 0);
+  std::queue<int> q;
+  seen[start] = 1;
+  q.push(start);
+  while (!q.empty()) {
+    int const cur = q.front();
+    q.pop();
+    for (const auto& e : pa.adj[cur]) {
+      if (e.other_mol >= start && e.other_mol < end && seen[e.other_mol] == 0) {
+        seen[e.other_mol] = 1;
+        q.push(e.other_mol);
+      }
+    }
+  }
+  for (int mi = start; mi < end; ++mi)
+    if (seen[mi] == 0)
+      return false;
+  return true;
+}
+
 // Is this >= 3-pattern rule a shape the n-ary path implements?  Kept as one
 // predicate so the engine gate and the load-time refusal in
 // simulator.cpp::scan_unsupported cannot drift apart: anything this rejects
@@ -2416,14 +2482,15 @@ bool nary_shape_supported(const Rule& rule) {
   if (static_cast<int>(rule.reactant_pattern_starts.size()) != n)
     return false;
 
-  // Every reactant pattern must be exactly one molecule.
+  // A reactant pattern may be a single molecule or a bonded complex
+  // (issue #26), but it has to be one connected piece — see above.
   int const n_mols = static_cast<int>(rule.reactant_pattern.molecules.size());
   for (int slot = 0; slot < n; ++slot) {
     int const start = rule.reactant_pattern_starts[slot];
     int const end = (slot + 1 < n) ? rule.reactant_pattern_starts[slot + 1] : n_mols;
-    if (end - start != 1)
+    if (start < 0 || start >= n_mols || end <= start || end > n_mols)
       return false;
-    if (start < 0 || start >= n_mols)
+    if (!nary_slot_connected(rule.reactant_pattern, start, end))
       return false;
   }
 
@@ -3832,19 +3899,20 @@ struct Engine::Impl {
     recompute_total_propensity();
   }
 
-  // --- N-ary reactant path (issue #24) -------------------------------------
+  // --- N-ary reactant path (issues #24, #26) -------------------------------
 
   // Decide whether rule `rule_idx` takes the n-ary path, and if so build its
   // NaryState.  Uni- and bimolecular rules are left untouched on the
   // existing two-slot machinery.
   //
-  // The path covers rules whose every reactant pattern is a single molecule
-  // — `A + A + A`, `A + B + C`, and so on.  Shapes left out are refused at
-  // load time by scan_unsupported rather than silently mis-simulated:
+  // The path covers rules whose every reactant pattern is one connected
+  // piece — `A + A + A`, `A + B + C`, `A(s,d!1).D(d!1) + A(s) + A(s)`, and so
+  // on.  Shapes left out are refused at load time by scan_unsupported rather
+  // than silently mis-simulated:
   //
-  //   * multi-molecule reactant patterns (`A.B + C + D`), which would need
-  //     the same distinctness bookkeeping across every pattern molecule that
-  //     compute_shared_components does for two slots;
+  //   * a reactant pattern whose `.`-joined molecules are not bonded to each
+  //     other (`A().B() + C + D`), which the sampler cannot place — see
+  //     nary_slot_connected;
   //   * MM (NFsim itself requires exactly 2 reactants), local-function and
   //     FunctionProduct rate laws, all of which are defined on 1-2 slots.
   void nary_setup(int rule_idx) {
@@ -3881,9 +3949,15 @@ struct Engine::Impl {
       return;
     }
 
+    int const n_mols = static_cast<int>(rule.reactant_pattern.molecules.size());
+
     ns.enabled = true;
     ns.n_slots = n;
     ns.counts.assign(n, {});
+    ns.slot_start.assign(n, 0);
+    ns.slot_end.assign(n, 0);
+    ns.slot_multi.assign(n, 0);
+    ns.slot_adj.assign(n, PatternAdj{});
     ns.slot_type_index.assign(n, -1);
     ns.reacting_local.assign(n, {});
     ns.subset_totals.assign(std::size_t{1} << n, 0.0);
@@ -3892,11 +3966,29 @@ struct Engine::Impl {
     ns.fenwick.resize(n);
     ns.use_fenwick.assign(n, 0);
 
+    for (int slot = 0; slot < n; ++slot) {
+      ns.slot_start[slot] = rule.reactant_pattern_starts[slot];
+      ns.slot_end[slot] = (slot + 1 < n) ? rule.reactant_pattern_starts[slot + 1] : n_mols;
+      if (ns.slot_end[slot] - ns.slot_start[slot] > 1) {
+        ns.slot_multi[slot] = 1;
+        ns.any_multi = true;
+        // Bond adjacency for the slot's own sub-range, as the two-slot path
+        // builds pat_adj_a/_b.  Drives both count_multi_mol_fast and the
+        // sampler's resolve_pattern_context.  (The 2-mol-1-bond FastMatchSlot
+        // specialization is deliberately not wired up here: n-ary rules are
+        // not a hot path, and the generic counter is the reference the
+        // specialization is checked against.)
+        ns.slot_adj[slot] =
+            build_pattern_adjacency(rule.reactant_pattern, ns.slot_start[slot], ns.slot_end[slot]);
+      }
+    }
+
     // Reacting-component local indices per slot, mirroring the
     // reacting_local_a/_b computation for the two-slot path: they drive
     // embedding deduplication in count_embeddings_single so that mappings
     // differing only in which non-reacting component is targeted collapse
-    // to one physical reaction.
+    // to one physical reaction.  Taken on the slot's seed molecule, which is
+    // where both counters enumerate embeddings.
     std::unordered_set<int> flat_reacting;
     for (auto& op : rule.operations) {
       if (op.comp_flat >= 0)
@@ -3907,7 +3999,7 @@ struct Engine::Impl {
         flat_reacting.insert(op.comp_flat_b);
     }
     for (int slot = 0; slot < n; ++slot) {
-      int const mi = rule.reactant_pattern_starts[slot];
+      int const mi = ns.slot_start[slot];
       auto& pm = rule.reactant_pattern.molecules[mi];
       ns.slot_type_index[slot] = pm.type_index;
       int flat_base = 0;
@@ -3917,6 +4009,57 @@ struct Engine::Impl {
         if (flat_reacting.count(flat_base + ci))
           ns.reacting_local[slot].push_back(ci);
     }
+  }
+
+  // Does the match a multi-molecule slot resolved to actually stand up?
+  // resolve_pattern_context walks bonds greedily out of the seed and does
+  // not re-check a molecule it has already placed, so a pattern with a ring
+  // can come back with a bond unsatisfied; nor does it require the slot's
+  // molecules to be distinct from one another.  count_multi_mol_fast checks
+  // both while counting, so checking them here too keeps the set of
+  // acceptable seed embeddings the same size as the count that weighted the
+  // draw — which is what makes the realized rate exact.
+  bool nary_slot_match_valid(const Rule& rule, const NaryState& ns, int slot,
+                             const ReactionMatch& m) const {
+    int const start = ns.slot_start[slot];
+    int const end = ns.slot_end[slot];
+    for (int i = start; i < end; ++i) {
+      if (m.mol_ids[i] < 0)
+        return false;
+      for (int j = i + 1; j < end; ++j)
+        if (m.mol_ids[i] == m.mol_ids[j])
+          return false;
+    }
+    // Every pattern bond inside the slot must be realized between the
+    // components the match picked.  The skip-then-test loop reads more
+    // clearly than std::all_of over a lambda with two range guards.
+    int const flat_start = rule.reactant_pattern.flat_index(start, 0);
+    int const flat_end = rule.reactant_pattern.flat_index(end, 0);
+    for (const auto& bond : rule.reactant_pattern.bonds) { // NOLINT(readability-use-anyofallof)
+      if (bond.comp_flat_a < flat_start || bond.comp_flat_a >= flat_end)
+        continue;
+      if (bond.comp_flat_b < flat_start || bond.comp_flat_b >= flat_end)
+        continue;
+      int const ca = m.comp_ids[bond.comp_flat_a];
+      int const cb = m.comp_ids[bond.comp_flat_b];
+      if (ca < 0 || cb < 0 || pool.component(ca).bond_partner != cb)
+        return false;
+    }
+    return true;
+  }
+
+  // Embeddings of slot `slot`'s reactant pattern seeded at molecule `mid`.
+  // Single-molecule slots take the plain per-molecule counter; a `.`-joined
+  // complex takes the same multi-molecule counter the bimolecular path uses
+  // for its own slots (issue #26).
+  int nary_slot_count(const Rule& rule, const NaryState& ns, int slot, int mid) {
+    int const start = ns.slot_start[slot];
+    if (ns.slot_multi[slot] == 0)
+      return count_embeddings_single(pool, mid, rule.reactant_pattern.molecules[start], model,
+                                     nullptr, &ns.reacting_local[slot]);
+    return count_multi_mol_fast(pool, mid, rule.reactant_pattern, model, start, ns.slot_end[slot],
+                                start, ns.slot_adj[slot], &cm_profile_, &cmm_fc_profile_,
+                                /*fm=*/nullptr, &ns.reacting_local[slot]);
   }
 
   // Full rescan of every slot's per-molecule counts, rebuilding the subset
@@ -3933,13 +4076,10 @@ struct Engine::Impl {
     std::fill(ns.slot_totals.begin(), ns.slot_totals.end(), 0.0);
 
     for (int slot = 0; slot < ns.n_slots; ++slot) {
-      int const mi = rule.reactant_pattern_starts[slot];
-      auto& pm = rule.reactant_pattern.molecules[mi];
       for (int const mid : pool.molecules_of_type(ns.slot_type_index[slot])) {
         if (mid < 0 || mid >= pool_size || !pool.molecule(mid).active)
           continue;
-        ns.counts[slot][mid] =
-            count_embeddings_single(pool, mid, pm, model, nullptr, &ns.reacting_local[slot]);
+        ns.counts[slot][mid] = nary_slot_count(rule, ns, slot, mid);
       }
     }
 
@@ -4008,11 +4148,8 @@ struct Engine::Impl {
     for (int slot = 0; slot < ns.n_slots; ++slot) {
       int const old_count = ns.counts[slot][mid];
       int new_count = 0;
-      if (live && pool.molecule(mid).type_index == ns.slot_type_index[slot]) {
-        int const pat_mi = rule.reactant_pattern_starts[slot];
-        new_count = count_embeddings_single(pool, mid, rule.reactant_pattern.molecules[pat_mi],
-                                            model, nullptr, &ns.reacting_local[slot]);
-      }
+      if (live && pool.molecule(mid).type_index == ns.slot_type_index[slot])
+        new_count = nary_slot_count(rule, ns, slot, mid);
       ns.counts[slot][mid] = new_count;
 
       if (ns.use_fenwick[slot] != 0 && new_count != old_count) {
@@ -6224,15 +6361,17 @@ struct Engine::Impl {
             }
       }
 
-      // Pick one embedding per slot and lay the components out flat.  Every
-      // slot is a single-molecule pattern (nary_shape_supported), so slot i
-      // is pattern molecule reactant_pattern_starts[i].
+      // Pick one embedding per slot and lay the components out flat.  Slot i
+      // is seeded at pattern molecule ns.slot_start[i]; a slot that spans
+      // more than one pattern molecule (issue #26) has its remaining
+      // molecules resolved by walking bonds out of that seed, exactly as the
+      // bimolecular sampler resolves its own multi-molecule patterns.
       int const n_flat = rule.reactant_pattern.flat_comp_count();
       match.mol_ids.assign(rule.reactant_pattern.molecules.size(), -1);
       match.comp_ids.assign(n_flat, -1);
 
       for (int slot = 0; slot < ns.n_slots; ++slot) {
-        int const pat_mi = rule.reactant_pattern_starts[slot];
+        int const pat_mi = ns.slot_start[slot];
         auto& pm = rule.reactant_pattern.molecules[pat_mi];
         std::vector<std::vector<int>> embs;
         count_embeddings_single(pool, chosen[slot], pm, model, &embs, &ns.reacting_local[slot]);
@@ -6241,17 +6380,80 @@ struct Engine::Impl {
           sr_finish(SrProfile::kPathNary, /*outcome=*/1);
           return match;
         }
-        int ei = static_cast<int>(uniform() * embs.size());
-        if (ei >= static_cast<int>(embs.size()))
-          ei = static_cast<int>(embs.size()) - 1;
 
-        match.mol_ids[pat_mi] = chosen[slot];
-        int flat_base = 0;
-        for (int j = 0; j < pat_mi; ++j)
-          flat_base += static_cast<int>(rule.reactant_pattern.molecules[j].components.size());
-        int const nc = static_cast<int>(pm.components.size());
-        for (int ci = 0; ci < nc && ci < static_cast<int>(embs[ei].size()); ++ci)
-          match.comp_ids[flat_base + ci] = pool.molecule(chosen[slot]).comp_ids[embs[ei][ci]];
+        // Write seed embedding `ei` into `m`, then, for a multi-molecule
+        // slot, walk the slot's bonds out of the seed to place the rest.
+        auto apply_emb = [&](int ei, ReactionMatch& m) {
+          m.mol_ids[pat_mi] = chosen[slot];
+          int flat_base = 0;
+          for (int j = 0; j < pat_mi; ++j)
+            flat_base += static_cast<int>(rule.reactant_pattern.molecules[j].components.size());
+          int const nc = static_cast<int>(pm.components.size());
+          for (int ci = 0; ci < nc && ci < static_cast<int>(embs[ei].size()); ++ci)
+            m.comp_ids[flat_base + ci] = pool.molecule(chosen[slot]).comp_ids[embs[ei][ci]];
+          if (ns.slot_multi[slot] == 0)
+            return true;
+          return resolve_pattern_context(rule.reactant_pattern, ns.slot_adj[slot], pat_mi,
+                                         ns.slot_end[slot], pat_mi, chosen[slot], embs[ei], m) &&
+                 nary_slot_match_valid(rule, ns, slot, m);
+        };
+
+        if (ns.slot_multi[slot] == 0) {
+          // Single-molecule slot: every seed embedding is a whole match, so
+          // one uniform draw settles it.  Untouched from the shape #24
+          // shipped, so those rules keep their exact RNG stream.
+          int ei = static_cast<int>(uniform() * embs.size());
+          if (ei >= static_cast<int>(embs.size()))
+            ei = static_cast<int>(embs.size()) - 1;
+          apply_emb(ei, match);
+          continue;
+        }
+
+        // Multi-molecule slot: only the seed embeddings that extend to a
+        // whole match are physical reactions, and they are exactly what
+        // c_i(m) counted for the propensity.  Filter first and draw among
+        // the survivors — drawing over all seed embeddings and calling a
+        // dead end a null event would dilute the rate by the fraction that
+        // dead-ends (an A(d,d) bonded to a D and an E offers two seed
+        // embeddings of `A(d!1).D(d!1)`, only one of which reaches the D).
+        std::vector<int> extending;
+        extending.reserve(embs.size());
+        for (int ei = 0; ei < static_cast<int>(embs.size()); ++ei) {
+          ReactionMatch trial = match;
+          if (apply_emb(ei, trial))
+            extending.push_back(ei);
+        }
+        if (extending.empty()) {
+          match.mol_ids.clear();
+          sr_finish(SrProfile::kPathNary, /*outcome=*/1);
+          return match;
+        }
+        int pick = static_cast<int>(uniform() * extending.size());
+        if (pick >= static_cast<int>(extending.size()))
+          pick = static_cast<int>(extending.size()) - 1;
+        apply_emb(extending[pick], match);
+      }
+
+      // Full-assignment injectivity (issue #26).  The distinctness enforced
+      // above is over the n seeds only.  A molecule drawn into one slot's
+      // complex may also be another slot's seed, or sit inside another
+      // slot's complex — firing on such a draw would consume one molecule
+      // twice, and a DeleteMolecules rule would try to delete it twice.  The
+      // propensity counts those draws, so rejecting them here as null events
+      // realizes the injective count exactly rather than approximately (see
+      // the NaryState comment).  A rule of single-molecule slots can never
+      // trip this; the loop is skipped outright for one.
+      if (ns.any_multi) {
+        int const n_pat_mols = static_cast<int>(match.mol_ids.size());
+        for (int i = 0; i < n_pat_mols; ++i) {
+          for (int j = i + 1; j < n_pat_mols; ++j) {
+            if (match.mol_ids[i] >= 0 && match.mol_ids[i] == match.mol_ids[j]) {
+              match.mol_ids.clear();
+              sr_finish(SrProfile::kPathNary, /*outcome=*/1);
+              return match;
+            }
+          }
+        }
       }
 
       sr_finish(SrProfile::kPathNary, /*outcome=*/2);

@@ -1,0 +1,50 @@
+# Feature: n-ary rule (3 reactant patterns) with a multi-molecule reactant
+# Tests: `A(s,d!1).D(d!1) + A(s) + A(s) -> P()` — a `.`-joined complex as one
+#   reactant pattern of a trimolecular rule (issue #26).  The complex
+#   population turns over through the binding rule, so the per-slot embedding
+#   counts are maintained incrementally rather than only at load, and `A(s)`
+#   matches the A inside the complex as well as the free ones, so slots 1 and
+#   2 draw from a pool that overlaps slot 0's own match.
+# Tier: base
+# Expected: P accumulates; each firing takes three A and one D, and the A
+#   bonded to the D is never consumed twice by an overlapping slot.
+
+begin model
+begin parameters
+    A_tot   200
+    D_tot    60
+    kf      0.002     # /s, A-D binding
+    kr      0.05      # /s, A-D unbinding
+    k3      2.5e-7    # /s, trimolecular consumption
+end parameters
+
+begin molecule types
+    A(s,d)
+    D(d)
+    P()
+end molecule types
+
+begin seed species
+    A(s,d)  A_tot
+    D(d)    D_tot
+end seed species
+
+begin observables
+    Molecules  A_total  A()
+    Molecules  D_total  D()
+    Molecules  A_free   A(d)
+    Molecules  AD       A(d!1).D(d!1)
+    Molecules  P_made   P()
+end observables
+
+begin reaction rules
+    # A-D binding turns the complex population over during the run
+    A(s,d) + D(d) <-> A(s,d!1).D(d!1)  kf, kr
+    # Trimolecular consumption seeded on the complex
+    A(s,d!1).D(d!1) + A(s) + A(s) -> P()  k3  DeleteMolecules
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>200,n_steps=>100})
+end actions

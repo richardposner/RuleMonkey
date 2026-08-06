@@ -226,14 +226,16 @@ add_test(
         ${CMAKE_CURRENT_BINARY_DIR}/negative_rate_clamp_stderr.txt
 )
 
-# N-ary reactant rules (issue #24): a rule such as `A + A + A -> P` used to
-# collapse its 2nd and 3rd patterns into the engine's single slot-B tail,
+# N-ary reactant rules (issues #24, #26): a rule such as `A + A + A -> P` used
+# to collapse its 2nd and 3rd patterns into the engine's single slot-B tail,
 # score zero embeddings, and never fire — with mass still conserved and
 # nothing reported, so the trajectory looked valid.  Covers that the
 # reproducer now fires and balances mass, that the realized rate matches the
 # closed-form k·sf·N(N-1)(N-2) on a constant-population fixture (the check a
-# wrong symmetry factor fails), and that shapes outside the implemented path
-# are still refused rather than going quietly inert again.
+# wrong symmetry factor fails), that a `.`-joined reactant complex is
+# accepted and its overlapping matches neither double-consume a molecule nor
+# skew the rate (#26), and that shapes outside the implemented path are still
+# refused rather than going quietly inert again.
 add_executable(trimolecular_test cpp/trimolecular_test.cpp)
 target_link_libraries(trimolecular_test PRIVATE rulemonkey)
 
@@ -242,7 +244,12 @@ add_test(
     COMMAND trimolecular_test
         ${_rulemonkey_test_dir}/cpp/trimolecular_model.xml
         ${_rulemonkey_test_dir}/cpp/trimolecular_rate_model.xml
-        ${_rulemonkey_test_dir}/cpp/trimolecular_unsupported_model.xml
+        ${_rulemonkey_test_dir}/cpp/trimolecular_multimol_model.xml
+        ${_rulemonkey_test_dir}/cpp/trimolecular_overlap_model.xml
+        ${_rulemonkey_test_dir}/cpp/trimolecular_deadend_model.xml
+        ${_rulemonkey_test_dir}/cpp/trimolecular_overlap_delete_model.xml
+        ${_rulemonkey_test_dir}/cpp/trimolecular_disjoint_model.xml
+        ${_rulemonkey_test_dir}/cpp/trimolecular_toomany_model.xml
         ${_rulemonkey_test_dir}/cpp/trimolecular_ratelaw_model.xml
 )
 

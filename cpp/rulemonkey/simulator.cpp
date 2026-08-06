@@ -2035,6 +2035,71 @@ bool has_child(const XmlNode& parent, const std::string& name) {
   return find_child(parent, name) != nullptr;
 }
 
+// Are the molecules of one <ReactantPattern> tied together by that pattern's
+// own bonds?  A `.`-joined reactant whose molecules share no bond —
+// `A(x).B(y)`, meaning "these molecules, anywhere in the same complex" — is a
+// shape the n-ary sampler cannot place, since it reaches a pattern's non-seed
+// molecules by following bonds out of the seed.  Mirrors nary_slot_connected()
+// in engine.cpp.  A single-molecule pattern is trivially connected.
+bool reactant_pattern_connected(const XmlNode& rp) {
+  std::vector<std::string> mol_ids;
+  if (auto* ml = find_child(rp, "ListOfMolecules")) {
+    for (auto& mn : ml->children)
+      if (mn.name == "Molecule")
+        mol_ids.push_back(opt_attr(mn, "id"));
+  }
+  int const n = static_cast<int>(mol_ids.size());
+  if (n <= 1)
+    return true;
+
+  // A component id is "<molecule id>_C<k>", so a bond endpoint belongs to the
+  // longest molecule id it starts with (on an underscore boundary).
+  auto mol_of_site = [&](const std::string& site) {
+    int best = -1;
+    for (int mi = 0; mi < n; ++mi) {
+      const std::string& mid = mol_ids[mi];
+      if (mid.empty() || site.size() <= mid.size())
+        continue;
+      if (site.compare(0, mid.size(), mid) != 0 || site[mid.size()] != '_')
+        continue;
+      if (best < 0 || mid.size() > mol_ids[best].size())
+        best = mi;
+    }
+    return best;
+  };
+
+  std::vector<std::vector<int>> adj(n);
+  if (auto* bl = find_child(rp, "ListOfBonds")) {
+    for (auto& bn : bl->children) {
+      if (bn.name != "Bond")
+        continue;
+      int const a = mol_of_site(opt_attr(bn, "site1"));
+      int const b = mol_of_site(opt_attr(bn, "site2"));
+      if (a >= 0 && b >= 0 && a != b) {
+        adj[a].push_back(b);
+        adj[b].push_back(a);
+      }
+    }
+  }
+
+  std::vector<char> seen(n, 0);
+  std::vector<int> stack{0};
+  seen[0] = 1;
+  int reached = 1;
+  while (!stack.empty()) {
+    int const cur = stack.back();
+    stack.pop_back();
+    for (int const nb : adj[cur]) {
+      if (seen[nb] != 0)
+        continue;
+      seen[nb] = 1;
+      ++reached;
+      stack.push_back(nb);
+    }
+  }
+  return reached == n;
+}
+
 // Check if any ReactionRule has a non-empty attribute.
 bool any_rule_has_attr(const XmlNode& model_node, const std::string& attr_name) {
   auto* rr_list = find_child(model_node, "ListOfReactionRules");
@@ -2151,16 +2216,17 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
   }
 
   // ERROR-level: an n-ary rule (>= 3 ReactantPatterns) in a shape the
-  // engine's n-ary path does not implement (issue #24).
+  // engine's n-ary path does not implement (issues #24, #26).
   //
   // Rules of three or more reactant patterns are simulated when every
-  // pattern is a single molecule and the rate law is elementary — see the
-  // NaryState comment in engine.cpp for the propensity and sampler.  The
-  // shapes below fall outside that and would otherwise hit the two-slot
-  // machinery, whose slot B swallows patterns 2..n into one bond-free
-  // pattern that scores zero embeddings for free reactants.  The rule would
-  // then hold zero propensity and never fire, with mass still conserved, so
-  // the trajectory looks valid unless compared against another engine.
+  // pattern is one connected piece — a single molecule or a bonded complex —
+  // and the rate law is elementary; see the NaryState comment in engine.cpp
+  // for the propensity and sampler.  The shapes below fall outside that and
+  // would otherwise hit the two-slot machinery, whose slot B swallows
+  // patterns 2..n into one bond-free pattern that scores zero embeddings for
+  // free reactants.  The rule would then hold zero propensity and never
+  // fire, with mass still conserved, so the trajectory looks valid unless
+  // compared against another engine.
   //
   // This mirrors nary_shape_supported() in engine.cpp; the two must agree,
   // or a rule rejected there and not refused here goes silently inert again.
@@ -2174,19 +2240,13 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
         continue;
 
       int rp_count = 0;
-      bool all_single_molecule = true;
+      bool all_connected = true;
       for (auto& rpn : rp_list->children) {
         if (rpn.name != "ReactantPattern")
           continue;
         ++rp_count;
-        int n_mol = 0;
-        if (auto* ml = find_child(rpn, "ListOfMolecules")) {
-          for (auto& mn : ml->children)
-            if (mn.name == "Molecule")
-              ++n_mol;
-        }
-        if (n_mol != 1)
-          all_single_molecule = false;
+        if (!reactant_pattern_connected(rpn))
+          all_connected = false;
       }
       if (rp_count < 3)
         continue;
@@ -2202,9 +2262,10 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
       std::string reason;
       if (rp_count > kMaxNaryPatterns) {
         reason = "past the engine's n-ary limit of " + std::to_string(kMaxNaryPatterns);
-      } else if (!all_single_molecule) {
-        reason = "one of them a multi-molecule complex — the n-ary path tracks "
-                 "a single seed molecule per pattern";
+      } else if (!all_connected) {
+        reason = "one of them a disconnected complex — the n-ary path places a "
+                 "pattern's non-seed molecules by following its bonds, so the "
+                 "molecules of a `.`-joined reactant must be bonded to each other";
       } else if (rate_type != "Ele") {
         // Reachable in practice for `Function` (a local or global rate
         // function on a multi-reactant rule).  `MM` cannot get this far —

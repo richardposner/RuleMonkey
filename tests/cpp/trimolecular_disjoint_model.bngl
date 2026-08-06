@@ -16,7 +16,7 @@ begin observables
   Molecules P_made P()
 end observables
 begin reaction rules
-  r: A(s,d!1).D(d!1) + A(s,d) + A(s,d) -> P()  k  DeleteMolecules
+  r: A(s).D(d!+) + A(s,d) + A(s,d) -> P()  k  DeleteMolecules
 end reaction rules
 end model
 begin actions

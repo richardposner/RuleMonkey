@@ -30,9 +30,9 @@ The runtime severity model is two-level:
   `Wildcard` (component omitted).
 - Multi-molecule reactant patterns (`A(b!1).B(a!1)`), including
   multi-bond rings.
-- Three or more reactant patterns (`A + A + A -> P`), for
-  single-molecule patterns under an elementary rate law — see "N-ary
-  reactant rules" below.
+- Three or more reactant patterns (`A + A + A -> P`,
+  `A(s,d!1).D(d!1) + A(s) + A(s) -> P`) under an elementary rate law —
+  see "N-ary reactant rules" below.
 - Symmetric components (`P(s,s)`) with the correct combinatorial
   weighting (the engine carries a "same components" flag and a
   symmetry factor).
@@ -228,7 +228,7 @@ treat at least one of these as a signal to refuse the model.
 |---|---|
 | `<ListOfCompartments>` non-empty | RM does not implement compartment volume scaling — bimolecular rate constants would be silently incorrect. |
 | An `RateLaw type="Arrhenius"` rule that is **not** a 2-reactant binding rule | eBNGL energy rules are expanded at load time (see "Energy-based BNGL" below), but only for the 2-reactant binding case — matching NFsim's own coverage. State-change energy rules, intramolecular ring-closure binding, and >2-reactant rules would be silently dropped, so they are refused. (2-reactant binding Arrhenius rules, and a bare `<ListOfEnergyPatterns>` with `Function`-type rate laws, are both fully supported and are **not** triggers.) |
-| A rule with three or more `<ReactantPattern>` children, where a pattern is a multi-molecule complex, the rate law is not `Ele`, or there are more than 6 patterns | Rules of 3-6 single-molecule reactant patterns under an elementary rate law are simulated (see "N-ary reactant rules" below). The shapes listed here fall outside that path and would drop onto the two-slot machinery, whose slot B merges patterns 2..n into one bond-free pattern that scores zero embeddings for free reactants — the rule would silently hold zero propensity and never fire, with mass still conserved so the trajectory looks valid (issue #24). Rewrite as a sequence of at most bimolecular steps. |
+| A rule with three or more `<ReactantPattern>` children, where a pattern's `.`-joined molecules are not bonded to each other, the rate law is not `Ele`, or there are more than 6 patterns | Rules of 3-6 reactant patterns under an elementary rate law are simulated, each pattern a single molecule or a bonded complex (see "N-ary reactant rules" below). The shapes listed here fall outside that path and would drop onto the two-slot machinery, whose slot B merges patterns 2..n into one bond-free pattern that scores zero embeddings for free reactants — the rule would silently hold zero propensity and never fire, with mass still conserved so the trajectory looks valid (issues #24, #26). Rewrite as a sequence of at most bimolecular steps. |
 | Any rule with `RateLaw type="Sat"` | Deprecated; rewrite as `MM(kcat, Km)`. |
 | Any rule with `RateLaw type="Hill"` | Network-only; use `generate_network()` + ODE/SSA instead of network-free. |
 | Any `<MoleculeType population="1">` | Hybrid particle-population SSA not implemented; would be silently treated as ordinary particles with diverging trajectories. |
@@ -252,14 +252,18 @@ These are emitted as `Severity::Warn` and the run proceeds.
 ## N-ary reactant rules
 
 A rule may carry three or more `+`-separated reactants — `A + A + A -> P`,
-`A + B + C -> P` — when every reactant pattern is a single molecule and the
-rate law is elementary. Up to 6 patterns are supported; shapes outside that
-are refused at Tier 0 rather than run (issue #24).
+`A + B + C -> P`, `A(s,d!1).D(d!1) + A(s) + A(s) -> P` — under an elementary
+rate law. Each reactant pattern may be a single molecule or a `.`-joined
+complex, as on a bimolecular rule, so long as its molecules are bonded to
+each other. Up to 6 patterns are supported; shapes outside that are refused
+at Tier 0 rather than run (issues #24, #26).
 
 Such a rule takes a dedicated path in the engine, separate from the two-slot
-machinery that serves uni- and bimolecular rules. With per-molecule embedding
-counts `c_i(m)` for reactant pattern `i`, its propensity is mass action over
-tuples of *distinct* molecules,
+machinery that serves uni- and bimolecular rules. Reactant pattern `i` is
+*seeded* on its first molecule, and `c_i(m)` counts the embeddings of the
+whole pattern that place that seed on molecule `m` — for a single-molecule
+pattern, just its embeddings on `m`. The propensity is mass action over
+tuples of *distinct* seed molecules,
 
 ```
 a = k · symmetry_factor · Σ_{(m_0..m_{n-1}) all distinct} Π_i c_i(m_i)
@@ -273,17 +277,41 @@ per molecule, `A + A + A` gives `k·N(N−1)(N−2)/6` and `A + B + C` gives
 `k·N_A·N_B·N_C`.
 
 Reactants are drawn one slot at a time, weighted by embedding count, and
-retried until the `n` molecules are distinct — which reproduces exactly the
-distribution the propensity integrates, so no null events are spent on
-coincidences.
+retried until the `n` seeds are distinct — which reproduces exactly the
+distribution the propensity integrates, so for a rule of single-molecule
+patterns no null events are spent on coincidences.
+
+Within a slot, the embedding is drawn from the seed embeddings that actually
+extend to a whole match — the ones `c_i(m)` counted. A seed molecule can
+offer an embedding that goes nowhere (an `A(d,d)` bonded to a D and an E has
+two embeddings of `A(d!1)` but only one reaches the D, so only one extends to
+`A(d!1).D(d!1)`), and treating that as a null event instead would dilute the
+rate by the fraction that dead-ends.
+
+A multi-molecule pattern needs one more step. Seed distinctness does not
+prevent a molecule pulled into one slot's complex from also being another
+slot's seed, or from sitting inside another slot's complex — firing on such
+a draw would consume one molecule twice. Those draws are counted by the
+propensity above and rejected by the sampler as null events, so the realized
+rate is the injective count `D_inj` exactly:
+
+```
+D · k · sf · (D_inj / D)  =  D_inj · k · sf
+```
+
+This is the same inflated-propensity/null-event trick the bimolecular
+sampler uses for same-molecule and same-complex draws; the cost is wasted
+SSA cycles in proportion to how often the patterns overlap, which is rare —
+and rarer still under `-bscb`, which rejects same-complex seed pairs first.
 
 ### What is and is not covered
 
 | Left-hand side | Handled? |
 |---|---|
 | `A + A + A`, `A + B + C`, `A + A + B` — 3 to 6 single-molecule patterns, elementary rate | **Yes**, simulated |
+| A pattern that is a bonded complex, e.g. `A(s,d!1).D(d!1) + A(s) + A(s)` | **Yes**, simulated |
 | 7 or more reactant patterns | No — Tier-0 refusal |
-| Any pattern that is a multi-molecule complex, e.g. `A(s,d!1).D(d!1) + A(s) + A(s)` | No — Tier-0 refusal |
+| A `.`-joined pattern whose molecules are not bonded to each other, e.g. `A(s).D(d!+) + A(s) + A(s)` | No — Tier-0 refusal |
 | A `Function` (global or local) rate law on 3+ reactants | No — Tier-0 refusal |
 | `MM(kcat,Km)` on 3+ reactants | Cannot arise — BNG2 refuses to write the XML |
 
