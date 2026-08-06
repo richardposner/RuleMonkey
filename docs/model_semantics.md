@@ -465,16 +465,26 @@ sample time; times at/after `t_end` (and any below `t_start`) are still
 emitted, recorded at the final/initial state. An out-of-order list throws
 `std::runtime_error`. This mirrors BNG2.pl's `simulate_nf` `sample_times`.
 
-## Open work tracked elsewhere
+## Open work
 
-- Compartment volume scaling (cBNGL) — tracked in
-  [#21](https://github.com/richardposner/RuleMonkey/issues/21);
-  foundational, no scheduled implementation.
-- Energy-based BNGL (eBNGL) beyond 2-reactant binding — the binding case
-  is implemented (see below); state-change energy rules and >2-reactant
-  energy rules remain deferred (they are also unsupported by NFsim's
-  current eBNGL). Tracked in
-  [#20](https://github.com/richardposner/RuleMonkey/issues/20).
+Neither of the two issues this section used to defer to is open any more,
+so each entry states its own tracking status rather than implying a live
+ticket.
+
+- Compartment volume scaling (cBNGL) — **untracked**.
+  [#21](https://github.com/richardposner/RuleMonkey/issues/21) was closed
+  as *not planned* (2026-07-13), so nothing schedules this; the gap itself
+  is unchanged. Compartments stay a Tier-0 refusal, because a well-mixed
+  reading of a compartmental model gets bimolecular rates silently wrong;
+  `--ignore-unsupported` runs one anyway at volume = 1.
+- Energy-based BNGL (eBNGL) beyond 2-reactant heterodimer binding —
+  **untracked**. [#20](https://github.com/richardposner/RuleMonkey/issues/20)
+  is closed as *completed*: it delivered the binding case in 3.6.0, and
+  does not cover the rest. Still refused at Tier 0 are state-change energy
+  rules, intramolecular ring-closure binding, >2-reactant energy rules,
+  same-type homodimer binding, binding coupled to another operation, and
+  rules carrying exclude/include constraints — the same scope NFsim's own
+  eBNGL implements. See "Energy-based BNGL (eBNGL)" above.
 - Hybrid particle-population SSA — open work, no scheduled implementation.
 - Multi-molecule Fixed species — would require pattern-based
   re-instantiation; not currently implemented (refused at Tier 0).
