@@ -2150,6 +2150,90 @@ std::vector<UnsupportedFeature> scan_unsupported(const XmlNode& model_node) {
     }
   }
 
+  // ERROR-level: an n-ary rule (>= 3 ReactantPatterns) in a shape the
+  // engine's n-ary path does not implement (issue #24).
+  //
+  // Rules of three or more reactant patterns are simulated when every
+  // pattern is a single molecule and the rate law is elementary — see the
+  // NaryState comment in engine.cpp for the propensity and sampler.  The
+  // shapes below fall outside that and would otherwise hit the two-slot
+  // machinery, whose slot B swallows patterns 2..n into one bond-free
+  // pattern that scores zero embeddings for free reactants.  The rule would
+  // then hold zero propensity and never fire, with mass still conserved, so
+  // the trajectory looks valid unless compared against another engine.
+  //
+  // This mirrors nary_shape_supported() in engine.cpp; the two must agree,
+  // or a rule rejected there and not refused here goes silently inert again.
+  constexpr int kMaxNaryPatterns = 6; // == engine.cpp's kMaxNarySlots
+  if (auto* rr_list = find_child(model_node, "ListOfReactionRules")) {
+    for (auto& rr : rr_list->children) {
+      if (rr.name != "ReactionRule")
+        continue;
+      auto* rp_list = find_child(rr, "ListOfReactantPatterns");
+      if (!rp_list)
+        continue;
+
+      int rp_count = 0;
+      bool all_single_molecule = true;
+      for (auto& rpn : rp_list->children) {
+        if (rpn.name != "ReactantPattern")
+          continue;
+        ++rp_count;
+        int n_mol = 0;
+        if (auto* ml = find_child(rpn, "ListOfMolecules")) {
+          for (auto& mn : ml->children)
+            if (mn.name == "Molecule")
+              ++n_mol;
+        }
+        if (n_mol != 1)
+          all_single_molecule = false;
+      }
+      if (rp_count < 3)
+        continue;
+
+      std::string rate_type = "Ele";
+      if (auto* rl = find_child(rr, "RateLaw")) {
+        auto it = rl->attributes.find("type");
+        if (it != rl->attributes.end())
+          rate_type = it->second;
+      }
+
+      // Each reason completes "Rule 'r' has N reactant patterns, ...".
+      std::string reason;
+      if (rp_count > kMaxNaryPatterns) {
+        reason = "past the engine's n-ary limit of " + std::to_string(kMaxNaryPatterns);
+      } else if (!all_single_molecule) {
+        reason = "one of them a multi-molecule complex — the n-ary path tracks "
+                 "a single seed molecule per pattern";
+      } else if (rate_type != "Ele") {
+        // Reachable in practice for `Function` (a local or global rate
+        // function on a multi-reactant rule).  `MM` cannot get this far —
+        // BNG2 itself refuses to write XML for it: "Michaelis-Menton type
+        // ratelaw require exactly 2 reactants".
+        reason = "under a '" + rate_type +
+                 "' rate law — the n-ary path implements elementary "
+                 "(mass-action) rates only";
+      } else {
+        continue; // supported — the engine simulates this rule
+      }
+
+      auto rule_name = opt_attr(rr, "name");
+      if (rule_name.empty())
+        rule_name = opt_attr(rr, "id");
+      std::string msg = "Rule '";
+      msg += rule_name;
+      msg += "' has ";
+      msg += std::to_string(rp_count);
+      msg += " reactant patterns, ";
+      msg += reason;
+      msg += ". The rule would silently have zero propensity and never fire, while "
+             "the rest of the model simulates normally. Rewrite it as a sequence of "
+             "at most bimolecular steps (e.g. A + A -> A2 followed by A2 + A -> P). "
+             "Pass --ignore-unsupported to run anyway (this rule will not fire).";
+      warnings.push_back({Severity::Error, "ListOfReactantPatterns", msg});
+    }
+  }
+
   // ERROR-level: BNGL `population` keyword (hybrid particle-population SSA,
   // Hogg 2013).  NFsim treats `population`-typed molecule types as bulk
   // counters rather than tracked individuals, with restricted semantics

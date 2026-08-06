@@ -2295,8 +2295,150 @@ struct PerMolRuleData {
   bool cache_init = false;
 };
 
+// ---------------------------------------------------------------------------
+// N-ary reactant support (issue #24)
+//
+// The two-slot machinery above (a_*/b_* fields, compute_shared_components,
+// the bimolecular sampler) is the hot path and stays exactly as it was.  A
+// rule with three or more reactant patterns takes this separate, general
+// path instead.
+//
+// Propensity.  With `n` reactant patterns and per-molecule embedding counts
+// `c_i(m)` for slot i, mass action over *distinct* molecules is
+//
+//     D = Σ_{(m_0..m_{n-1}) all distinct} Π_i c_i(m_i)
+//
+// which expands over the partition lattice of {0..n-1} as
+//
+//     D = Σ_P μ(P) · Π_{B ∈ P} T_B ,   T_B = Σ_m Π_{i ∈ B} c_i(m)
+//     μ(P) = Π_{B ∈ P} (−1)^(|B|−1) · (|B|−1)!
+//
+// For n = 2 this is the familiar `T_0·T_1 − T_{01}`; for n = 3 it is
+// `T_0T_1T_2 − T_01T_2 − T_02T_1 − T_12T_0 + 2·T_012`.  With all slots
+// identical and one embedding per molecule it collapses to the falling
+// factorial N(N−1)…(N−n+1), so `k·symmetry_factor·D` reproduces the
+// textbook k·N(N−1)(N−2)/6 for a trimolecular rule (BNG2 emits
+// symmetry_factor = 1/n! for n identical patterns).
+//
+// The `T_B` are maintained incrementally over all 2^n − 1 non-empty
+// subsets, so a per-molecule count change costs 2^n multiply-adds rather
+// than a rescan.  `kMaxNarySlots` caps n so both that and the Bell(n)
+// partition sum stay small (Bell(6) = 203).
+//
+// Sampling.  Each slot is drawn independently ∝ c_i(·) and the tuple is
+// rejected unless all n molecules are distinct — which yields exactly the
+// distribution ∝ Π c_i(m_i) conditioned on distinctness, the same measure
+// the propensity above integrates.  No null events are needed for
+// coincidence; the SSA stays exact.
+// ---------------------------------------------------------------------------
+
+constexpr int kMaxNarySlots = 6;
+
+// One partition of the slot index set, pre-expanded at rule setup.
+struct NaryPartition {
+  double mu = 1.0;              // Möbius coefficient Π (−1)^(|B|−1)(|B|−1)!
+  std::vector<uint32_t> blocks; // block membership bitmasks
+};
+
+// Per-rule state for a rule with >= 3 reactant patterns.  Left disabled
+// (and unallocated) for every uni- and bimolecular rule.
+struct NaryState {
+  bool enabled = false;
+  int n_slots = 0;
+
+  // Per-slot embedding counts, [slot][mol_id].  Slot i corresponds to
+  // reactant pattern i, whose seed (and only) molecule is pattern molecule
+  // `reactant_pattern_starts[i]`.
+  std::vector<std::vector<int>> counts;
+  std::vector<int> slot_type_index;             // molecule type per slot
+  std::vector<std::vector<int>> reacting_local; // per-slot reacting components
+
+  // T_B for every subset mask in [0, 1<<n_slots).  Index 0 is unused.
+  std::vector<double> subset_totals;
+  std::vector<NaryPartition> partitions;
+
+  // O(log N) samplers, one per slot, for slot types above FENWICK_THRESHOLD.
+  std::vector<FenwickTree> fenwick;
+  std::vector<char> use_fenwick;   // vector<bool> is a bitfield; char is plainer
+  std::vector<double> slot_totals; // Σ_m c_i(m), == subset_totals[1<<i]
+
+  int count_for(int slot, int mid) const {
+    const auto& cs = counts[slot];
+    return (mid >= 0 && mid < static_cast<int>(cs.size())) ? cs[mid] : 0;
+  }
+};
+
+// Enumerate the partitions of {0..n-1} with their Möbius coefficients.
+// Restricted-growth-string enumeration: element 0 always opens block 0, and
+// element i may join any existing block or open the next one.
+std::vector<NaryPartition> build_nary_partitions(int n) {
+  std::vector<NaryPartition> out;
+  std::vector<int> block_of(n, 0);
+
+  std::function<void(int, int)> rec = [&](int idx, int n_blocks) {
+    if (idx == n) {
+      NaryPartition p;
+      p.blocks.assign(n_blocks, 0);
+      for (int i = 0; i < n; ++i)
+        p.blocks[block_of[i]] |= (uint32_t{1} << i);
+      p.mu = 1.0;
+      for (uint32_t const b : p.blocks) {
+        int const size = __builtin_popcount(b);
+        // (−1)^(size−1) · (size−1)!
+        double term = ((size - 1) % 2 == 0) ? 1.0 : -1.0;
+        for (int f = 2; f <= size - 1; ++f)
+          term *= f;
+        p.mu *= term;
+      }
+      out.push_back(std::move(p));
+      return;
+    }
+    for (int b = 0; b < n_blocks; ++b) {
+      block_of[idx] = b;
+      rec(idx + 1, n_blocks);
+    }
+    block_of[idx] = n_blocks;
+    rec(idx + 1, n_blocks + 1);
+  };
+
+  rec(1, 1); // element 0 is pinned to block 0
+  return out;
+}
+
+// Is this >= 3-pattern rule a shape the n-ary path implements?  Kept as one
+// predicate so the engine gate and the load-time refusal in
+// simulator.cpp::scan_unsupported cannot drift apart: anything this rejects
+// must be refused there, or it would silently never fire again.
+bool nary_shape_supported(const Rule& rule) {
+  int const n = rule.molecularity;
+  if (n < 3 || n > kMaxNarySlots)
+    return false;
+  if (static_cast<int>(rule.reactant_pattern_starts.size()) != n)
+    return false;
+
+  // Every reactant pattern must be exactly one molecule.
+  int const n_mols = static_cast<int>(rule.reactant_pattern.molecules.size());
+  for (int slot = 0; slot < n; ++slot) {
+    int const start = rule.reactant_pattern_starts[slot];
+    int const end = (slot + 1 < n) ? rule.reactant_pattern_starts[slot + 1] : n_mols;
+    if (end - start != 1)
+      return false;
+    if (start < 0 || start >= n_mols)
+      return false;
+  }
+
+  // Rate laws defined only on 1-2 reactant slots.
+  if (rule.rate_law.type != RateLawType::Ele)
+    return false;
+  if (rule.rate_law.is_local)
+    return false;
+
+  return true;
+}
+
 struct RuleState {
   std::vector<PerMolRuleData> mol_data; // indexed by mol_id
+  NaryState nary;                       // >= 3 reactant patterns (issue #24)
   double a_total = 0;
   double b_total = 0;
   double a_only_total = 0;
@@ -2364,6 +2506,25 @@ struct RuleState {
   bool b_mask_complete = false;
 };
 
+// Distinct-tuple sum D over the n reactant slots (issue #24).  See the
+// NaryState comment for the partition-lattice expansion this evaluates.
+double nary_distinct_sum(const NaryState& ns) {
+  double d = 0;
+  for (const auto& p : ns.partitions) {
+    double term = p.mu;
+    for (uint32_t const b : p.blocks) {
+      term *= ns.subset_totals[b];
+      if (term == 0)
+        break;
+    }
+    d += term;
+  }
+  // Cancellation between partition terms can leave a tiny negative residue
+  // where the true value is zero (e.g. two molecules, three slots).  A
+  // negative propensity is meaningless and would poison the SSA draw.
+  return (d > 0) ? d : 0.0;
+}
+
 // Compute propensity for a rule given its accumulated state.
 // embedding_correction_a/b correct for overcounting due to permutations
 // of identical non-reacting components in the pattern.
@@ -2374,6 +2535,21 @@ double compute_propensity(const RuleState& rs, const Rule& rule, double rate) {
   if (rule.molecularity == 0) {
     // Zero-order synthesis: propensity is just the rate
     return rate;
+  }
+
+  // Three or more reactant patterns (issue #24).  Mass action over distinct
+  // molecule tuples; symmetry_factor carries BNG2's 1/n! for n identical
+  // patterns, exactly as it carries the 1/2 in the homodimer case below.
+  if (rs.nary.enabled) {
+    if (rule.rate_law.is_total_rate) {
+      // The rate function already returns the whole propensity; it still
+      // has to vanish when any reactant is absent.
+      for (double const t : rs.nary.slot_totals)
+        if (t <= 0)
+          return 0;
+      return rate;
+    }
+    return nary_distinct_sum(rs.nary) * rate * rule.symmetry_factor;
   }
 
   // MM(kcat, Km) — Michaelis-Menten with quasi-steady-state for free
@@ -3567,6 +3743,8 @@ struct Engine::Impl {
         }
       }
 
+      nary_setup(ri);
+
       rescan_all_molecules_for_rule(ri);
     }
 
@@ -3601,6 +3779,21 @@ struct Engine::Impl {
           int const type_b = rule.reactant_pattern.molecules[seed_b].type_index;
           if (type_b != type_a && type_b >= 0 && type_b < n_types)
             type_to_rules[type_b].push_back(ri);
+        }
+      }
+
+      // Slots 2..n-1 of an n-ary rule (issue #24).  Without this a change to
+      // a molecule matching only the third pattern would never reach the
+      // rule, leaving its propensity stale.
+      const auto& ns = rule_states[ri].nary;
+      if (ns.enabled) {
+        for (int slot = 2; slot < ns.n_slots; ++slot) {
+          int const t = ns.slot_type_index[slot];
+          if (t < 0 || t >= n_types)
+            continue;
+          auto& lst = type_to_rules[t];
+          if (std::find(lst.begin(), lst.end(), ri) == lst.end())
+            lst.push_back(ri);
         }
       }
     }
@@ -3639,10 +3832,264 @@ struct Engine::Impl {
     recompute_total_propensity();
   }
 
+  // --- N-ary reactant path (issue #24) -------------------------------------
+
+  // Decide whether rule `rule_idx` takes the n-ary path, and if so build its
+  // NaryState.  Uni- and bimolecular rules are left untouched on the
+  // existing two-slot machinery.
+  //
+  // The path covers rules whose every reactant pattern is a single molecule
+  // — `A + A + A`, `A + B + C`, and so on.  Shapes left out are refused at
+  // load time by scan_unsupported rather than silently mis-simulated:
+  //
+  //   * multi-molecule reactant patterns (`A.B + C + D`), which would need
+  //     the same distinctness bookkeeping across every pattern molecule that
+  //     compute_shared_components does for two slots;
+  //   * MM (NFsim itself requires exactly 2 reactants), local-function and
+  //     FunctionProduct rate laws, all of which are defined on 1-2 slots.
+  void nary_setup(int rule_idx) {
+    auto& rule = model.rules[rule_idx];
+    auto& ns = rule_states[rule_idx].nary;
+    ns = NaryState{};
+
+    int const n = rule.molecularity;
+    if (n < 3)
+      return;
+
+    // Safety net for issue #24's actual failure mode.  A rule of >= 3
+    // reactant patterns that does NOT get an n-ary state falls through to
+    // the two-slot machinery, where slot B swallows patterns 2..n into one
+    // bond-free pattern that scores zero embeddings — the rule holds zero
+    // propensity and never fires, with mass still conserved, so the
+    // trajectory looks valid.  That is precisely the silence this issue was
+    // about.
+    //
+    // scan_unsupported() is expected to have refused such a model at load,
+    // but it reaches that verdict from the raw XML while the decision here
+    // is made on the parsed Rule.  Rather than trust the two to agree
+    // forever, say so on stderr unconditionally: if the load-time check
+    // ever misses a shape, the run is still loud instead of quietly wrong.
+    // (A throw would be wrong — it would break the documented
+    // --ignore-unsupported contract of running with the rule inert.)
+    if (!nary_shape_supported(rule)) {
+      fprintf(stderr,
+              "WARN: rule '%s' (%s) has %d reactant patterns in a shape the "
+              "engine does not implement — it will never fire. The rest of "
+              "the model still simulates, and mass stays conserved, so the "
+              "trajectory will look valid. See issue #24.\n",
+              rule.id.c_str(), rule.name.c_str(), n);
+      return;
+    }
+
+    ns.enabled = true;
+    ns.n_slots = n;
+    ns.counts.assign(n, {});
+    ns.slot_type_index.assign(n, -1);
+    ns.reacting_local.assign(n, {});
+    ns.subset_totals.assign(std::size_t{1} << n, 0.0);
+    ns.slot_totals.assign(n, 0.0);
+    ns.partitions = build_nary_partitions(n);
+    ns.fenwick.resize(n);
+    ns.use_fenwick.assign(n, 0);
+
+    // Reacting-component local indices per slot, mirroring the
+    // reacting_local_a/_b computation for the two-slot path: they drive
+    // embedding deduplication in count_embeddings_single so that mappings
+    // differing only in which non-reacting component is targeted collapse
+    // to one physical reaction.
+    std::unordered_set<int> flat_reacting;
+    for (auto& op : rule.operations) {
+      if (op.comp_flat >= 0)
+        flat_reacting.insert(op.comp_flat);
+      if (op.comp_flat_a >= 0)
+        flat_reacting.insert(op.comp_flat_a);
+      if (op.comp_flat_b >= 0)
+        flat_reacting.insert(op.comp_flat_b);
+    }
+    for (int slot = 0; slot < n; ++slot) {
+      int const mi = rule.reactant_pattern_starts[slot];
+      auto& pm = rule.reactant_pattern.molecules[mi];
+      ns.slot_type_index[slot] = pm.type_index;
+      int flat_base = 0;
+      for (int j = 0; j < mi; ++j)
+        flat_base += static_cast<int>(rule.reactant_pattern.molecules[j].components.size());
+      for (int ci = 0; ci < static_cast<int>(pm.components.size()); ++ci)
+        if (flat_reacting.count(flat_base + ci))
+          ns.reacting_local[slot].push_back(ci);
+    }
+  }
+
+  // Full rescan of every slot's per-molecule counts, rebuilding the subset
+  // totals from scratch.  Called from rescan_all_molecules_for_rule.
+  void nary_rescan(int rule_idx) {
+    auto& rule = model.rules[rule_idx];
+    auto& rs = rule_states[rule_idx];
+    auto& ns = rs.nary;
+
+    int const pool_size = pool.molecule_count();
+    for (int slot = 0; slot < ns.n_slots; ++slot)
+      ns.counts[slot].assign(pool_size, 0);
+    std::fill(ns.subset_totals.begin(), ns.subset_totals.end(), 0.0);
+    std::fill(ns.slot_totals.begin(), ns.slot_totals.end(), 0.0);
+
+    for (int slot = 0; slot < ns.n_slots; ++slot) {
+      int const mi = rule.reactant_pattern_starts[slot];
+      auto& pm = rule.reactant_pattern.molecules[mi];
+      for (int const mid : pool.molecules_of_type(ns.slot_type_index[slot])) {
+        if (mid < 0 || mid >= pool_size || !pool.molecule(mid).active)
+          continue;
+        ns.counts[slot][mid] =
+            count_embeddings_single(pool, mid, pm, model, nullptr, &ns.reacting_local[slot]);
+      }
+    }
+
+    // T_B = Σ_m Π_{i∈B} c_i(m) over every non-empty subset.
+    uint32_t const n_masks = uint32_t{1} << ns.n_slots;
+    for (int mid = 0; mid < pool_size; ++mid) {
+      for (uint32_t mask = 1; mask < n_masks; ++mask)
+        ns.subset_totals[mask] += nary_mol_product(ns, mid, mask);
+    }
+    for (int slot = 0; slot < ns.n_slots; ++slot)
+      ns.slot_totals[slot] = ns.subset_totals[uint32_t{1} << slot];
+
+    // Per-slot Fenwick samplers for large populations, matching the
+    // FENWICK_THRESHOLD policy the two-slot path uses.
+    for (int slot = 0; slot < ns.n_slots; ++slot) {
+      ns.fenwick[slot].clear();
+      ns.use_fenwick[slot] = 0;
+      if (static_cast<int>(pool.molecules_of_type(ns.slot_type_index[slot]).size()) <=
+          FENWICK_THRESHOLD)
+        continue;
+      ns.fenwick[slot].init(std::max(pool_size, 1));
+      ns.use_fenwick[slot] = 1;
+      for (int const mid : pool.molecules_of_type(ns.slot_type_index[slot])) {
+        if (mid < 0 || mid >= pool_size || !pool.molecule(mid).active)
+          continue;
+        if (ns.counts[slot][mid] > 0)
+          ns.fenwick[slot].update(mid, ns.counts[slot][mid]);
+      }
+    }
+  }
+
+  // Π_{i ∈ mask} c_i(mid).
+  static double nary_mol_product(const NaryState& ns, int mid, uint32_t mask) {
+    double p = 1.0;
+    for (int slot = 0; slot < ns.n_slots; ++slot) {
+      if ((mask & (uint32_t{1} << slot)) == 0)
+        continue;
+      int const c = ns.count_for(slot, mid);
+      if (c == 0)
+        return 0.0;
+      p *= c;
+    }
+    return p;
+  }
+
+  // Recompute every slot count for one molecule and fold the delta into the
+  // subset totals.  This is the incremental counterpart of nary_rescan; cost
+  // is 2^n multiply-adds rather than a pool scan.
+  void nary_update_mol(int rule_idx, int mid) {
+    auto& rule = model.rules[rule_idx];
+    auto& rs = rule_states[rule_idx];
+    auto& ns = rs.nary;
+    if (mid < 0)
+      return;
+
+    for (int slot = 0; slot < ns.n_slots; ++slot) {
+      if (mid >= static_cast<int>(ns.counts[slot].size()))
+        ns.counts[slot].resize(mid + 1, 0);
+    }
+
+    uint32_t const n_masks = uint32_t{1} << ns.n_slots;
+    for (uint32_t mask = 1; mask < n_masks; ++mask)
+      ns.subset_totals[mask] -= nary_mol_product(ns, mid, mask);
+
+    bool const live = (mid < pool.molecule_count()) && pool.molecule(mid).active;
+    for (int slot = 0; slot < ns.n_slots; ++slot) {
+      int const old_count = ns.counts[slot][mid];
+      int new_count = 0;
+      if (live && pool.molecule(mid).type_index == ns.slot_type_index[slot]) {
+        int const pat_mi = rule.reactant_pattern_starts[slot];
+        new_count = count_embeddings_single(pool, mid, rule.reactant_pattern.molecules[pat_mi],
+                                            model, nullptr, &ns.reacting_local[slot]);
+      }
+      ns.counts[slot][mid] = new_count;
+
+      if (ns.use_fenwick[slot] != 0 && new_count != old_count) {
+        // Growing the tree in place would leave new ancestor nodes at zero,
+        // silently truncating prefix sums — rebuild, as the a/b path does.
+        if (mid >= ns.fenwick[slot].n) {
+          int const new_n = std::max(mid + 1, ns.fenwick[slot].n * 2);
+          ns.fenwick[slot].init(new_n);
+          for (int const m : pool.molecules_of_type(ns.slot_type_index[slot])) {
+            if (m < 0 || m >= pool.molecule_count() || !pool.molecule(m).active)
+              continue;
+            if (ns.count_for(slot, m) > 0)
+              ns.fenwick[slot].update(m, ns.count_for(slot, m));
+          }
+        } else {
+          ns.fenwick[slot].update(mid, new_count - old_count);
+        }
+      }
+    }
+
+    for (uint32_t mask = 1; mask < n_masks; ++mask)
+      ns.subset_totals[mask] += nary_mol_product(ns, mid, mask);
+    for (int slot = 0; slot < ns.n_slots; ++slot)
+      ns.slot_totals[slot] = ns.subset_totals[uint32_t{1} << slot];
+  }
+
+  // Draw one molecule for `slot`, weighted by its embedding count.
+  int nary_sample_slot(const NaryState& ns, int slot) {
+    double const total = ns.slot_totals[slot];
+    if (total <= 0)
+      return -1;
+
+    if (ns.use_fenwick[slot] != 0) {
+      double const r = uniform() * total;
+      int const mid = ns.fenwick[slot].find(r);
+      if (mid >= 0 && mid < pool.molecule_count() && pool.molecule(mid).active &&
+          ns.count_for(slot, mid) > 0)
+        return mid;
+      // Fenwick can land off the end on rounding; fall through to the scan.
+    }
+
+    double r = uniform() * total;
+    for (int const mid : pool.molecules_of_type(ns.slot_type_index[slot])) {
+      if (mid < 0 || mid >= pool.molecule_count() || !pool.molecule(mid).active)
+        continue;
+      double const w = ns.count_for(slot, mid);
+      if (w <= 0)
+        continue;
+      r -= w;
+      if (r <= 0)
+        return mid;
+    }
+    // Floating-point drift past the end: return the last eligible molecule.
+    for (auto it = pool.molecules_of_type(ns.slot_type_index[slot]).rbegin();
+         it != pool.molecules_of_type(ns.slot_type_index[slot]).rend(); ++it) {
+      int const mid = *it;
+      if (mid >= 0 && mid < pool.molecule_count() && pool.molecule(mid).active &&
+          ns.count_for(slot, mid) > 0)
+        return mid;
+    }
+    return -1;
+  }
+
   void rescan_all_molecules_for_rule(int rule_idx) {
     auto& rule = model.rules[rule_idx];
     auto& rs = rule_states[rule_idx];
     auto& bi = bind_infos[rule_idx];
+
+    // >= 3 reactant patterns (issue #24): the two-slot bookkeeping below
+    // cannot represent this rule — slot B would swallow patterns 2..n — so
+    // the n-ary path owns its counts and propensity outright.
+    if (rs.nary.enabled) {
+      nary_rescan(rule_idx);
+      double const rate = evaluate_rate(rule);
+      set_rule_propensity(rs, compute_propensity(rs, rule, rate));
+      return;
+    }
 
     int const pool_size = pool.molecule_count();
     rs.mol_data.assign(pool_size, PerMolRuleData{});
@@ -5303,6 +5750,17 @@ struct Engine::Impl {
         continue;
       }
 
+      // >= 3 reactant patterns (issue #24): refresh every slot's count for
+      // each touched molecule, then let compute_propensity re-evaluate the
+      // distinct-tuple sum from the updated subset totals.
+      if (rs.nary.enabled) {
+        for (int const mid : affected_mols)
+          nary_update_mol(ri, mid);
+        double const rate = evaluate_rate(rule);
+        set_rule_propensity(rs, compute_propensity(rs, rule, rate));
+        continue;
+      }
+
       auto& pm_a = rule.reactant_pattern.molecules[seed_a];
 
       // For local-rate rules, use the expanded set; otherwise use the original
@@ -5713,6 +6171,90 @@ struct Engine::Impl {
       // Zero-order synthesis: no reactants to select, just return empty match
       // (fire_rule will process Add operations via product_mol_to_actual)
       sr_finish(SrProfile::kPathZero, /*outcome=*/2);
+      return match;
+    }
+
+    if (rs.nary.enabled) {
+      // >= 3 reactant patterns (issue #24).  Draw each slot independently
+      // ∝ its embedding count and retry until the n molecules are distinct;
+      // the accepted distribution is then ∝ Π c_i(m_i) over distinct tuples,
+      // which is exactly the measure compute_propensity integrates.  The
+      // retry cap protects against pathological weight concentration (say
+      // three slots over three molecules of wildly unequal count); hitting
+      // it yields a null event, as the homodimer path does at its own cap.
+      auto& ns = rs.nary;
+      constexpr int kMaxNaryRetries = 256;
+      std::vector<int> chosen(ns.n_slots, -1);
+      bool distinct = false;
+
+      for (int retry = 0; retry < kMaxNaryRetries && !distinct; ++retry) {
+        bool empty_slot = false;
+        for (int slot = 0; slot < ns.n_slots; ++slot) {
+          chosen[slot] = nary_sample_slot(ns, slot);
+          if (chosen[slot] < 0) {
+            empty_slot = true;
+            break;
+          }
+        }
+        if (empty_slot) {
+          sr_finish(SrProfile::kPathNary, /*outcome=*/0);
+          return match;
+        }
+        distinct = true;
+        for (int i = 0; i < ns.n_slots && distinct; ++i)
+          for (int j = i + 1; j < ns.n_slots; ++j)
+            if (chosen[i] == chosen[j]) {
+              distinct = false;
+              break;
+            }
+      }
+      if (!distinct) {
+        sr_finish(SrProfile::kPathNary, /*outcome=*/1);
+        return match;
+      }
+
+      // -bscb: bimolecular rules only fire across complexes.  Applied
+      // pairwise here, as a null event, matching the two-slot behaviour.
+      if (model.block_same_complex_binding) {
+        for (int i = 0; i < ns.n_slots; ++i)
+          for (int j = i + 1; j < ns.n_slots; ++j)
+            if (pool.complex_of(chosen[i]) == pool.complex_of(chosen[j])) {
+              sr_finish(SrProfile::kPathNary, /*outcome=*/1);
+              return match;
+            }
+      }
+
+      // Pick one embedding per slot and lay the components out flat.  Every
+      // slot is a single-molecule pattern (nary_shape_supported), so slot i
+      // is pattern molecule reactant_pattern_starts[i].
+      int const n_flat = rule.reactant_pattern.flat_comp_count();
+      match.mol_ids.assign(rule.reactant_pattern.molecules.size(), -1);
+      match.comp_ids.assign(n_flat, -1);
+
+      for (int slot = 0; slot < ns.n_slots; ++slot) {
+        int const pat_mi = rule.reactant_pattern_starts[slot];
+        auto& pm = rule.reactant_pattern.molecules[pat_mi];
+        std::vector<std::vector<int>> embs;
+        count_embeddings_single(pool, chosen[slot], pm, model, &embs, &ns.reacting_local[slot]);
+        if (embs.empty()) {
+          match.mol_ids.clear();
+          sr_finish(SrProfile::kPathNary, /*outcome=*/1);
+          return match;
+        }
+        int ei = static_cast<int>(uniform() * embs.size());
+        if (ei >= static_cast<int>(embs.size()))
+          ei = static_cast<int>(embs.size()) - 1;
+
+        match.mol_ids[pat_mi] = chosen[slot];
+        int flat_base = 0;
+        for (int j = 0; j < pat_mi; ++j)
+          flat_base += static_cast<int>(rule.reactant_pattern.molecules[j].components.size());
+        int const nc = static_cast<int>(pm.components.size());
+        for (int ci = 0; ci < nc && ci < static_cast<int>(embs[ei].size()); ++ci)
+          match.comp_ids[flat_base + ci] = pool.molecule(chosen[slot]).comp_ids[embs[ei][ci]];
+      }
+
+      sr_finish(SrProfile::kPathNary, /*outcome=*/2);
       return match;
     }
 

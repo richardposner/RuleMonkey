@@ -11,8 +11,8 @@ header comments, and the model-semantics doc.
 `rm_driver` refuses by default if the model uses a BNGL construct RM
 cannot honor (compartments, Sat / Hill rate laws, non-binding Arrhenius
 energy rules, `population` molecule types, multi-molecule Fixed species,
-…).  Each refusal names the offending element and gives per-feature
-guidance.  (`FunctionProduct` rate laws and 2-reactant binding
+n-ary rules outside the implemented shape, …).  Each refusal names the
+offending element and gives per-feature guidance.  (`FunctionProduct` rate laws and 2-reactant binding
 `Arrhenius` energy rules are now implemented — see
 [`model_semantics.md`](model_semantics.md).)
 
@@ -25,6 +25,43 @@ Two ways forward:
   features are demoted to warnings.  The trajectory will run but
   may diverge from BNGL semantics — each warning explains exactly
   how.
+
+### "Rule '…' has N reactant patterns, …"
+
+Rules with three or more `+`-separated reactants — `A + A + A -> P` — are
+simulated when every reactant pattern is a single molecule, the rate law is
+elementary, and there are at most 6 patterns.  See
+[`model_semantics.md`](model_semantics.md) for the propensity and sampler.
+
+This error means the rule falls *outside* that.  The message says which of
+the three it hit:
+
+- **"past the engine's n-ary limit of 6"** — split the rule.
+- **"one of them a multi-molecule complex"** — a reactant such as
+  `A(s,d!1).D(d!1)`.  The n-ary path tracks one seed molecule per pattern.
+- **"under a '…' rate law"** — in practice `Function`, i.e. a global or
+  local rate function on a rule of 3+ reactants.  The n-ary path
+  implements elementary (mass-action) rates only.  (`MM` cannot reach RM
+  at all: BNG2 refuses to write XML for it, with "Michaelis-Menton type
+  ratelaw require exactly 2 reactants".)
+
+In every case, rewrite as a sequence of at most bimolecular steps:
+
+```
+# instead of:  r: A(s) + A(s) + A(s) -> P()  k
+r1: A(s) + A(s) <-> A2(a)      kf, kr
+r2: A2(a) + A(s) -> P()        k2
+```
+
+Before issue #24 was fixed, *any* rule of three or more reactants was
+silently skipped: it scored zero embeddings, held zero propensity, and never
+fired, while every other rule behaved normally.  Mass stayed conserved, so
+nothing in the trajectory looked wrong; the only way to notice was to run
+the same XML through NFsim, which does fire the rule.  That is why the
+remaining unsupported shapes are a hard refusal rather than a warning.
+
+`--ignore-unsupported` runs the model anyway, with the rule still inert —
+useful only to confirm the rest of the model is unaffected.
 
 ### "Cannot resolve value '...'"
 

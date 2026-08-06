@@ -270,13 +270,14 @@ struct SrProfile {
   static constexpr int kPathUniMultiFm = 2;
   static constexpr int kPathUniMultiGen = 3;
   static constexpr int kPathBimol = 4;
-  static constexpr int kNPaths = 5;
+  static constexpr int kPathNary = 5; // >= 3 reactant patterns (issue #24)
+  static constexpr int kNPaths = 6;
 
   uint64_t calls = 0;
-  std::array<uint64_t, kNPaths> path_calls = {0, 0, 0, 0, 0};
-  std::array<uint64_t, kNPaths> path_null_no_seed = {0, 0, 0, 0, 0};
-  std::array<uint64_t, kNPaths> path_null_post = {0, 0, 0, 0, 0};
-  std::array<uint64_t, kNPaths> path_success = {0, 0, 0, 0, 0};
+  std::array<uint64_t, kNPaths> path_calls = {0, 0, 0, 0, 0, 0};
+  std::array<uint64_t, kNPaths> path_null_no_seed = {0, 0, 0, 0, 0, 0};
+  std::array<uint64_t, kNPaths> path_null_post = {0, 0, 0, 0, 0, 0};
+  std::array<uint64_t, kNPaths> path_success = {0, 0, 0, 0, 0, 0};
 
   // Sampler sub-decisions (global, not per-path).
   uint64_t sampler_calls = 0;
@@ -312,8 +313,8 @@ struct SrProfile {
 
   // K-sampled whole-call chrono, bucketed per path.
   uint64_t sampled_calls = 0;
-  std::array<uint64_t, kNPaths> path_ns = {0, 0, 0, 0, 0};
-  std::array<uint64_t, kNPaths> path_hits = {0, 0, 0, 0, 0};
+  std::array<uint64_t, kNPaths> path_ns = {0, 0, 0, 0, 0, 0};
+  std::array<uint64_t, kNPaths> path_hits = {0, 0, 0, 0, 0, 0};
 };
 
 struct RemoveBondProfile {
@@ -1110,8 +1111,8 @@ inline void report_cmm_fc(const CmmFcProfile& q, const CountMultiProfile& cm) {
 
 inline void report_select_reactants(const SrProfile& q, double timing_sample) {
   const int K = kSelectReactantsProfileSampleEvery;
-  static const char* const path_names[SrProfile::kNPaths] = {"zero", "uni_single", "uni_multi_fm",
-                                                             "uni_multi_gen", "bimol"};
+  static const char* const path_names[SrProfile::kNPaths] = {
+      "zero", "uni_single", "uni_multi_fm", "uni_multi_gen", "bimol", "nary"};
   auto path_sec = [&](int p) -> double {
     return static_cast<double>(q.path_ns[p]) / 1e9 * static_cast<double>(K);
   };

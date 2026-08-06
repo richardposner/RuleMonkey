@@ -30,6 +30,9 @@ The runtime severity model is two-level:
   `Wildcard` (component omitted).
 - Multi-molecule reactant patterns (`A(b!1).B(a!1)`), including
   multi-bond rings.
+- Three or more reactant patterns (`A + A + A -> P`), for
+  single-molecule patterns under an elementary rate law — see "N-ary
+  reactant rules" below.
 - Symmetric components (`P(s,s)`) with the correct combinatorial
   weighting (the engine carries a "same components" flag and a
   symmetry factor).
@@ -225,6 +228,7 @@ treat at least one of these as a signal to refuse the model.
 |---|---|
 | `<ListOfCompartments>` non-empty | RM does not implement compartment volume scaling — bimolecular rate constants would be silently incorrect. |
 | An `RateLaw type="Arrhenius"` rule that is **not** a 2-reactant binding rule | eBNGL energy rules are expanded at load time (see "Energy-based BNGL" below), but only for the 2-reactant binding case — matching NFsim's own coverage. State-change energy rules, intramolecular ring-closure binding, and >2-reactant rules would be silently dropped, so they are refused. (2-reactant binding Arrhenius rules, and a bare `<ListOfEnergyPatterns>` with `Function`-type rate laws, are both fully supported and are **not** triggers.) |
+| A rule with three or more `<ReactantPattern>` children, where a pattern is a multi-molecule complex, the rate law is not `Ele`, or there are more than 6 patterns | Rules of 3-6 single-molecule reactant patterns under an elementary rate law are simulated (see "N-ary reactant rules" below). The shapes listed here fall outside that path and would drop onto the two-slot machinery, whose slot B merges patterns 2..n into one bond-free pattern that scores zero embeddings for free reactants — the rule would silently hold zero propensity and never fire, with mass still conserved so the trajectory looks valid (issue #24). Rewrite as a sequence of at most bimolecular steps. |
 | Any rule with `RateLaw type="Sat"` | Deprecated; rewrite as `MM(kcat, Km)`. |
 | Any rule with `RateLaw type="Hill"` | Network-only; use `generate_network()` + ODE/SSA instead of network-free. |
 | Any `<MoleculeType population="1">` | Hybrid particle-population SSA not implemented; would be silently treated as ordinary particles with diverging trajectories. |
@@ -244,6 +248,59 @@ These are emitted as `Severity::Warn` and the run proceeds.
 |---|---|
 | Any rule with `MoveConnected` operation | Requires compartments; emitted as a warning because RM ignores the operation entirely. |
 | Any rule with a `priority` attribute | Honored as ordinary rule firing; the priority modifier is ignored. |
+
+## N-ary reactant rules
+
+A rule may carry three or more `+`-separated reactants — `A + A + A -> P`,
+`A + B + C -> P` — when every reactant pattern is a single molecule and the
+rate law is elementary. Up to 6 patterns are supported; shapes outside that
+are refused at Tier 0 rather than run (issue #24).
+
+Such a rule takes a dedicated path in the engine, separate from the two-slot
+machinery that serves uni- and bimolecular rules. With per-molecule embedding
+counts `c_i(m)` for reactant pattern `i`, its propensity is mass action over
+tuples of *distinct* molecules,
+
+```
+a = k · symmetry_factor · Σ_{(m_0..m_{n-1}) all distinct} Π_i c_i(m_i)
+```
+
+evaluated exactly by expanding the distinct-tuple sum over the partition
+lattice of the slot indices (see the `NaryState` comment in
+`cpp/rulemonkey/engine.cpp`). BNG2 emits `symmetry_factor = 1/n!` for `n`
+identical patterns, so the familiar closed forms fall out: with one embedding
+per molecule, `A + A + A` gives `k·N(N−1)(N−2)/6` and `A + B + C` gives
+`k·N_A·N_B·N_C`.
+
+Reactants are drawn one slot at a time, weighted by embedding count, and
+retried until the `n` molecules are distinct — which reproduces exactly the
+distribution the propensity integrates, so no null events are spent on
+coincidences.
+
+### What is and is not covered
+
+| Left-hand side | Handled? |
+|---|---|
+| `A + A + A`, `A + B + C`, `A + A + B` — 3 to 6 single-molecule patterns, elementary rate | **Yes**, simulated |
+| 7 or more reactant patterns | No — Tier-0 refusal |
+| Any pattern that is a multi-molecule complex, e.g. `A(s,d!1).D(d!1) + A(s) + A(s)` | No — Tier-0 refusal |
+| A `Function` (global or local) rate law on 3+ reactants | No — Tier-0 refusal |
+| `MM(kcat,Km)` on 3+ reactants | Cannot arise — BNG2 refuses to write the XML |
+
+A left-hand side in the "No" rows is refused at load: `rm_driver` exits 2
+and names the rule and which of the three it hit.  `--ignore-unsupported`
+runs the model anyway with that rule inert, and the engine then emits its
+own `WARN` line for the same rule, so the inertness is stated on both
+paths rather than inferred.
+
+That second, engine-side warning is deliberate belt-and-braces.  The
+load-time refusal decides from the raw XML, while the engine decides from
+the parsed rule; if those two ever disagree about a shape, the run stays
+loud instead of quietly producing a valid-looking trajectory.
+
+Before this was implemented such a rule was *silently inert*: it scored zero
+embeddings, held zero propensity, and never fired, while the rest of the
+model simulated normally and mass stayed conserved.
 
 ## Energy-based BNGL (eBNGL)
 

@@ -1,0 +1,29 @@
+begin model
+begin parameters
+  k 1.0e-6
+end parameters
+begin molecule types
+  A(s)
+  B(s)
+  C(s)
+  P()
+end molecule types
+begin seed species
+  A(s) 300
+  B(s) 200
+  C(s) 100
+end seed species
+begin observables
+  Molecules A_free A(s)
+  Molecules P_made P()
+end observables
+begin functions
+  rate_fn() = k*A_free
+end functions
+begin reaction rules
+  r: A(s) + B(s) + C(s) -> P()  rate_fn()  DeleteMolecules
+end reaction rules
+end model
+begin actions
+  writeXML()
+end actions
