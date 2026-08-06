@@ -4011,18 +4011,17 @@ struct Engine::Impl {
     }
   }
 
-  // Does the match a multi-molecule slot resolved to actually stand up?
-  // resolve_pattern_context walks bonds greedily out of the seed and does
-  // not re-check a molecule it has already placed, so a pattern with a ring
-  // can come back with a bond unsatisfied; nor does it require the slot's
-  // molecules to be distinct from one another.  count_multi_mol_fast checks
-  // both while counting, so checking them here too keeps the set of
-  // acceptable seed embeddings the same size as the count that weighted the
-  // draw — which is what makes the realized rate exact.
-  bool nary_slot_match_valid(const Rule& rule, const NaryState& ns, int slot,
-                             const ReactionMatch& m) const {
-    int const start = ns.slot_start[slot];
-    int const end = ns.slot_end[slot];
+  // Does the match a multi-molecule reactant pattern resolved to actually
+  // stand up?  resolve_pattern_context walks bonds greedily out of the seed
+  // and does not re-check a molecule it has already placed, so a pattern
+  // with a ring can come back with a bond unsatisfied; nor does it require
+  // the pattern's molecules to be distinct from one another.
+  // count_multi_mol_fast checks both while counting, so checking them here
+  // too keeps the set of acceptable seed embeddings the same size as the
+  // count that weighted the draw — which is what makes the realized rate
+  // exact.  Used by both the bimolecular and the n-ary sampler; `start` /
+  // `end` bound the pattern's own molecules.
+  bool slot_match_valid(const Rule& rule, int start, int end, const ReactionMatch& m) const {
     for (int i = start; i < end; ++i) {
       if (m.mol_ids[i] < 0)
         return false;
@@ -6395,7 +6394,7 @@ struct Engine::Impl {
             return true;
           return resolve_pattern_context(rule.reactant_pattern, ns.slot_adj[slot], pat_mi,
                                          ns.slot_end[slot], pat_mi, chosen[slot], embs[ei], m) &&
-                 nary_slot_match_valid(rule, ns, slot, m);
+                 slot_match_valid(rule, pat_mi, ns.slot_end[slot], m);
         };
 
         if (ns.slot_multi[slot] == 0) {
@@ -6678,59 +6677,136 @@ struct Engine::Impl {
         return match;
       }
 
-      int ei_a = static_cast<int>(uniform() * embs_a.size());
-      int ei_b = static_cast<int>(uniform() * embs_b.size());
-      if (ei_a >= static_cast<int>(embs_a.size()))
-        ei_a = static_cast<int>(embs_a.size()) - 1;
-      if (ei_b >= static_cast<int>(embs_b.size()))
-        ei_b = static_cast<int>(embs_b.size()) - 1;
-
-      match.mol_ids.resize(rule.reactant_pattern.molecules.size(), -1);
-      match.mol_ids[seed_a] = mol_a;
-      match.mol_ids[seed_b] = mol_b;
-
+      int const n_pat_mols = static_cast<int>(rule.reactant_pattern.molecules.size());
       int const n_flat = rule.reactant_pattern.flat_comp_count();
-      match.comp_ids.resize(n_flat, -1);
-      int base = 0;
-      for (int mi = 0; mi < static_cast<int>(rule.reactant_pattern.molecules.size()); ++mi) {
-        int const nc = static_cast<int>(rule.reactant_pattern.molecules[mi].components.size());
-        if (mi == seed_a) {
-          for (int ci = 0; ci < nc && ci < static_cast<int>(embs_a[ei_a].size()); ++ci)
-            match.comp_ids[base + ci] = pool.molecule(mol_a).comp_ids[embs_a[ei_a][ci]];
-        } else if (mi == seed_b) {
-          for (int ci = 0; ci < nc && ci < static_cast<int>(embs_b[ei_b].size()); ++ci)
-            match.comp_ids[base + ci] = pool.molecule(mol_b).comp_ids[embs_b[ei_b][ci]];
+      int const end_a = seed_b; // pattern A spans [seed_a, seed_b)
+      int const end_b = n_pat_mols;
+      bool const multi_a = (end_a - seed_a) > 1;
+      bool const multi_b = (end_b - seed_b) > 1;
+
+      // Lay seed embedding `emb` down at `pat_seed`, then, for a
+      // multi-molecule pattern, walk its bonds out of the seed to place the
+      // rest.  False means this seed embedding does not reach a whole match.
+      auto apply_slot = [&](int pat_seed, int pat_end, const PatternAdj& adj, int mol,
+                            const std::vector<int>& emb, ReactionMatch& m) {
+        m.mol_ids[pat_seed] = mol;
+        int const flat_base = rule.reactant_pattern.flat_index(pat_seed, 0);
+        int const nc =
+            static_cast<int>(rule.reactant_pattern.molecules[pat_seed].components.size());
+        for (int ci = 0; ci < nc && ci < static_cast<int>(emb.size()); ++ci)
+          m.comp_ids[flat_base + ci] = pool.molecule(mol).comp_ids[emb[ci]];
+        if (pat_end - pat_seed <= 1)
+          return true;
+        if constexpr (kSelectReactantsProfile)
+          sr_profile_.bimol_resolve_calls++;
+        return resolve_pattern_context(rule.reactant_pattern, adj, pat_seed, pat_end, pat_seed, mol,
+                                       emb, m) &&
+               slot_match_valid(rule, pat_seed, pat_end, m);
+      };
+
+      // A multi-molecule pattern is drawn over the seed embeddings that reach
+      // a whole match — exactly the ones count_multi_mol_fast counted into the
+      // weight this molecule was drawn by.  Drawing over all of them and
+      // calling a dead end a null event instead would run the rule slow by
+      // the fraction that dead-ends: an `A(d,d)` bonded to a D and an E has
+      // two embeddings of `A(d!1)`, only one of which reaches the D, so
+      // `A(d!1).D(d!1) + X()` fired at half its rate.  A single-molecule
+      // pattern needs no filtering (every seed embedding is already a whole
+      // match) and skips the work outright, which also leaves its draw
+      // stream exactly as it was.
+      auto extending_embs = [&](int pat_seed, int pat_end, const PatternAdj& adj, int mol,
+                                const std::vector<std::vector<int>>& embs) {
+        std::vector<int> keep;
+        keep.reserve(embs.size());
+        ReactionMatch trial;
+        for (int i = 0; i < static_cast<int>(embs.size()); ++i) {
+          trial.mol_ids.assign(n_pat_mols, -1);
+          trial.comp_ids.assign(n_flat, -1);
+          if (apply_slot(pat_seed, pat_end, adj, mol, embs[i], trial))
+            keep.push_back(i);
         }
-        base += nc;
+        return keep;
+      };
+
+      // With one seed embedding there is nothing to choose between, so the
+      // filter is skipped and a dead end stays a null event — c/S is 0 or 1
+      // there and no rate is lost.  That keeps the cost off the common
+      // multi-molecule rules (one bond, one endpoint) entirely.
+      //
+      // Both filters run before either draw, so a rule that loses a whole
+      // side to dead ends still spends no uniform() on the other — the same
+      // ordering the embs_a/embs_b emptiness check above keeps.
+      bool const filter_a = multi_a && embs_a.size() > 1;
+      bool const filter_b = multi_b && embs_b.size() > 1;
+      std::vector<int> ext_a, ext_b;
+      if (filter_a) {
+        ext_a = extending_embs(seed_a, end_a, rs.pat_adj_a, mol_a, embs_a);
+        if (ext_a.empty()) {
+          if constexpr (kSelectReactantsProfile)
+            sr_profile_.bimol_resolve_failures++;
+          sr_finish(SrProfile::kPathBimol, /*outcome=*/1);
+          return match;
+        }
+      }
+      if (filter_b) {
+        ext_b = extending_embs(seed_b, end_b, rs.pat_adj_b, mol_b, embs_b);
+        if (ext_b.empty()) {
+          if constexpr (kSelectReactantsProfile)
+            sr_profile_.bimol_resolve_failures++;
+          sr_finish(SrProfile::kPathBimol, /*outcome=*/1);
+          return match;
+        }
       }
 
-      // Resolve non-seed molecules in multi-molecule reactant patterns
-      int const end_a = seed_b; // pattern A spans [seed_a, seed_b)
-      int const end_b = static_cast<int>(rule.reactant_pattern.molecules.size());
-      if (end_a - seed_a > 1) {
+      auto draw = [&](std::size_t n) {
+        auto i = static_cast<std::size_t>(uniform() * static_cast<double>(n));
+        return (i >= n) ? (n - 1) : i;
+      };
+      std::size_t const pick_a = draw(filter_a ? ext_a.size() : embs_a.size());
+      std::size_t const pick_b = draw(filter_b ? ext_b.size() : embs_b.size());
+      int const ei_a = filter_a ? ext_a[pick_a] : static_cast<int>(pick_a);
+      int const ei_b = filter_b ? ext_b[pick_b] : static_cast<int>(pick_b);
+
+      match.mol_ids.resize(n_pat_mols, -1);
+      match.comp_ids.resize(n_flat, -1);
+
+      // Both sides were checked above, so these cannot fail; the branch is
+      // kept so a future divergence between filter and apply surfaces as a
+      // null event rather than a half-built match.
+      if (!apply_slot(seed_a, end_a, rs.pat_adj_a, mol_a, embs_a[ei_a], match) ||
+          !apply_slot(seed_b, end_b, rs.pat_adj_b, mol_b, embs_b[ei_b], match)) {
+        match.mol_ids.clear(); // null event — context mismatch
         if constexpr (kSelectReactantsProfile)
-          sr_profile_.bimol_resolve_calls++;
-        if (!resolve_pattern_context(rule.reactant_pattern, rs.pat_adj_a, seed_a, end_a, seed_a,
-                                     mol_a, embs_a[ei_a], match)) {
-          match.mol_ids.clear(); // null event — context mismatch
-          if constexpr (kSelectReactantsProfile)
-            sr_profile_.bimol_resolve_failures++;
-          sr_finish(SrProfile::kPathBimol, /*outcome=*/1);
-          return match;
+          sr_profile_.bimol_resolve_failures++;
+        sr_finish(SrProfile::kPathBimol, /*outcome=*/1);
+        return match;
+      }
+
+      // Injectivity across the two patterns.  `mol_a != mol_b` above only
+      // separates the seeds; a molecule pulled into one pattern's complex
+      // can be the other pattern's match as well — `A(s,d!1).A(s,d!1) +
+      // A(s)` can draw the dimer's second A for slot B — and firing on that
+      // consumes one molecule twice, which a DeleteMolecules rule turns into
+      // a double delete and a broken mass balance.  The propensity counts
+      // those draws, so rejecting them here as null events realizes the
+      // injective count exactly, the same way the n-ary path does.  Only
+      // multi-molecule patterns can trip it; under `-bscb` the same-complex
+      // check has already rejected the draw.  (Ordering note: this consumes
+      // no uniform(), so a rule that cannot trip it keeps its draw stream.)
+      if (multi_a || multi_b) {
+        for (int i = 0; i < n_pat_mols; ++i) {
+          for (int j = i + 1; j < n_pat_mols; ++j) {
+            if (match.mol_ids[i] >= 0 && match.mol_ids[i] == match.mol_ids[j]) {
+              match.mol_ids.clear();
+              if constexpr (kSelectReactantsProfile)
+                sr_profile_.bimol_same_mol_rejects++;
+              sr_finish(SrProfile::kPathBimol, /*outcome=*/1);
+              return match;
+            }
+          }
         }
       }
-      if (end_b - seed_b > 1) {
-        if constexpr (kSelectReactantsProfile)
-          sr_profile_.bimol_resolve_calls++;
-        if (!resolve_pattern_context(rule.reactant_pattern, rs.pat_adj_b, seed_b, end_b, seed_b,
-                                     mol_b, embs_b[ei_b], match)) {
-          match.mol_ids.clear(); // null event — context mismatch
-          if constexpr (kSelectReactantsProfile)
-            sr_profile_.bimol_resolve_failures++;
-          sr_finish(SrProfile::kPathBimol, /*outcome=*/1);
-          return match;
-        }
-      }
+
       sr_finish(SrProfile::kPathBimol, /*outcome=*/2);
       return match;
     }

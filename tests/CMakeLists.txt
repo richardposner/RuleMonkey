@@ -253,6 +253,26 @@ add_test(
         ${_rulemonkey_test_dir}/cpp/trimolecular_ratelaw_model.xml
 )
 
+# Bimolecular multi-molecule reactant rate parity: the sampler weights the
+# seed molecule by the number of seed embeddings that extend to a whole match
+# (count_multi_mol_fast's c) but used to choose among all S >= c of them,
+# turning the dead ends into null events and firing the rule at c/S of its
+# rate.  The fixture makes c/S = 1/2 — an A(d,d) bonded to a D and an E, with
+# the pattern A(d!1).D(d!1) — and holds every population constant so the
+# closed-form propensity applies for the whole run.  The second fixture
+# covers the other multi-molecule hazard in the same sampler: a molecule
+# reached through the pattern's bonds also matching the other slot, which
+# under DeleteMolecules deleted it twice and broke mass balance.
+add_executable(multimol_rate_test cpp/multimol_rate_test.cpp)
+target_link_libraries(multimol_rate_test PRIVATE rulemonkey)
+
+add_test(
+    NAME multimol_rate_test
+    COMMAND multimol_rate_test
+        ${_rulemonkey_test_dir}/cpp/multimol_deadend_model.xml
+        ${_rulemonkey_test_dir}/cpp/multimol_overlap_model.xml
+)
+
 # Global-function exposure regression (issue #7): pins down that
 # Result::function_names / function_data, RuleMonkeySimulator::function_names()
 # and get_function_values() expose BNGL global-function values, that the

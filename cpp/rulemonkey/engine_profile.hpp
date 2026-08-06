@@ -305,9 +305,16 @@ struct SrProfile {
   uint64_t uni_mm_gen_null = 0;
   uint64_t bimol_embs_a_sum = 0;
   uint64_t bimol_embs_b_sum = 0;
+  // same_mol_rejects counts both the seed-vs-seed rejection and the wider
+  // injectivity rejection a multi-molecule pattern needs (a molecule reached
+  // through one pattern's bonds also matching the other slot).
   uint64_t bimol_same_mol_rejects = 0;
   uint64_t bimol_same_cx_rejects = 0;
   uint64_t bimol_embs_empty = 0;
+  // resolve_calls counts every seed embedding walked, including the ones
+  // walked while filtering a multi-molecule pattern down to the embeddings
+  // that reach a whole match; failures counts draws lost because no
+  // embedding reached one.
   uint64_t bimol_resolve_calls = 0;
   uint64_t bimol_resolve_failures = 0;
 
