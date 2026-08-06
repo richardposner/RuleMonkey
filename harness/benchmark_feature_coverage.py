@@ -548,6 +548,14 @@ def generate_nfsim_reference(model, t_end, n_steps, nfsim_flags, n_reps=DEFAULT_
     if not os.path.exists(xml_path):
         return None, None
 
+    # No NFsim to regenerate with.  Reached on a checkout without NFSIM_BIN
+    # for the models that carry an ODE reference only (NFsim refuses them):
+    # ft_tfun, ft_nested_functions, edg_time_dependent_rate,
+    # edg_deep_param_chain.  Without this guard subprocess.run runs an empty
+    # argv[0] and the whole suite dies on PermissionError mid-model.
+    if not NFSIM:
+        return None, None
+
     all_data = []
     headers = None
 

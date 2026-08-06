@@ -5,6 +5,47 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **The ASan build left the vendored expression layer uninstrumented.**
+  `RULEMONKEY_ENABLE_ASAN` applied `-fsanitize=address,undefined` to
+  `rulemonkey`, `rm_driver` and `rm_scan`, but not to the `rm_bngsim_expr`
+  object library, whose objects are folded into `librulemonkey.a` by
+  `target_sources`. libc++ emits `std::vector` container annotations only
+  from instrumented translation units, so `ExprTkEvaluator`'s
+  `vector<string>` members — grown inside the uninstrumented
+  `expression.cpp`, read from instrumented code — carried annotations the
+  two sides disagreed about, and ASan aborted with `container-overflow` at
+  `expression.cpp:817`. Every one of the 30 ctest binaries died there,
+  inside `RuleMonkeySimulator`'s constructor, before reaching its first
+  assertion.
+
+  Whether it fires depends on how much of `<vector>` the toolchain's libc++
+  annotates: the CI macOS runner never reported it, Xcode 26.5 does, and
+  v3.7.0 reproduces it identically at the same line — so this is a latent
+  hole in the sanitizer gate rather than a regression. The gate was passing
+  by aborting before it could check anything. With the object library
+  instrumented, all 30 tests pass clean under `-fsanitize=address,undefined`.
+
+- **`benchmark_feature_coverage.py` aborted the run instead of skipping when
+  `NFSIM_BIN` was unset.** Four models carry a BNG2 ODE reference and no
+  NFsim one, because NFsim refuses them: `ft_tfun`, `ft_nested_functions`,
+  `edg_time_dependent_rate`, `edg_deep_param_chain`. On a checkout without
+  `NFSIM_BIN`, `generate_nfsim_reference` tried to regenerate the missing
+  reference anyway, reaching `subprocess.run` with an empty `argv[0]` and
+  taking the whole suite down with `PermissionError: [Errno 13] Permission
+  denied: ''` — mid-model, after the ODE comparison for that model had
+  already passed. The script's own docstring promises the missing-ref model
+  "is skipped with a warning".
+
+  It now returns early when no NFsim binary is configured, which is the
+  skip path that was always intended. The full 82-model suite runs to
+  completion on a bare checkout again (82 PASS), instead of stopping at the
+  first ODE-only model. CI is unaffected: it sets `NFSIM_BIN` from the
+  BioNetGen tarball, which is why the suite has never hit this there.
+
 ## [3.8.0] — 2026-08-06
 
 ### Added

@@ -158,6 +158,17 @@ if(RULEMONKEY_ENABLE_ASAN)
     set(_rm_asan_flags -fsanitize=address,undefined -fno-omit-frame-pointer)
     target_compile_options(rulemonkey  PRIVATE ${_rm_asan_flags})
     target_link_options   (rulemonkey  PUBLIC  ${_rm_asan_flags})
+    # The vendored expression layer must be instrumented too.  Its objects are
+    # folded into librulemonkey.a, and ExprTkEvaluator's std::vector<std::string>
+    # members are grown from this TU but read from instrumented ones.  libc++
+    # emits container annotations only from instrumented code, so leaving this
+    # object library out desynchronizes them and ASan reports a
+    # container-overflow inside expression.cpp on every model load — a false
+    # positive whose visibility depends on the toolchain's annotation coverage
+    # (Xcode 26 reports it; the CI runner's older libc++ did not).
+    if(TARGET rm_bngsim_expr)
+        target_compile_options(rm_bngsim_expr PRIVATE ${_rm_asan_flags})
+    endif()
     foreach(_rm_cli_target rm_driver rm_scan)
         if(TARGET ${_rm_cli_target})
             target_compile_options(${_rm_cli_target} PRIVATE ${_rm_asan_flags})
