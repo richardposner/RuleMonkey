@@ -7,18 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **N-ary reactant rules (issue #24).** A rule may now carry three or more
+  `+`-separated reactants — `A + A + A -> P`, `A + B + C -> P` — when every
+  reactant pattern is a single molecule and the rate law is elementary. Up
+  to 6 patterns are supported.
+
+  These rules take a path of their own, separate from the two reactant
+  slots that serve uni- and bimolecular rules. The propensity is mass
+  action over tuples of *distinct* molecules, evaluated exactly by
+  expanding the distinct-tuple sum over the partition lattice of the slot
+  indices; reactants are drawn per slot by embedding count and retried
+  until distinct, which reproduces precisely the distribution the
+  propensity integrates, so no null events are spent on coincidences. BNG2
+  emits `symmetry_factor = 1/n!` for `n` identical patterns, so the
+  textbook forms fall out — `k·N(N−1)(N−2)/6` for `A + A + A`,
+  `k·N_A·N_B·N_C` for `A + B + C`.
+
+  Verified against the closed-form propensity on constant-population
+  fixtures over 200 replicates: `A + A + A` (symmetry factor 1/6),
+  `A + B + C` (1) and `A + A + B` (1/2) all land within 0.1% of exact. On
+  the issue's reproducer RM now fires the trimolecular rule 127-130 times
+  against NFsim's reported 126-129, and the four-body rule 98 against
+  NFsim's 98-99. Uni- and bimolecular trajectories are bit-identical — the
+  new path is inert below three patterns, and no model in the 185-XML
+  corpus reaches it.
+
 ### Fixed
 
-- **Rules with three or more reactant patterns are now refused instead of
-  silently never firing (issue #24).** The engine carries exactly two
-  reactant slots, and every consumer of `reactant_pattern_starts` treats
-  slot B as the whole tail `[starts[1], molecules.size())`. A rule written
-  `A + A + A -> P` therefore collapsed its second and third patterns into
-  one bond-free slot-B pattern, which `count_multi_mol_fast_generic` can
-  only satisfy from inside the seed molecule's own complex — so three free
-  monomers scored zero embeddings, `b_total` stayed zero, and the rule's
-  propensity was identically zero. The cutoff was exactly at three: two
-  identical reactant patterns were, and remain, correct.
+- **Rules with three or more reactant patterns no longer fail silently
+  (issue #24).** The engine carries exactly two reactant slots, and every
+  consumer of `reactant_pattern_starts` treats slot B as the whole tail
+  `[starts[1], molecules.size())`. A rule written `A + A + A -> P`
+  therefore collapsed its second and third patterns into one bond-free
+  slot-B pattern, which `count_multi_mol_fast_generic` can only satisfy
+  from inside the seed molecule's own complex — so three free monomers
+  scored zero embeddings, `b_total` stayed zero, and the rule's propensity
+  was identically zero. The cutoff was exactly at three: two identical
+  reactant patterns were, and remain, correct.
 
   Nothing reported the loss. The rule simply behaved as if it were absent
   while the rest of the model simulated normally, and because mass was
@@ -29,11 +56,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   solution to within 1% while one molecule sat at its seeded value of 50 at
   every output time.
 
-  Such a model is now refused at Tier 0, naming the rule and its pattern
-  count, with the suggestion to rewrite it as a sequence of at most
-  bimolecular steps. `--ignore-unsupported` runs it anyway, with the rule
-  still inert. This is a diagnostic, not a capability: real n-ary reactant
-  support is separate work, and will lift the refusal.
+  The common shapes are now simulated (see Added above). The rest — a
+  multi-molecule reactant pattern, a non-elementary rate law, or more than
+  6 patterns — are refused at Tier 0, naming the rule and which of the
+  three it hit, rather than going quietly inert.
+  `--ignore-unsupported` runs them anyway, with the rule still inert.
 
 ## [3.7.0] — 2026-07-29
 

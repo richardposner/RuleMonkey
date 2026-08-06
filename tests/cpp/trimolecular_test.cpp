@@ -1,31 +1,44 @@
-// Regression test for issue #24: rules with three or more reactant
-// patterns must be reported, not silently skipped.
+// Rate-parity and coverage test for n-ary reactant rules (issue #24).
 //
-// The engine carries exactly two reactant slots.  Every consumer of
+// A rule with three or more reactant patterns used to be silently inert.
+// The engine carries two reactant slots, and every consumer of
 // `reactant_pattern_starts` treats slot B as the whole tail
-// `[starts[1], molecules.size())`, so a rule written `A + A + A -> P`
-// collapses its second and third patterns into one bond-free slot-B
-// pattern.  `count_multi_mol_fast_generic` can only satisfy the
-// unassigned molecules of such a pattern from inside the seed's own
-// complex, so three free monomers score zero, `b_total` stays zero, and
-// the rule's propensity is identically zero.  It never fires.
+// `[starts[1], molecules.size())`, so `A + A + A -> P` collapsed its second
+// and third patterns into one bond-free slot-B pattern.
+// `count_multi_mol_fast_generic` can satisfy the unassigned molecules of
+// such a pattern only from inside the seed's own complex, so three free
+// monomers scored zero, `b_total` stayed zero, and the propensity was
+// identically zero.  Mass was still conserved and every other rule behaved,
+// so nothing in the trajectory looked wrong — the reporter found it only by
+// running the same XML through NFsim.
 //
-// The failure is invisible from the trajectory alone: mass is conserved
-// and every other rule in the model behaves, so the run looks valid
-// unless it is compared against another engine (NFsim fires the same
-// rule ~126 times over the fixture's horizon).  This test pins down that
-// RM refuses the model up front instead.
+// Rules whose every reactant pattern is a single molecule now take a
+// separate n-ary path (see the NaryState comment in engine.cpp), whose
+// propensity is the distinct-tuple sum expanded over the partition lattice.
+// This test pins down three things:
 //
-// The fixture (`trimolecular_model.bngl/.xml`) is the issue's reproducer:
-// `r: A(s) + A(s) + A(s) -> P() k DeleteMolecules` with A(s) seeded at 400.
+//   1. The reproducer fires at all, and conserves mass exactly.
+//   2. The realized *rate* matches the closed-form propensity — the check
+//      that a wrong symmetry factor or a missed inclusion-exclusion term
+//      would fail.  A depletion model cannot do this (it saturates: nearly
+//      all A is consumed for any rate fast enough to matter), so the rate
+//      fixture holds its population constant by putting the reactants back
+//      on the product side.  Its propensity is then constant for the whole
+//      run at
 //
-// NOTE: this test guards the *diagnostic*, which is a stopgap.  When the
-// engine grows real n-ary reactant support the Tier-0 error goes away and
-// this test must be replaced by a trajectory-parity check against NFsim.
+//          a = k · sf · N(N−1)(N−2) = 1e-6 · (1/6) · 400·399·398 = 10.5868
+//
+//      and the terminal P count is Poisson(a·t_end).
+//   3. An n-ary shape the path does *not* implement — here a multi-molecule
+//      reactant pattern — is still refused at load, rather than going back
+//      to silently never firing.
 
 #include "rulemonkey/simulator.hpp"
 
+#include <cmath>
+#include <cstdint>
 #include <cstdio>
+#include <stdexcept>
 #include <string>
 
 namespace {
@@ -34,55 +47,132 @@ int g_failures = 0;
 
 void check(bool ok, const std::string& msg) {
   if (!ok) {
-    std::fprintf(stdout, "FAIL: %s\n", msg.c_str());
+    std::fprintf(stderr, "FAIL: %s\n", msg.c_str());
     ++g_failures;
+  }
+}
+
+double final_value(const rulemonkey::Result& r, const std::string& name) {
+  for (size_t i = 0; i < r.observable_names.size(); ++i)
+    if (r.observable_names[i] == name)
+      return r.observable_data[i].back();
+  throw std::runtime_error("observable not found: " + name);
+}
+
+// (1) The issue's reproducer: A(s) + A(s) + A(s) -> P() with DeleteMolecules,
+//     A seeded at 400, k = 1e-6, t = 5000.  Before the fix this held A at
+//     exactly 400 and P at exactly 0 forever.
+void test_reproducer_fires(const std::string& xml) {
+  rulemonkey::RuleMonkeySimulator sim(xml);
+
+  // The rule is implemented now, so nothing about it may be reported.
+  for (const auto& f : sim.unsupported_features()) {
+    check(f.element != "ListOfReactantPatterns",
+          "a single-molecule-pattern trimolecular rule is implemented and must "
+          "not be reported as unsupported");
+  }
+
+  auto r = sim.run({0.0, 5000.0, 2}, /*seed=*/1);
+  double const a_free = final_value(r, "A_free");
+  double const p_made = final_value(r, "P_made");
+
+  check(p_made > 0, "trimolecular rule must fire (it produced exactly 0 before the fix)");
+
+  // Exact bookkeeping: each firing consumes three A and makes one P.
+  check(std::abs((a_free + (3.0 * p_made)) - 400.0) < 1e-9,
+        "mass must balance exactly: A_free + 3·P_made == 400, got A_free=" +
+            std::to_string(a_free) + " P_made=" + std::to_string(p_made));
+
+  // Deterministic depletion for dN/dt = −k·N³/2 gives N(5000) = 14.1, so
+  // P ≈ 128.6; NFsim reports 126-129 on this model, and 20 RM seeds span
+  // 127-130.  The band is wide enough not to be flaky and still catches a
+  // rule that has stopped firing.
+  check(p_made > 100 && p_made < 160,
+        "trimolecular fire count should land near the deterministic 128.6, got " +
+            std::to_string(p_made));
+}
+
+// (2) Rate parity against the closed-form propensity, on a fixture whose
+//     population does not change (reactants reappear as products).
+void test_rate_matches_closed_form(const std::string& xml) {
+  constexpr double kN = 400.0;
+  constexpr double kK = 1.0e-6;
+  constexpr double kSym = 1.0 / 6.0; // BNG2's symmetry_factor for A+A+A
+  constexpr double kTEnd = 100.0;
+  constexpr int kReps = 40;
+
+  // a = k · sf · N(N−1)(N−2), constant for the whole run.
+  double const a = kK * kSym * kN * (kN - 1.0) * (kN - 2.0);
+  double const expected = a * kTEnd;
+
+  double sum = 0.0;
+  for (int rep = 0; rep < kReps; ++rep) {
+    rulemonkey::RuleMonkeySimulator sim(xml);
+    auto r =
+        sim.run({0.0, kTEnd, 2}, /*seed=*/std::uint64_t{500} + static_cast<std::uint64_t>(rep));
+
+    // The population must be genuinely constant, or the closed form does
+    // not apply and the comparison below would be meaningless.
+    check(std::abs(final_value(r, "A_free") - kN) < 1e-9,
+          "rate fixture must hold A at " + std::to_string(kN) + " (it is catalytic)");
+    sum += final_value(r, "P_made");
+  }
+  double const mean = sum / kReps;
+
+  // Counts are Poisson(expected) per replicate, so the mean's standard
+  // error is √(expected/kReps) ≈ 5.1.  A 5σ band is ~2.4% wide: loose
+  // enough never to flake, tight enough that any symmetry-factor or
+  // inclusion-exclusion error (which move the rate by integer factors —
+  // 6× for a dropped 1/6) fails it outright.
+  double const sem = std::sqrt(expected / kReps);
+  double const tol = 5.0 * sem;
+  check(std::abs(mean - expected) < tol,
+        "trimolecular rate must match k·sf·N(N-1)(N-2): expected " + std::to_string(expected) +
+            " +- " + std::to_string(tol) + ", observed " + std::to_string(mean));
+}
+
+// (3) An n-ary shape outside the implemented path must still be refused,
+//     not silently dropped.  Here reactant pattern 0 is a two-molecule
+//     complex (A.D), which the path does not handle.
+void test_unsupported_shape_still_refused(const std::string& xml) {
+  const rulemonkey::RuleMonkeySimulator sim(xml);
+
+  const rulemonkey::UnsupportedFeature* hit = nullptr;
+  for (const auto& f : sim.unsupported_features()) {
+    if (f.element == "ListOfReactantPatterns") {
+      hit = &f;
+      break;
+    }
+  }
+
+  check(hit != nullptr, "a 3-pattern rule with a multi-molecule pattern must still be reported");
+  if (hit != nullptr) {
+    check(hit->severity == rulemonkey::Severity::Error,
+          "unsupported n-ary shapes must be Error severity — a Warn would let the "
+          "model run to a silently wrong trajectory");
+    check(hit->feature.find("'r'") != std::string::npos,
+          "diagnostic must name the offending rule so it is findable in a large model");
+    check(hit->feature.find("multi-molecule") != std::string::npos,
+          "diagnostic must say which shape it refused");
   }
 }
 
 } // namespace
 
 int main(int argc, char* argv[]) {
-  if (argc < 3) {
-    std::fprintf(stdout, "Usage: trimolecular_test <trimolecular_xml> <bimolecular_xml>\n");
+  if (argc < 4) {
+    std::fprintf(stderr,
+                 "Usage: trimolecular_test <reproducer_xml> <rate_xml> <unsupported_xml>\n");
     return 2;
   }
-  const std::string tri_xml = argv[1];
-  const std::string bi_xml = argv[2];
 
-  // (1) A 3-reactant-pattern rule must raise an Error-severity feature,
-  //     naming the rule and its pattern count.
-  {
-    const rulemonkey::RuleMonkeySimulator sim(tri_xml);
-    const auto& uf = sim.unsupported_features();
-
-    const rulemonkey::UnsupportedFeature* hit = nullptr;
-    for (const auto& f : uf) {
-      if (f.element == "ListOfReactantPatterns") {
-        hit = &f;
-        break;
-      }
-    }
-
-    check(hit != nullptr, "3-reactant-pattern rule must report a ListOfReactantPatterns feature");
-    if (hit != nullptr) {
-      check(hit->severity == rulemonkey::Severity::Error,
-            "3-reactant-pattern rule must be Error severity, not Warn — a Warn would "
-            "still let the model run to a silently wrong trajectory");
-      check(hit->feature.find("'r'") != std::string::npos,
-            "diagnostic must name the offending rule so it is findable in a large model");
-      check(hit->feature.find("3 reactant patterns") != std::string::npos,
-            "diagnostic must state the pattern count it saw");
-    }
-  }
-
-  // (2) The check must not fire on an ordinary bimolecular model — the
-  //     cutoff is at three patterns, and two must stay clean.
-  {
-    const rulemonkey::RuleMonkeySimulator sim(bi_xml);
-    for (const auto& f : sim.unsupported_features()) {
-      check(f.element != "ListOfReactantPatterns",
-            "bimolecular rule must not trip the >=3-reactant-pattern check");
-    }
+  try {
+    test_reproducer_fires(argv[1]);
+    test_rate_matches_closed_form(argv[2]);
+    test_unsupported_shape_still_refused(argv[3]);
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "FAIL: exception: %s\n", e.what());
+    ++g_failures;
   }
 
   if (g_failures == 0)

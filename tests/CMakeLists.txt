@@ -226,11 +226,14 @@ add_test(
         ${CMAKE_CURRENT_BINARY_DIR}/negative_rate_clamp_stderr.txt
 )
 
-# Three-or-more-reactant-pattern diagnostic (issue #24): a rule such as
-# `A + A + A -> P` collapses its 2nd and 3rd patterns into the engine's
-# single slot-B tail, scores zero embeddings, and never fires — with mass
-# still conserved and nothing reported, so the trajectory looks valid.
-# Pins down that RM refuses such a model up front instead of running it.
+# N-ary reactant rules (issue #24): a rule such as `A + A + A -> P` used to
+# collapse its 2nd and 3rd patterns into the engine's single slot-B tail,
+# score zero embeddings, and never fire — with mass still conserved and
+# nothing reported, so the trajectory looked valid.  Covers that the
+# reproducer now fires and balances mass, that the realized rate matches the
+# closed-form k·sf·N(N-1)(N-2) on a constant-population fixture (the check a
+# wrong symmetry factor fails), and that shapes outside the implemented path
+# are still refused rather than going quietly inert again.
 add_executable(trimolecular_test cpp/trimolecular_test.cpp)
 target_link_libraries(trimolecular_test PRIVATE rulemonkey)
 
@@ -238,7 +241,8 @@ add_test(
     NAME trimolecular_test
     COMMAND trimolecular_test
         ${_rulemonkey_test_dir}/cpp/trimolecular_model.xml
-        ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
+        ${_rulemonkey_test_dir}/cpp/trimolecular_rate_model.xml
+        ${_rulemonkey_test_dir}/cpp/trimolecular_unsupported_model.xml
 )
 
 # Global-function exposure regression (issue #7): pins down that

@@ -1,0 +1,23 @@
+begin model
+begin parameters
+  k 1.0e-6
+  A0 400
+end parameters
+begin molecule types
+  A(s)
+  P()
+end molecule types
+begin seed species
+  A(s) A0
+end seed species
+begin observables
+  Molecules A_free A(s)
+  Molecules P_made P()
+end observables
+begin reaction rules
+  r: A(s) + A(s) + A(s) -> A(s) + A(s) + A(s) + P()  k
+end reaction rules
+end model
+begin actions
+  writeXML()
+end actions
