@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.8.1] — 2026-08-06
+
 ### Fixed
 
 - **The ASan build left the vendored expression layer uninstrumented.**
@@ -1184,6 +1186,8 @@ The legacy implementation, RuleMonkey 2.0.25, was introduced in:
 > RG. *RuleMonkey: software for stochastic simulation of rule-based
 > models.* BMC Bioinformatics 11:404 (2010). PMID: 20673321.
 
+[Unreleased]: https://github.com/richardposner/RuleMonkey/compare/v3.8.1...HEAD
+[3.8.1]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.8.1
 [3.8.0]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.8.0
 [3.7.0]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.7.0
 [3.6.1]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.6.1
