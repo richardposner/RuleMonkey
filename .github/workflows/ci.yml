@@ -31,11 +31,14 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
 
+    # No Ninja install step: all three hosted images ship Ninja 1.13.2 on
+    # PATH.  seanmiddleditch/gha-setup-ninja used to provide it, but that
+    # action is archived and never moved off Node 20 (issue #30), and the
+    # image's copy is the same generator with one fewer dependency.  If a
+    # future image drops it, `cmake --preset release` fails at configure
+    # with "CMAKE_MAKE_PROGRAM is not set", which is a clear enough signal.
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Ninja
-        uses: seanmiddleditch/gha-setup-ninja@v5
 
       # cl.exe and the Windows SDK are not on PATH on the hosted Windows
       # image — only the Visual Studio generator finds them unaided.  With
@@ -79,9 +82,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Ninja
-        uses: seanmiddleditch/gha-setup-ninja@v5
-
       - name: Configure (asan)
         run: cmake --preset asan
 
@@ -113,9 +113,6 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Ninja
-        uses: seanmiddleditch/gha-setup-ninja@v5
 
       - name: Set up Python
         uses: actions/setup-python@v5

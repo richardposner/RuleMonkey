@@ -24,6 +24,8 @@ jobs:
     env:
       BNG_VERSION: "2.9.3"
 
+    # Ninja comes from the runner image (1.13.2, preinstalled), not from an
+    # install step — see the note in ci.yml's build job (issue #30).
     steps:
       - name: Checkout PR HEAD with full history
         uses: actions/checkout@v4
@@ -31,9 +33,6 @@ jobs:
           # Need history for the base ref + a clean checkout we can
           # `git checkout` between later.
           fetch-depth: 0
-
-      - name: Install Ninja
-        uses: seanmiddleditch/gha-setup-ninja@v5
 
       - name: Set up Python
         uses: actions/setup-python@v5
