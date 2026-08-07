@@ -2401,6 +2401,20 @@ struct NaryState {
   }
 };
 
+// Population count of a block mask.  std::popcount is C++20 and we target
+// C++17.  Unlike highest_pow2 below — a Fenwick-descent inner step, where
+// the per-compiler intrinsics earn their keep — this runs once per partition
+// at rule setup over a mask of at most kMaxNarySlots bits, so the portable
+// Kernighan loop costs nothing and sidesteps the intrinsic spellings
+// entirely (__builtin_popcount is GCC/Clang-only, and MSVC's __popcnt is
+// x86-only and needs a POPCNT-capable target).
+inline int popcount_mask(uint32_t v) {
+  int c = 0;
+  for (; v != 0; v &= v - 1)
+    ++c;
+  return c;
+}
+
 // Enumerate the partitions of {0..n-1} with their Möbius coefficients.
 // Restricted-growth-string enumeration: element 0 always opens block 0, and
 // element i may join any existing block or open the next one.
@@ -2416,7 +2430,7 @@ std::vector<NaryPartition> build_nary_partitions(int n) {
         p.blocks[block_of[i]] |= (uint32_t{1} << i);
       p.mu = 1.0;
       for (uint32_t const b : p.blocks) {
-        int const size = __builtin_popcount(b);
+        int const size = popcount_mask(b);
         // (−1)^(size−1) · (size−1)!
         double term = ((size - 1) % 2 == 0) ? 1.0 : -1.0;
         for (int f = 2; f <= size - 1; ++f)

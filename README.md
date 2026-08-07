@@ -31,6 +31,12 @@ cmake --build --preset release
 ctest --preset release
 ```
 
+Linux (GCC/Clang), macOS (AppleClang) and Windows (MSVC) are built and
+tested in CI.  On Windows, run those three commands from a Developer
+Command Prompt for Visual Studio: the `release` preset uses the Ninja
+generator, which finds `cl.exe` only when the MSVC environment is already
+on `PATH`.
+
 The `rm_driver` and `rm_scan` executables are built at
 `build/release/rm_driver` and `build/release/rm_scan`.
 
