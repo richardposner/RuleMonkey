@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.9.0] — 2026-08-07
+
 ### Added
 
 - **Windows / MSVC is now a CI gate (issue #29).** The `build` job runs
@@ -35,6 +37,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The `asan` job stays ubuntu/macos: `-fsanitize=address,undefined` is the
   GCC/Clang spelling, MSVC ships no UBSan, and `CMakeLists.txt` already
   refuses `RULEMONKEY_ENABLE_ASAN` outside Clang/GCC.
+
+### Changed
+
+- **CI workflow actions moved off Node 20 (issue #30).** `actions/checkout`,
+  `actions/setup-python` and `actions/upload-artifact` are on v7. The two pins
+  with no Node 24 version were retired rather than bumped:
+  `seanmiddleditch/gha-setup-ninja` is gone entirely — it is archived upstream
+  and its latest release is still Node 20, while all three runner images ship
+  Ninja 1.13.2 on PATH — and the MSVC environment now comes from a `vswhere` +
+  `vcvars64.bat` step rather than `ilammy/msvc-dev-cmd`, every available
+  MSVC-environment action being Node 20 as well. A full run now carries no
+  deprecation annotations on any job.
+
+  Build pipeline only: no engine, API or build-system behaviour changes for a
+  consumer of the library.
 
 ### Fixed
 
@@ -1231,7 +1248,8 @@ The legacy implementation, RuleMonkey 2.0.25, was introduced in:
 > RG. *RuleMonkey: software for stochastic simulation of rule-based
 > models.* BMC Bioinformatics 11:404 (2010). PMID: 20673321.
 
-[Unreleased]: https://github.com/richardposner/RuleMonkey/compare/v3.8.1...HEAD
+[Unreleased]: https://github.com/richardposner/RuleMonkey/compare/v3.9.0...HEAD
+[3.9.0]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.9.0
 [3.8.1]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.8.1
 [3.8.0]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.8.0
 [3.7.0]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.7.0
