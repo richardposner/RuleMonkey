@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Windows / MSVC is now a CI gate (issue #29).** The `build` job runs
+  `ubuntu-latest`, `macos-latest` and `windows-latest`; the Windows leg
+  configures, compiles with MSVC 14.51 and passes all 30 ctest cases in
+  under two minutes. Before this, no part of RuleMonkey had ever been
+  compiled with MSVC — the code's `_MSC_VER` guards were an assessment from
+  reading the source, not a tested claim, and one of them was missing (see
+  below).
+
+  All three legs share the same Ninja `release` preset. A multi-config
+  Visual Studio generator would leave `CMAKE_BUILD_TYPE` empty and silently
+  change which self-check defines compile in, so the Windows leg instead
+  puts the MSVC environment on `PATH` first — the hosted image does not
+  expose `cl.exe` to a non-VS generator, and CMake would otherwise
+  configure against whatever compiler it found (the Strawberry Perl gcc).
+
+  Two MSVC-only compile flags come with it, applied directory-wide and
+  gated on `MSVC` so the Clang/GNU `-Wall -Wextra -Werror` sets are
+  untouched: `/bigobj`, without which the vendored exprtk translation unit
+  stops at `fatal error C1128`, and `/utf-8`, which pins source decoding so
+  RM's non-ASCII diagnostic strings do not depend on the build machine's
+  active code page. The tree compiles clean at MSVC's default `/W3` — zero
+  warnings.
+
+  The `asan` job stays ubuntu/macos: `-fsanitize=address,undefined` is the
+  GCC/Clang spelling, MSVC ships no UBSan, and `CMakeLists.txt` already
+  refuses `RULEMONKEY_ENABLE_ASAN` outside Clang/GCC.
+
+### Fixed
+
+- **`__builtin_popcount` made the engine uncompilable with MSVC.**
+  `build_nary_partitions`, which pre-expands the Möbius coefficients for a
+  rule with three or more reactant patterns, reached for the GCC/Clang
+  builtin with no `_MSC_VER` counterpart — unlike `highest_pow2` a few lines
+  above it, which carries GCC/Clang, MSVC and generic branches — so `cl.exe`
+  stopped at `engine.cpp` with `error C3861: '__builtin_popcount':
+  identifier not found`. This was the only MSVC break in the tree.
+
+  It is now a portable Kernighan loop rather than a third per-compiler
+  branch: the code runs once per partition at rule setup over a mask of at
+  most `kMaxNarySlots` bits, so there is nothing for an intrinsic to win,
+  and MSVC's `__popcnt` would have carried its own caveats (x86-only, and it
+  assumes a POPCNT-capable target).
+
 ## [3.8.1] — 2026-08-06
 
 ### Fixed

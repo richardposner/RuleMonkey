@@ -40,16 +40,19 @@ endif()
 # Guarded on MSVC, so the -Wall -Wextra -Werror sets further down (gated on
 # Clang|GNU) are untouched.
 #
-#   /utf-8   The sources are UTF-8 and a number of user-facing diagnostic
-#            strings embed non-ASCII characters.  Absent this flag MSVC
-#            decodes them as the machine's active code page and both the
-#            messages and the ctest PASS_REGULAR_EXPRESSION matches against
-#            them go through a lossy round trip.
-#   /bigobj  third_party/exprtk/exprtk.hpp is a 1.6 MB single header whose
-#            instantiations run past the 65,536-section limit of the default
-#            COFF object format (C1128).  engine.cpp is large enough to be at
-#            risk of the same, so the flag covers the tree rather than just
-#            the exprtk TU.
+#   /bigobj  Required: third_party/exprtk/exprtk.hpp is a 1.6 MB single
+#            header, and expression.cpp instantiates past the 65,536-section
+#            limit of the default object format.  Without this the build
+#            stops at `fatal error C1128`.  engine.cpp is large enough to be
+#            at risk of the same, so the flag covers the tree rather than
+#            just the exprtk TU.
+#   /utf-8   Defensive: the sources are UTF-8 and a number of user-facing
+#            diagnostic strings embed non-ASCII characters, which MSVC
+#            otherwise decodes as the build machine's active code page.  The
+#            hosted CI runner's is already UTF-8 (no C4819 there either way),
+#            so this is for developer machines whose locale differs — without
+#            it, whether RM's error messages come out intact depends on who
+#            compiled the library.
 # ---------------------------------------------------------------------------
 if(MSVC)
     add_compile_options(/utf-8 /bigobj)
