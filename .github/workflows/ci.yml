@@ -15,13 +15,20 @@ on:
 
 jobs:
   build:
-    # macOS runs build + smoke ctest only (the feature_coverage benchmark
-    # job below requires the Linux-only NFsim binary from BioNetGen).  Treat
-    # the macOS leg as a "build-clean" gate, not a correctness gate.
+    # macOS and Windows run build + ctest only (the feature_coverage
+    # benchmark job below requires the Linux-only NFsim binary from
+    # BioNetGen).  Treat those two legs as "build-clean" gates, not
+    # correctness gates.
+    #
+    # All three legs use the same Ninja `release` preset on purpose.  A
+    # multi-config Visual Studio generator would leave CMAKE_BUILD_TYPE
+    # empty, which silently changes which self-check defines CMakeLists.txt
+    # compiles in (`CMAKE_BUILD_TYPE STREQUAL "Debug"`), so the Windows leg
+    # would no longer be testing the same configuration as the other two.
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -29,6 +36,15 @@ jobs:
 
       - name: Install Ninja
         uses: seanmiddleditch/gha-setup-ninja@v5
+
+      # cl.exe and the Windows SDK are not on PATH on the hosted Windows
+      # image — only the Visual Studio generator finds them unaided.  With
+      # the Ninja generator CMake would otherwise pick up whatever compiler
+      # happens to be on PATH (the Strawberry Perl gcc) or fail its compiler
+      # check outright, so put the MSVC environment in place first.
+      - name: Set up MSVC environment (Windows)
+        if: runner.os == 'Windows'
+        uses: ilammy/msvc-dev-cmd@v1
 
       - name: Configure
         run: cmake --preset release
@@ -48,6 +64,12 @@ jobs:
     # macOS (libc++ + AppleClang asan) are exercised, since std-lib
     # divergence is exactly the kind of thing that hides UB on one
     # platform and reveals it on the other.
+    #
+    # Deliberately no windows-latest leg: `-fsanitize=address,undefined` is
+    # the GCC/Clang spelling, MSVC wants `/fsanitize=address` and ships no
+    # UBSan at all, and CMakeLists.txt refuses RULEMONKEY_ENABLE_ASAN
+    # outside Clang/GCC for that reason.  Windows is a build + ctest gate
+    # only.
     strategy:
       fail-fast: false
       matrix:

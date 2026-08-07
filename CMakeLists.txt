@@ -31,6 +31,31 @@ if(CCACHE_PROGRAM)
 endif()
 
 # ---------------------------------------------------------------------------
+# MSVC-only compile flags (issue #29).
+#
+# Directory-wide rather than per-target: every translation unit in the tree
+# needs both, including the vendored exprtk object library declared below and
+# the test executables under tests/.  add_compile_options only reaches targets
+# created after it, hence the placement here, ahead of the first add_library.
+# Guarded on MSVC, so the -Wall -Wextra -Werror sets further down (gated on
+# Clang|GNU) are untouched.
+#
+#   /utf-8   The sources are UTF-8 and a number of user-facing diagnostic
+#            strings embed non-ASCII characters.  Absent this flag MSVC
+#            decodes them as the machine's active code page and both the
+#            messages and the ctest PASS_REGULAR_EXPRESSION matches against
+#            them go through a lossy round trip.
+#   /bigobj  third_party/exprtk/exprtk.hpp is a 1.6 MB single header whose
+#            instantiations run past the 65,536-section limit of the default
+#            COFF object format (C1128).  engine.cpp is large enough to be at
+#            risk of the same, so the flag covers the tree rather than just
+#            the exprtk TU.
+# ---------------------------------------------------------------------------
+if(MSVC)
+    add_compile_options(/utf-8 /bigobj)
+endif()
+
+# ---------------------------------------------------------------------------
 # librulemonkey: the core simulation engine
 # ---------------------------------------------------------------------------
 add_library(rulemonkey STATIC
