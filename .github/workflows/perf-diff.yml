@@ -28,7 +28,7 @@ jobs:
     # install step — see the note in ci.yml's build job (issue #30).
     steps:
       - name: Checkout PR HEAD with full history
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           # Need history for the base ref + a clean checkout we can
           # `git checkout` between later.

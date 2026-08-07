@@ -38,7 +38,7 @@ jobs:
     # future image drops it, `cmake --preset release` fails at configure
     # with "CMAKE_MAKE_PROGRAM is not set", which is a clear enough signal.
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # cl.exe and the Windows SDK are not on PATH on the hosted Windows
       # image — only the Visual Studio generator finds them unaided.  With
@@ -111,7 +111,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Configure (asan)
         run: cmake --preset asan
@@ -143,7 +143,7 @@ jobs:
       BNG_VERSION: "2.9.3"
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -210,10 +210,10 @@ jobs:
 
     steps:
       - name: Checkout RuleMonkey
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Checkout lanl/bngsim (full history for the pinned commit)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           repository: lanl/bngsim
           path: bngsim
