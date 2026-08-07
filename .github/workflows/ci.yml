@@ -45,9 +45,40 @@ jobs:
       # the Ninja generator CMake would otherwise pick up whatever compiler
       # happens to be on PATH (the Strawberry Perl gcc) or fail its compiler
       # check outright, so put the MSVC environment in place first.
+      #
+      # Done by hand rather than with an action because every MSVC-environment
+      # action is still Node 20 — ilammy/msvc-dev-cmd, microsoft/setup-msbuild
+      # and TheMrMilchmann/setup-msvc-dev alike — which is the deprecation
+      # issue #30 exists to clear.  vswhere.exe ships with the image, so this
+      # needs nothing the runner does not already have.
       - name: Set up MSVC environment (Windows)
         if: runner.os == 'Windows'
-        uses: ilammy/msvc-dev-cmd@v1
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vs = & $vswhere -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          if (-not $vs) { throw "vswhere found no Visual Studio install carrying the VC x64 toolset" }
+
+          # vcvars64.bat mutates its own process environment, which dies with
+          # the cmd.exe that ran it, so `&& set` is the only way to read back
+          # what it exported.
+          $vcvars = Join-Path $vs 'VC\Auxiliary\Build\vcvars64.bat'
+          $after = @{}
+          cmd /c "`"$vcvars`" >nul 2>&1 && set" | ForEach-Object {
+            if ($_ -match '^([^=]+)=(.*)$') { $after[$matches[1]] = $matches[2] }
+          }
+          if (-not $after.ContainsKey('INCLUDE')) { throw "vcvars64.bat exported no INCLUDE; MSVC environment not established" }
+
+          # PATH goes through $GITHUB_PATH, the documented channel, and carries
+          # only the entries vcvars added.  INCLUDE / LIB / LIBPATH do not exist
+          # beforehand, so those are written whole.
+          $before = $env:PATH -split ';'
+          ($after['PATH'] -split ';') |
+            Where-Object { $_ -and $before -notcontains $_ } |
+            Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          foreach ($name in 'INCLUDE', 'LIB', 'LIBPATH') {
+            "$name=$($after[$name])" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          }
 
       - name: Configure
         run: cmake --preset release
