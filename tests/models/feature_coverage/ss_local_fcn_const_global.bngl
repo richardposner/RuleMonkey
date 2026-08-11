@@ -1,0 +1,91 @@
+# Feature: a local rate over a bare observable that never moves (issue #40).
+# Tests:   the cost of the per-event rescan that issue #38 put behind a local
+#          rate reading a global, at an instance count where that cost shows.
+#          `Vol` is written bare inside `aflip`, so it is the system-wide
+#          count and the rule is marked as tracking a global — but nothing in
+#          the model touches V, so `Vol` is 50 at every event of the run and
+#          not one of those rescans can change a single per-instance rate.
+#          Skipping them is exact, and this model is where "exact" and
+#          "free" have to coincide.
+#
+#          This is the shape the three corpora had no model of at all: a bare
+#          observable inside a local function appears in none of their 199
+#          XMLs, so nothing timed the path and a 20x regression sat in it
+#          unseen (#39).  It is also the common shape — a bare observable is
+#          typically a volume proxy, a total or a clock, and those are
+#          constant or near-constant for most of a run.
+#
+# Oracle:  the same exact binomial death process ft_local_fcn_global_obs uses,
+#          scaled up.  A(m~0,p~1) flips at kf*Vol*Aphos(x) = 2e-4*50*1 = 0.01;
+#          A(m~0,p~0) has Aphos(x) = 0 and must never react, which is what
+#          keeps the TAGGED half of the classification pinned while the bare
+#          half is under test.  Nothing consumes V, so Vol stays 50:
+#            Aoff(t) = 2000 + 20000*exp(-0.01 t)
+#            Aoff(100) = 2000 + 20000*exp(-1) = 9357.6
+#
+# Tier:    stress (network-free; NFsim reference only).
+# Target:  well under 1 s of RM wall time, and that target IS the assertion.
+#          The other stress models are sized to run long; this one is sized so
+#          that a rule which rescans unconditionally cannot run short.  22000
+#          molecules match the rule's reactant pattern at t=0 and ~12800
+#          events fire, so a per-event rescan is ~2e8 local-rate evaluations:
+#          33 s against 0.16 s measured, i.e. a regression lands in perf_diff
+#          as a ~200x column rather than as noise.  The correctness half is a
+#          plain z-score against NFsim like any other model in the suite, and
+#          local_fcn_rescan_gate_test turns the cost half into a hard ctest
+#          gate by running this model against a folded-constant twin.
+# Regression: #39 made a local rate that reads ANY global take a full O(N)
+#          rescan after every event.  The guard answered "can this rule read
+#          a moving global?" when what gates an O(N) rescan is "did that
+#          global actually move?" — and for a constant `Vol` the honest
+#          answer is no, forever.  RM now caches the resolved dependency
+#          values and rescans only when one of them changes.
+# invariant: conserved Vol = 50
+# invariant: conserved Aphos = 20000
+# invariant: nonneg
+
+begin model
+begin parameters
+    X0    20000    # reactive:  Aphos(x) = 1, flips at kf*Vol
+    I0     2000    # inert:     Aphos(x) = 0, must never fire
+    kf    2.0e-4   # kf*Vol = 0.01 per reactive molecule
+end parameters
+
+begin molecule types
+    V()
+    A(m~0~1,p~0~1)
+end molecule types
+
+begin seed species
+    V()              50
+    A(m~0,p~1)       X0
+    A(m~0,p~0)       I0
+end seed species
+
+begin observables
+    # Referenced BARE by aflip -> system-wide count, and constant: no rule
+    # creates or destroys V.
+    Molecules  Vol    V()
+    # Referenced applied to the tag -> evaluated at the tagged molecule,
+    # 1 for the reactive half and 0 for the inert half.
+    Molecules  Aphos  A(p~1)
+    Molecules  Aoff   A(m~0)
+    Molecules  Aon    A(m~1)
+end observables
+
+begin functions
+    # Vol bare (global, = 50 throughout); Aphos(x) tagged (local, 0 or 1).
+    aflip(x) = kf*Vol*Aphos(x)
+end functions
+
+begin reaction rules
+    # The tag is repeated on the product so BNG2 maps the molecule through
+    # the rule; without it the untouched `p` component reads as a missing
+    # component on a newly created molecule.
+    RA: A(m~0)%x -> A(m~1)%x    aflip(x)
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>100,n_steps=>20})
+end actions

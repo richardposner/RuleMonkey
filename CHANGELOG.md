@@ -9,6 +9,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A local rate reading a bare observable was rescanned every event even
+  when that observable never moved (issue #40).** #38's fix gave such a
+  rule a full O(N) rescan after **every** event. The rescan itself is
+  necessary — a moving global changes every instance's rate at once with
+  no molecule marked affected, so the affected-molecule delta path cannot
+  see it — but the guard answered *"can this rule read a moving global?"*
+  when the question that gates an O(N) rescan is *"did that global
+  actually move?"*. A bare observable is typically a volume proxy, a total
+  or a clock, so on most models it answers yes to the first and no to the
+  second for the entire run, and every one of those rescans recomputes
+  rates that cannot have changed. Correctness was never affected; this was
+  cost only.
+
+  RM now records **what** the local-function chain reads at global scope —
+  the resolved observable slots, plus flags for `time` and for a
+  dependency the loader cannot enumerate — and caches those values at each
+  rescan. When they are all unchanged the rescan is skipped and the rule
+  falls through to the ordinary delta path, which still owns whatever the
+  event itself touched. The skip is exact, not an approximation: if
+  nothing the rate reads globally has moved, no per-instance rate can have
+  moved either. A rule reading `time` is unavoidably dirty every event and
+  keeps the unconditional rescan.
+
+  On bngsim's `context_symmetry` fixture — 15 rules, 4000 molecules per
+  pool, two DOR pools whose local functions read a `Src()` count that
+  nothing in the model touches — the full `t_end=2000` run goes from
+  **35.7 s to 0.12 s**, which is exactly what the same model costs with
+  that observable replaced by the literal `1`, and the trajectories are
+  byte-identical across seeds. The whole difference was overhead.
+
+  Blast radius: a byte-identity sweep of all 87 feature-coverage models
+  against the pre-fix binary finds 86 identical and one changed —
+  `ft_local_fcn_mixed_scope`, the only model whose bare observable moves.
+  Its rule now takes the delta path on the events that do *not* move that
+  observable, and incremental accumulation differs from a full re-sum in
+  the last bits, so the SSA draws a different realization of the same
+  process. Not a different distribution: over 80 seeds per build the two
+  sit at Aoff 72.0 vs 72.7 and Boff 57.4 vs 56.6 — z of +0.6 and −0.7
+  between them, both straddling the analytic 73.58 and 56.49, and the
+  model's own `local_fcn_global_obs_test` oracle (4 SE over 40 reps) is
+  unchanged. Every other model is bit-for-bit unchanged,
+  as is the local-function hot path — isingspin_localfcn 0.07s → 0.07s, t3
+  17.1 → 16.5, AN 6.74 → 6.73, min of 3.
+
+  Nothing caught this because none of the 199 model XMLs across the three
+  corpora references a bare observable inside a local function — the same
+  coverage hole that hid #34, #36 and #38 — so no corpus model entered the
+  rescan path at all and `perf_diff` saw nothing. That hole is now closed
+  at a scale where the cost shows: feature-coverage model
+  `ss_local_fcn_const_global` (22000 instances, ~12800 events, a bare
+  observable that is constant for the whole run) and the
+  `local_fcn_rescan_gate_test` ctest, which runs it against a twin with
+  that observable folded into a parameter and requires the two to agree on
+  the trajectory (byte-identical) **and** on the wall time (1.01x measured,
+  213.8x before this fix, bound at 5x). A third arm moves the observable
+  with `add_molecules` from outside the event loop — where the value cache
+  is the only thing watching — and checks the doubled rate reaches every
+  instance.
+
 - **A bare (global) observable inside a local function was evaluated at
   local scope, so the rule silently never fired (issue #38).** Inside a
   local function, an observable applied to the tag — `Mod(x)` — is local,
