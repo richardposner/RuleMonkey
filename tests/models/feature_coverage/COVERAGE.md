@@ -16,6 +16,7 @@
 | Elementary rate laws | RateLaw/@type="Ele" | most models | PASS |
 | Functional rate laws | RateLaw/@type="Function" | ft_functional_rate | PASS |
 | Local functions (tags) | Function with Arguments | ft_local_functions | PASS |
+| Local function on a bimolecular rule (DOR1) | Function with Arguments, 2 ReactantPatterns | nf_local_fcn_bimol, nf_local_fcn_bimol_sym | PASS |
 | FunctionProduct (DOR2) | RateLaw/@type="FunctionProduct" | nf_function_product | PASS |
 | Conditional if() | Expression with if() | ft_conditional_rate | PASS |
 | Energy patterns | compiled to local functions | ft_energy_patterns | PASS |

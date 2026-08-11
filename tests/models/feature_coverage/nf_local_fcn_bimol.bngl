@@ -1,0 +1,82 @@
+# Feature: DOR1 — a BIMOLECULAR rule whose rate is a single local function,
+#          with only ONE of the two reactants tagged.
+# Tests:   the four shapes a single tag can take on a two-reactant rule:
+#            RB  tag on reactant pattern 1, molecule-level  (S + E()%x)
+#            RA  tag on reactant pattern 0, molecule-level  (E()%x + S)
+#            RC  tag on reactant pattern 1, pattern-level   (S + %x:E())
+#            RD  pattern-level tag on a MULTI-molecule pattern
+#          The tagged reactant contributes Σ_t w_t·f(t); the untagged one
+#          contributes its plain embedding count, so the propensity is the
+#          product of the two — NFsim's DOR1.
+# Tier:    network-free (NFsim reference only).  BNG2's generate_network()
+#          collapses the two embeddings of the E homodimer into one reaction
+#          and so integrates this model at half the network-free rate; the
+#          ODE oracle is not valid here.
+# Expected (kc = 1e-3, Emod = 20 throughout — the rules never touch E):
+#            RA/RB  molecule-level: Σ over the 40 E molecules of Emod(x) = 20
+#                   -> k_eff = 0.02 per substrate
+#            RC/RD  complex-wide:   each of the 20 dimer-resident E molecules
+#                   sees Emod = 2  -> k_eff = 0.04 per substrate
+#          so SubA/SubB decay at half the rate of SubC/SubD.
+# Regression: before issue #34 no propensity branch covered `is_local` with
+#          molecularity 2.  The rule fired once, then read a never-populated
+#          accumulator as its propensity and went inert — silently, with the
+#          substrate observable simply flat.
+# invariant: conserved Etot = 40
+# invariant: conserved Emod = 20
+
+begin model
+begin parameters
+    kc    1.0e-3
+    S0    300
+end parameters
+
+begin molecule types
+    Sa(s~0~1)
+    Sb(s~0~1)
+    Sc(s~0~1)
+    Sd(s~0~1)
+    E(d,m~0~1)
+end molecule types
+
+begin seed species
+    Sa(s~0)                 S0
+    Sb(s~0)                 S0
+    Sc(s~0)                 S0
+    Sd(s~0)                 S0
+    E(d,m~0)                20
+    E(d!1,m~1).E(d!1,m~1)   10
+end seed species
+
+begin observables
+    Molecules  SubA   Sa(s~0)
+    Molecules  SubB   Sb(s~0)
+    Molecules  SubC   Sc(s~0)
+    Molecules  SubD   Sd(s~0)
+    Molecules  Emod   E(m~1)
+    Molecules  Etot   E()
+end observables
+
+begin functions
+    # Molecule-level tag -> Emod(x) counts within x itself (0 or 1).
+    # Pattern-level tag  -> Emod(x) counts across x's whole complex (0 or 2).
+    lf(x) = kc*Emod(x)
+end functions
+
+begin reaction rules
+    # Tagged reactant SECOND (the shape reported in issue #34).
+    RB: Sa(s~0) + E()%x  ->  Sa(s~1) + E()%x   lf(x)
+    # Tagged reactant FIRST — the factor has to follow the tag to the other
+    # sampler slot, not sit on whichever reactant happens to be pattern 0.
+    RA: E()%x + Sb(s~0)  ->  E()%x + Sb(s~1)   lf(x)
+    # Pattern-level tag: complex-wide observable scope, single-molecule pattern.
+    RC: Sc(s~0) + %x:E()  ->  Sc(s~1) + %x:E()   lf(x)
+    # Pattern-level tag on a two-molecule reactant pattern: the untagged side
+    # is a plain count, the tagged side a multi-molecule embedding count.
+    RD: Sd(s~0) + %x:E(d!1).E(d!1)  ->  Sd(s~1) + %x:E(d!1).E(d!1)   lf(x)
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>60,n_steps=>60})
+end actions

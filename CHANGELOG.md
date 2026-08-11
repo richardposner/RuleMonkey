@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A bimolecular rule with a local-function rate fired once and then went
+  inert (issue #34).** For a rule like
+  `S(s~0) + E()%x -> S(s~1) + E()%x  lf(x)` — NFsim's DOR1, one tagged
+  reactant carrying a per-instance factor — no branch of the propensity
+  code applied. `recompute_rule_state` handled `FunctionProduct` (two
+  tagged reactants) and `is_local` with molecularity ≤ 1, but a local
+  `Function` on a two-reactant rule fell through to the mass-action path,
+  which evaluated the local function against no molecule at all and left
+  `rs.local_propensity_total` at zero while `has_local_rates` stayed true.
+  The first `incremental_update` then read that never-populated accumulator
+  as the rule's propensity. The rule fired once, off the load-time
+  mass-action value, and never again.
+
+  Nothing surfaced it: no clamp warning (the rate law is never negative —
+  the documented clamp diagnostic was not involved), mass conserved, and
+  the substrate observable simply flat. On the issue's reproducer RM
+  converted 1 of 2000 substrate molecules over an interval where NFsim
+  converts about 92%.
+
+  The loader now normalizes such a rule to a `FunctionProduct` whose
+  untagged factor is the constant 1, so the existing DOR2 propensity,
+  incremental update and sampler cover it. Verified against 40-seed NFsim
+  ensembles and against an exact binomial death-process oracle for all
+  four shapes a single tag can take: on either reactant, in per-molecule
+  or complex-wide observable scope, and on a single- or multi-molecule
+  tagged pattern.
+
+  A symmetric DOR1 rule (`A(b)%x + A(b) -> ...`) takes **no** factor of
+  1/2, even though BNG2 emits `symmetry_factor="0.5"` for it: the tagged
+  and untagged slots are distinguishable once one of them carries a
+  per-instance rate, so `(a,b)` and `(b,a)` are different reactions.
+  Measured against NFsim, which agrees; the untagged form of the same rule
+  does take the 1/2, and that path is unchanged.
+
+### Added
+
+- `tests/models/feature_coverage/nf_local_fcn_bimol.bngl` and
+  `nf_local_fcn_bimol_sym.bngl`, plus the `local_fcn_bimol_test` ctest
+  case, covering the DOR1 shapes above. No existing corpus model used a
+  local function on a bimolecular rule, which is why the gap survived
+  three minor releases.
+
 ## [3.9.0] — 2026-08-07
 
 ### Added

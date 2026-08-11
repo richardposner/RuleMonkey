@@ -5616,12 +5616,19 @@ struct Engine::Impl {
   // For pattern-level argument binding: evaluates observables across the
   // molecule's entire complex (complex-wide scope).
   double evaluate_local_rate(const Rule& rule, int mol_id) {
+    // DOR1 (issue #34): this side carries no per-instance factor, so it
+    // weighs in at its plain embedding count.  Returning 1 here — rather than
+    // branching at every call site — keeps local_propensity = count_a/corr_a.
+    if (rule.rate_law.unity_factor_a)
+      return 1.0;
     return evaluate_local_factor(rule.rate_law.function_name, rule.rate_law.local_arg_is_molecule,
                                  mol_id);
   }
 
   // FunctionProduct B-side factor f2 evaluated at a reactant-B molecule.
   double evaluate_local_rate_b(const Rule& rule, int mol_id) {
+    if (rule.rate_law.unity_factor_b)
+      return 1.0;
     return evaluate_local_factor(rule.rate_law.function_name_b,
                                  rule.rate_law.local_arg_is_molecule_b, mol_id);
   }
@@ -6645,8 +6652,16 @@ struct Engine::Impl {
         }
       } else {
         if (is_function_product) {
-          mol_a = sample_molecule_by_local_propensity(pm_a.type_index, rs, /*use_b=*/false);
-          mol_b = sample_molecule_by_local_propensity(pm_b.type_index, rs, /*use_b=*/true);
+          // A unity side's local_propensity is count/correction — proportional
+          // to the raw embedding count — so draw it with the count-weighted
+          // sampler, which is O(log N) via the Fenwick tree instead of the
+          // local-propensity sampler's O(N) scan.  Same distribution.
+          mol_a = rule.rate_law.unity_factor_a
+                      ? sample_molecule_weighted(pm_a.type_index, rs, /*use_a=*/true)
+                      : sample_molecule_by_local_propensity(pm_a.type_index, rs, /*use_b=*/false);
+          mol_b = rule.rate_law.unity_factor_b
+                      ? sample_molecule_weighted(pm_b.type_index, rs, /*use_a=*/false)
+                      : sample_molecule_by_local_propensity(pm_b.type_index, rs, /*use_b=*/true);
         } else {
           mol_a = sample_molecule_weighted(pm_a.type_index, rs, true);
           mol_b = sample_molecule_weighted(pm_b.type_index, rs, false);

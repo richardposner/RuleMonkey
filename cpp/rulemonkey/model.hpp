@@ -186,6 +186,17 @@ struct RateLaw {
   bool is_local_b = false;
   bool local_arg_is_molecule_b = false;
 
+  // NFsim's DOR1: a *bimolecular* rule carrying a single local function, with
+  // only one of the two reactants tagged (`S(s~0) + E()%x -> ...  lf(x)`).
+  // Its propensity is `(Σ_t w_t·f(t)) · (Σ_u w_u)` over the tagged and
+  // untagged reactants — i.e. a FunctionProduct whose untagged factor is the
+  // constant 1.  The loader normalizes such a rule to
+  // RateLawType::FunctionProduct and sets exactly one of these flags to mark
+  // which side is that constant; both stay false for a genuine two-factor
+  // FunctionProduct and for a unimolecular local-function rule.
+  bool unity_factor_a = false;
+  bool unity_factor_b = false;
+
   // For MM
   double mm_Km = 0.0;
   double mm_kcat = 0.0;

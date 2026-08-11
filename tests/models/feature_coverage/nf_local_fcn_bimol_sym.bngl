@@ -1,0 +1,57 @@
+# Feature: DOR1 on a SYMMETRIC bimolecular rule — both reactants are the same
+#          molecule type binding on the same component, and one is tagged.
+# Tests:   the tagged and untagged slots are distinguishable even though the
+#          patterns are structurally identical, because the pair (a,b) fires at
+#          f(a) and (b,a) at f(b).  NFsim counts those ordered assignments
+#          separately: measured against a 40-seed NFsim ensemble this model
+#          runs at Σ_t f(t) · Σ_u 1, with NO factor of 1/2 — even though BNG2
+#          emits symmetry_factor="0.5" for the rule (its network expansion
+#          treats the two patterns as interchangeable, which they are not once
+#          one carries a per-instance rate).  The same rule without the tag
+#          does take the 1/2, and RM's plain homodimer path applies it.
+# Tier:    network-free (NFsim reference only — see above, the network
+#          expansion disagrees with NFsim on this rule).
+# Expected: A(b) is consumed in pairs; m~1 molecules are twice as likely to be
+#          drawn into the tagged slot as m~0 ones, so Afree collapses fast and
+#          Amod stays pinned (the rule never changes m).
+# Note:    this is also the shape that routes a local-function rule through the
+#          same-molecule null-event rejection rather than the homodimer
+#          ab_both deflation — the draw is rejected when both slots land on the
+#          same molecule, which realizes the distinct ordered-pair sum exactly.
+# invariant: conserved Atot = 400
+# invariant: conserved Amod = 200
+
+begin model
+begin parameters
+    kc   1.0e-3
+end parameters
+
+begin molecule types
+    A(b,m~0~1)
+end molecule types
+
+begin seed species
+    A(b,m~0)   200
+    A(b,m~1)   200
+end seed species
+
+begin observables
+    Molecules  Afree   A(b)
+    Molecules  Amod    A(m~1)
+    Molecules  Atot    A()
+    Molecules  Dim     A(b!1).A(b!1)
+end observables
+
+begin functions
+    # 1 for an m~0 molecule, 2 for an m~1 one (molecule-level tag scope).
+    lf(x) = kc*(1+Amod(x))
+end functions
+
+begin reaction rules
+    R: A(b)%x + A(b) -> A(b!1)%x.A(b!1)   lf(x)
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>30,n_steps=>60})
+end actions

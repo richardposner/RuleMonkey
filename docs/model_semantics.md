@@ -66,7 +66,22 @@ The runtime severity model is two-level:
   variable map. Supports parameters, observables, the special variables
   `time` / `t`, and references to other functions. Local functions
   (per-molecule or per-pattern arguments) are supported in both
-  per-molecule and complex-wide scopes.
+  per-molecule and complex-wide scopes, on unimolecular and bimolecular
+  rules alike.
+  - **One tagged reactant on a bimolecular rule (NFsim's DOR1).** A rule
+    like `S(s~0) + E()%x -> S(s~1) + E()%x  lf(x)` applies the
+    per-instance factor to the tagged reactant only; the untagged one
+    contributes its plain embedding count. The propensity is therefore
+    `(Σ_t w_t·f(t)) · (Σ_u w_u)` over the tagged and untagged matches —
+    a `FunctionProduct` (below) whose untagged factor is the constant 1,
+    which is how RM loads it. The tag may sit on either reactant and on
+    a single- or multi-molecule pattern.
+    Note that when both reactant patterns are structurally identical
+    (`A(b)%x + A(b) -> ...`), the tagged and untagged slots are still
+    *distinguishable* — the pair `(a,b)` fires at `f(a)` and `(b,a)` at
+    `f(b)` — so no 1/2 is applied, even though BNG2 emits
+    `symmetry_factor="0.5"` for such a rule. This matches NFsim; the
+    same rule without the tag does take the 1/2.
   - **Global function of a local function is ill-defined.** A global
     (no-argument) function that references a *local* function has no
     molecule context at global scope, so its exposed value (`.gdat`

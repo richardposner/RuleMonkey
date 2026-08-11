@@ -1738,6 +1738,10 @@ Model load_model(const std::string& xml_path,
           continue;
         }
 
+        // Reactant pattern the single local-function argument is tagged on,
+        // -1 until resolved.  Only consulted for the DOR1 normalization below.
+        int local_arg_rp_idx = -1;
+
         if (rl_type == "Ele") {
           rule.rate_law.type = RateLawType::Ele;
           auto* rc_list = find_child(*rl_node, "ListOfRateConstants");
@@ -1778,6 +1782,17 @@ Model load_model(const std::string& xml_path,
                                "rule '%s' not found in reactant_id_map; defaulting to "
                                "complex-wide scope\n",
                                argval.c_str(), rule.name.c_str());
+                }
+                // Which reactant pattern carries the tag?  Irrelevant for a
+                // unimolecular rule (there is only one) but load-bearing for
+                // the DOR1 normalization below, which has to know whether the
+                // per-instance factor belongs on the A or the B sampler slot.
+                if (rit != reactant_id_map.end()) {
+                  int const mol_off = rit->second.first;
+                  for (int k = 0; k < static_cast<int>(rule.reactant_pattern_starts.size()); ++k) {
+                    if (rule.reactant_pattern_starts[k] <= mol_off)
+                      local_arg_rp_idx = k;
+                  }
                 }
               }
             }
@@ -1877,6 +1892,42 @@ Model load_model(const std::string& xml_path,
               }
               ++idx;
             }
+          }
+        }
+
+        // NFsim DOR1 — a bimolecular rule with ONE tagged reactant, e.g.
+        //   R: S(s~0) + E()%x -> S(s~1) + E()%x   lf(x)
+        // The per-instance factor applies to the tagged reactant only; the
+        // untagged one contributes its plain embedding count, so the rule is
+        // a FunctionProduct whose other factor is the constant 1.  Normalizing
+        // it here means the engine's DOR2 propensity, incremental update and
+        // sampler cover it unchanged — the alternative was a fourth
+        // propensity branch duplicating all three.
+        //
+        // Without this the rule kept RateLawType::Function with molecularity
+        // 2, which no branch of recompute_rule_state handled: it fell through
+        // to the mass-action path with the local function evaluated on no
+        // molecule at all, leaving rs.local_propensity_total at 0 while
+        // has_local_rates stayed true.  The first incremental_update then read
+        // that never-populated accumulator as the propensity and the rule went
+        // inert after a single firing (issue #34).
+        if (rule.rate_law.type == RateLawType::Function && rule.rate_law.is_local &&
+            rule.molecularity == 2) {
+          rule.rate_law.type = RateLawType::FunctionProduct;
+          rule.rate_law.is_local_b = true;
+          if (local_arg_rp_idx == 1) {
+            // Tag on reactant pattern 1 — move the factor to the B slot.
+            rule.rate_law.function_name_b = rule.rate_law.function_name;
+            rule.rate_law.local_arg_is_molecule_b = rule.rate_law.local_arg_is_molecule;
+            rule.rate_law.function_name.clear();
+            rule.rate_law.unity_factor_a = true;
+            // Per-molecule scope on the unity side skips the per-complex
+            // rate cache, which would only churn to memoize the constant 1.
+            rule.rate_law.local_arg_is_molecule = true;
+          } else {
+            rule.rate_law.function_name_b.clear();
+            rule.rate_law.unity_factor_b = true;
+            rule.rate_law.local_arg_is_molecule_b = true;
           }
         }
       }
