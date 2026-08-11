@@ -2106,7 +2106,7 @@ Model load_model(const std::string& xml_path,
     }
   }
 
-  // ---- 8b. Local rates that track a moving global (issue #38) ----
+  // ---- 8b. Local rates that track a moving global (issue #38, #40) ----
   //
   // A local function built only from tagged observables and constants has
   // a per-instance value that can only change when that instance's own
@@ -2119,52 +2119,137 @@ Model load_model(const std::string& xml_path,
   // Marking is deliberately narrow.  Every model in the three corpora
   // takes the constant-and-tagged-only shape, so none of them acquires a
   // per-event rescan from this.
+  //
+  // The walk also records WHAT the chain reads, not just that it reads
+  // something (issue #40).  "Could this rule read a moving global?" is the
+  // right question for choosing the rescan path and the wrong one for
+  // running it every event: a bare observable is usually a volume proxy or
+  // a total that never moves, and then every one of those O(N) rescans
+  // recomputes rates that cannot have changed.  The engine compares these
+  // resolved values against the previous rescan's and skips when they
+  // agree — which is why the list is collected here, where the walk
+  // already visits exactly those tokens.
   {
-    // Memoized, cycle-safe: does evaluating this function consult anything
-    // global that a reaction event can move?
-    std::unordered_map<std::string, bool> fn_verdict;
-    auto tracks_global = [&](const std::string& fname, auto&& self) -> bool {
+    // What a function's evaluation consults that a reaction event can
+    // move.  `obs` are observable slots read at system scope; `time`
+    // advances every event, and `opaque` marks a dependency this walk
+    // cannot name — both mean "assume moved", i.e. rescan unconditionally.
+    struct GlobalDeps {
+      std::vector<int> obs;
+      bool time = false;
+      bool opaque = false;
+      bool any() const { return !obs.empty() || time || opaque; }
+      void merge(const GlobalDeps& o) {
+        obs.insert(obs.end(), o.obs.begin(), o.obs.end());
+        time = time || o.time;
+        opaque = opaque || o.opaque;
+      }
+    };
+
+    // Memoized and cycle-safe.  Re-entering a function still being walked
+    // is a reference cycle, whose dependency set cannot be enumerated by
+    // this walk (it would need its own fixed point) — so answer `opaque`
+    // and let the engine rescan unconditionally.  The pre-#40 walk broke
+    // the same cycle with a provisional `false`, which was safe when the
+    // verdict only chose a path and is not safe now that a missing
+    // observable would suppress a rescan.  Nothing in the corpora writes
+    // one: a cyclic function chain has no value to evaluate at all.
+    std::unordered_map<std::string, GlobalDeps> fn_deps;
+    std::unordered_set<std::string> in_progress;
+    auto global_deps = [&](const std::string& fname, auto&& self) -> GlobalDeps {
       auto fi = model.function_index.find(fname);
       if (fi == model.function_index.end())
-        return false;
-      if (auto memo = fn_verdict.find(fname); memo != fn_verdict.end())
+        return {};
+      if (auto memo = fn_deps.find(fname); memo != fn_deps.end())
         return memo->second;
-      fn_verdict[fname] = false; // provisional — breaks reference cycles
+      if (!in_progress.insert(fname).second) {
+        GlobalDeps cyclic;
+        cyclic.opaque = true;
+        return cyclic;
+      }
       const auto& gf = model.functions[fi->second];
+
+      GlobalDeps deps;
 
       // A TFUN's counter is a time / observable / function value unless it
       // is a plain parameter, and the table turns it into a moving rate.
-      bool dep = gf.is_tfun && gf.tfun_counter_source != TfunCounterSource::Parameter;
+      // The table itself is fixed, so the counter's own dependencies are
+      // the TFUN's: a table read at an unchanged counter returns an
+      // unchanged value.
+      if (gf.is_tfun && gf.tfun_counter_source != TfunCounterSource::Parameter) {
+        switch (gf.tfun_counter_source) {
+        case TfunCounterSource::Time:
+          deps.time = true;
+          break;
+        case TfunCounterSource::Observable: {
+          auto oi = model.observable_index.find(gf.tfun_counter_name);
+          if (oi != model.observable_index.end())
+            deps.obs.push_back(oi->second);
+          else
+            deps.opaque = true; // counter names an observable that isn't there
+          break;
+        }
+        case TfunCounterSource::Function: {
+          // Engine::get_tfun_counter_value evaluates this one at global
+          // scope; a local callee has no tag there, so don't pretend to
+          // know what it reads.
+          auto ci = model.function_index.find(gf.tfun_counter_name);
+          if (ci == model.function_index.end() || model.functions[ci->second].is_local())
+            deps.opaque = true;
+          else
+            deps.merge(self(gf.tfun_counter_name, self));
+          break;
+        }
+        default:
+          deps.opaque = true; // is_tfun with no counter source RM can read
+          break;
+        }
+      }
 
       for (const auto& tok : expr::collect_variables(gf.expression_text)) {
-        if (dep)
-          break;
         // An observable tagged inside THIS function is per-instance and
         // already covered by the affected-molecule path; any other
         // observable reference is the system-wide count.  A parameter or
         // a builtin name matches none of the three and is constant.
         bool const is_time = (tok == "time" || tok == "t");
+        auto const oi = model.observable_index.find(tok);
         bool const is_global_obs =
-            model.observable_index.count(tok) != 0U &&
+            oi != model.observable_index.end() &&
             std::find(gf.local_observable_names.begin(), gf.local_observable_names.end(), tok) ==
                 gf.local_observable_names.end();
-        bool const via_callee = model.function_index.count(tok) != 0U && self(tok, self);
-        if (is_time || is_global_obs || via_callee)
-          dep = true;
+        if (is_time)
+          deps.time = true;
+        if (is_global_obs)
+          deps.obs.push_back(oi->second);
+        if (model.function_index.count(tok) != 0U)
+          deps.merge(self(tok, self));
       }
-      fn_verdict[fname] = dep;
-      return dep;
+
+      std::sort(deps.obs.begin(), deps.obs.end());
+      deps.obs.erase(std::unique(deps.obs.begin(), deps.obs.end()), deps.obs.end());
+      in_progress.erase(fname);
+      fn_deps[fname] = deps;
+      return deps;
     };
 
     // The DOR1 normalization clears the name on whichever side it turned
     // into the constant 1, so an empty name is exactly "no factor here".
     for (auto& rule : model.rules) {
-      const auto& rl = rule.rate_law;
+      auto& rl = rule.rate_law;
       if (!rl.is_local && rl.type != RateLawType::FunctionProduct)
         continue;
-      rule.rate_law.local_rate_tracks_global =
-          (!rl.function_name.empty() && tracks_global(rl.function_name, tracks_global)) ||
-          (!rl.function_name_b.empty() && tracks_global(rl.function_name_b, tracks_global));
+      GlobalDeps deps;
+      if (!rl.function_name.empty())
+        deps.merge(global_deps(rl.function_name, global_deps));
+      if (!rl.function_name_b.empty())
+        deps.merge(global_deps(rl.function_name_b, global_deps));
+      std::sort(deps.obs.begin(), deps.obs.end());
+      deps.obs.erase(std::unique(deps.obs.begin(), deps.obs.end()), deps.obs.end());
+
+      rl.local_rate_tracks_global = deps.any();
+      rl.global_dep_observables = std::move(deps.obs);
+      rl.global_dep_time = deps.time;
+      rl.global_dep_opaque = deps.opaque;
     }
   }
 

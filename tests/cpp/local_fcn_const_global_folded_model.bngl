@@ -1,0 +1,58 @@
+# Control twin of tests/models/feature_coverage/ss_local_fcn_const_global.bngl
+# for the issue #40 cost guard (local_fcn_rescan_gate_test).
+#
+# Identical in every respect but one: the bare observable `Vol` in the local
+# function is replaced by the parameter `VolConst`, which holds the value
+# `Vol` has at every event of that model's run.  Same arithmetic, same rate,
+# same RNG stream, same trajectory — but the rule no longer reads an
+# observable, so it never enters `global_dep_local_rules` and takes the
+# ordinary affected-molecule delta path throughout.
+#
+# That makes it the cost floor: whatever this twin costs is what the model
+# reading the constant `Vol` must also cost, because no rescan it could have
+# performed can change a single per-instance rate.  Before #40 it cost ~200x
+# more.
+#
+# Kept out of tests/models/feature_coverage/ deliberately — it adds no
+# feature coverage over its twin, only a timing baseline, so it does not
+# belong in a suite that runs 20 NFsim replicates per model on every push.
+
+begin model
+begin parameters
+    X0        20000    # reactive:  Aphos(x) = 1, flips at kf*VolConst
+    I0         2000    # inert:     Aphos(x) = 0, must never fire
+    kf        2.0e-4
+    VolConst     50    # the value the twin's `Vol` observable holds throughout
+end parameters
+
+begin molecule types
+    V()
+    A(m~0~1,p~0~1)
+end molecule types
+
+begin seed species
+    V()              50
+    A(m~0,p~1)       X0
+    A(m~0,p~0)       I0
+end seed species
+
+begin observables
+    Molecules  Vol    V()
+    Molecules  Aphos  A(p~1)
+    Molecules  Aoff   A(m~0)
+    Molecules  Aon    A(m~1)
+end observables
+
+begin functions
+    # The twin writes `kf*Vol*Aphos(x)`.  Only the middle factor differs.
+    aflip(x) = kf*VolConst*Aphos(x)
+end functions
+
+begin reaction rules
+    RA: A(m~0)%x -> A(m~1)%x    aflip(x)
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>100,n_steps=>20})
+end actions

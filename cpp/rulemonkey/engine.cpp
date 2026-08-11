@@ -2943,10 +2943,26 @@ struct Engine::Impl {
   std::vector<int> dynamic_synthesis_rules;    // synthesis rules with dynamic rates
   std::vector<int> dynamic_rate_rules;         // non-synthesis rules with dynamic rates (func/expr)
   // Local-rate rules whose function chain reads a moving global (issue
-  // #38): rescanned in full after every event, since no affected molecule
-  // marks the change.  Empty for every model whose local rates are built
-  // from tagged observables and constants alone.
-  std::vector<int> global_dep_local_rules;
+  // #38): rescanned in full when no affected molecule marks the change.
+  // Empty for every model whose local rates are built from tagged
+  // observables and constants alone.
+  //
+  // The rescan is gated on the dependency values actually moving (issue
+  // #40).  "Reads a global" is a load-time property and stays true for the
+  // whole run; "that global just moved" is the per-event question, and on
+  // the common shape — a bare observable standing for a volume, a total or
+  // a clock — the answer is no at every event of the run.  Each entry
+  // caches the values read at its last rescan; when they all match, the
+  // rule keeps the ordinary delta path, which is what a local rate over a
+  // genuinely constant global would have taken all along.
+  struct GlobalDepWatch {
+    int rule_index = -1;
+    bool always_dirty = false;  // reads `time`, or a dependency §8b could not name
+    std::vector<int> obs_slots; // observable slots read at system scope
+    std::vector<double> last;   // their values at the last rescan
+    bool primed = false;        // false until that first rescan has happened
+  };
+  std::vector<GlobalDepWatch> global_dep_local_rules;
   std::vector<char> rule_needed_buf; // pre-allocated, reused each update
   int max_pattern_depth = 0;         // max pattern diameter across all rules
 
@@ -3943,9 +3959,18 @@ struct Engine::Impl {
       // molecule is marked affected by it.  Marking the rule needed is not
       // enough: incremental_update only revisits molecules in the affected
       // set, so each untouched instance would keep its stale per-molecule
-      // rate.  These rules take a full rescan per event instead.
-      if (rule.rate_law.local_rate_tracks_global)
-        global_dep_local_rules.push_back(ri);
+      // rate.  These rules take a full rescan instead — on the events where
+      // one of those globals really did move (issue #40); the watch starts
+      // unprimed, so the first event after any init_rule_states rescans and
+      // establishes the baseline.
+      if (rule.rate_law.local_rate_tracks_global) {
+        GlobalDepWatch w;
+        w.rule_index = ri;
+        w.always_dirty = rule.rate_law.global_dep_time || rule.rate_law.global_dep_opaque;
+        w.obs_slots = rule.rate_law.global_dep_observables;
+        w.last.assign(w.obs_slots.size(), 0.0);
+        global_dep_local_rules.push_back(std::move(w));
+      }
       int const seed_a =
           (!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0;
       if (seed_a >= static_cast<int>(rule.reactant_pattern.molecules.size()))
@@ -5992,13 +6017,35 @@ struct Engine::Impl {
       incr_profile_.rules_visited_hist[rb]++;
     }
 
-    // Local rates over a moving global (issue #38): every instance's rate
-    // just changed, so replace the delta update for these rules with a
-    // full rescan and take them out of the loop below.  The observables
-    // were refreshed before this call, so the rescan reads current values.
-    for (int const ri : global_dep_local_rules) {
-      rescan_all_molecules_for_rule(ri);
-      rule_needed_buf[ri] = 0;
+    // Local rates over a moving global (issue #38): when one of those
+    // globals moves, every instance's rate moves with it and no molecule
+    // is marked affected, so the delta update below cannot see it and a
+    // full rescan replaces it.  The observables were refreshed before this
+    // call, so the rescan reads current values.
+    //
+    // Gated on the values, not on the rule's shape (issue #40).  If
+    // nothing the rate reads globally has changed since the last rescan,
+    // no per-instance rate can have changed either — the skip is exact,
+    // not an approximation — and the rule drops through to the ordinary
+    // delta path, which still owns whatever this event itself touched.
+    // `time` and an unenumerable dependency have no value to compare and
+    // keep the unconditional rescan.
+    for (auto& w : global_dep_local_rules) {
+      bool moved = w.always_dirty || !w.primed;
+      for (size_t k = 0; k < w.obs_slots.size(); ++k) {
+        int const oi = w.obs_slots[k];
+        double const v =
+            (oi >= 0 && oi < static_cast<int>(obs_values.size())) ? obs_values[oi] : 0.0;
+        if (v != w.last[k]) {
+          w.last[k] = v;
+          moved = true;
+        }
+      }
+      if (!moved)
+        continue;
+      w.primed = true;
+      rescan_all_molecules_for_rule(w.rule_index);
+      rule_needed_buf[w.rule_index] = 0;
     }
 
     for (int ri = 0; ri < n_rules; ++ri) {

@@ -106,9 +106,16 @@ The runtime severity model is two-level:
     the bare observable folded in as a global and the tagged one resolved
     to its per-instance value.
     Two consequences worth naming. A rule whose local rate reads a bare
-    observable is **rescanned after every event**: that observable moves
+    observable is **rescanned whenever that observable moves**: it moves
     for every instance at once with no molecule marked affected, so the
-    usual affected-molecule delta path cannot see the change. And an
+    usual affected-molecule delta path cannot see the change. The rescan
+    is gated on the value, not on the rule's shape — RM records which
+    observables the local-function chain reads at global scope and skips
+    the rescan on events where none of them changed, since a per-instance
+    rate cannot move if nothing the rate reads moved. That matters because
+    a bare observable is usually a volume proxy, a total or a clock and is
+    constant for most or all of a run; a rule reading `time` has no value
+    to compare and is rescanned unconditionally. And an
     observable used *both ways inside one function* (`O + O(x)`) cannot be
     represented — RM holds one value slot per observable — so RM resolves
     it at local scope and emits a load-time warning naming the function.

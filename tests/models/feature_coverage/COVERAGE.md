@@ -20,6 +20,7 @@
 | symmetry_factor on a local-function rate law | @symmetry_factor + Function with Arguments | ft_local_fcn_bimol_sym | PASS (ODE verdict; NFsim 2.9.3 drops the factor) |
 | Bare (global) observable inside a local function | Function with Arguments, untagged Observable reference | ft_local_fcn_global_obs | PASS |
 | One observable at local scope in one function and global in another; bare observable moving mid-run | Function with Arguments, same Observable tagged and bare | ft_local_fcn_mixed_scope | PASS (ODE verdict; NFsim 2.9.3 never refreshes the bare observable) |
+| Bare observable inside a local function that never moves, at scale | Function with Arguments, untagged Observable reference, 22000 instances | ss_local_fcn_const_global | PASS (cost guard: the per-event rescan must be skipped) |
 | FunctionProduct (DOR2) | RateLaw/@type="FunctionProduct" | nf_function_product | PASS |
 | Conditional if() | Expression with if() | ft_conditional_rate | PASS |
 | Energy patterns | compiled to local functions | ft_energy_patterns | PASS |

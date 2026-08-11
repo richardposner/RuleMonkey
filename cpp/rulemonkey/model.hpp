@@ -207,6 +207,26 @@ struct RateLaw {
   // uses — which keeps the delta path in charge there.
   bool local_rate_tracks_global = false;
 
+  // What that chain actually reads, resolved (issue #40).  The flag above
+  // answers "could this rule read a moving global?"; gating an O(N)
+  // rescan needs "did one of them move?", and that needs the list, not
+  // the verdict.  A bare observable is typically a volume proxy, a total
+  // or a clock and is constant for the whole run, so on most models the
+  // honest answer is "no" at every event and the rescan is pure waste.
+  //
+  // `global_dep_observables` are the observable slots the chain reads at
+  // system scope, sorted and de-duplicated; comparing their values
+  // against the last rescan's is exact, since a per-instance rate can
+  // only move if something the rate reads moved.  The two flags below are
+  // the cases with no value to compare: `time` advances every event, and
+  // `global_dep_opaque` marks a dependency the §8b walk could not
+  // enumerate.  Either one means "always dirty" — the unconditional
+  // rescan, i.e. the pre-#40 behaviour.  All three are meaningful only
+  // when `local_rate_tracks_global` is set.
+  std::vector<int> global_dep_observables;
+  bool global_dep_time = false;
+  bool global_dep_opaque = false;
+
   // For MM
   double mm_Km = 0.0;
   double mm_kcat = 0.0;

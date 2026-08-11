@@ -103,6 +103,25 @@ add_test(
         ${_rulemonkey_test_dir}/cpp/local_fcn_mixed_ref_model.xml
 )
 
+# Cost of that rescan (issue #40): #38 made a local rate reading ANY global
+# rescan every instance after every event, when what gates an O(N) rescan is
+# whether the global actually moved — and a bare observable is usually a
+# volume, a total or a clock that never does.  Runs a 22000-instance model
+# whose bare observable is constant against a twin with that observable
+# folded into a parameter, and requires the two to agree on the trajectory
+# (the skip is exact) AND on the wall time (the skip is free).  The twin also
+# covers the other direction: add_molecules moves the observable from outside
+# the event loop, where the value cache is the only thing watching.
+add_executable(local_fcn_rescan_gate_test cpp/local_fcn_rescan_gate_test.cpp)
+target_link_libraries(local_fcn_rescan_gate_test PRIVATE rulemonkey)
+
+add_test(
+    NAME local_fcn_rescan_gate_test
+    COMMAND local_fcn_rescan_gate_test
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ss_local_fcn_const_global.xml
+        ${_rulemonkey_test_dir}/cpp/local_fcn_const_global_folded_model.xml
+)
+
 # save_state / load_state regression: round-trip a mid-run snapshot
 # back into a fresh simulator and verify (a) the continuation matches
 # an uninterrupted run, (b) loading state from a structurally
