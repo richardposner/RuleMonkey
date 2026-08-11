@@ -2606,6 +2606,28 @@ double nary_distinct_sum(const NaryState& ns) {
   return (d > 0) ? d : 0.0;
 }
 
+// Reaction-center symmetry factor for the local-rate propensity paths.
+//
+// `compute_propensity` multiplies BNG2's `symmetry_factor` into every rate
+// law it handles, but the local-function and FunctionProduct paths compute
+// their propensity directly from Σ w·f(mol) and used to skip it.  A
+// symmetric rule then ran at `1/symmetry_factor` times its intended rate —
+// 2x for a homodimer.
+//
+// Stock NFsim has the identical defect, and for the identical reason: every
+// rate law except the ones routing through `setBaseRate()` is constructed
+// with `baseRate=1` and never recovers the factor.  bngsim's vendored NFsim
+// patches it in `ReactionClass::ReactionClass` (lanl/bngsim#195, fixed in
+// #278) — the patch comment names "global function, local function (DOR),
+// function product, MM" as the affected set.  BNG2.pl's network expansion
+// has always applied it.  RM follows BNG2.
+//
+// The homodimer branch of compute_propensity deliberately does NOT apply it
+// (its `/2` already is the 0.5, and multiplying would double-count).  The
+// local paths have no such implicit halving: for a DOR pair the propensity
+// is the *ordered* distinct-pair sum, and 0.5 converts it to unordered.
+double dor_symmetry(const Rule& rule) { return rule.symmetry_factor; }
+
 // Compute propensity for a rule given its accumulated state.
 // embedding_correction_a/b correct for overcounting due to permutations
 // of identical non-reacting components in the pattern.
@@ -4430,7 +4452,7 @@ struct Engine::Impl {
           rs.local_propensity_b_total += md.local_propensity_b;
         }
       }
-      new_propensity = rs.local_propensity_total * rs.local_propensity_b_total;
+      new_propensity = rs.local_propensity_total * rs.local_propensity_b_total * dor_symmetry(rule);
     } else if (rs.has_local_rates && rule.molecularity <= 1) {
       // Local-rate rule: propensity = sum of per-molecule (count_a * local_rate)
       rs.local_propensity_total = 0;
@@ -4453,7 +4475,7 @@ struct Engine::Impl {
         }
         rs.local_propensity_total += md.local_propensity;
       }
-      new_propensity = rs.local_propensity_total;
+      new_propensity = rs.local_propensity_total * dor_symmetry(rule);
     } else {
       double const rate = evaluate_rate(rule);
       new_propensity = compute_propensity(rs, rule, rate);
@@ -5616,12 +5638,19 @@ struct Engine::Impl {
   // For pattern-level argument binding: evaluates observables across the
   // molecule's entire complex (complex-wide scope).
   double evaluate_local_rate(const Rule& rule, int mol_id) {
+    // DOR1 (issue #34): this side carries no per-instance factor, so it
+    // weighs in at its plain embedding count.  Returning 1 here — rather than
+    // branching at every call site — keeps local_propensity = count_a/corr_a.
+    if (rule.rate_law.unity_factor_a)
+      return 1.0;
     return evaluate_local_factor(rule.rate_law.function_name, rule.rate_law.local_arg_is_molecule,
                                  mol_id);
   }
 
   // FunctionProduct B-side factor f2 evaluated at a reactant-B molecule.
   double evaluate_local_rate_b(const Rule& rule, int mol_id) {
+    if (rule.rate_law.unity_factor_b)
+      return 1.0;
     return evaluate_local_factor(rule.rate_law.function_name_b,
                                  rule.rate_law.local_arg_is_molecule_b, mol_id);
   }
@@ -6254,9 +6283,10 @@ struct Engine::Impl {
         incr_profile_.propensity_recomputes++;
       double new_propensity;
       if (rule.rate_law.type == RateLawType::FunctionProduct) {
-        new_propensity = rs.local_propensity_total * rs.local_propensity_b_total;
+        new_propensity =
+            rs.local_propensity_total * rs.local_propensity_b_total * dor_symmetry(rule);
       } else if (rs.has_local_rates) {
-        new_propensity = rs.local_propensity_total;
+        new_propensity = rs.local_propensity_total * dor_symmetry(rule);
       } else {
         double const rate = evaluate_rate(rule);
         new_propensity = compute_propensity(rs, rule, rate);
@@ -6645,8 +6675,16 @@ struct Engine::Impl {
         }
       } else {
         if (is_function_product) {
-          mol_a = sample_molecule_by_local_propensity(pm_a.type_index, rs, /*use_b=*/false);
-          mol_b = sample_molecule_by_local_propensity(pm_b.type_index, rs, /*use_b=*/true);
+          // A unity side's local_propensity is count/correction — proportional
+          // to the raw embedding count — so draw it with the count-weighted
+          // sampler, which is O(log N) via the Fenwick tree instead of the
+          // local-propensity sampler's O(N) scan.  Same distribution.
+          mol_a = rule.rate_law.unity_factor_a
+                      ? sample_molecule_weighted(pm_a.type_index, rs, /*use_a=*/true)
+                      : sample_molecule_by_local_propensity(pm_a.type_index, rs, /*use_b=*/false);
+          mol_b = rule.rate_law.unity_factor_b
+                      ? sample_molecule_weighted(pm_b.type_index, rs, /*use_a=*/false)
+                      : sample_molecule_by_local_propensity(pm_b.type_index, rs, /*use_b=*/true);
         } else {
           mol_a = sample_molecule_weighted(pm_a.type_index, rs, true);
           mol_b = sample_molecule_weighted(pm_b.type_index, rs, false);

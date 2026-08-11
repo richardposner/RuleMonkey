@@ -66,7 +66,29 @@ The runtime severity model is two-level:
   variable map. Supports parameters, observables, the special variables
   `time` / `t`, and references to other functions. Local functions
   (per-molecule or per-pattern arguments) are supported in both
-  per-molecule and complex-wide scopes.
+  per-molecule and complex-wide scopes, on unimolecular and bimolecular
+  rules alike.
+  - **One tagged reactant on a bimolecular rule (NFsim's DOR1).** A rule
+    like `S(s~0) + E()%x -> S(s~1) + E()%x  lf(x)` applies the
+    per-instance factor to the tagged reactant only; the untagged one
+    contributes its plain embedding count. The propensity is therefore
+    `(Σ_t w_t·f(t)) · (Σ_u w_u)` over the tagged and untagged matches —
+    a `FunctionProduct` (below) whose untagged factor is the constant 1,
+    which is how RM loads it. The tag may sit on either reactant and on
+    a single- or multi-molecule pattern.
+    When both reactant patterns are structurally identical
+    (`A(b)%x + A(b) -> ...`), BNG2 emits `symmetry_factor="0.5"` and RM
+    applies it, like it does on every other rate law. The propensity the
+    local paths build from `Σ w·f(mol)` is the *ordered* distinct-pair
+    sum, and the 0.5 converts it to unordered.
+    Note that the **pinned NFsim release disagrees here, and is wrong**:
+    it constructs every rate law except the `setBaseRate()` ones with
+    `baseRate = 1` and never recovers the symmetry factor, so a symmetric
+    rule runs 2x fast. That is fixed upstream in bngsim's vendored NFsim
+    (lanl/bngsim#195, fixed in #278), whose patch names "global function,
+    local function (DOR), function product, MM" as the affected set.
+    `ft_local_fcn_bimol_sym` is verdicted against BNG2's ODE for that
+    reason.
   - **Global function of a local function is ill-defined.** A global
     (no-argument) function that references a *local* function has no
     molecule context at global scope, so its exposed value (`.gdat`

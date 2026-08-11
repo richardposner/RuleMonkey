@@ -1,0 +1,78 @@
+# Feature: reaction-center symmetry on a local-function rate law — a
+#          SYMMETRIC bimolecular rule (both reactants the same molecule type,
+#          binding on the same component) with one reactant tagged.
+# Tests:   that BNG2's symmetry_factor reaches the local-rate propensity
+#          paths.  BNG2 emits symmetry_factor="0.5" for this rule; RM's
+#          FunctionProduct / local-function propensity is built directly from
+#          Σ w·f(mol) and used to skip the factor entirely, so the rule ran
+#          at exactly 2x its intended rate.
+#
+#          `compute_propensity` (every other rate law) has always applied it,
+#          and no other model in any of the three corpora pairs a non-unit
+#          symmetry_factor with a local function — this model is the only
+#          coverage of that combination.
+#
+# Oracle:  BNG2 network -> ODE.  Listed in NFSIM_UNRELIABLE: the pinned
+#          NFsim release has this same defect and reads 2x fast here.  It is
+#          an NFsim bug, not a semantic disagreement — stock NFsim
+#          constructs every rate law except the setBaseRate() ones with
+#          baseRate=1 and never recovers the factor.  Fixed upstream in
+#          bngsim's vendored NFsim (lanl/bngsim#195, fixed in #278); the
+#          patch comment names "global function, local function (DOR),
+#          function product, MM" as the affected set.
+#
+#          Measured, Afree at t = 10/20/30:
+#            BNG2 ODE          60.8 / 33.8 / 23.6   <- oracle
+#            RM (fixed)        61.0 / 33.7 / 24.2
+#            RM (before)       33.7 / 18.9 / 12.8   <- 2x fast
+#            NFsim 2.9.3       33.5 / 17.9 / 13.0   <- same defect
+#
+# Tier:    base.
+# Expected: A(b) is consumed in pairs; m~1 molecules are twice as likely to
+#          be drawn into the tagged slot as m~0 ones, so Afree collapses fast
+#          and Amod stays pinned (the rule never changes m).
+# Note:    a symmetric rule with a tagged reactant also routes through the
+#          same-molecule null-event rejection rather than the
+#          `same_components` ab_both deflation.  That path yields the
+#          *ordered* distinct-pair sum, which is what the 0.5 then converts
+#          to unordered — the two corrections compose rather than collide.
+#          Untagged homodimer rules are unaffected and keep the implicit /2
+#          in compute_propensity (tests/cpp/homodimer_rate_test.cpp pins that
+#          against the chemical master equation).
+# invariant: conserved Atot = 400
+# invariant: conserved Amod = 200
+
+begin model
+begin parameters
+    kc   1.0e-3
+end parameters
+
+begin molecule types
+    A(b,m~0~1)
+end molecule types
+
+begin seed species
+    A(b,m~0)   200
+    A(b,m~1)   200
+end seed species
+
+begin observables
+    Molecules  Afree   A(b)
+    Molecules  Amod    A(m~1)
+    Molecules  Atot    A()
+    Molecules  Dim     A(b!1).A(b!1)
+end observables
+
+begin functions
+    # 1 for an m~0 molecule, 2 for an m~1 one (molecule-level tag scope).
+    lf(x) = kc*(1+Amod(x))
+end functions
+
+begin reaction rules
+    R: A(b)%x + A(b) -> A(b!1)%x.A(b!1)   lf(x)
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>30,n_steps=>60})
+end actions

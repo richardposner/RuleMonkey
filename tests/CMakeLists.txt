@@ -69,6 +69,21 @@ add_test(
         ${_rulemonkey_test_dir}/reference/nfsim/xml/A_plus_A.xml
 )
 
+# DOR1 rate parity (issue #34): a bimolecular rule with ONE tagged reactant
+# and a local-function rate.  No branch of the propensity code covered that
+# shape, so the rule fired once and then read a never-populated accumulator
+# as its propensity — silently inert.  Four arms (tag on either reactant,
+# molecule vs complex observable scope, single- vs multi-molecule tagged
+# pattern) are checked against an exact binomial death-process oracle.
+add_executable(local_fcn_bimol_test cpp/local_fcn_bimol_test.cpp)
+target_link_libraries(local_fcn_bimol_test PRIVATE rulemonkey)
+
+add_test(
+    NAME local_fcn_bimol_test
+    COMMAND local_fcn_bimol_test
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_local_fcn_bimol.xml
+)
+
 # save_state / load_state regression: round-trip a mid-run snapshot
 # back into a fresh simulator and verify (a) the continuation matches
 # an uninterrupted run, (b) loading state from a structurally

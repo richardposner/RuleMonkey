@@ -1,0 +1,99 @@
+# Feature: DOR1 — a BIMOLECULAR rule whose rate is a single local function,
+#          with only ONE of the two reactants tagged.
+# Tests:   the four shapes a single tag can take on a two-reactant rule:
+#            RB  tag on reactant pattern 1, molecule-level  (Sa + E()%x)
+#            RA  tag on reactant pattern 0, molecule-level  (E()%x + Sb)
+#            RC  tag on reactant pattern 1, pattern-level   (Sc + %x:E())
+#            RD  pattern-level tag on a MULTI-molecule pattern
+#          The tagged reactant contributes Σ_t w_t·f(t); the untagged one
+#          contributes its plain embedding count, so the propensity is the
+#          product of the two — NFsim's DOR1.
+#
+# Oracle:  deliberately unambiguous.  The enzyme context is a HETERODIMER
+#          E(d!1).F(d!1), so `E()` matches each complex exactly once and
+#          the per-molecule vs per-complex context-multiplicity question
+#          (issue #33 — where NFsim and BNG2's network expansion genuinely
+#          disagree by the number of matching molecules per complex) cannot
+#          reach any arm here.  Verified: NFsim, BNG2 network → ODE, and RM
+#          all agree on all four arms, so this model pins the DOR1
+#          propensity itself and nothing else.  Reference is NFsim for
+#          consistency with the rest of the tier; the ODE agrees with it
+#          column for column.
+#
+#          `Mod` counts a site on BOTH molecules of the complex, so the two
+#          observable scopes still differ by a clean 2x without leaning on
+#          any contested counting rule.
+#
+# Tier:    network-free.
+# Expected (kc = 1e-3, 20 heterodimers, Mod = 40 throughout — no rule
+#          touches E or F):
+#            RA/RB  molecule-level: Mod(x) = 1 on the tagged E
+#                   -> c = 20·kc = 0.02 per substrate
+#            RC/RD  complex-wide:   Mod(x) = 2 across E and F
+#                   -> c = 40·kc = 0.04 per substrate
+#          BNG2's own network confirms the same split, emitting
+#          `_RB_local1 = kc*1` / `_RC_local1 = kc*2`.  Each substrate is then
+#          an exact binomial death process, Sub(t) ~ Binomial(300, e^-ct).
+# Regression: before issue #34 no propensity branch covered `is_local` with
+#          molecularity 2.  The rule fired once, then read a never-populated
+#          accumulator as its propensity and went inert — silently, with the
+#          substrate observable simply flat.
+# invariant: conserved Mod = 40
+
+begin model
+begin parameters
+    kc    1.0e-3
+    S0    300
+end parameters
+
+begin molecule types
+    Sa(s~0~1)
+    Sb(s~0~1)
+    Sc(s~0~1)
+    Sd(s~0~1)
+    E(d,e~0~1)
+    F(d,f~0~1)
+end molecule types
+
+begin seed species
+    Sa(s~0)                 S0
+    Sb(s~0)                 S0
+    Sc(s~0)                 S0
+    Sd(s~0)                 S0
+    E(d!1,e~1).F(d!1,f~1)   20
+end seed species
+
+begin observables
+    Molecules  SubA   Sa(s~0)
+    Molecules  SubB   Sb(s~0)
+    Molecules  SubC   Sc(s~0)
+    Molecules  SubD   Sd(s~0)
+    # One site on each partner, so molecule scope sees 1 and complex-wide
+    # scope sees 2 — with only one embedding per complex either way.
+    Molecules  Mod    E(e~1), F(f~1)
+end observables
+
+begin functions
+    # Molecule-level tag -> Mod(x) counts within the tagged E itself  (= 1).
+    # Pattern-level tag  -> Mod(x) counts across x's whole complex     (= 2).
+    lf(x) = kc*Mod(x)
+end functions
+
+begin reaction rules
+    # Tagged reactant SECOND (the shape reported in issue #34).
+    RB: Sa(s~0) + E()%x  ->  Sa(s~1) + E()%x   lf(x)
+    # Tagged reactant FIRST — the factor has to follow the tag to the other
+    # sampler slot, not sit on whichever reactant happens to be pattern 0.
+    RA: E()%x + Sb(s~0)  ->  E()%x + Sb(s~1)   lf(x)
+    # Pattern-level tag: complex-wide observable scope, single-molecule
+    # pattern.  A per-molecule misreading of the scope halves this arm.
+    RC: Sc(s~0) + %x:E()  ->  Sc(s~1) + %x:E()   lf(x)
+    # Pattern-level tag on a two-molecule reactant pattern: the untagged side
+    # is a plain count, the tagged side a multi-molecule embedding count.
+    RD: Sd(s~0) + %x:E(d!1).F(d!1)  ->  Sd(s~1) + %x:E(d!1).F(d!1)   lf(x)
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>60,n_steps=>60})
+end actions

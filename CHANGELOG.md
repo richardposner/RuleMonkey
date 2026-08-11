@@ -7,6 +7,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A bimolecular rule with a local-function rate fired once and then went
+  inert (issue #34).** For a rule like
+  `S(s~0) + E()%x -> S(s~1) + E()%x  lf(x)` — NFsim's DOR1, one tagged
+  reactant carrying a per-instance factor — no branch of the propensity
+  code applied. `recompute_rule_state` handled `FunctionProduct` (two
+  tagged reactants) and `is_local` with molecularity ≤ 1, but a local
+  `Function` on a two-reactant rule fell through to the mass-action path,
+  which evaluated the local function against no molecule at all and left
+  `rs.local_propensity_total` at zero while `has_local_rates` stayed true.
+  The first `incremental_update` then read that never-populated accumulator
+  as the rule's propensity. The rule fired once, off the load-time
+  mass-action value, and never again.
+
+  Nothing surfaced it: no clamp warning (the rate law is never negative —
+  the documented clamp diagnostic was not involved), mass conserved, and
+  the substrate observable simply flat. On the issue's reproducer RM
+  converted 1 of 2000 substrate molecules over an interval where NFsim
+  converts about 92%.
+
+  The loader now normalizes such a rule to a `FunctionProduct` whose
+  untagged factor is the constant 1, so the existing DOR2 propensity,
+  incremental update and sampler cover it. Verified for all four shapes a
+  single tag can take — on either reactant, in per-molecule or
+  complex-wide observable scope, and on a single- or multi-molecule
+  tagged pattern — against **BNG2's network → ODE**, with an exact
+  binomial death-process oracle and NFsim both agreeing. The test model
+  uses a heterodimer enzyme context on purpose, so the per-molecule vs
+  per-complex context-multiplicity defect of lanl/bngsim#281 (RM issue
+  #33) — where the pinned NFsim over-counts a symmetric *context* pattern
+  N-fold, with or without any local function involved — cannot reach the
+  result.
+
+- **BNG2's `symmetry_factor` did not reach the local-function or
+  `FunctionProduct` propensity paths (issue #36).** Those paths build the
+  propensity directly from `Σ w·f(mol)` rather than through
+  `compute_propensity`, which applies the factor for every other rate
+  law — so a rule with a symmetric reaction center and a local-function
+  rate ran at `1/symmetry_factor` times its intended rate, 2x for a
+  homodimer. Found while cross-checking #34 against BNG2 rather than
+  against NFsim alone.
+
+  The pinned NFsim release has the identical defect for the identical
+  reason (every rate law except the ones routing through `setBaseRate()`
+  is constructed with `baseRate = 1` and never recovers the factor), so
+  NFsim is not a valid oracle here; it is fixed upstream in bngsim's
+  vendored NFsim, lanl/bngsim#195 → #278. BNG2's network expansion has
+  always applied the factor. RM now matches BNG2's ODE exactly
+  (`ODE_tz = 0.00`).
+
+  No model in any of the three corpora pairs a non-unit `symmetry_factor`
+  with a local function, so this is inert for every existing model — the
+  new `ft_local_fcn_bimol_sym` is the only coverage of the combination,
+  and it verdicts against BNG2's ODE. The untagged homodimer path is
+  untouched: its `/2` in `compute_propensity` already is the 0.5, and
+  `homodimer_rate_test` still pins it against the chemical master
+  equation.
+
+### Added
+
+- `tests/models/feature_coverage/ft_local_fcn_bimol.bngl` and
+  `ft_local_fcn_bimol_sym.bngl`, plus the `local_fcn_bimol_test` ctest
+  case, covering the DOR1 shapes above. No existing corpus model used a
+  local function on a bimolecular rule, which is why the gap survived
+  three minor releases.
+
 ## [3.9.0] — 2026-08-07
 
 ### Added
