@@ -30,18 +30,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
   The loader now normalizes such a rule to a `FunctionProduct` whose
   untagged factor is the constant 1, so the existing DOR2 propensity,
-  incremental update and sampler cover it. Verified against 40-seed NFsim
-  ensembles and against an exact binomial death-process oracle for all
-  four shapes a single tag can take: on either reactant, in per-molecule
-  or complex-wide observable scope, and on a single- or multi-molecule
-  tagged pattern.
+  incremental update and sampler cover it. Verified for all four shapes a
+  single tag can take — on either reactant, in per-molecule or
+  complex-wide observable scope, and on a single- or multi-molecule
+  tagged pattern — on a model where NFsim, BNG2's network → ODE and RM
+  all agree, plus an exact binomial death-process oracle. The test model
+  uses a heterodimer enzyme context on purpose, so the per-molecule vs
+  per-complex context-multiplicity question of issue #33 (where the two
+  engines do disagree, with or without any local function involved)
+  cannot reach the result.
 
-  A symmetric DOR1 rule (`A(b)%x + A(b) -> ...`) takes **no** factor of
-  1/2, even though BNG2 emits `symmetry_factor="0.5"` for it: the tagged
-  and untagged slots are distinguishable once one of them carries a
-  per-instance rate, so `(a,b)` and `(b,a)` are different reactions.
-  Measured against NFsim, which agrees; the untagged form of the same rule
-  does take the 1/2, and that path is unchanged.
+  One case is left deliberately undecided and is now issue #36: a
+  *symmetric* DOR1 rule (`A(b)%x + A(b) -> ...`), where NFsim sums the
+  two tag labelings of a pair and BNG2's network averages them — an exact
+  factor of two. RM follows NFsim, per its standing parity baseline;
+  `nf_local_fcn_bimol_sym.bngl` is labelled a characterization test of
+  that choice rather than evidence for it. The untagged form of the same
+  rule is unaffected — both engines apply the 1/2 there, and RM's
+  homodimer path is unchanged.
 
 ### Added
 

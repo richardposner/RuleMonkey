@@ -76,12 +76,16 @@ The runtime severity model is two-level:
     a `FunctionProduct` (below) whose untagged factor is the constant 1,
     which is how RM loads it. The tag may sit on either reactant and on
     a single- or multi-molecule pattern.
-    Note that when both reactant patterns are structurally identical
-    (`A(b)%x + A(b) -> ...`), the tagged and untagged slots are still
-    *distinguishable* — the pair `(a,b)` fires at `f(a)` and `(b,a)` at
-    `f(b)` — so no 1/2 is applied, even though BNG2 emits
-    `symmetry_factor="0.5"` for such a rule. This matches NFsim; the
-    same rule without the tag does take the 1/2.
+    When both reactant patterns are structurally identical
+    (`A(b)%x + A(b) -> ...`) the construct is genuinely ambiguous, and
+    the two reference engines resolve it differently: for a pair `(a,b)`
+    NFsim **sums** the two tag labelings (`f(a) + f(b)`) while BNG2's
+    network expansion **averages** them, emitting both orderings and
+    applying `symmetry_factor="0.5"` to each. That is an exact factor of
+    two. **RM follows NFsim**, per its parity baseline — see issue #36,
+    which is open on which convention is right and whether the construct
+    deserves a load-time warning instead. The same rule *without* the tag
+    is not ambiguous and does take the 1/2, on both engines and in RM.
   - **Global function of a local function is ill-defined.** A global
     (no-argument) function that references a *local* function has no
     molecule context at global scope, so its exposed value (`.gdat`

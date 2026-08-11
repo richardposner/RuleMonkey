@@ -1,23 +1,49 @@
 # Feature: DOR1 on a SYMMETRIC bimolecular rule — both reactants are the same
 #          molecule type binding on the same component, and one is tagged.
-# Tests:   the tagged and untagged slots are distinguishable even though the
-#          patterns are structurally identical, because the pair (a,b) fires at
-#          f(a) and (b,a) at f(b).  NFsim counts those ordered assignments
-#          separately: measured against a 40-seed NFsim ensemble this model
-#          runs at Σ_t f(t) · Σ_u 1, with NO factor of 1/2 — even though BNG2
-#          emits symmetry_factor="0.5" for the rule (its network expansion
-#          treats the two patterns as interchangeable, which they are not once
-#          one carries a per-instance rate).  The same rule without the tag
-#          does take the 1/2, and RM's plain homodimer path applies it.
-# Tier:    network-free (NFsim reference only — see above, the network
-#          expansion disagrees with NFsim on this rule).
-# Expected: A(b) is consumed in pairs; m~1 molecules are twice as likely to be
-#          drawn into the tagged slot as m~0 ones, so Afree collapses fast and
-#          Amod stays pinned (the rule never changes m).
-# Note:    this is also the shape that routes a local-function rule through the
-#          same-molecule null-event rejection rather than the homodimer
-#          ab_both deflation — the draw is rejected when both slots land on the
-#          same molecule, which realizes the distinct ordered-pair sum exactly.
+#
+# STATUS:  CHARACTERIZATION TEST.  This model pins RM to NFsim on a point
+#          where NFsim and BNG2 genuinely disagree; it is not evidence that
+#          NFsim is right.  See issue #36.
+#
+#          The rule gives one physical event — molecules a and b binding —
+#          two different rates depending on which one the tag lands on:
+#          f(a) if a is tagged, f(b) if b is tagged.  The two engines
+#          resolve that differently:
+#
+#            NFsim      SUMS the two labelings.  Effective rate f(a) + f(b).
+#            BNG2 net   AVERAGES them.  It emits both orderings as separate
+#                       reactions and applies symmetry_factor = 0.5 to each,
+#                       giving (f(a) + f(b))/2.
+#
+#          Measured, 40 seeds / BNG2's own integrator, Afree at t = 10/20/30:
+#            NFsim     33.5 / 17.9 / 13.0
+#            RM        33.7 / 18.9 / 12.8      <- follows NFsim
+#            BNG2 ODE  60.8 / 33.8 / 23.6      <- exactly 2x slower
+#
+#          RM follows NFsim because NFsim is RM's declared parity baseline,
+#          not because the question is settled.  If issue #36 resolves the
+#          other way, THIS MODEL'S REFERENCE DATA CHANGES — the DOR1
+#          propensity machinery it rides on does not.  The oracle-clean
+#          coverage of that machinery is nf_local_fcn_bimol, whose four arms
+#          NFsim, BNG2 and RM all agree on.
+#
+#          Note this is a different disagreement from issue #33 (per-molecule
+#          vs per-complex context multiplicity), which needs no local
+#          function to reproduce and does not arise here — both reactants are
+#          single molecules.
+#
+# Tests:   coverage of the code path a symmetric DOR1 rule takes, which is
+#          not the plain homodimer path: it routes through the same-molecule
+#          null-event rejection rather than the `same_components` ab_both
+#          deflation.  The draw is rejected when both slots land on the same
+#          molecule, which realizes the distinct ordered-pair sum exactly.
+#          Untagged homodimer rules are unaffected and still take the 1/2
+#          (see tests/cpp/homodimer_rate_test.cpp, which checks that against
+#          the chemical master equation).
+# Tier:    network-free.
+# Expected: A(b) is consumed in pairs; m~1 molecules are twice as likely to
+#          be drawn into the tagged slot as m~0 ones, so Afree collapses fast
+#          and Amod stays pinned (the rule never changes m).
 # invariant: conserved Atot = 400
 # invariant: conserved Amod = 200
 

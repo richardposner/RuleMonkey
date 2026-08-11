@@ -17,23 +17,30 @@
 //   RB  Sa(s~0) + E()%x                 tag on pattern 1, molecule scope
 //   RA  E()%x + Sb(s~0)                 tag on pattern 0, molecule scope
 //   RC  Sc(s~0) + %x:E()                tag on pattern 1, complex scope
-//   RD  Sd(s~0) + %x:E(d!1).E(d!1)      complex scope, multi-molecule pattern
+//   RD  Sd(s~0) + %x:E(d!1).F(d!1)      complex scope, multi-molecule pattern
 //
-// The enzyme pool is inert (no rule touches E), so each substrate sees a
-// constant per-molecule hazard c = Σ_t f(t) over the tagged reactant's
-// matches, and Sub(t) is an exact binomial death process:
+// The enzyme context is a heterodimer E(d!1).F(d!1) on purpose: `E()` matches
+// each complex exactly once, so the per-molecule vs per-complex context
+// multiplicity that NFsim and BNG2 disagree about (issue #33) cannot reach
+// any arm.  NFsim, BNG2's network → ODE and RM all agree on this model, so
+// what it pins is the DOR1 propensity and nothing else.
+//
+// Nothing consumes or modifies E or F, so each substrate sees a constant
+// per-molecule hazard c = Σ_t f(t) over the tagged reactant's matches, and
+// Sub(t) is an exact binomial death process:
 //
 //     Sub(t) ~ Binomial(S0, exp(-c·t))
 //
-// With kc = 1e-3, 20 free E(m~0) and 10 E(m~1) homodimers (Emod = 20):
+// With kc = 1e-3 and 20 heterodimers, `Mod` counting one site on each
+// partner:
 //
-//   molecule scope  c = kc · Σ_{40 E molecules} Emod(x)  = kc·20 = 0.02
-//   complex scope   c = kc · Σ_{20 dimer E's}   Emod(cx) = kc·40 = 0.04
+//   molecule scope  Mod(x) = 1 on the tagged E   ->  c = 20·kc = 0.02
+//   complex scope   Mod(x) = 2 across E and F    ->  c = 40·kc = 0.04
 //
-// and for RD the same 0.04 arrives as 10 dimers × 2 embeddings × 2.  That
-// gives an analytic mean and variance to test against, with no NFsim or BNG2
-// dependency — the harness model nf_local_fcn_bimol covers the NFsim
-// ensemble comparison separately.
+// which is what BNG2's own network emits (`_RB_local1 = kc*1`,
+// `_RC_local1 = kc*2`).  That gives an analytic mean and variance to test
+// against with no NFsim or BNG2 dependency at test time — the harness model
+// of the same name covers the NFsim ensemble comparison separately.
 
 #include "rulemonkey/simulator.hpp"
 
@@ -98,9 +105,9 @@ void test_dor1_arms(const std::string& xml) {
     auto r = sim.run({0.0, kTEnd, 2},
                      /*seed=*/std::uint64_t{7000} + static_cast<std::uint64_t>(rep));
 
-    // The enzyme pool is context only — no rule may consume or modify it.
-    check(final_value(r, "Etot") == 40.0, "Etot conserved at 40");
-    check(final_value(r, "Emod") == 20.0, "Emod conserved at 20");
+    // The enzyme pool is context only — no rule may consume or modify it,
+    // so every arm's hazard stays constant and the binomial oracle holds.
+    check(final_value(r, "Mod") == 40.0, "Mod conserved at 40");
 
     for (size_t a = 0; a < arms.size(); ++a) {
       double const v = final_value(r, arms[a].observable);

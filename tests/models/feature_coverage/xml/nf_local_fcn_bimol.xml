@@ -10,7 +10,18 @@
       <MoleculeType id="E">
         <ListOfComponentTypes>
           <ComponentType id="d"/>
-          <ComponentType id="m">
+          <ComponentType id="e">
+            <ListOfAllowedStates>
+              <AllowedState id="0"/>
+              <AllowedState id="1"/>
+            </ListOfAllowedStates>
+          </ComponentType>
+        </ListOfComponentTypes>
+      </MoleculeType>
+      <MoleculeType id="F">
+        <ListOfComponentTypes>
+          <ComponentType id="d"/>
+          <ComponentType id="f">
             <ListOfAllowedStates>
               <AllowedState id="0"/>
               <AllowedState id="1"/>
@@ -98,33 +109,23 @@
           </Molecule>
         </ListOfMolecules>
       </Species>
-      <Species id="S5"  concentration="20" name="E(d,m~0)">
+      <Species id="S5"  concentration="20" name="E(d!1,e~1).F(d!1,f~1)">
         <ListOfMolecules>
           <Molecule id="S5_M1" name="E">
             <ListOfComponents>
-              <Component id="S5_M1_C1" name="d" numberOfBonds="0"/>
-              <Component id="S5_M1_C2" name="m" state="0" numberOfBonds="0"/>
+              <Component id="S5_M1_C1" name="d" numberOfBonds="1"/>
+              <Component id="S5_M1_C2" name="e" state="1" numberOfBonds="0"/>
             </ListOfComponents>
           </Molecule>
-        </ListOfMolecules>
-      </Species>
-      <Species id="S6"  concentration="10" name="E(d!1,m~1).E(d!1,m~1)">
-        <ListOfMolecules>
-          <Molecule id="S6_M1" name="E">
+          <Molecule id="S5_M2" name="F">
             <ListOfComponents>
-              <Component id="S6_M1_C1" name="d" numberOfBonds="1"/>
-              <Component id="S6_M1_C2" name="m" state="1" numberOfBonds="0"/>
-            </ListOfComponents>
-          </Molecule>
-          <Molecule id="S6_M2" name="E">
-            <ListOfComponents>
-              <Component id="S6_M2_C1" name="d" numberOfBonds="1"/>
-              <Component id="S6_M2_C2" name="m" state="1" numberOfBonds="0"/>
+              <Component id="S5_M2_C1" name="d" numberOfBonds="1"/>
+              <Component id="S5_M2_C2" name="f" state="1" numberOfBonds="0"/>
             </ListOfComponents>
           </Molecule>
         </ListOfMolecules>
         <ListOfBonds>
-          <Bond id="S6_B1" site1="S6_M1_C1" site2="S6_M2_C1"/>
+          <Bond id="S5_B1" site1="S5_M1_C1" site2="S5_M2_C1"/>
         </ListOfBonds>
       </Species>
     </ListOfSpecies>
@@ -288,7 +289,7 @@
                   <Component id="RR4_RP2_M1_C1" name="d" numberOfBonds="1"/>
                 </ListOfComponents>
               </Molecule>
-              <Molecule id="RR4_RP2_M2" name="E">
+              <Molecule id="RR4_RP2_M2" name="F">
                 <ListOfComponents>
                   <Component id="RR4_RP2_M2_C1" name="d" numberOfBonds="1"/>
                 </ListOfComponents>
@@ -316,7 +317,7 @@
                   <Component id="RR4_PP2_M1_C1" name="d" numberOfBonds="1"/>
                 </ListOfComponents>
               </Molecule>
-              <Molecule id="RR4_PP2_M2" name="E">
+              <Molecule id="RR4_PP2_M2" name="F">
                 <ListOfComponents>
                   <Component id="RR4_PP2_M2_C1" name="d" numberOfBonds="1"/>
                 </ListOfComponents>
@@ -398,24 +399,24 @@
           </Pattern>
         </ListOfPatterns>
       </Observable>
-      <Observable id="O5" name="Emod" type="Molecules">
+      <Observable id="O5" name="Mod" type="Molecules">
         <ListOfPatterns>
           <Pattern id="O5_P1">
             <ListOfMolecules>
               <Molecule id="O5_P1_M1" name="E">
                 <ListOfComponents>
-                  <Component id="O5_P1_M1_C1" name="m" state="1" numberOfBonds="0"/>
+                  <Component id="O5_P1_M1_C1" name="e" state="1" numberOfBonds="0"/>
                 </ListOfComponents>
               </Molecule>
             </ListOfMolecules>
           </Pattern>
-        </ListOfPatterns>
-      </Observable>
-      <Observable id="O6" name="Etot" type="Molecules">
-        <ListOfPatterns>
-          <Pattern id="O6_P1">
+          <Pattern id="O5_P2">
             <ListOfMolecules>
-              <Molecule id="O6_P1_M1" name="E"/>
+              <Molecule id="O5_P2_M1" name="F">
+                <ListOfComponents>
+                  <Component id="O5_P2_M1_C1" name="f" state="1" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
             </ListOfMolecules>
           </Pattern>
         </ListOfPatterns>
@@ -429,9 +430,9 @@
         <ListOfReferences>
           <Reference name="kc" type="Constant"/>
           <Reference name="x" type="Local"/>
-          <Reference name="Emod" type="Observable"/>
+          <Reference name="Mod" type="Observable"/>
         </ListOfReferences>
-        <Expression> kc*Emod(x) </Expression>
+        <Expression> kc*Mod(x) </Expression>
       </Function>
       <Function id="_rateLaw1">
         <ListOfArguments>
