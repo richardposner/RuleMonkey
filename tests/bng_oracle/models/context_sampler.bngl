@@ -1,0 +1,60 @@
+# Companion to context_symmetry.bngl: the same defect seen from the SAMPLER
+# side rather than the propensity side (RuleMonkey GH #33).
+#
+# Counting an untransformed reactant pattern once per COMPLEX changes the
+# propensity, but a bimolecular rule also has to reject draws that put both
+# reactants in the same complex (BNGL's `+` means two distinct complexes).
+# That rejection is only self-consistent if the reactant is DRAWN the same way
+# it is COUNTED.  Count per complex while still drawing per molecule and the
+# rejection rate no longer offsets the propensity, leaving a systematic bias.
+#
+# The bias cancels exactly whenever every complex holds the same number of
+# context matches, which is why no model in the regular corpus can see it.
+# This one makes the multiplicities UNEQUAL -- 4 Ez in the tethered complex,
+# 1 in the free one -- and puts every Sub inside a complex that also holds Ez,
+# so the rejection actually fires and its weighting matters:
+#
+#   per complex, own complex excluded (correct):  mu = kc*(T+D-1)         = 3*kc
+#   per molecule (RuleMonkey before the fix):     mu = kc*(m*(T-1)+D)     = 6*kc
+#   per-complex count + per-molecule draw:        mu = kc*(T+D)*(1-m/(m*T+D))
+#                                                    = 2.4*kc
+#
+# with T=2 tethered complexes, D=2 free Ez, m=4 Ez per tethered complex.  The
+# three are 25% apart at t_end, so a run that lands on the third is diagnosing
+# the sampler and not the count.
+#
+# Complex instance counts are deliberately tiny (4 complexes), because the bias
+# is O(1/#complexes) -- it is a same-complex-pair effect against an O(N^2)
+# propensity.  Molecule counts are kept up by chaining several Sub into each
+# complex, which is also what keeps the expanded network small enough for BNG2.
+
+begin model
+begin parameters
+  kc  0.001
+  T   2      # tethered complexes: 4 Sub + 4 Ez each
+  D   2      # free single-Ez complexes
+end parameters
+
+begin molecule types
+  Sub(s~0~1,l,r)
+  Ez(d,e,f)
+end molecule types
+
+begin seed species
+  Sub(s~0,l,r!1).Sub(s~0,l!1,r!2).Sub(s~0,l!2,r!3).Sub(s~0,l!3,r!4).Ez(d,e!4,f!5).Ez(d,e!5,f!6).Ez(d,e!6,f!7).Ez(d,e!7,f)  T
+  Ez(d,e,f)  D
+end seed species
+
+begin observables
+  Molecules Sub0  Sub(s~0)
+  Molecules Sub1  Sub(s~1)
+end observables
+
+begin reaction rules
+  R_ctx: Sub(s~0) + Ez(d) -> Sub(s~1) + Ez(d)  kc
+end reaction rules
+end model
+
+begin actions
+  writeXML({overwrite=>1})
+end actions
