@@ -2626,9 +2626,9 @@ struct RuleState {
   bool per_complex_b = false;
   PerCxTally percx_a;
   PerCxTally percx_b;
-  FenwickTree fenwick_a;               // O(log N) sampler for slot A (if active)
-  FenwickTree fenwick_b;               // O(log N) sampler for slot B (if active)
-  bool use_fenwick_a = false;          // true if type population > FENWICK_THRESHOLD
+  FenwickTree fenwick_a;      // O(log N) sampler for slot A (if active)
+  FenwickTree fenwick_b;      // O(log N) sampler for slot B (if active)
+  bool use_fenwick_a = false; // true if type population > FENWICK_THRESHOLD
   bool use_fenwick_b = false;
   bool use_multi_mol_count = false;     // true for multi-mol reactant A has >1 molecule
   bool use_multi_mol_count_b = false;   // true for multi-mol bimolecular reactant B
@@ -2718,8 +2718,8 @@ double dor_symmetry(const Rule& rule) { return rule.symmetry_factor; }
 // Compute propensity for a rule given its accumulated state.
 // embedding_correction_a/b correct for overcounting due to permutations
 // of identical non-reacting components in the pattern.
-double compute_propensity(const RuleState& rs, const Rule& rule, double rate,
-                          double a_cx = -1.0, double b_cx = -1.0) {
+double compute_propensity(const RuleState& rs, const Rule& rule, double rate, double a_cx = -1.0,
+                          double b_cx = -1.0) {
   double const ca = rs.embedding_correction_a;
   double const cb = rs.embedding_correction_b;
   // Pure-context reactant patterns count complexes, not molecules (issue #33).
@@ -4222,13 +4222,11 @@ struct Engine::Impl {
       for (int slot = 0; slot < 2; ++slot) {
         if (!(slot == 0 ? rs.per_complex_a : rs.per_complex_b))
           continue;
-        int const seed = (slot == 0)
-                             ? ((!rule.reactant_pattern_starts.empty())
-                                    ? rule.reactant_pattern_starts[0]
-                                    : 0)
-                             : ((rule.reactant_pattern_starts.size() > 1)
-                                    ? rule.reactant_pattern_starts[1]
-                                    : -1);
+        int const seed =
+            (slot == 0)
+                ? ((!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0)
+                : ((rule.reactant_pattern_starts.size() > 1) ? rule.reactant_pattern_starts[1]
+                                                             : -1);
         if (seed < 0 || seed >= static_cast<int>(rule.reactant_pattern.molecules.size()))
           continue;
         int const ti = rule.reactant_pattern.molecules[seed].type_index;
@@ -4616,7 +4614,7 @@ struct Engine::Impl {
 
   // Re-sum `cx`'s representative rate into rate_sum.  Called on every rep
   // change and whenever the sitting rep's local rate is recomputed.
-  void percx_refresh_rate(RuleState& rs, int slot, int cx) {
+  static void percx_refresh_rate(RuleState& rs, int slot, int cx) {
     PerCxTally& t = tally_of(rs, slot);
     auto it = t.entries.find(cx);
     if (it == t.entries.end())
@@ -4646,7 +4644,7 @@ struct Engine::Impl {
     return best;
   }
 
-  void percx_add(RuleState& rs, int slot, int cx, int mid) {
+  static void percx_add(RuleState& rs, int slot, int cx, int mid) {
     PerCxTally& t = tally_of(rs, slot);
     PerCxTally::Entry& e = t.entries[cx];
     if (e.hits == 0) {
@@ -4662,7 +4660,7 @@ struct Engine::Impl {
     }
   }
 
-  void percx_remove(RuleState& rs, int slot, int cx, int mid) {
+  void percx_remove(RuleState& rs, int slot, int cx, int mid) const {
     PerCxTally& t = tally_of(rs, slot);
     auto it = t.entries.find(cx);
     if (it == t.entries.end())
@@ -4745,13 +4743,10 @@ struct Engine::Impl {
     for (auto& md : rs.mol_data)
       percx_cx_of(md, slot) = -1;
     auto& rule = model.rules[ri];
-    int const seed = (slot != 0)
-                         ? ((rule.reactant_pattern_starts.size() > 1)
-                                ? rule.reactant_pattern_starts[1]
-                                : -1)
-                         : ((!rule.reactant_pattern_starts.empty())
-                                ? rule.reactant_pattern_starts[0]
-                                : 0);
+    int const seed =
+        (slot != 0)
+            ? ((rule.reactant_pattern_starts.size() > 1) ? rule.reactant_pattern_starts[1] : -1)
+            : ((!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0);
     if (seed < 0 || seed >= static_cast<int>(rule.reactant_pattern.molecules.size()))
       return;
     for (int const mid : pool.molecules_of_type(rule.reactant_pattern.molecules[seed].type_index))
@@ -5036,8 +5031,7 @@ struct Engine::Impl {
       }
     } else {
       double const rate = evaluate_rate(rule);
-      new_propensity =
-          compute_propensity(rs, rule, rate, percx_a(rule_idx), percx_b(rule_idx));
+      new_propensity = compute_propensity(rs, rule, rate, percx_a(rule_idx), percx_b(rule_idx));
     }
     set_rule_propensity(rs, new_propensity);
 
@@ -6916,10 +6910,8 @@ struct Engine::Impl {
       double new_propensity;
       if (rule.rate_law.type == RateLawType::FunctionProduct) {
         {
-          double const s1 =
-              rs.per_complex_a ? rs.percx_a.rate_sum : rs.local_propensity_total;
-          double const s2 =
-              rs.per_complex_b ? rs.percx_b.rate_sum : rs.local_propensity_b_total;
+          double const s1 = rs.per_complex_a ? rs.percx_a.rate_sum : rs.local_propensity_total;
+          double const s2 = rs.per_complex_b ? rs.percx_b.rate_sum : rs.local_propensity_b_total;
           new_propensity = s1 * s2 * dor_symmetry(rule);
         }
       } else if (rs.has_local_rates) {
@@ -7625,8 +7617,8 @@ struct Engine::Impl {
       const PerCxTally& t = use_a ? rs.percx_a : rs.percx_b;
       if (t.list.empty())
         return -1;
-      int const cx = t.list[std::min(static_cast<std::size_t>(uniform() * t.list.size()),
-                                     t.list.size() - 1)];
+      int const cx =
+          t.list[std::min(static_cast<std::size_t>(uniform() * t.list.size()), t.list.size() - 1)];
       auto it = t.entries.find(cx);
       return (it != t.entries.end()) ? it->second.rep : -1;
     }

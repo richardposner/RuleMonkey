@@ -159,9 +159,7 @@ def _ssa_rep(args):
 
 def emit_ssa(model: str, text: str, spec: dict):
     reps = spec["reps"]
-    jobs = [
-        (model, text, spec["t_end"], spec["n_steps"], seed) for seed in range(1, reps + 1)
-    ]
+    jobs = [(model, text, spec["t_end"], spec["n_steps"], seed) for seed in range(1, reps + 1)]
     header, runs = None, []
     n_workers = max(1, (os.cpu_count() or 4) - 1)
     with concurrent.futures.ProcessPoolExecutor(max_workers=n_workers) as ex:
@@ -188,9 +186,7 @@ def emit_ssa(model: str, text: str, spec: dict):
             # SEM, not the per-rep spread: check.py combines it in quadrature
             # with RuleMonkey's own SEM, so the file has to carry the error on
             # the MEAN or the reference's own noise would be double counted.
-            srow.append(
-                statistics.stdev(vals) / math.sqrt(len(vals)) if len(vals) > 1 else 0.0
-            )
+            srow.append(statistics.stdev(vals) / math.sqrt(len(vals)) if len(vals) > 1 else 0.0)
         mean_rows.append(mrow)
         std_rows.append(srow)
     os.makedirs(REF_DIR, exist_ok=True)
