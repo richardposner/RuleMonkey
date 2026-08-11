@@ -2942,8 +2942,13 @@ struct Engine::Impl {
   std::vector<std::vector<int>> type_to_rules; // type_index → rule indices
   std::vector<int> dynamic_synthesis_rules;    // synthesis rules with dynamic rates
   std::vector<int> dynamic_rate_rules;         // non-synthesis rules with dynamic rates (func/expr)
-  std::vector<char> rule_needed_buf;           // pre-allocated, reused each update
-  int max_pattern_depth = 0;                   // max pattern diameter across all rules
+  // Local-rate rules whose function chain reads a moving global (issue
+  // #38): rescanned in full after every event, since no affected molecule
+  // marks the change.  Empty for every model whose local rates are built
+  // from tagged observables and constants alone.
+  std::vector<int> global_dep_local_rules;
+  std::vector<char> rule_needed_buf; // pre-allocated, reused each update
+  int max_pattern_depth = 0;         // max pattern diameter across all rules
 
   // Per-rule event counting for diagnostics
   std::vector<uint64_t> rule_fire_counts;
@@ -2972,8 +2977,24 @@ struct Engine::Impl {
   IncrUpdateProfile incr_profile_;
   RecordAtProfile rap_profile_;
 
-  // Precomputed: indices into model.observables for all local-function observables
+  // Precomputed: indices into model.observables of every observable that
+  // some local function evaluates at its tag — the union across functions.
+  // These are the slots evaluate_local_factor overrides with a per-molecule
+  // value.  Bare (global) observables of a local function are NOT here:
+  // they keep their system-wide value (issue #38).
   std::vector<int> local_obs_indices;
+  // Set only when the union above is ambiguous — some local function reads
+  // an observable at global scope that another localizes.  A single slot
+  // then cannot serve both, so evaluate_local_factor switches from one
+  // override for the whole chain to a per-function re-scope.  False for
+  // every model that does not mix the two scopings, which keeps the common
+  // path exactly as it was.
+  bool local_obs_scope_conflict_ = false;
+  // Per function (indexed like model.functions), a mask over
+  // local_obs_indices: 1 where that function localizes the observable, 0
+  // where it reads it globally.  Populated only when
+  // local_obs_scope_conflict_.
+  std::vector<std::vector<char>> fn_local_obs_mask_;
   // Precomputed: whether any rule uses local rates
   bool have_local_rules_ = false;
   // Precomputed: whether any rule has disjoint multi-mol patterns
@@ -3149,6 +3170,11 @@ struct Engine::Impl {
   // local_obs_indices and eval_local_fn_slots are populated).
   std::vector<double> eval_local_obs_save_;
   std::vector<double> eval_local_fn_save_;
+  // Companion buffer: the localized value of each local_obs_indices entry
+  // at the molecule being evaluated.  Only read under
+  // local_obs_scope_conflict_, where the slots are re-scoped per function
+  // instead of once for the whole chain.
+  std::vector<double> eval_local_obs_value_;
 
   // pool is initialized from `model` (the just-copied snapshot), not
   // from `m` — declaration order guarantees `model` is constructed
@@ -3586,26 +3612,68 @@ struct Engine::Impl {
     bind_infos.resize(n_rules);
     rule_fire_counts.assign(n_rules, 0);
 
-    // Precompute local_obs_indices: all observable indices referenced by any
-    // local function, resolved via observable_index.  MUST run before the
-    // per-rule rescan loop below — rescan_all_molecules_for_rule evaluates
-    // local-rate / FunctionProduct propensities through evaluate_local_factor,
-    // which localizes exactly these observable slots.  If this set were empty
-    // at rescan time, those observables would be read globally and the initial
-    // propensity would be wildly wrong (e.g. a free monomer's local count read
-    // as the whole-system count).
+    // Precompute local_obs_indices: the observable slots that any local
+    // function evaluates at its tag, resolved via observable_index.  MUST
+    // run before the per-rule rescan loop below —
+    // rescan_all_molecules_for_rule evaluates local-rate / FunctionProduct
+    // propensities through evaluate_local_factor, which localizes exactly
+    // these observable slots.  If this set were empty at rescan time, those
+    // observables would be read globally and the initial propensity would
+    // be wildly wrong (e.g. a free monomer's local count read as the
+    // whole-system count).
+    //
+    // The loader classifies each of a local function's observables as
+    // tagged or bare (issue #38); only the tagged ones belong here.
     {
+      local_obs_scope_conflict_ = false;
+      fn_local_obs_mask_.clear();
       std::unordered_set<int> idx_set;
+      auto resolve = [&](const std::string& obs_name) {
+        auto it = model.observable_index.find(obs_name);
+        return it != model.observable_index.end() ? it->second : -1;
+      };
       for (auto& gf : model.functions) {
-        if (gf.is_local()) {
-          for (auto& obs_name : gf.local_observable_names) {
-            auto it = model.observable_index.find(obs_name);
-            if (it != model.observable_index.end())
-              idx_set.insert(it->second);
-          }
+        if (!gf.is_local())
+          continue;
+        for (auto& obs_name : gf.local_observable_names) {
+          int const oi = resolve(obs_name);
+          if (oi >= 0)
+            idx_set.insert(oi);
         }
       }
       local_obs_indices.assign(idx_set.begin(), idx_set.end());
+
+      // One slot per observable means the union can only stand in for the
+      // per-function sets while they agree.  If some local function reads
+      // an observable bare that another localizes, the override would
+      // reach into the function that wants the global value; note it and
+      // record the per-function sets so evaluate_local_factor can re-scope
+      // around each function in the chain.
+      for (auto& gf : model.functions) {
+        if (!gf.is_local())
+          continue;
+        for (auto& obs_name : gf.global_observable_names) {
+          int const oi = resolve(obs_name);
+          if (oi >= 0 && idx_set.count(oi))
+            local_obs_scope_conflict_ = true;
+        }
+      }
+      if (local_obs_scope_conflict_) {
+        fn_local_obs_mask_.assign(model.functions.size(),
+                                  std::vector<char>(local_obs_indices.size(), 0));
+        for (int i = 0; i < static_cast<int>(model.functions.size()); ++i) {
+          auto& gf = model.functions[i];
+          if (!gf.is_local())
+            continue;
+          for (auto& obs_name : gf.local_observable_names) {
+            int const oi = resolve(obs_name);
+            for (size_t k = 0; k < local_obs_indices.size(); ++k) {
+              if (local_obs_indices[k] == oi)
+                fn_local_obs_mask_[i][k] = 1;
+            }
+          }
+        }
+      }
     }
 
     for (int ri = 0; ri < n_rules; ++ri) {
@@ -3856,6 +3924,7 @@ struct Engine::Impl {
     type_to_rules.assign(n_types, {});
     dynamic_synthesis_rules.clear();
     dynamic_rate_rules.clear();
+    global_dep_local_rules.clear();
     for (int ri = 0; ri < n_rules; ++ri) {
       auto& rule = model.rules[ri];
       if (rule.molecularity == 0) {
@@ -3868,6 +3937,15 @@ struct Engine::Impl {
       // regardless of which molecule types were directly affected.
       if (rule.rate_law.is_dynamic && !rule.rate_law.is_local)
         dynamic_rate_rules.push_back(ri);
+      // Local-rate counterpart (issue #38).  A local rate that reads a
+      // moving global — bare observable, time, a global function over
+      // either — changes for EVERY instance when that global moves, and no
+      // molecule is marked affected by it.  Marking the rule needed is not
+      // enough: incremental_update only revisits molecules in the affected
+      // set, so each untouched instance would keep its stale per-molecule
+      // rate.  These rules take a full rescan per event instead.
+      if (rule.rate_law.local_rate_tracks_global)
+        global_dep_local_rules.push_back(ri);
       int const seed_a =
           (!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0;
       if (seed_a >= static_cast<int>(rule.reactant_pattern.molecules.size()))
@@ -5702,9 +5780,14 @@ struct Engine::Impl {
       if (elr_sampled)
         elr_sub = std::chrono::steady_clock::now();
     }
-    for (int const oi : local_obs_indices) {
+    eval_local_obs_value_.resize(local_obs_indices.size());
+    for (size_t k = 0; k < local_obs_indices.size(); ++k) {
+      int const oi = local_obs_indices[k];
       auto& obs = model.observables[oi];
-      eval_vars_flat[eval_obs_slot[oi]] = evaluate_observable_on(obs, mol_id, !per_molecule, oi);
+      double const v = evaluate_observable_on(obs, mol_id, !per_molecule, oi);
+      eval_local_obs_value_[k] = v;
+      if (!local_obs_scope_conflict_)
+        eval_vars_flat[eval_obs_slot[oi]] = v;
     }
     if constexpr (kExprEvalProfile) {
       if (elr_sampled) {
@@ -5721,9 +5804,22 @@ struct Engine::Impl {
     // top-of-call update_eval_vars and DO NOT depend on local
     // observables (BNG2 emits local arg references only inside
     // is_local() functions).
+    //
+    // With a scope conflict in play the observable slots cannot be set
+    // once for the whole chain: each function is given its own view —
+    // localized where it tags the observable, the saved global value
+    // where it reads it bare — immediately before it is evaluated.  Its
+    // result lands in its own slot, so a caller later in the chain still
+    // sees the value that function computed under its own scoping.
     for (int const i : eval_local_fn_slots) {
       if constexpr (kExprEvalProfile)
         expr_eval_profile_.local_fn_ast_evals++;
+      if (local_obs_scope_conflict_) {
+        auto const& mask = fn_local_obs_mask_[i];
+        for (size_t k = 0; k < local_obs_indices.size(); ++k)
+          eval_vars_flat[eval_obs_slot[local_obs_indices[k]]] =
+              mask[k] != 0 ? eval_local_obs_value_[k] : eval_local_obs_save_[k];
+      }
       try {
         eval_vars_flat[eval_gf_main_slot[i]] = expr_eval_.evaluate(gf_expr_id_[i]);
       } catch (...) {
@@ -5894,6 +5990,15 @@ struct Engine::Impl {
       else
         rb = 6;
       incr_profile_.rules_visited_hist[rb]++;
+    }
+
+    // Local rates over a moving global (issue #38): every instance's rate
+    // just changed, so replace the delta update for these rules with a
+    // full rescan and take them out of the loop below.  The observables
+    // were refreshed before this call, so the rescan reads current values.
+    for (int const ri : global_dep_local_rules) {
+      rescan_all_molecules_for_rule(ri);
+      rule_needed_buf[ri] = 0;
     }
 
     for (int ri = 0; ri < n_rules; ++ri) {

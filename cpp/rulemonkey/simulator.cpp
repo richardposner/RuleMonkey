@@ -1276,6 +1276,9 @@ Model load_model(const std::string& xml_path,
   }
 
   // ---- 5. Functions ----
+  // Observables a local function references both tagged and bare — RM
+  // resolves them as tagged and warns (see the split below).
+  std::vector<std::string> mixed_scope_observables;
   auto* func_list = find_child(*model_node, "ListOfFunctions");
   if (func_list) {
     for (auto& fn : func_list->children) {
@@ -1296,7 +1299,11 @@ Model load_model(const std::string& xml_path,
         }
       }
 
-      // Parse references to identify locally-evaluated observables
+      // Collect the observables this function references.  Which of them
+      // are evaluated locally is decided further down, once the
+      // expression text is in hand — `<ListOfReferences>` cannot answer it
+      // (issue #38).
+      std::vector<std::string> referenced_observables;
       auto* ref_list = find_child(fn, "ListOfReferences");
       if (ref_list) {
         for (auto& rn : ref_list->children) {
@@ -1304,7 +1311,7 @@ Model load_model(const std::string& xml_path,
             continue;
           auto rtype = opt_attr(rn, "type");
           if (rtype == "Observable") {
-            gf.local_observable_names.push_back(need_attr(rn, "name"));
+            referenced_observables.push_back(need_attr(rn, "name"));
           }
         }
       }
@@ -1384,6 +1391,41 @@ Model load_model(const std::string& xml_path,
         auto* expr_node = find_child(fn, "Expression");
         if (expr_node && !expr_node->text.empty())
           gf.expression_text = trim(expr_node->text);
+      }
+
+      // Split the referenced observables by scope (issue #38).  An
+      // observable is local iff the expression applies it to one of THIS
+      // function's own arguments; a bare reference is the global,
+      // system-wide count and must keep reading its global value.  BNG2
+      // states the same split in the network it generates for the model,
+      // folding the bare observable into the rate expression and
+      // resolving only the tagged one per instance:
+      //
+      //     1 _R_local1() ((kc*Obs_Src)*1)
+      //
+      // Before this split RM localized every referenced observable, so a
+      // bare one evaluated at the tagged molecule, read 0 whenever its
+      // pattern was absent from that molecule's complex — which for a
+      // system-wide quantity is essentially always — and zeroed the
+      // propensity.  The rule then never fired, silently.
+      if (gf.is_local()) {
+        auto const scoped =
+            expr::classify_by_tag_application(gf.expression_text, gf.argument_names);
+        auto const& tagged = scoped.tag_applied;
+        for (auto& obs_name : referenced_observables) {
+          if (std::find(tagged.begin(), tagged.end(), obs_name) == tagged.end()) {
+            gf.global_observable_names.push_back(obs_name);
+            continue;
+          }
+          gf.local_observable_names.push_back(obs_name);
+          // Written BOTH ways in one function (`O + O(x)`) the observable
+          // wants two values out of one eval-layout slot, which RM cannot
+          // express.  The tagged reading wins — it is the one that needs
+          // the local machinery — and the model is flagged rather than
+          // quietly mis-evaluated.
+          if (std::find(scoped.bare.begin(), scoped.bare.end(), obs_name) != scoped.bare.end())
+            mixed_scope_observables.push_back("'" + obs_name + "' in function '" + gf.name + "'");
+        }
       }
 
       model.function_index[gf.name] = static_cast<int>(model.functions.size());
@@ -2021,6 +2063,14 @@ Model load_model(const std::string& xml_path,
     // they don't need global recomputation and should not be marked
     // rate_dependent.  If an observable is ALSO reachable via a global
     // path, the global path will add it normally.
+    //
+    // That list is the TAGGED observables only (issue #38).  A bare
+    // observable inside a local function keeps its global value, so it
+    // falls through to the worklist here and is marked rate_dependent —
+    // which is what keeps it refreshed after every event rather than only
+    // at sample points.  Misclassifying it as local would have skipped
+    // that refresh too, so a fix to the local-scope override alone could
+    // still have read a stale global value.
     std::unordered_set<std::string> rate_vars;
     std::vector<std::string> worklist(seeds.begin(), seeds.end());
     while (!worklist.empty()) {
@@ -2056,6 +2106,68 @@ Model load_model(const std::string& xml_path,
     }
   }
 
+  // ---- 8b. Local rates that track a moving global (issue #38) ----
+  //
+  // A local function built only from tagged observables and constants has
+  // a per-instance value that can only change when that instance's own
+  // neighbourhood changes — which is exactly what the engine's
+  // affected-molecule delta path already covers.  Let a bare observable in
+  // (or `time`, or a global function over either) and that stops holding:
+  // every instance's rate moves at once, with no molecule marked affected.
+  // Flag those rules so the engine rescans them after each event instead.
+  //
+  // Marking is deliberately narrow.  Every model in the three corpora
+  // takes the constant-and-tagged-only shape, so none of them acquires a
+  // per-event rescan from this.
+  {
+    // Memoized, cycle-safe: does evaluating this function consult anything
+    // global that a reaction event can move?
+    std::unordered_map<std::string, bool> fn_verdict;
+    auto tracks_global = [&](const std::string& fname, auto&& self) -> bool {
+      auto fi = model.function_index.find(fname);
+      if (fi == model.function_index.end())
+        return false;
+      if (auto memo = fn_verdict.find(fname); memo != fn_verdict.end())
+        return memo->second;
+      fn_verdict[fname] = false; // provisional — breaks reference cycles
+      const auto& gf = model.functions[fi->second];
+
+      // A TFUN's counter is a time / observable / function value unless it
+      // is a plain parameter, and the table turns it into a moving rate.
+      bool dep = gf.is_tfun && gf.tfun_counter_source != TfunCounterSource::Parameter;
+
+      for (const auto& tok : expr::collect_variables(gf.expression_text)) {
+        if (dep)
+          break;
+        // An observable tagged inside THIS function is per-instance and
+        // already covered by the affected-molecule path; any other
+        // observable reference is the system-wide count.  A parameter or
+        // a builtin name matches none of the three and is constant.
+        bool const is_time = (tok == "time" || tok == "t");
+        bool const is_global_obs =
+            model.observable_index.count(tok) != 0U &&
+            std::find(gf.local_observable_names.begin(), gf.local_observable_names.end(), tok) ==
+                gf.local_observable_names.end();
+        bool const via_callee = model.function_index.count(tok) != 0U && self(tok, self);
+        if (is_time || is_global_obs || via_callee)
+          dep = true;
+      }
+      fn_verdict[fname] = dep;
+      return dep;
+    };
+
+    // The DOR1 normalization clears the name on whichever side it turned
+    // into the constant 1, so an empty name is exactly "no factor here".
+    for (auto& rule : model.rules) {
+      const auto& rl = rule.rate_law;
+      if (!rl.is_local && rl.type != RateLawType::FunctionProduct)
+        continue;
+      rule.rate_law.local_rate_tracks_global =
+          (!rl.function_name.empty() && tracks_global(rl.function_name, tracks_global)) ||
+          (!rl.function_name_b.empty() && tracks_global(rl.function_name_b, tracks_global));
+    }
+  }
+
   // Scan for unsupported features if requested
   if (unsupported_out) {
     *unsupported_out = scan_unsupported(*model_node);
@@ -2073,6 +2185,14 @@ Model load_model(const std::string& xml_path,
                "rules, and rules with exclude/include constraints are deferred; "
                "the rule would be silently dropped. Pass --ignore-unsupported to "
                "run anyway without that rule."});
+    for (const auto& what : mixed_scope_observables)
+      unsupported_out->push_back(
+          {Severity::Warn, "Function/Expression",
+           "Observable " + what +
+               " is referenced both applied to the function's tag and bare, i.e. "
+               "at local and at global scope in one expression. RM evaluates it "
+               "at local scope throughout; the bare reference reads the local "
+               "value rather than the system-wide count."});
   }
 
   return model;

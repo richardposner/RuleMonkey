@@ -84,6 +84,25 @@ add_test(
         ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_local_fcn_bimol.xml
 )
 
+# Observable scope inside a local function (issue #38): an observable applied
+# to the function's tag is local, a bare one is global, and BNG2's XML marks
+# both identically — the split only survives in the <Expression>.  RM
+# localized every one of them, so a bare observable read 0 and its rule went
+# silently inert.  Covers the unimolecular and bimolecular propensity paths,
+# one observable used at both scopes across two functions (which the union of
+# per-function local sets cannot express), a bare observable whose value moves
+# mid-run, and the warning for both scopes inside a single function.
+add_executable(local_fcn_global_obs_test cpp/local_fcn_global_obs_test.cpp)
+target_link_libraries(local_fcn_global_obs_test PRIVATE rulemonkey)
+
+add_test(
+    NAME local_fcn_global_obs_test
+    COMMAND local_fcn_global_obs_test
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_local_fcn_global_obs.xml
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_local_fcn_mixed_scope.xml
+        ${_rulemonkey_test_dir}/cpp/local_fcn_mixed_ref_model.xml
+)
+
 # save_state / load_state regression: round-trip a mid-run snapshot
 # back into a fresh simulator and verify (a) the continuation matches
 # an uninterrupted run, (b) loading state from a structurally

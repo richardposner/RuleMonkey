@@ -9,6 +9,76 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A bare (global) observable inside a local function was evaluated at
+  local scope, so the rule silently never fired (issue #38).** Inside a
+  local function, an observable applied to the tag — `Mod(x)` — is local,
+  and one written bare — `Vol` — is the ordinary system-wide count. RM
+  treated **every** observable a local function referenced as local and
+  evaluated it at the tagged molecule. A bare observable is typically a
+  system-wide quantity — a volume proxy, a total count, a clock — and so is
+  essentially never present in the tagged molecule's own complex: it read
+  0, the product went to 0, the propensity went to 0, and the rule never
+  fired at all. No warning, mass conserved, trajectory flat — the same
+  signature as #34, and not specific to it: a plain unimolecular rule
+  `A(m~0)%x -> A(m~1)  flip(x)` with `flip(x) = kf*Obs_Src*A0(x)` held 500
+  molecules at 500 where BNG2's ODE reaches 67.7.
+
+  The XML cannot answer the question. BNG2 emits both kinds identically —
+  `<Reference name="Cnt_Wz" type="Observable"/>` next to
+  `<Reference name="Obs_Src" type="Observable"/>` — and the distinction
+  survives only in the `<Expression>`: an observable is local iff it
+  appears applied to one of that function's own `<Argument id=>` names.
+  The loader now classifies from the expression, per function, so a chain
+  of local functions is resolved against each callee's own parameter. BNG2
+  states the intended scoping directly in the network it generates —
+  `_R_local1() ((kc*Obs_Src)*1)`, the bare observable folded in as a global
+  and the tagged one resolved per instance — and RM now matches it.
+
+  Three things fall out of the corrected classification:
+
+  - The **rate-dependent closure** stops excluding bare observables, so
+    they are globally refreshed after each event instead of only at sample
+    points. Both consumers of the local-observable set are fed from the one
+    classification.
+  - A local rate that reads a bare observable is now **rescanned after
+    every event**. That observable moves for every instance at once with no
+    molecule marked affected, so the affected-molecule delta path cannot
+    see it; without the rescan every instance keeps the rate it had when
+    the observable was last read. Marking is narrow — a local rate built
+    from tagged observables and constants alone keeps the delta path, which
+    is every model in all three corpora, so no existing model takes a
+    per-event rescan.
+  - RM holds one value slot per observable, so the union of the
+    per-function local sets can only stand in for them while they agree.
+    When one local function reads an observable that another localizes,
+    each function is now given its own view of the observable slots
+    immediately before it is evaluated. Models that do not mix the two
+    scopings keep the single-override fast path unchanged.
+
+  An observable written **both ways inside one function** (`O + O(x)`)
+  wants two values from one slot and cannot be represented. RM resolves it
+  at local scope — the reading that needs the machinery — and emits a
+  load-time warning naming the function and observable, rather than
+  mis-evaluating it in silence.
+
+  Blast radius: a scan of all 199 model XMLs across the three corpora finds
+  67 local functions and **zero** referencing a bare observable, `time`, or
+  a global function — the same coverage hole that hid #34 and #36. So the
+  change is inert for every existing model, and the new coverage is what
+  exercises it: feature-coverage models `ft_local_fcn_global_obs`
+  (unimolecular and bimolecular DOR1 arms, each with a subpopulation whose
+  tagged observable is 0 so the two possible scope errors separate) and
+  `ft_local_fcn_mixed_scope` (one observable at both scopes across two
+  functions, plus a bare observable that moves mid-run), and the
+  `local_fcn_global_obs_test` ctest against exact analytic oracles.
+
+  The pinned NFsim 2.9.3 gets the classification right but never refreshes
+  a bare observable: on `ft_local_fcn_mixed_scope` its initial slope is
+  exactly `kb*Aoff(0)` and the whole run then proceeds at that t=0 value,
+  giving 27.1 against the true 56.5. BNG2's ODE (56.49) and SSA (54.4)
+  agree with each other and with RM, so that model joins the ODE-verdict
+  set. This fix and #34 together unblock lanl/bngsim#301.
+
 - **A bimolecular rule with a local-function rate fired once and then went
   inert (issue #34).** For a rule like
   `S(s~0) + E()%x -> S(s~1) + E()%x  lf(x)` — NFsim's DOR1, one tagged

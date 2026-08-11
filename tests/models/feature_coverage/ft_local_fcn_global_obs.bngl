@@ -1,0 +1,102 @@
+# Feature: a BARE observable inside a local function is GLOBAL.
+# Tests:   the two scopes an observable can carry inside one local-function
+#          expression, on both propensity paths:
+#            RU  unimolecular local-function rule   uflip(x) = kf*Vol*Uphos(x)
+#            RB  bimolecular DOR1 rule              ecat(x)  = kc*Vol*Mod(x)
+#          `Vol` is written bare, so it is the system-wide count (50).
+#          `Uphos(x)` / `Mod(x)` are applied to the function's own tag, so
+#          they are evaluated at the tagged molecule.  BNG2 states the split
+#          in its generated network, folding the bare observable into the
+#          rate expression and resolving only the tagged one per instance:
+#            _RU_local1() ((kf*Vol)*1)
+#
+# Oracle:  deliberately unambiguous, and able to tell the two possible
+#          scope errors apart.
+#            - Localizing the bare observable (the issue #38 defect) reads
+#              `Vol` = 0 at a U or E molecule, so BOTH rules go inert and
+#              Uoff / Sub stay flat at their seed values.
+#            - Globalizing the tagged observable instead would read
+#              Uphos = 400 and Mod = 20 for every instance, running RU at
+#              8.0/molecule and RB at 0.4/substrate — both essentially
+#              instantaneous.
+#          Each arm carries a subpopulation whose TAGGED observable is 0 —
+#          U(p~0) and E(e~0) — and those instances must never react, which
+#          is what pins the tagged half while the bare half is under test.
+#          The enzyme context is a HETERODIMER E(d!1).F(d!1), so `E()`
+#          matches each complex exactly once and the per-molecule vs
+#          per-complex context-multiplicity question (issue #33) cannot
+#          reach the bimolecular arm.
+#
+# Tier:    network-free.
+# Expected (Vol = 50 throughout — nothing touches V):
+#            RU  reactive U:  kf*Vol*1 = 4e-4*50 = 0.02 per molecule
+#                inert    U:  Uphos(x) = 0        -> never fires
+#                Uoff(t) = 200 + 400*exp(-0.02 t);  Uoff(60) = 320.5
+#            RB  tagged side: 20 E(e~1) at kc*Vol*1 = 1e-3 each -> 0.02
+#                             20 E(e~0) at 0
+#                Sub(t) = 600*exp(-0.02 t);         Sub(60)  = 180.7
+#          Each substrate is then an exact binomial death process.
+# Regression: RM swept every <Reference type="Observable"> of a
+#          function-with-arguments into its local set, because BNG2's XML
+#          marks the two kinds identically and only the <Expression>
+#          distinguishes them.  A bare observable was therefore evaluated
+#          at the tagged molecule, read 0, and zeroed the propensity — no
+#          warning, mass conserved, trajectory flat.
+# invariant: conserved Vol = 50
+# invariant: conserved Uphos = 400
+# invariant: conserved Mod = 20
+
+begin model
+begin parameters
+    kf    4.0e-4
+    kc    2.0e-5
+end parameters
+
+begin molecule types
+    V()
+    U(m~0~1,p~0~1)
+    S(s~0~1)
+    E(d,e~0~1)
+    F(d)
+end molecule types
+
+begin seed species
+    V()                  50
+    U(m~0,p~1)          400
+    U(m~0,p~0)          200
+    S(s~0)              600
+    E(d!1,e~1).F(d!1)    20
+    E(d!1,e~0).F(d!1)    20
+end seed species
+
+begin observables
+    # Referenced BARE by both local functions -> system-wide count.
+    Molecules  Vol    V()
+    # Referenced applied to the tag -> evaluated at the tagged molecule.
+    Molecules  Uphos  U(p~1)
+    Molecules  Mod    E(e~1)
+    Molecules  Uoff   U(m~0)
+    Molecules  Sub    S(s~0)
+end observables
+
+begin functions
+    # Vol bare (global, = 50); Uphos(x) / Mod(x) tagged (local, 0 or 1).
+    uflip(x) = kf*Vol*Uphos(x)
+    ecat(x)  = kc*Vol*Mod(x)
+end functions
+
+begin reaction rules
+    # Unimolecular: no DOR machinery involved, so this arm shows the defect
+    # predates the bimolecular local-function work of issue #34.
+    # The tag is repeated on the product so BNG2 maps the molecule through
+    # the rule; without it the untouched `p` component reads as a missing
+    # component on a newly created molecule.
+    RU: U(m~0)%x -> U(m~1)%x                 uflip(x)
+    # Bimolecular DOR1: tagged enzyme, untagged substrate.
+    RB: S(s~0) + E()%x  ->  S(s~1) + E()%x   ecat(x)
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>60,n_steps=>60})
+end actions
