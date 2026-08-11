@@ -77,15 +77,18 @@ The runtime severity model is two-level:
     which is how RM loads it. The tag may sit on either reactant and on
     a single- or multi-molecule pattern.
     When both reactant patterns are structurally identical
-    (`A(b)%x + A(b) -> ...`) the construct is genuinely ambiguous, and
-    the two reference engines resolve it differently: for a pair `(a,b)`
-    NFsim **sums** the two tag labelings (`f(a) + f(b)`) while BNG2's
-    network expansion **averages** them, emitting both orderings and
-    applying `symmetry_factor="0.5"` to each. That is an exact factor of
-    two. **RM follows NFsim**, per its parity baseline — see issue #36,
-    which is open on which convention is right and whether the construct
-    deserves a load-time warning instead. The same rule *without* the tag
-    is not ambiguous and does take the 1/2, on both engines and in RM.
+    (`A(b)%x + A(b) -> ...`), BNG2 emits `symmetry_factor="0.5"` and RM
+    applies it, like it does on every other rate law. The propensity the
+    local paths build from `Σ w·f(mol)` is the *ordered* distinct-pair
+    sum, and the 0.5 converts it to unordered.
+    Note that the **pinned NFsim release disagrees here, and is wrong**:
+    it constructs every rate law except the `setBaseRate()` ones with
+    `baseRate = 1` and never recovers the symmetry factor, so a symmetric
+    rule runs 2x fast. That is fixed upstream in bngsim's vendored NFsim
+    (lanl/bngsim#195, fixed in #278), whose patch names "global function,
+    local function (DOR), function product, MM" as the affected set.
+    `ft_local_fcn_bimol_sym` is verdicted against BNG2's ODE for that
+    reason.
   - **Global function of a local function is ill-defined.** A global
     (no-argument) function that references a *local* function has no
     molecule context at global scope, so its exposed value (`.gdat`

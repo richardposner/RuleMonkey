@@ -81,7 +81,7 @@ target_link_libraries(local_fcn_bimol_test PRIVATE rulemonkey)
 add_test(
     NAME local_fcn_bimol_test
     COMMAND local_fcn_bimol_test
-        ${_rulemonkey_test_dir}/models/feature_coverage/xml/nf_local_fcn_bimol.xml
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_local_fcn_bimol.xml
 )
 
 # save_state / load_state regression: round-trip a mid-run snapshot

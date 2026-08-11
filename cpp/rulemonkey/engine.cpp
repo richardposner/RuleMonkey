@@ -2606,6 +2606,28 @@ double nary_distinct_sum(const NaryState& ns) {
   return (d > 0) ? d : 0.0;
 }
 
+// Reaction-center symmetry factor for the local-rate propensity paths.
+//
+// `compute_propensity` multiplies BNG2's `symmetry_factor` into every rate
+// law it handles, but the local-function and FunctionProduct paths compute
+// their propensity directly from Σ w·f(mol) and used to skip it.  A
+// symmetric rule then ran at `1/symmetry_factor` times its intended rate —
+// 2x for a homodimer.
+//
+// Stock NFsim has the identical defect, and for the identical reason: every
+// rate law except the ones routing through `setBaseRate()` is constructed
+// with `baseRate=1` and never recovers the factor.  bngsim's vendored NFsim
+// patches it in `ReactionClass::ReactionClass` (lanl/bngsim#195, fixed in
+// #278) — the patch comment names "global function, local function (DOR),
+// function product, MM" as the affected set.  BNG2.pl's network expansion
+// has always applied it.  RM follows BNG2.
+//
+// The homodimer branch of compute_propensity deliberately does NOT apply it
+// (its `/2` already is the 0.5, and multiplying would double-count).  The
+// local paths have no such implicit halving: for a DOR pair the propensity
+// is the *ordered* distinct-pair sum, and 0.5 converts it to unordered.
+double dor_symmetry(const Rule& rule) { return rule.symmetry_factor; }
+
 // Compute propensity for a rule given its accumulated state.
 // embedding_correction_a/b correct for overcounting due to permutations
 // of identical non-reacting components in the pattern.
@@ -4430,7 +4452,7 @@ struct Engine::Impl {
           rs.local_propensity_b_total += md.local_propensity_b;
         }
       }
-      new_propensity = rs.local_propensity_total * rs.local_propensity_b_total;
+      new_propensity = rs.local_propensity_total * rs.local_propensity_b_total * dor_symmetry(rule);
     } else if (rs.has_local_rates && rule.molecularity <= 1) {
       // Local-rate rule: propensity = sum of per-molecule (count_a * local_rate)
       rs.local_propensity_total = 0;
@@ -4453,7 +4475,7 @@ struct Engine::Impl {
         }
         rs.local_propensity_total += md.local_propensity;
       }
-      new_propensity = rs.local_propensity_total;
+      new_propensity = rs.local_propensity_total * dor_symmetry(rule);
     } else {
       double const rate = evaluate_rate(rule);
       new_propensity = compute_propensity(rs, rule, rate);
@@ -6261,9 +6283,10 @@ struct Engine::Impl {
         incr_profile_.propensity_recomputes++;
       double new_propensity;
       if (rule.rate_law.type == RateLawType::FunctionProduct) {
-        new_propensity = rs.local_propensity_total * rs.local_propensity_b_total;
+        new_propensity =
+            rs.local_propensity_total * rs.local_propensity_b_total * dor_symmetry(rule);
       } else if (rs.has_local_rates) {
-        new_propensity = rs.local_propensity_total;
+        new_propensity = rs.local_propensity_total * dor_symmetry(rule);
       } else {
         double const rate = evaluate_rate(rule);
         new_propensity = compute_propensity(rs, rule, rate);

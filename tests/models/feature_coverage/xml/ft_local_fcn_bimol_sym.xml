@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Created by BioNetGen 2.9.3  -->
 <sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
-  <model id="nf_local_fcn_bimol_sym">
+  <model id="ft_local_fcn_bimol_sym">
     <ListOfParameters>
       <Parameter id="kc" type="Constant" value="0.001" expr="1.0e-3"/>
     </ListOfParameters>

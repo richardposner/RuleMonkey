@@ -168,6 +168,15 @@ NFSIM_UNRELIABLE = {
     # unit-tested against NFsim's own numbers separately.
     "ft_energy_arrhenius",
     "ft_energy_arrhenius_coop",
+    # Stock NFsim drops BNG2's symmetry_factor on every rate law that does
+    # not route through setBaseRate() — global function, local function
+    # (DOR), FunctionProduct, MM — so a symmetric rule runs at
+    # 1/symmetry_factor times its intended rate (2x for a homodimer).
+    # Fixed upstream in bngsim's vendored NFsim (lanl/bngsim#195 -> #278),
+    # not in our pinned release, which reads 2x fast on this model.  BNG2's
+    # network expansion has always applied the factor, so ODE is the verdict
+    # reference and RM matches it.
+    "ft_local_fcn_bimol_sym",
 }
 
 # Models for which no third-party simulator produces a usable

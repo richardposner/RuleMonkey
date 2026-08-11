@@ -11,7 +11,7 @@
 // with no clamp warning and a conserved, entirely plausible-looking
 // trajectory.
 //
-// Model: tests/models/feature_coverage/nf_local_fcn_bimol.bngl, four
+// Model: tests/models/feature_coverage/ft_local_fcn_bimol.bngl, four
 // independent substrates driven by the four shapes a single tag can take:
 //
 //   RB  Sa(s~0) + E()%x                 tag on pattern 1, molecule scope
@@ -21,9 +21,10 @@
 //
 // The enzyme context is a heterodimer E(d!1).F(d!1) on purpose: `E()` matches
 // each complex exactly once, so the per-molecule vs per-complex context
-// multiplicity that NFsim and BNG2 disagree about (issue #33) cannot reach
-// any arm.  NFsim, BNG2's network → ODE and RM all agree on this model, so
-// what it pins is the DOR1 propensity and nothing else.
+// multiplicity of issue #33 (lanl/bngsim#281 — the pinned NFsim over-counts a
+// symmetric *context* pattern N-fold, where BNG2 counts it once) cannot reach
+// any arm.  BNG2's network → ODE is the oracle and RM matches it, with NFsim
+// agreeing here too, so what this pins is the DOR1 propensity and nothing else.
 //
 // Nothing consumes or modifies E or F, so each substrate sees a constant
 // per-molecule hazard c = Σ_t f(t) over the tagged reactant's matches, and
@@ -152,7 +153,7 @@ void test_scope_separation(const std::string& xml) {
 
 int main(int argc, char* argv[]) {
   if (argc < 2) {
-    std::fprintf(stderr, "Usage: local_fcn_bimol_test <nf_local_fcn_bimol.xml>\n");
+    std::fprintf(stderr, "Usage: local_fcn_bimol_test <ft_local_fcn_bimol.xml>\n");
     return 2;
   }
   std::string const xml = argv[1];
