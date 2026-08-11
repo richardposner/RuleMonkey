@@ -179,6 +179,7 @@ public:
     mol.complex_id = cx;
     complex_members_[cx] = {mol_id};
     mark_cx_dirty(cx); // a freshly born complex has no cached canonical label
+    cx_moves_.push_back(mol_id);
 
     type_mol_index_[type_index].push_back(mol_id);
     return mol_id;
@@ -224,6 +225,7 @@ public:
     mol.active = false;
     mol.comp_ids.clear();
     free_mol_ids_.push_back(mol_id);
+    cx_moves_.push_back(mol_id);
   }
 
   void set_state(int comp_id, int new_state) {
@@ -483,6 +485,7 @@ private:
     for (int const mid : merge) {
       molecules_[mid].complex_id = cx_keep;
       keep.push_back(mid);
+      cx_moves_.push_back(mid);
     }
     complex_members_.erase(cx_merge);
     cxs_died_.push_back(cx_merge);
@@ -644,6 +647,7 @@ private:
       } else {
         molecules_[mid].complex_id = new_cx;
         new_members.push_back(mid);
+        cx_moves_.push_back(mid);
       }
     }
 
@@ -699,6 +703,27 @@ public:
   void consume_dead_cxs(std::vector<int>& out) {
     out.swap(cxs_died_);
     cxs_died_.clear();
+  }
+
+  // Molecules whose complex membership changed since the observer last drained
+  // this — a merge moving one side's members, a split moving the severed
+  // piece, a birth, or a death.  Issue #33's per-complex reactant tallies are
+  // keyed by complex, so they have to learn about these: a molecule far from
+  // the edited bond has its complex reassigned without ever entering
+  // fire_rule's affected-molecule BFS, which is exactly what a tally keyed off
+  // `affected` would miss.
+  //
+  // Ids only — the reader re-reads the destination from the pool, so this list
+  // never has to be replayed in order and a molecule that moved twice in one
+  // event settles correctly either way.  The mutators that append here already
+  // walk the molecules they are moving, so this costs a push_back and no
+  // asymptotics.  Kept unconditional (rather than gated on "some rule needs
+  // it") so the pool has no dependency on rule classification; the engine
+  // clears it in one branch when no rule counts per complex.
+  std::vector<int> cx_moves_;
+  void consume_cx_moves(std::vector<int>& out) {
+    out.swap(cx_moves_);
+    cx_moves_.clear();
   }
 
   // Cx IDs whose cached canonical label is stale — a structural mutator
@@ -2293,6 +2318,15 @@ struct PerMolRuleData {
   // value" from "default-initialized sentinel".  Bumped back to true on
   // every recompute; never reset to false during a run.
   bool cache_init = false;
+  // Complex this molecule is currently counted in by the pure-context tally
+  // of reactant slot A / B (issue #33), or -1 when it is not in that tally at
+  // all.  This is the tally's own record, deliberately NOT re-derived from
+  // `pool.complex_of(mid)`: a molecule can change complex without this rule
+  // ever recomputing its count, and the removal has to be applied to the
+  // complex the hit was actually credited to.  Unused (left -1) for slots the
+  // rule transforms.
+  int percx_cx_a = -1;
+  int percx_cx_b = -1;
 };
 
 // ---------------------------------------------------------------------------
@@ -2517,6 +2551,52 @@ bool nary_shape_supported(const Rule& rule) {
   return true;
 }
 
+// Per-complex tally for one pure-context reactant slot (issue #33).
+//
+// BioNetGen gives a reactant pattern the rule does not transform ONE reaction
+// instance per matching complex, however many molecules inside that complex
+// match: every embedding yields the identical reaction, so there is only one.
+// Recomputing that count by walking the matched molecules and de-duplicating
+// their complex ids is O(N) on the propensity hot path, and measurably so —
+// 32x on `r08` (`DNA -> DNA + RNA`, `RNA -> RNA + Protein`), where the context
+// pattern's population is the one that grows.  So it is maintained instead:
+// `list.size()` is the count, delta-updated as molecules start and stop
+// matching and as complexes merge and split.
+//
+// `rep` is the instance that actually fires.  The count and the draw have to
+// agree: a bimolecular rule rejects draws that put both reactants in the same
+// complex, and that rejection only offsets the propensity when the reactant is
+// drawn the same way it is counted.  Counting per complex while drawing per
+// molecule leaves a systematic bias wherever complexes hold unequal numbers of
+// context matches (tests/bng_oracle/models/context_sampler.bngl pins it).
+// Which instance is chosen is otherwise immaterial — the rule changes nothing
+// about it — so `rep` is simply the lowest live matching molecule id, which
+// makes it a function of the pool state rather than of event history.
+//
+// `rate_sum` is the DOR case: a pure-context pattern may still carry a local
+// function tag, and then the collapsed instances have different rates.  BNG2
+// cannot arbitrate — its network expansion has no local functions — so this
+// follows bngsim's patched NFsim (perComplexRateFactorSum) and prices one
+// representative per complex, which is also the instance `rep` fires.
+struct PerCxTally {
+  struct Entry {
+    int hits = 0;          // matching molecules of this slot inside the complex
+    int rep = -1;          // lowest live matching mol id
+    int pos = -1;          // index into `list`
+    double rep_rate = 0.0; // rep's local rate, as currently summed into rate_sum
+  };
+  std::unordered_map<int, Entry> entries;
+  std::vector<int> list; // complexes with hits > 0, dense, for O(1) uniform draw
+  double rate_sum = 0.0; // Σ rep_rate over `list` (local-rate rules only)
+
+  int size() const { return static_cast<int>(list.size()); }
+  void clear() {
+    entries.clear();
+    list.clear();
+    rate_sum = 0.0;
+  }
+};
+
 struct RuleState {
   std::vector<PerMolRuleData> mol_data; // indexed by mol_id
   NaryState nary;                       // >= 3 reactant patterns (issue #24)
@@ -2539,9 +2619,16 @@ struct RuleState {
   double local_propensity_b_total = 0.0;
   double embedding_correction_a = 1.0; // overcounting correction for pattern A
   double embedding_correction_b = 1.0; // overcounting correction for pattern B
-  FenwickTree fenwick_a;               // O(log N) sampler for slot A (if active)
-  FenwickTree fenwick_b;               // O(log N) sampler for slot B (if active)
-  bool use_fenwick_a = false;          // true if type population > FENWICK_THRESHOLD
+  // Reactant pattern A / B is pure context — no operation in this rule touches
+  // it — so it is counted once per matching complex rather than once per
+  // matching molecule (issue #33).  See PerCxTally.
+  bool per_complex_a = false;
+  bool per_complex_b = false;
+  PerCxTally percx_a;
+  PerCxTally percx_b;
+  FenwickTree fenwick_a;      // O(log N) sampler for slot A (if active)
+  FenwickTree fenwick_b;      // O(log N) sampler for slot B (if active)
+  bool use_fenwick_a = false; // true if type population > FENWICK_THRESHOLD
   bool use_fenwick_b = false;
   bool use_multi_mol_count = false;     // true for multi-mol reactant A has >1 molecule
   bool use_multi_mol_count_b = false;   // true for multi-mol bimolecular reactant B
@@ -2631,9 +2718,13 @@ double dor_symmetry(const Rule& rule) { return rule.symmetry_factor; }
 // Compute propensity for a rule given its accumulated state.
 // embedding_correction_a/b correct for overcounting due to permutations
 // of identical non-reacting components in the pattern.
-double compute_propensity(const RuleState& rs, const Rule& rule, double rate) {
+double compute_propensity(const RuleState& rs, const Rule& rule, double rate, double a_cx = -1.0,
+                          double b_cx = -1.0) {
   double const ca = rs.embedding_correction_a;
   double const cb = rs.embedding_correction_b;
+  // Pure-context reactant patterns count complexes, not molecules (issue #33).
+  double const a_used = (a_cx >= 0.0) ? a_cx : (rs.a_total / ca);
+  double const b_used = (b_cx >= 0.0) ? b_cx : (rs.b_total / cb);
 
   if (rule.molecularity == 0) {
     // Zero-order synthesis: propensity is just the rate
@@ -2665,8 +2756,8 @@ double compute_propensity(const RuleState& rs, const Rule& rule, double rate) {
   if (rule.rate_law.type == RateLawType::MM) {
     if (rule.molecularity != 2)
       return 0;
-    double const S = rs.a_total / ca;
-    double const E = rs.b_total / cb;
+    double const S = a_used;
+    double const E = b_used;
     if (S <= 0 || E <= 0)
       return 0;
     double const kcat = rule.rate_law.mm_kcat;
@@ -2684,10 +2775,10 @@ double compute_propensity(const RuleState& rs, const Rule& rule, double rate) {
   // (matching NFsim's FunctionalRxnClass / BasicRxnClass behavior).
   if (rule.rate_law.is_total_rate) {
     if (rule.molecularity <= 1) {
-      if (rs.a_total <= 0)
+      if (a_used <= 0)
         return 0;
     } else {
-      if (rs.a_total <= 0 || rs.b_total <= 0)
+      if (a_used <= 0 || b_used <= 0)
         return 0;
     }
     return rate;
@@ -2697,12 +2788,12 @@ double compute_propensity(const RuleState& rs, const Rule& rule, double rate) {
     // Unimolecular: multiply by symmetry_factor to correct for identical-
     // molecule permutations in multi-molecule patterns (e.g., M(a!1).M(a!1)
     // has 2 seed embeddings per dimer; sf=0.5 gives propensity = rate per dimer).
-    return (rs.a_total / ca) * rate * rule.symmetry_factor;
+    return a_used * rate * rule.symmetry_factor;
   }
 
   // Bimolecular — apply corrections to the per-pattern totals.
-  double const a_eff = rs.a_total / ca;
-  double const b_eff = rs.b_total / cb;
+  double const a_eff = a_used;
+  double const b_eff = b_used;
   if (!rule.same_components) {
     // Heterodimer (A+B different types, or A+A with different bond-target
     // component names).  symmetry_factor is 1 in BNGL.  After the sampler
@@ -3612,6 +3703,11 @@ struct Engine::Impl {
       rescan_all_molecules_for_rule(ri);
     recompute_total_propensity();
     init_incremental_observables();
+    // Every pure-context tally was just rebuilt from the live pool, so the
+    // moves this mutation logged have nothing left to say.  Draining them at
+    // the next event would be harmless (percx_sync is idempotent) but would
+    // let the list grow across a paused session that adds many species.
+    pool.cx_moves_.clear();
   }
 
   // Embedding overcounting is now corrected at count time inside
@@ -3737,6 +3833,108 @@ struct Engine::Impl {
                 rs.reacting_local_b.push_back(ci);
           }
           flat_base += nc;
+        }
+      }
+
+      // Pure-context reactant patterns (issue #33).  A reactant pattern that
+      // NO operation in this rule touches is context: every embedding of it
+      // yields the identical reaction, so BNG's network expansion emits one
+      // reaction instance per matching COMPLEX rather than one per matching
+      // molecule.  Derived here from the flat reactant-pattern component
+      // indices the ops already carry — RM stores no per-reactant
+      // transformation list, but the mapping op → pattern is exact.
+      //
+      // The classification must be conservative: an operation whose reactant
+      // endpoint failed to resolve at load leaves no trace on any pattern, and
+      // silently reading that as "context" would halve a real rule's rate.  So
+      // an unresolved endpoint disables the optimization for the whole rule.
+      {
+        rs.per_complex_a = false;
+        rs.per_complex_b = false;
+        int const n_rp = static_cast<int>(rule.reactant_pattern_starts.size());
+        int const n_rp_mols = static_cast<int>(rule.reactant_pattern.molecules.size());
+        // pattern molecule index -> reactant pattern index
+        auto rp_of_mol = [&](int mi) -> int {
+          int p = -1;
+          for (int i = 0; i < n_rp; ++i)
+            if (rule.reactant_pattern_starts[i] <= mi)
+              p = i;
+          return p;
+        };
+        // flat reactant component index -> pattern molecule index
+        auto mol_of_flat = [&](int flat) -> int {
+          int base = 0;
+          for (int mi = 0; mi < n_rp_mols; ++mi) {
+            int const nc = static_cast<int>(rule.reactant_pattern.molecules[mi].components.size());
+            if (flat >= base && flat < base + nc)
+              return mi;
+            base += nc;
+          }
+          return -1;
+        };
+        std::vector<char> transformed(std::max(n_rp, 0), 0);
+        bool resolvable = n_rp > 0;
+        auto touch_flat = [&](int flat) {
+          int const mi = mol_of_flat(flat);
+          int const p = (mi >= 0) ? rp_of_mol(mi) : -1;
+          if (p < 0)
+            resolvable = false;
+          else
+            transformed[p] = 1;
+        };
+        for (auto& op : rule.operations) {
+          switch (op.type) {
+          case OpType::StateChange:
+            if (op.comp_flat >= 0)
+              touch_flat(op.comp_flat);
+            else
+              resolvable = false;
+            break;
+          case OpType::AddBond:
+          case OpType::DeleteBond:
+            // Each endpoint is either a reactant component (transforms that
+            // pattern) or a component of a molecule the rule synthesizes
+            // (product-side only, transforms no reactant pattern).  Anything
+            // else is unresolved.
+            if (op.comp_flat_a >= 0)
+              touch_flat(op.comp_flat_a);
+            else if (op.product_mol_a < 0)
+              resolvable = false;
+            if (op.comp_flat_b >= 0)
+              touch_flat(op.comp_flat_b);
+            else if (op.product_mol_b < 0)
+              resolvable = false;
+            break;
+          case OpType::DeleteMolecule: {
+            int const mi = op.delete_pattern_mol_idx;
+            int const p = (mi >= 0) ? rp_of_mol(mi) : -1;
+            if (p < 0)
+              resolvable = false;
+            else
+              transformed[p] = 1;
+            break;
+          }
+          case OpType::AddMolecule:
+            break; // product side only
+          }
+        }
+        if (resolvable) {
+          rs.per_complex_a = (transformed[0] == 0);
+          if (n_rp > 1)
+            rs.per_complex_b = (transformed[1] == 0);
+        }
+        // Scoped to the two-slot path.  A rule with three or more reactant
+        // patterns takes the n-ary machinery, whose propensity is a
+        // distinct-tuple sum over the partition lattice of the slots — defined
+        // over MOLECULES, so a per-complex slot needs that sum re-derived
+        // rather than a count substituted into it.  Left per-molecule here and
+        // tracked separately (GH #42); the guard is explicit so a pure-context
+        // n-ary slot cannot half-enter this path — the n-ary rescan does not
+        // build a tally, and an empty tally read as a count would take the
+        // rule to zero propensity.
+        if (n_rp > 2 || rule.molecularity > 2) {
+          rs.per_complex_a = false;
+          rs.per_complex_b = false;
         }
       }
 
@@ -4011,6 +4209,36 @@ struct Engine::Impl {
       int const d = pattern_diameter(model.rules[ri].reactant_pattern);
       max_pattern_depth = std::max(d, max_pattern_depth);
     }
+
+    // Bucket the pure-context slots by seed molecule type (issue #33), so the
+    // per-event complex-move drain can skip a molecule whose type no rule
+    // counts per complex — which in a model with no pure-context reactant at
+    // all is every molecule, making the whole mechanism free there.
+    percx_slots_by_type.assign(model.molecule_types.size(), {});
+    any_percx = false;
+    for (int ri = 0; ri < n_rules; ++ri) {
+      auto& rule = model.rules[ri];
+      auto& rs = rule_states[ri];
+      for (int slot = 0; slot < 2; ++slot) {
+        if (!(slot == 0 ? rs.per_complex_a : rs.per_complex_b))
+          continue;
+        int const seed =
+            (slot == 0)
+                ? ((!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0)
+                : ((rule.reactant_pattern_starts.size() > 1) ? rule.reactant_pattern_starts[1]
+                                                             : -1);
+        if (seed < 0 || seed >= static_cast<int>(rule.reactant_pattern.molecules.size()))
+          continue;
+        int const ti = rule.reactant_pattern.molecules[seed].type_index;
+        if (ti < 0 || ti >= static_cast<int>(percx_slots_by_type.size()))
+          continue;
+        percx_slots_by_type[ti].emplace_back(ri, slot);
+        any_percx = true;
+      }
+    }
+    // The pool appends to its move side-channel unconditionally; if nothing
+    // reads it, drop whatever accumulated during seeding.
+    pool.cx_moves_.clear();
 
     // Precompute have_local_rules_ flag (Fix 3)
     have_local_rules_ = false;
@@ -4351,6 +4579,208 @@ struct Engine::Impl {
     return -1;
   }
 
+  // --- Pure-context per-complex tallies (issue #33) -------------------------
+  //
+  // Every mutation of a pure-context slot's membership funnels through
+  // percx_sync(), which compares the tally's own record of where a molecule is
+  // counted (PerMolRuleData::percx_cx_*) against where it should be counted
+  // now.  Both callers — a recomputed match count, and a molecule whose
+  // complex changed underneath it — are the same operation from the tally's
+  // point of view, so there is one path and not two.
+
+  // Which (rule, slot) pairs count per complex, bucketed by the slot's seed
+  // molecule type.  Empty for every type in a model whose rules all transform
+  // their reactants, which is what keeps the drain below free there.
+  std::vector<std::vector<std::pair<int, int>>> percx_slots_by_type;
+  bool any_percx = false;
+  std::vector<int> percx_moved_scratch;
+
+  static PerCxTally& tally_of(RuleState& rs, int slot) {
+    return (slot != 0) ? rs.percx_b : rs.percx_a;
+  }
+  static int& percx_cx_of(PerMolRuleData& md, int slot) {
+    return (slot != 0) ? md.percx_cx_b : md.percx_cx_a;
+  }
+  static int count_of(const PerMolRuleData& md, int slot) {
+    return (slot != 0) ? md.count_b : md.count_a;
+  }
+  // The local rate priced for this molecule on this slot.  Zero for a rule
+  // with no local function, which keeps rate_sum trivially 0 there.
+  static double percx_rate_of(const RuleState& rs, const PerMolRuleData& md, int slot) {
+    if (!rs.has_local_rates)
+      return 0.0;
+    return (slot != 0) ? md.local_rate_b : md.local_rate;
+  }
+
+  // Re-sum `cx`'s representative rate into rate_sum.  Called on every rep
+  // change and whenever the sitting rep's local rate is recomputed.
+  static void percx_refresh_rate(RuleState& rs, int slot, int cx) {
+    PerCxTally& t = tally_of(rs, slot);
+    auto it = t.entries.find(cx);
+    if (it == t.entries.end())
+      return;
+    double const nv = (it->second.rep >= 0 && it->second.rep < static_cast<int>(rs.mol_data.size()))
+                          ? percx_rate_of(rs, rs.mol_data[it->second.rep], slot)
+                          : 0.0;
+    t.rate_sum += nv - it->second.rep_rate;
+    it->second.rep_rate = nv;
+  }
+
+  // Lowest molecule id this slot currently counts inside `cx`.  Only runs when
+  // the sitting rep drops out, which is rare next to the count updates.
+  int percx_find_rep(RuleState& rs, int slot, int cx) const {
+    int best = -1;
+    for (int const m : pool.molecules_in_complex(cx)) {
+      if (m >= static_cast<int>(rs.mol_data.size()))
+        continue;
+      // Membership is read off the tally's own record rather than off the
+      // match count, so a molecule that has moved but not yet been re-synced
+      // cannot be promoted into a complex it is no longer credited to.
+      if (percx_cx_of(rs.mol_data[m], slot) != cx)
+        continue;
+      if (best < 0 || m < best)
+        best = m;
+    }
+    return best;
+  }
+
+  static void percx_add(RuleState& rs, int slot, int cx, int mid) {
+    PerCxTally& t = tally_of(rs, slot);
+    PerCxTally::Entry& e = t.entries[cx];
+    if (e.hits == 0) {
+      e.pos = static_cast<int>(t.list.size());
+      t.list.push_back(cx);
+      e.rep = -1;
+      e.rep_rate = 0.0;
+    }
+    ++e.hits;
+    if (e.rep < 0 || mid < e.rep) {
+      e.rep = mid;
+      percx_refresh_rate(rs, slot, cx);
+    }
+  }
+
+  void percx_remove(RuleState& rs, int slot, int cx, int mid) const {
+    PerCxTally& t = tally_of(rs, slot);
+    auto it = t.entries.find(cx);
+    if (it == t.entries.end())
+      return;
+    if (--it->second.hits > 0) {
+      if (it->second.rep == mid) {
+        // The representative dropped out.  Re-derive it from the complex's
+        // remaining members; this is the only O(complex) step in the tally,
+        // and it runs on rep loss rather than on every count change.
+        it->second.rep = percx_find_rep(rs, slot, cx);
+        percx_refresh_rate(rs, slot, cx);
+      }
+      return;
+    }
+    // Complex no longer holds a match: drop it out of the dense list with a
+    // swap-erase so the uniform draw stays O(1).  Values are copied out first
+    // — the map write below may rehash and invalidate `it`.
+    int const pos = it->second.pos;
+    double const rate = it->second.rep_rate;
+    int const back = t.list.back();
+    t.list[pos] = back;
+    t.list.pop_back();
+    auto bit = t.entries.find(back);
+    if (bit != t.entries.end())
+      bit->second.pos = pos;
+    t.rate_sum -= rate;
+    t.entries.erase(cx);
+  }
+
+  // Bring the tally's record for (rule slot, molecule) in line with the pool.
+  void percx_sync(int ri, int slot, int mid) {
+    auto& rs = rule_states[ri];
+    if (mid < 0 || mid >= static_cast<int>(rs.mol_data.size()))
+      return;
+    auto& md = rs.mol_data[mid];
+    int& cur = percx_cx_of(md, slot);
+    bool const live = mid < pool.molecule_count() && pool.molecule(mid).active;
+    int const want = (live && count_of(md, slot) > 0) ? pool.complex_of(mid) : -1;
+    if (cur == want)
+      return;
+    if (cur >= 0)
+      percx_remove(rs, slot, cur, mid);
+    cur = want;
+    if (want >= 0)
+      percx_add(rs, slot, want, mid);
+  }
+
+  // A molecule whose complex membership changed, for every pure-context slot
+  // its type can seed.
+  void percx_sync_all_slots(int mid) {
+    if (mid < 0 || mid >= pool.molecule_count())
+      return;
+    // A dead molecule keeps its last type_index, which is what we want: its
+    // stale hit still has to come out of the slots that were counting it.
+    int const ti = pool.molecule(mid).type_index;
+    if (ti < 0 || ti >= static_cast<int>(percx_slots_by_type.size()))
+      return;
+    for (auto& [ri, slot] : percx_slots_by_type[ti])
+      percx_sync(ri, slot, mid);
+  }
+
+  // Drain the pool's complex-move side-channel.  Runs once per event, before
+  // any propensity is read.
+  void percx_drain_moves() {
+    if (!any_percx) {
+      pool.cx_moves_.clear();
+      return;
+    }
+    pool.consume_cx_moves(percx_moved_scratch);
+    for (int const mid : percx_moved_scratch)
+      percx_sync_all_slots(mid);
+    percx_moved_scratch.clear();
+  }
+
+  // Rebuild one slot's tally from the current pool and match counts.
+  void percx_rebuild(int ri, int slot) {
+    auto& rs = rule_states[ri];
+    PerCxTally& t = tally_of(rs, slot);
+    t.clear();
+    for (auto& md : rs.mol_data)
+      percx_cx_of(md, slot) = -1;
+    auto& rule = model.rules[ri];
+    int const seed =
+        (slot != 0)
+            ? ((rule.reactant_pattern_starts.size() > 1) ? rule.reactant_pattern_starts[1] : -1)
+            : ((!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0);
+    if (seed < 0 || seed >= static_cast<int>(rule.reactant_pattern.molecules.size()))
+      return;
+    for (int const mid : pool.molecules_of_type(rule.reactant_pattern.molecules[seed].type_index))
+      percx_sync(ri, slot, mid);
+  }
+
+  // Re-sum every complex's representative rate.  The from-scratch rescan
+  // computes per-molecule local rates AFTER it rebuilds membership, so
+  // rate_sum has to be settled once those are in hand; the incremental path
+  // keeps it current through percx_refresh_rate instead.
+  void percx_resum_rates(int ri, int slot) {
+    auto& rs = rule_states[ri];
+    PerCxTally& t = tally_of(rs, slot);
+    t.rate_sum = 0.0;
+    for (int const cx : t.list) {
+      auto& e = t.entries[cx];
+      e.rep_rate = (e.rep >= 0 && e.rep < static_cast<int>(rs.mol_data.size()))
+                       ? percx_rate_of(rs, rs.mol_data[e.rep], slot)
+                       : 0.0;
+      t.rate_sum += e.rep_rate;
+    }
+  }
+
+  // Effective reactant counts for compute_propensity: the complex count for a
+  // pure-context slot, -1 (meaning "use the per-molecule total") otherwise.
+  double percx_a(int ri) const {
+    return rule_states[ri].per_complex_a ? static_cast<double>(rule_states[ri].percx_a.size())
+                                         : -1.0;
+  }
+  double percx_b(int ri) const {
+    return rule_states[ri].per_complex_b ? static_cast<double>(rule_states[ri].percx_b.size())
+                                         : -1.0;
+  }
+
   void rescan_all_molecules_for_rule(int rule_idx) {
     auto& rule = model.rules[rule_idx];
     auto& rs = rule_states[rule_idx];
@@ -4512,6 +4942,13 @@ struct Engine::Impl {
 
     // Compute propensity
     rs.has_local_rates = rule.rate_law.is_local;
+    // Pure-context slots price complexes, so their tallies have to be standing
+    // before the propensity is read.  Rebuilt rather than delta-updated here:
+    // this whole routine is already a from-scratch O(N) rescan.
+    if (rs.per_complex_a)
+      percx_rebuild(rule_idx, 0);
+    if (rs.per_complex_b)
+      percx_rebuild(rule_idx, 1);
     double new_propensity;
     if (rule.rate_law.type == RateLawType::FunctionProduct) {
       // FunctionProduct (DOR2): propensity = S1·S2 where S1 = Σ_a w_a·f1(a)
@@ -4555,7 +4992,15 @@ struct Engine::Impl {
           rs.local_propensity_b_total += md.local_propensity_b;
         }
       }
-      new_propensity = rs.local_propensity_total * rs.local_propensity_b_total * dor_symmetry(rule);
+      {
+        if (rs.per_complex_a)
+          percx_resum_rates(rule_idx, 0);
+        if (rs.per_complex_b)
+          percx_resum_rates(rule_idx, 1);
+        double const s1 = rs.per_complex_a ? rs.percx_a.rate_sum : rs.local_propensity_total;
+        double const s2 = rs.per_complex_b ? rs.percx_b.rate_sum : rs.local_propensity_b_total;
+        new_propensity = s1 * s2 * dor_symmetry(rule);
+      }
     } else if (rs.has_local_rates && rule.molecularity <= 1) {
       // Local-rate rule: propensity = sum of per-molecule (count_a * local_rate)
       rs.local_propensity_total = 0;
@@ -4578,10 +5023,15 @@ struct Engine::Impl {
         }
         rs.local_propensity_total += md.local_propensity;
       }
-      new_propensity = rs.local_propensity_total * dor_symmetry(rule);
+      if (rs.per_complex_a) {
+        percx_resum_rates(rule_idx, 0);
+        new_propensity = rs.percx_a.rate_sum * dor_symmetry(rule);
+      } else {
+        new_propensity = rs.local_propensity_total * dor_symmetry(rule);
+      }
     } else {
       double const rate = evaluate_rate(rule);
-      new_propensity = compute_propensity(rs, rule, rate);
+      new_propensity = compute_propensity(rs, rule, rate, percx_a(rule_idx), percx_b(rule_idx));
     }
     set_rule_propensity(rs, new_propensity);
 
@@ -5882,6 +6332,14 @@ struct Engine::Impl {
   // --- Incremental update after reaction firing ---
 
   void incremental_update(const std::unordered_set<int>& affected_mols) {
+    // Pure-context per-complex tallies first (issue #33).  fire_rule may have
+    // merged or split complexes, which moves molecules the affected-molecule
+    // BFS below never visits — a molecule at the far end of a polymer keeps
+    // its every component and still lands in a different complex.  Draining
+    // before any count is touched means the rest of this routine only ever
+    // sees a tally that already agrees with the pool about who is where.
+    percx_drain_moves();
+
     // issue #10 spike: each incremental_update is one event.  Advance the
     // epoch so evaluate_observable_on can tell intra-event repeats apart
     // from cross-event ones.
@@ -6418,7 +6876,23 @@ struct Engine::Impl {
 
         // P1 cache: mark this (rule, molecule) entry as a valid snapshot.
         nd.cache_init = true;
+        // `nd` is a fresh record, so it carries no memory of which complex the
+        // pure-context tally is currently counting this molecule in.  Carry
+        // that across the overwrite: percx_sync is what moves the hit, and it
+        // has to know where to take it from.
+        nd.percx_cx_a = old.percx_cx_a;
+        nd.percx_cx_b = old.percx_cx_b;
         rs.mol_data[mid] = nd;
+        if (rs.per_complex_a) {
+          percx_sync(ri, 0, mid);
+          if (rs.has_local_rates && rs.mol_data[mid].percx_cx_a >= 0)
+            percx_refresh_rate(rs, 0, rs.mol_data[mid].percx_cx_a);
+        }
+        if (rs.per_complex_b) {
+          percx_sync(ri, 1, mid);
+          if (rs.has_local_rates && rs.mol_data[mid].percx_cx_b >= 0)
+            percx_refresh_rate(rs, 1, rs.mol_data[mid].percx_cx_b);
+        }
 
         if constexpr (kIncrUpdateProfile) {
           if (prof_inner_sample) {
@@ -6435,13 +6909,18 @@ struct Engine::Impl {
         incr_profile_.propensity_recomputes++;
       double new_propensity;
       if (rule.rate_law.type == RateLawType::FunctionProduct) {
-        new_propensity =
-            rs.local_propensity_total * rs.local_propensity_b_total * dor_symmetry(rule);
+        {
+          double const s1 = rs.per_complex_a ? rs.percx_a.rate_sum : rs.local_propensity_total;
+          double const s2 = rs.per_complex_b ? rs.percx_b.rate_sum : rs.local_propensity_b_total;
+          new_propensity = s1 * s2 * dor_symmetry(rule);
+        }
       } else if (rs.has_local_rates) {
         new_propensity = rs.local_propensity_total * dor_symmetry(rule);
+        if (rs.per_complex_a)
+          new_propensity = rs.percx_a.rate_sum * dor_symmetry(rule);
       } else {
         double const rate = evaluate_rate(rule);
-        new_propensity = compute_propensity(rs, rule, rate);
+        new_propensity = compute_propensity(rs, rule, rate, percx_a(ri), percx_b(ri));
       }
       set_rule_propensity(rs, new_propensity);
     }
@@ -7127,6 +7606,22 @@ struct Engine::Impl {
   int sample_molecule_weighted(int type_index, const RuleState& rs, bool use_a) {
     if constexpr (kSelectReactantsProfile)
       sr_profile_.sampler_calls++;
+    // A pure-context slot is PRICED per complex, so it must be DRAWN per
+    // complex (issue #33).  Drawing per molecule while pricing per complex
+    // leaves the same-complex rejection mis-weighted whenever complexes hold
+    // unequal numbers of context matches, which is a systematic bias and not
+    // a sampling detail — see PerCxTally and context_sampler.bngl.  Which
+    // instance inside the complex is returned does not matter to the
+    // reaction, only that it is the one the propensity priced.
+    if (use_a ? rs.per_complex_a : rs.per_complex_b) {
+      const PerCxTally& t = use_a ? rs.percx_a : rs.percx_b;
+      if (t.list.empty())
+        return -1;
+      int const cx =
+          t.list[std::min(static_cast<std::size_t>(uniform() * t.list.size()), t.list.size() - 1)];
+      auto it = t.entries.find(cx);
+      return (it != t.entries.end()) ? it->second.rep : -1;
+    }
     auto& mols = pool.molecules_of_type(type_index);
     if (mols.empty()) {
       if constexpr (kSelectReactantsProfile)
@@ -7232,6 +7727,26 @@ struct Engine::Impl {
   int sample_molecule_by_local_propensity(int type_index, const RuleState& rs, bool use_b = false) {
     if constexpr (kSelectReactantsProfile)
       sr_profile_.sampler_local_prop_calls++;
+    // Pure-context slot: the propensity is Σ over complexes of the
+    // representative's rate, so draw a complex with that same weight and fire
+    // that representative (issue #33).
+    if (use_b ? rs.per_complex_b : rs.per_complex_a) {
+      const PerCxTally& t = use_b ? rs.percx_b : rs.percx_a;
+      if (t.list.empty() || t.rate_sum <= 0)
+        return -1;
+      double const r = uniform() * t.rate_sum;
+      double cum = 0;
+      for (int const cx : t.list) {
+        auto it = t.entries.find(cx);
+        if (it == t.entries.end())
+          continue;
+        cum += it->second.rep_rate;
+        if (r < cum)
+          return it->second.rep;
+      }
+      auto last = t.entries.find(t.list.back());
+      return (last != t.entries.end()) ? last->second.rep : -1;
+    }
     auto& mols = pool.molecules_of_type(type_index);
     if (mols.empty())
       return -1;

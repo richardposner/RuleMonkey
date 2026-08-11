@@ -496,3 +496,25 @@ if(TARGET rm_scan)
     )
     set_tests_properties(rm_scan_rejects_bad_spec PROPERTIES WILL_FAIL TRUE)
 endif()
+
+# BNG2-oracle suite (tests/bng_oracle): models whose reference is BioNetGen's
+# own network expansion rather than an NFsim ensemble, because they pin
+# behaviour NFsim does not have.  Scored by z against the committed BNG2 mean;
+# see tests/bng_oracle/README.md for why the suite is separate and how the two
+# reference kinds (ode / ssa) are chosen.
+#
+# Needs rm_driver and a python3; skipped when either is absent so a
+# library-only or CLI-disabled configure still passes.
+if(TARGET rm_driver)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    if(Python3_Interpreter_FOUND)
+        add_test(
+            NAME bng_oracle
+            COMMAND ${Python3_EXECUTABLE} ${_rulemonkey_test_dir}/bng_oracle/check.py
+                --driver $<TARGET_FILE:rm_driver>
+        )
+        # The 400-seed sampler model dominates; comfortably inside this on a
+        # laptop, headroom for a loaded CI runner.
+        set_tests_properties(bng_oracle PROPERTIES TIMEOUT 600)
+    endif()
+endif()

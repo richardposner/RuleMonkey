@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created by BioNetGen 2.9.3  -->
+<sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
+  <model id="context_sampler">
+    <ListOfParameters>
+      <Parameter id="kc" type="Constant" value="0.001" expr="0.001"/>
+      <Parameter id="T" type="Constant" value="2" expr="2"/>
+      <Parameter id="D" type="Constant" value="2" expr="2"/>
+    </ListOfParameters>
+    <ListOfMoleculeTypes>
+      <MoleculeType id="Ez">
+        <ListOfComponentTypes>
+          <ComponentType id="d"/>
+          <ComponentType id="e"/>
+          <ComponentType id="f"/>
+        </ListOfComponentTypes>
+      </MoleculeType>
+      <MoleculeType id="Sub">
+        <ListOfComponentTypes>
+          <ComponentType id="s">
+            <ListOfAllowedStates>
+              <AllowedState id="0"/>
+              <AllowedState id="1"/>
+            </ListOfAllowedStates>
+          </ComponentType>
+          <ComponentType id="l"/>
+          <ComponentType id="r"/>
+        </ListOfComponentTypes>
+      </MoleculeType>
+    </ListOfMoleculeTypes>
+    <ListOfCompartments>
+    </ListOfCompartments>
+    <ListOfSpecies>
+      <Species id="S1"  concentration="T" name="Ez(d,e!1,f!2).Ez(d,e!2,f!3).Ez(d,e!3,f!4).Ez(d,e!4,f).Sub(l!5,r!6,s~0).Sub(l!6,r!7,s~0).Sub(l!7,r!1,s~0).Sub(l,r!5,s~0)">
+        <ListOfMolecules>
+          <Molecule id="S1_M1" name="Ez">
+            <ListOfComponents>
+              <Component id="S1_M1_C1" name="d" numberOfBonds="0"/>
+              <Component id="S1_M1_C2" name="e" numberOfBonds="1"/>
+              <Component id="S1_M1_C3" name="f" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M2" name="Ez">
+            <ListOfComponents>
+              <Component id="S1_M2_C1" name="d" numberOfBonds="0"/>
+              <Component id="S1_M2_C2" name="e" numberOfBonds="1"/>
+              <Component id="S1_M2_C3" name="f" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M3" name="Ez">
+            <ListOfComponents>
+              <Component id="S1_M3_C1" name="d" numberOfBonds="0"/>
+              <Component id="S1_M3_C2" name="e" numberOfBonds="1"/>
+              <Component id="S1_M3_C3" name="f" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M4" name="Ez">
+            <ListOfComponents>
+              <Component id="S1_M4_C1" name="d" numberOfBonds="0"/>
+              <Component id="S1_M4_C2" name="e" numberOfBonds="1"/>
+              <Component id="S1_M4_C3" name="f" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M5" name="Sub">
+            <ListOfComponents>
+              <Component id="S1_M5_C1" name="l" numberOfBonds="1"/>
+              <Component id="S1_M5_C2" name="r" numberOfBonds="1"/>
+              <Component id="S1_M5_C3" name="s" state="0" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M6" name="Sub">
+            <ListOfComponents>
+              <Component id="S1_M6_C1" name="l" numberOfBonds="1"/>
+              <Component id="S1_M6_C2" name="r" numberOfBonds="1"/>
+              <Component id="S1_M6_C3" name="s" state="0" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M7" name="Sub">
+            <ListOfComponents>
+              <Component id="S1_M7_C1" name="l" numberOfBonds="1"/>
+              <Component id="S1_M7_C2" name="r" numberOfBonds="1"/>
+              <Component id="S1_M7_C3" name="s" state="0" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+          <Molecule id="S1_M8" name="Sub">
+            <ListOfComponents>
+              <Component id="S1_M8_C1" name="l" numberOfBonds="0"/>
+              <Component id="S1_M8_C2" name="r" numberOfBonds="1"/>
+              <Component id="S1_M8_C3" name="s" state="0" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+        <ListOfBonds>
+          <Bond id="S1_B1" site1="S1_M1_C2" site2="S1_M7_C2"/>
+          <Bond id="S1_B2" site1="S1_M1_C3" site2="S1_M2_C2"/>
+          <Bond id="S1_B3" site1="S1_M2_C3" site2="S1_M3_C2"/>
+          <Bond id="S1_B4" site1="S1_M3_C3" site2="S1_M4_C2"/>
+          <Bond id="S1_B5" site1="S1_M5_C1" site2="S1_M8_C2"/>
+          <Bond id="S1_B6" site1="S1_M5_C2" site2="S1_M6_C1"/>
+          <Bond id="S1_B7" site1="S1_M6_C2" site2="S1_M7_C1"/>
+        </ListOfBonds>
+      </Species>
+      <Species id="S2"  concentration="D" name="Ez(d,e,f)">
+        <ListOfMolecules>
+          <Molecule id="S2_M1" name="Ez">
+            <ListOfComponents>
+              <Component id="S2_M1_C1" name="d" numberOfBonds="0"/>
+              <Component id="S2_M1_C2" name="e" numberOfBonds="0"/>
+              <Component id="S2_M1_C3" name="f" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+      </Species>
+    </ListOfSpecies>
+    <ListOfReactionRules>
+      <ReactionRule id="RR1" name="R_ctx" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR1_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP1_M1" name="Sub">
+                <ListOfComponents>
+                  <Component id="RR1_RP1_M1_C1" name="s" state="0" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+          <ReactantPattern id="RR1_RP2">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP2_M1" name="Ez">
+                <ListOfComponents>
+                  <Component id="RR1_RP2_M1_C1" name="d" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR1_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP1_M1" name="Sub">
+                <ListOfComponents>
+                  <Component id="RR1_PP1_M1_C1" name="s" state="1" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+          <ProductPattern id="RR1_PP2">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP2_M1" name="Ez">
+                <ListOfComponents>
+                  <Component id="RR1_PP2_M1_C1" name="d" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR1_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="kc"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR1_RP1_M1" targetID="RR1_PP1_M1"/>
+          <MapItem sourceID="RR1_RP1_M1_C1" targetID="RR1_PP1_M1_C1"/>
+          <MapItem sourceID="RR1_RP2_M1" targetID="RR1_PP2_M1"/>
+          <MapItem sourceID="RR1_RP2_M1_C1" targetID="RR1_PP2_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR1_RP1_M1_C1" finalState="1"/>
+        </ListOfOperations>
+      </ReactionRule>
+    </ListOfReactionRules>
+    <ListOfObservables>
+      <Observable id="O1" name="Sub0" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O1_P1">
+            <ListOfMolecules>
+              <Molecule id="O1_P1_M1" name="Sub">
+                <ListOfComponents>
+                  <Component id="O1_P1_M1_C1" name="s" state="0" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O2" name="Sub1" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O2_P1">
+            <ListOfMolecules>
+              <Molecule id="O2_P1_M1" name="Sub">
+                <ListOfComponents>
+                  <Component id="O2_P1_M1_C1" name="s" state="1" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+    </ListOfObservables>
+    <ListOfFunctions>
+    </ListOfFunctions>
+  </model>
+</sbml>
