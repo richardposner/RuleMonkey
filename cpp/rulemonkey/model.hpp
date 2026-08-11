@@ -197,6 +197,16 @@ struct RateLaw {
   bool unity_factor_a = false;
   bool unity_factor_b = false;
 
+  // Set when this rule's local-function chain reads something global that
+  // moves during a run — a bare observable, `time`, a global function
+  // built on either (issue #38).  Such a rule's per-instance rates all
+  // change when nothing in any instance's own neighbourhood did, so the
+  // engine's affected-molecule delta path cannot see it and the rule has
+  // to be rescanned after every event.  False for a local rate built only
+  // from tagged observables and constants — the shape every corpus model
+  // uses — which keeps the delta path in charge there.
+  bool local_rate_tracks_global = false;
+
   // For MM
   double mm_Km = 0.0;
   double mm_kcat = 0.0;
@@ -279,8 +289,18 @@ struct GlobalFunction {
   std::string expression_text;
 
   // Local function support
-  std::vector<std::string> argument_names;         // e.g. {"z"}
-  std::vector<std::string> local_observable_names; // observables referenced locally
+  std::vector<std::string> argument_names; // e.g. {"z"}
+
+  // Observables this function references, split by scope (issue #38).  An
+  // observable is LOCAL iff the expression applies it to one of this
+  // function's own argument names — `NbrUp(z)` — and GLOBAL when written
+  // bare — `Obs_Vol`.  BNG2's `<ListOfReferences>` marks both `Observable`
+  // with nothing to tell them apart, so the split comes from parsing
+  // `expression_text` (expr::classify_by_tag_application).  Both lists are
+  // empty for a non-local function, where every observable is global by
+  // construction.
+  std::vector<std::string> local_observable_names;  // evaluated at the tagged molecule
+  std::vector<std::string> global_observable_names; // read at system scope
 
   bool is_local() const { return !argument_names.empty(); }
 

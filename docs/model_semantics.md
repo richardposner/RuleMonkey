@@ -89,6 +89,33 @@ The runtime severity model is two-level:
     local function (DOR), function product, MM" as the affected set.
     `ft_local_fcn_bimol_sym` is verdicted against BNG2's ODE for that
     reason.
+  - **Observable scope inside a local function.** An observable *applied
+    to the function's own tag* — `Mod(x)` — is evaluated at the tagged
+    molecule (per-molecule or complex-wide, per the tag). An observable
+    written **bare** — `Vol` — is the ordinary system-wide count, exactly
+    as it is anywhere else, and keeps its global value inside a local
+    function. So `lf(x) = k*Vol*Mod(x)` scales a per-instance factor by a
+    global one, which is how growth-dilution and Shea-Ackers style rate
+    laws are written.
+    BNG2's XML marks both kinds `<Reference type="Observable"/>` with
+    nothing to distinguish them, so RM recovers the split by parsing the
+    `<Expression>`: local iff applied to one of that function's own
+    `<Argument id=>` names, resolved per function so a chain of local
+    functions is classified against each callee's own parameter. BNG2's
+    generated network states the same split — `_R_local1() ((k*Vol)*1)`,
+    the bare observable folded in as a global and the tagged one resolved
+    to its per-instance value.
+    Two consequences worth naming. A rule whose local rate reads a bare
+    observable is **rescanned after every event**: that observable moves
+    for every instance at once with no molecule marked affected, so the
+    usual affected-molecule delta path cannot see the change. And an
+    observable used *both ways inside one function* (`O + O(x)`) cannot be
+    represented — RM holds one value slot per observable — so RM resolves
+    it at local scope and emits a load-time warning naming the function.
+    The **pinned NFsim release gets the scope right but never refreshes**:
+    its initial slope matches the true bare-observable value and then the
+    whole run proceeds at that t=0 value. `ft_local_fcn_mixed_scope` is
+    verdicted against BNG2's ODE for that reason.
   - **Global function of a local function is ill-defined.** A global
     (no-argument) function that references a *local* function has no
     molecule context at global scope, so its exposed value (`.gdat`

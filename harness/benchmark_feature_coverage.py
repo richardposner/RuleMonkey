@@ -177,6 +177,15 @@ NFSIM_UNRELIABLE = {
     # network expansion has always applied the factor, so ODE is the verdict
     # reference and RM matches it.
     "ft_local_fcn_bimol_sym",
+    # A local function reading a bare (global) observable whose count moves
+    # during the run.  NFsim gets the scope right — its initial slope is
+    # exactly kb*Aoff(0) — but never refreshes the per-instance rates when
+    # that observable changes, so the whole run proceeds at the t=0 value:
+    # Boff(100) = 200*exp(-kb*200*100) = 27.1 against the true 56.5.  BNG2's
+    # network expansion carries the observable as a live global, and its ODE
+    # (56.49) and SSA (54.4) agree with each other and with RM, so ODE is the
+    # verdict reference here.
+    "ft_local_fcn_mixed_scope",
 }
 
 # Models for which no third-party simulator produces a usable

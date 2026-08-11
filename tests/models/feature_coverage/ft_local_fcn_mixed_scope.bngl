@@ -1,0 +1,77 @@
+# Feature: one observable, LOCAL in one local function and GLOBAL in
+#          another, and a bare observable whose value MOVES during the run.
+# Tests:   `Aoff` is applied to the tag in lfA and written bare in lfB:
+#            lfA(x) = ka*Aoff(x)          -> per-instance, always 1
+#            lfB(x) = kb*Aoff*Boff(x)     -> system-wide count of A(m~0)
+#          BNG2 resolves exactly that split in its network, keeping the
+#          bare reference as a live global and collapsing the tagged one:
+#            _RA_local1  ka*1
+#            _RB_local1() ((kb*Aoff)*1)
+#          Two things follow that ft_local_fcn_global_obs cannot reach:
+#            1. RM holds one eval slot per observable, so the union of the
+#               per-function local sets cannot stand in for them here — the
+#               localized `Aoff` would leak into lfB, which wants the
+#               global count.  Each function has to be given its own view.
+#            2. `Aoff` decays as RA fires, so RB's rate changes for every B
+#               instance while nothing in any B's own neighbourhood does.
+#               The affected-molecule delta path cannot see that; the rule
+#               needs a rescan per event or every B keeps a stale rate.
+#
+# Oracle:  BNG2 network -> ODE, exactly.  Both failure modes are far
+#          outside sampling noise at these counts:
+#            - union scoping:  lfB reads Aoff = 0 at a B molecule, RB never
+#                              fires, Boff stays flat at 200.
+#            - stale rate:     RB keeps firing at the seed Aoff = 200, so
+#                              Boff(100) = 200*exp(-kb*200*100) = 27.1
+#                              instead of 56.5.
+#          Single molecules only, no complexes, so context multiplicity
+#          (issue #33) cannot reach either arm.
+#
+# Tier:    network-free.
+# Expected:
+#            RA  ka*Aoff(x) = ka*1 = 0.01 per A(m~0)
+#                Aoff(t) = 200*exp(-0.01 t);            Aoff(100) = 73.6
+#            RB  kb*Aoff*Boff(x) = kb*Aoff(t)*1
+#                Boff(t) = 200*exp(-kb*Integral(Aoff))
+#                        = 200*exp(-2*(1-exp(-0.01 t)))
+#                                                       Boff(100) = 56.5
+#          Aoff enters RB's rate linearly and stays a large count, so the
+#          stochastic mean tracks the ODE to well under a percent.
+# invariant: nonneg (both species deplete; nothing is conserved)
+
+begin model
+begin parameters
+    ka  1.0e-2
+    kb  1.0e-4
+end parameters
+
+begin molecule types
+    A(m~0~1)
+    B(m~0~1)
+end molecule types
+
+begin seed species
+    A(m~0)  200
+    B(m~0)  200
+end seed species
+
+begin observables
+    # Local in lfA (applied to the tag), global in lfB (written bare).
+    Molecules  Aoff  A(m~0)
+    Molecules  Boff  B(m~0)
+end observables
+
+begin functions
+    lfA(x) = ka*Aoff(x)
+    lfB(x) = kb*Aoff*Boff(x)
+end functions
+
+begin reaction rules
+    RA: A(m~0)%x -> A(m~1)   lfA(x)
+    RB: B(m~0)%x -> B(m~1)   lfB(x)
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>100,n_steps=>100})
+end actions
