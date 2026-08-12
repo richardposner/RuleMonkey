@@ -2020,6 +2020,9 @@ Model load_model(const std::string& xml_path,
       //     molecules in M(a!1).M(a!1), where a_total=2 per dimer)
       //   - Bimolecular: sf not applied (same_components formula and
       //     embedding_correction already handle the combinatorics)
+      //   - MM(kcat,Km): sf scales the count of the reactant the rule
+      //     transforms, *inside* the law rather than on the finished
+      //     propensity, since the law is not linear in it (issue #37)
 
       model.rules.push_back(std::move(rule));
     }

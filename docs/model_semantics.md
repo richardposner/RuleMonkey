@@ -166,6 +166,28 @@ The runtime severity model is two-level:
   `sFree = 0.5·((S − Km − E) + √((S − Km − E)² + 4·Km·S))`,
   `a = kcat·sFree·E/(Km + sFree)`. Mirrors `MMRxnClass::update_a` in
   the NFsim source.
+  BNG2's `symmetry_factor` scales one of the two counts **inside** the law
+  — normally `S = (substrate match count) · symmetry_factor` — rather than
+  the finished propensity. What it corrects is a match multiplicity: a
+  pattern with a non-trivial reaction-center automorphism
+  (`A(d!1).A(d!1)`) matches each complex more than once. MM is not linear
+  in either count, so scaling the propensity instead is exact only below
+  saturation; scaling the count is exact everywhere and reproduces BNG2's
+  network expansion, which folds the factor into the reaction
+  multiplicity and leaves the law reading species counts.
+  The count it scales is the one the rule **transforms**. BNG2 refuses
+  `MM` on a rule whose two reactant patterns are isomorphic, so the
+  reactant automorphism group is the direct product of the two patterns'
+  own, and a pure-context pattern contributes 1 (and is already counted
+  once per matching complex rather than once per matching molecule). For
+  the canonical shape, where the enzyme is a catalyst and so context, that
+  is the substrate; a rule that transforms its enzyme slot instead is
+  off-spec for MM but BNG2 writes it and attaches the factor there, and RM
+  follows.
+  If both patterns are transformed the scalar cannot be split and RM
+  applies it to the substrate. The pinned NFsim release drops the factor
+  here for the same reason it drops it on the local-function paths, so
+  `ft_mm_ratelaw_sym` is verdicted against BNG2's ODE.
 - **`TFUN`** — table-function rate laws backed by external `.tfun`
   files. RM searches both the XML directory and one level up to handle
   both author-side and harness-side layouts. Counter sources may be

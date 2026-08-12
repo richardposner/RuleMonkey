@@ -1,0 +1,77 @@
+# Fixture for tests/cpp/mm_symmetry_test.cpp — symmetry_factor on an
+# MM(kcat,Km) rate law (issue #37).  Three independent arms sharing one
+# enzyme pool; each substrate is large enough that the run window depletes
+# it by only a few percent, so each arm reads as a near-constant hazard.
+#
+#   RA  symmetric dimer, SATURATED   (S >> Km): a -> kcat*E whether or not
+#       the factor is applied, but half that if it is applied to the
+#       finished propensity instead of to the substrate count.
+#   RB  symmetric dimer, LINEAR      (S << Km): a is proportional to the
+#       substrate count, so dropping the factor doubles it while applying
+#       it to the propensity is indistinguishable from applying it to the
+#       count.
+#   RC  asymmetric control, symmetry_factor="1" — unchanged by any of the
+#       three, and pins the saturated limit a -> kcat*E of the MM formula.
+#   RD  the symmetry sits on the pattern in the ENZYME slot, because that is
+#       the pattern this rule transforms (the substrate F is pure context).
+#       Off-spec for MM — the QSS derivation assumes a conserved enzyme —
+#       but BNG2 writes it and attaches the factor to it, so the engine has
+#       to attribute the scalar rather than assume the substrate.  Saturated
+#       in F, which is where the two attributions differ: a -> kcat*E there,
+#       so putting the factor on the substrate leaves the rate 2x fast.
+#
+# BNG2 emits symmetry_factor="0.5" for RA, RB and RD, "1" for RC.
+
+begin model
+begin parameters
+    E0      5
+    A0      200      # dimers, saturated arm
+    B0      1000     # dimers, linear arm
+    C0      200      # molecules, asymmetric control
+    F0      1000     # molecules, context substrate of the enzyme-slot arm
+    G0      200      # dimers, transformed "enzyme" of that arm
+    kcat_s  1.0
+    Km_s    1.0      # << substrate count -> saturated
+    kcat_l  10.0
+    Km_l    10000.0  # >> substrate count -> linear
+    kcat_d  0.05     # slow enough that RD's own pool depletes ~10% in 2 s
+end parameters
+
+begin molecule types
+    A(d)
+    B(d)
+    C(x~0~P)
+    F()
+    G(d)
+    E()
+end molecule types
+
+begin seed species
+    A(d!1).A(d!1)   A0
+    B(d!1).B(d!1)   B0
+    C(x~0)          C0
+    F()             F0
+    G(d!1).G(d!1)   G0
+    E()             E0
+end seed species
+
+begin observables
+    Molecules  Afree   A(d)
+    Molecules  Bfree   B(d)
+    Molecules  Cprod   C(x~P)
+    Molecules  Gfree   G(d)
+    Molecules  Atot    A()
+    Molecules  Btot    B()
+end observables
+
+begin reaction rules
+    RA: A(d!1).A(d!1) + E() -> A(d) + A(d) + E()   MM(kcat_s,Km_s)
+    RB: B(d!1).B(d!1) + E() -> B(d) + B(d) + E()   MM(kcat_l,Km_l)
+    RC: C(x~0) + E()        -> C(x~P) + E()        MM(kcat_s,Km_s)
+    RD: F() + G(d!1).G(d!1) -> F() + G(d) + G(d)   MM(kcat_d,Km_s)
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>2,n_steps=>2})
+end actions

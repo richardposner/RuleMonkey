@@ -9,6 +9,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`MM(kcat,Km)` dropped BNG2's `symmetry_factor` — the last member of the
+  set (issue #37).** `compute_propensity` applies the factor on every rate
+  law it handles except the Michaelis-Menten branch, which returned
+  `kcat*sFree*E/(Km+sFree)` computed off the raw substrate match count. A
+  rule whose substrate pattern has a non-trivial reaction-center
+  automorphism — an enzyme taking apart a symmetric dimer, where either
+  molecule can seed the match — therefore ran fast: 2x deep in the linear
+  regime, tapering to 1x deep in saturation. #36 fixed the same defect on
+  the local-function and `FunctionProduct` paths and filed this one
+  separately because, unlike those, it needed an oracle established rather
+  than read off.
+
+  The factor scales a reactant **count**, inside the law — `S = (match
+  count) · symmetry_factor` — not the finished propensity. What it corrects
+  is a match multiplicity: the pattern matches each complex twice, so the law
+  was handed more of that reactant than exists. MM is not linear in either
+  count, so scaling the propensity instead is exact only below saturation
+  and dropping the factor is exact only inside it; scaling the count is
+  exact everywhere and the three agree wherever the law is linear. That is
+  also what BNG2 integrates: its network expansion builds one reaction per
+  rule application and folds the factor into the reaction multiplicity (2
+  maps x 0.5 = 1), leaving the rate law reading species counts. bngsim's
+  patched NFsim (lanl/bngsim#195, fixed in #278) puts it in the same place.
+
+  Which count: the one the rule **transforms**. BNG2 refuses `MM` on a rule
+  whose two reactant patterns are isomorphic (*"Michaelis-Menton type
+  ratelaw requires non-identical reactants"*), so no automorphism can carry
+  one pattern onto the other and the reactant automorphism group is the
+  direct product of the two patterns' own. A pure-context pattern
+  contributes 1 and is already counted per complex (issue #33), so after the
+  factor the law reads complex counts on both sides — exactly what BNG2's
+  ODE integrates. For the canonical shape, where the enzyme is a catalyst
+  and so context, that is the substrate: BNG2 emits `symmetry_factor="1"`
+  when only the enzyme is symmetric and the rule leaves it alone. A rule
+  that transforms its enzyme slot instead is off-spec for MM — the QSS
+  derivation assumes a conserved enzyme — but BNG2 writes the XML for it and
+  attaches the factor there, and RM now attributes the scalar rather than
+  assuming the substrate; assuming it would have left that shape 2x fast in
+  saturation. All three behaviours verified against BNG2 2.9.3 directly.
+
+  Blast radius: none. Across all 208 model XMLs in the tree, `MM` appears in
+  four models that predate this change — `ft_mm_ratelaw`, `CaMKII_holo` and
+  `context_symmetry` (two rules) — and every one carries
+  `symmetry_factor="1"`, so the new multiplier is exactly 1.0 and every
+  existing trajectory is bit-identical. The full feature-coverage suite is
+  unchanged.
+
+  Nothing exercised it, which is why it was filed rather than fixed
+  alongside #36: no model in any corpus paired a non-unit `symmetry_factor`
+  with `MM`, so the fix had to bring its own coverage. Two models now do.
+  `tests/cpp/mm_symmetry_model.bngl` drives the `mm_symmetry_test` ctest
+  with four arms against a mean-field firing-count oracle — a symmetric
+  dimer in saturation, a symmetric dimer in the linear regime, an asymmetric
+  control with `symmetry_factor="1"`, and one whose symmetry sits in the
+  transformed enzyme slot — because no single arm separates the candidate
+  propensities: dropping the factor fails only the linear arm (16.6 firings
+  against 9.1 expected), putting it on the propensity fails only the
+  saturated one (5.2 against 9.9), and assuming the substrate fails only the
+  enzyme-slot one (36.6 against 19.0, which is BNG2's own ODE for that arm).
+  Feature-coverage model `ft_mm_ratelaw_sym` adds the ensemble
+  comparison: an enzyme disassembling a recycled dimer pool, with a
+  turnover counter so the discrepancy accumulates instead of being bounded
+  by the pool. Verdicted against BNG2's ODE (turnovers at t=30: ODE 736,
+  BNG2 SSA 731, RM 739, RM before the fix 988) and listed in
+  `NFSIM_UNRELIABLE`, since the pinned NFsim release builds `MMRxnClass`
+  with `baseRate=1` and reads 994.
+
 - **A local rate reading a bare observable was rescanned every event even
   when that observable never moved (issue #40).** #38's fix gave such a
   rule a full O(N) rescan after **every** event. The rescan itself is

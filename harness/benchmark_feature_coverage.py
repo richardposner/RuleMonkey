@@ -177,6 +177,12 @@ NFSIM_UNRELIABLE = {
     # network expansion has always applied the factor, so ODE is the verdict
     # reference and RM matches it.
     "ft_local_fcn_bimol_sym",
+    # Same defect on the MM branch (issue #37): NFsim builds MMRxnClass with
+    # baseRate=1 too, so a symmetric-reaction-center MM rule drops the factor.
+    # bngsim's patched NFsim puts it on the transformed reactant's count
+    # inside the law rather than on the finished propensity, which is what
+    # BNG2's network expansion does and what RM matches; ODE is the verdict.
+    "ft_mm_ratelaw_sym",
     # A local function reading a bare (global) observable whose count moves
     # during the run.  NFsim gets the scope right — its initial slope is
     # exactly kb*Aoff(0) — but never refreshes the per-instance rates when

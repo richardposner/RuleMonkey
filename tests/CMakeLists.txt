@@ -84,6 +84,22 @@ add_test(
         ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_local_fcn_bimol.xml
 )
 
+# symmetry_factor on an MM(kcat,Km) rate law (issue #37): every rate law but
+# the Michaelis-Menten branch applied BNG2's factor, and no corpus model
+# paired one with MM.  The factor scales the substrate COUNT inside the law,
+# not the finished propensity — MM is nonlinear in that count, so the two
+# differ everywhere except below saturation.  Three arms (symmetric dimer
+# saturated, symmetric dimer linear, asymmetric control) against a mean-field
+# firing-count oracle; no single regime separates all three candidates.
+add_executable(mm_symmetry_test cpp/mm_symmetry_test.cpp)
+target_link_libraries(mm_symmetry_test PRIVATE rulemonkey)
+
+add_test(
+    NAME mm_symmetry_test
+    COMMAND mm_symmetry_test
+        ${_rulemonkey_test_dir}/cpp/mm_symmetry_model.xml
+)
+
 # Observable scope inside a local function (issue #38): an observable applied
 # to the function's tag is local, a bare one is global, and BNG2's XML marks
 # both identically — the split only survives in the <Expression>.  RM
