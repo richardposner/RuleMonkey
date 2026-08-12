@@ -2712,7 +2712,10 @@ double nary_distinct_sum(const NaryState& ns) {
 // The homodimer branch of compute_propensity deliberately does NOT apply it
 // (its `/2` already is the 0.5, and multiplying would double-count).  The
 // local paths have no such implicit halving: for a DOR pair the propensity
-// is the *ordered* distinct-pair sum, and 0.5 converts it to unordered.
+// is the *ordered* distinct-pair sum, and 0.5 converts it to unordered.  The
+// MM branch is the third case: it applies the factor to the count of the
+// reactant the rule transforms, inside the law rather than to the finished
+// propensity, because the law is not linear in that count (see there).
 double dor_symmetry(const Rule& rule) { return rule.symmetry_factor; }
 
 // Compute propensity for a rule given its accumulated state.
@@ -2753,11 +2756,43 @@ double compute_propensity(const RuleState& rs, const Rule& rule, double rate, do
   //   sFree = 0.5 * ((S-Km-E) + sqrt((S-Km-E)^2 + 4*Km*S))
   //   a     = kcat * sFree * E / (Km + sFree)
   // NFsim requires exactly 2 reactants; ditto here.
+  //
+  // symmetry_factor scales one of the two COUNTS, inside the law — not the
+  // finished propensity (issue #37).  What it corrects is a match
+  // multiplicity: a pattern with a non-trivial reaction-center automorphism
+  // matches each complex more than once (2x for the symmetric dimer
+  // S(d!1).S(d!1)), so the law would otherwise be handed more of that
+  // reactant than exists.  Michaelis-Menten is not linear in either count, so
+  // scaling the finished propensity is exact only below saturation, where the
+  // two agree; scaling the count is exact everywhere and reproduces BNG2's
+  // network expansion, which builds the reaction from species counts and
+  // folds the factor into the reaction multiplicity.
+  //
+  // Which count: the one the rule TRANSFORMS.  BNG2 refuses an MM rule whose
+  // two reactant patterns are isomorphic ("requires non-identical
+  // reactants"), so no automorphism can carry one pattern onto the other and
+  // the reactant automorphism group is the direct product of the two
+  // patterns' own.  A pure-context pattern contributes 1 — all of its
+  // automorphisms stabilize the (empty) reaction center — and is already
+  // counted per complex by the issue-#33 tally, so applying the factor to it
+  // would deflate a count that never was inflated.  So the factor lands on
+  // the transformed slot, and after it the law reads complex counts on both
+  // sides, which is exactly what BNG2's ODE integrates.
+  //
+  // For the canonical MM shape (enzyme is a catalyst, so pure context) that
+  // slot is the substrate.  A rule that transforms its enzyme instead is
+  // off-spec for MM — the QSS derivation assumes a conserved enzyme — but
+  // BNG2 writes the XML for it and puts the factor there, so honour it.  If
+  // BOTH are transformed the scalar is a product of the two patterns' factors
+  // and cannot be split; the substrate is the better guess and is what the
+  // canonical shape needs.  (cf. lanl/bngsim#281, about NFsim over-counting a
+  // symmetric CONTEXT match — a separate defect RM does not share since #33.)
   if (rule.rate_law.type == RateLawType::MM) {
     if (rule.molecularity != 2)
       return 0;
-    double const S = a_used;
-    double const E = b_used;
+    bool const sym_on_enzyme = rs.per_complex_a && !rs.per_complex_b;
+    double const S = a_used * (sym_on_enzyme ? 1.0 : rule.symmetry_factor);
+    double const E = b_used * (sym_on_enzyme ? rule.symmetry_factor : 1.0);
     if (S <= 0 || E <= 0)
       return 0;
     double const kcat = rule.rate_law.mm_kcat;
