@@ -268,7 +268,7 @@ Reference data (`tests/reference/nfsim/ensemble/*.tsv`) is
 checked in; you don't need NFsim to run RM or its parity benchmarks.
 Only **regenerating** references requires a local NFsim build, set
 via the `NFSIM_BIN` env var.  See
-[`tests/reference/nfsim/PROVENANCE.md`](../tests/reference/nfsim/PROVENANCE.md)
+[`tests/reference/nfsim/PROVENANCE.md`](https://github.com/richardposner/RuleMonkey/blob/main/tests/reference/nfsim/PROVENANCE.md)
 for what a regeneration would entail (the regen scripts are not
 currently in this repo's tree).
 

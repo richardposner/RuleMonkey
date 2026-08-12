@@ -64,7 +64,7 @@ with two per-model exceptions:
 | `toy_jim` | hand-rolled Gillespie SSA | NFsim over-counts `K(Y~P)` by ~12% on the disjoint transphosphorylation pattern. SSA confirmed RM is correct (`harness/ssa/toy_jim_ssa.py`). |
 | `rm_tlbr_rings` | hand-rolled Gillespie SSA | NFsim under-counts on disjoint + symmetric ring-closure patterns. SSA confirmed RM is correct (`harness/ssa/rm_tlbr_rings_ssa.py`). |
 
-See [`tests/reference/nfsim/PROVENANCE.md`](../tests/reference/nfsim/PROVENANCE.md)
+See [`tests/reference/nfsim/PROVENANCE.md`](https://github.com/richardposner/RuleMonkey/blob/main/tests/reference/nfsim/PROVENANCE.md)
 for the full provenance.
 
 The driver supports three tiers, chosen by wall budget:
@@ -110,7 +110,7 @@ names, simulation times, and flags are in
 
 Seven upstream NFsim tests are deliberately excluded (r27 / r28 /
 r31 / r33 / r34 / r35 / r36) — see
-[`tests/reference/basicmodels/PROVENANCE.md`](../tests/reference/basicmodels/PROVENANCE.md)
+[`tests/reference/basicmodels/PROVENANCE.md`](https://github.com/richardposner/RuleMonkey/blob/main/tests/reference/basicmodels/PROVENANCE.md)
 for the per-test rationale.
 
 ```bash
