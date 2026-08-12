@@ -1,0 +1,73 @@
+# Fixture for tests/cpp/mm_diagnostics_test.cpp — the two MM(kcat,Km)
+# constructs RM reads one way and cannot verify (issue #45).  Both rules are
+# legal BNGL that BNG2 writes without complaint into the XML; each trips one
+# diagnostic and neither trips the other.
+#
+#   R1  the substrate PATTERN matches more than one species — S(a~x) leaves
+#       component b unspecified, so it matches S(a~x,b) and S(a~x,b!1)...
+#       alike.  BNG2's network expansion emits one MM reaction per matching
+#       species, each saturating against its own copy of the enzyme pool;
+#       network-free applies one law to the summed match count.  BNG2 warns
+#       about this at rule-read time and the warning dies in the XML.
+#
+#   R3  the ENZYME pattern matches more than one species.  BNG2 expands one
+#       MM reaction per matching species pair on that axis too, evaluating
+#       the law on each pair's own counts, and the law is not linear in the
+#       enzyme count either (measured 1.81x with the enzyme in excess).
+#       BNG2's own check looks at the substrate only, so this axis is silent
+#       there.
+#
+#   R2  the rule transforms BOTH reactant patterns and carries
+#       symmetry_factor="0.5" (the D dimer's reaction-center automorphism),
+#       so the scalar cannot be attributed to one slot from the XML.  The
+#       substrate pattern here is deliberately a complete species, so R2
+#       trips only the attribution diagnostic and not R1's.
+#
+# The model is a load-time fixture: the test reads unsupported_features()
+# and never simulates it.
+
+begin model
+begin parameters
+    kcat  1.0
+    Km    10.0
+end parameters
+
+begin molecule types
+    S(a~x~y,b)
+    E()
+    P()
+    D(d,p~0~P)
+    F(q~0~P)
+    W()
+    V(g~1~2)
+end molecule types
+
+begin seed species
+    S(a~x,b)                100
+    E()                      10
+    P()                       0
+    D(d!1,p~0).D(d!1,p~0)   100
+    F(q~0)                   10
+    W()                      50
+    V(g~1)                   10
+    V(g~2)                   10
+end seed species
+
+begin observables
+    Molecules Pn    P()
+    Molecules Dfree D(d)
+end observables
+
+begin reaction rules
+    # Partial substrate pattern: component b unspecified.
+    R1: S(a~x) + E() -> P() + E()                             MM(kcat,Km)
+    # Partial ENZYME pattern: V() leaves component g unspecified.
+    R3: W() + V() -> P() + V()                                MM(kcat,Km)
+    # Both reactant patterns transformed, symmetry_factor="0.5" on the first.
+    R2: D(d!1,p~0).D(d!1,p~0) + F(q~0) -> D(d,p~0) + D(d,p~0) + F(q~P)  MM(kcat,Km)
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>1,n_steps=>1})
+end actions

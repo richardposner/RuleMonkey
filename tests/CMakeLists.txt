@@ -116,6 +116,22 @@ add_test(
         ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_mm_ratelaw.xml
 )
 
+# Load-time diagnostics for the two MM(kcat,Km) constructs RM reads one way
+# and cannot verify (issue #45): a substrate pattern matching more than one
+# species, where BNG2's network expansion gives each matching species its own
+# copy of the enzyme pool, and a symmetry_factor on a rule that transforms
+# both reactant patterns, where the scalar cannot be attributed to a slot.
+# Both are Warn severity; mm_symmetry_model is the negative control.
+add_executable(mm_diagnostics_test cpp/mm_diagnostics_test.cpp)
+target_link_libraries(mm_diagnostics_test PRIVATE rulemonkey)
+
+add_test(
+    NAME mm_diagnostics_test
+    COMMAND mm_diagnostics_test
+        ${_rulemonkey_test_dir}/cpp/mm_diagnostics_model.xml
+        ${_rulemonkey_test_dir}/cpp/mm_symmetry_model.xml
+)
+
 # Observable scope inside a local function (issue #38): an observable applied
 # to the function's tag is local, a bare one is global, and BNG2's XML marks
 # both identically — the split only survives in the <Expression>.  RM

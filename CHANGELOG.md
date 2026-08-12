@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Load-time diagnostics for the two `MM(kcat,Km)` constructs where RM
+  cannot reproduce BNG2 (issue #45).** BNG2.pl is the reference RM is written
+  against, so both of these are divergences from it and both now say so at
+  load. They are `Severity::Warn` rather than refusals because the constructs
+  are idiomatic BNGL and refusing would put a large share of real MM models
+  out of reach. What the warning buys is that the divergence is named at load
+  instead of being discovered by diffing trajectories against BNG2.
+
+  **A substrate pattern that can match more than one species.** BNG2's
+  network expansion emits one MM reaction per matching *(substrate, enzyme)
+  species pair*, each evaluating the law on that pair's own counts, while RM
+  applies one law to the summed match counts. Measured: a two-species
+  substrate in saturation runs at **2.00x** under BNG2 (product at t=40:
+  783.9 against RM's 398.4), and a two-species **enzyme** with the enzyme in
+  excess runs at **1.81x** (BNG2 82.11 against RM 45.26), the law being
+  nonlinear in both counts. Both vanish where the law is linear. BNG2's own
+  `checkSpeciesGraph` check covers the substrate only, so the enzyme axis is
+  silent there; RM checks both slots. Matching BNG2 would need a live map
+  from species canonical form to match count on each slot, maintained per
+  event, which is the species-level bookkeeping a network-free engine exists
+  to avoid, and it costs most on the very models that carry the construct. BNG2 warns
+  about this at rule-read time via `checkSpeciesGraph(..., IsSpecies => 1)`
+  but the warning dies in the XML, so RM recomputes the predicate: a pattern
+  matches at most one species iff every molecule specifies every component
+  its type declares, each with a definite state and a definite bond status.
+  Validated against BNG2 2.9.3 on seven cases — complete patterns, a missing
+  component, an unspecified state, `!+` and `!?` bonds, a stateless molecule
+  type, a complete two-molecule complex — agreeing on all of them. This is
+  not hypothetical: `CaMKII_holo` in the reference corpus has it, its
+  `CaMKII(Y286~P)` substrate leaving six of seven components unspecified.
+
+  `docs/model_semantics.md` gains the corresponding modelling note: MM
+  reproduces BNG2 exactly when both reactant patterns pin one species each,
+  and since MM exists to keep a generated network small and network-free
+  never generates one, writing the mechanism out (`S + E <-> SE -> P + E`)
+  is exact in both engines, needs no warning, and gets shared-enzyme
+  competition right, which neither MM reading does.
+
+  **A `symmetry_factor` that cannot be attributed.** It belongs to the
+  reactant pattern the rule transforms (#37); when the rule transforms
+  **both**, the scalar is a product of both patterns' factors and the XML is
+  one number with no way to split it. RM applies it to the substrate, which
+  reproduces BNG2 for the ordinary shape where the enzyme is a catalyst and
+  anywhere the law is linear (the rate goes as `S*E` there), and runs up to
+  2x fast against BNG2 in saturation if the symmetry was the enzyme slot's.
+  Now named at load either way.
+
+  The transformed/context derivation that #33 and #37 both read is now a
+  single shared function (`reactant_pattern_transforms` in `model.hpp`)
+  rather than one copy in the engine's `init_rule_states` and another in the
+  loader; the engine's inline copy is replaced by a call to it. Behaviour is
+  unchanged: all 88 feature-coverage models and all 71 nfsim-corpus models
+  are byte-identical against the pre-change binary. `mm_diagnostics_test`
+  pins both diagnostics on a fixture where each rule trips exactly one, with
+  `mm_symmetry_model` (four MM rules, including #37's enzyme-slot arm whose
+  factor *is* attributable) as the negative control.
+
 ### Fixed
 
 - **`MM(kcat,Km)` at the `Km <= 0` boundary: a rate of 0 where the limit is

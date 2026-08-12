@@ -3934,89 +3934,14 @@ struct Engine::Impl {
       // NO operation in this rule touches is context: every embedding of it
       // yields the identical reaction, so BNG's network expansion emits one
       // reaction instance per matching COMPLEX rather than one per matching
-      // molecule.  Derived here from the flat reactant-pattern component
-      // indices the ops already carry — RM stores no per-reactant
-      // transformation list, but the mapping op → pattern is exact.
-      //
-      // The classification must be conservative: an operation whose reactant
-      // endpoint failed to resolve at load leaves no trace on any pattern, and
-      // silently reading that as "context" would halve a real rule's rate.  So
-      // an unresolved endpoint disables the optimization for the whole rule.
+      // molecule.  The derivation is shared with the loader, which reads the
+      // same fact to decide whether an MM rule's symmetry_factor can be
+      // attributed to a slot (issue #37) — see reactant_pattern_transforms in
+      // model.hpp, including why an unresolved endpoint disables it.
       {
-        rs.per_complex_a = false;
-        rs.per_complex_b = false;
-        int const n_rp = static_cast<int>(rule.reactant_pattern_starts.size());
-        int const n_rp_mols = static_cast<int>(rule.reactant_pattern.molecules.size());
-        // pattern molecule index -> reactant pattern index
-        auto rp_of_mol = [&](int mi) -> int {
-          int p = -1;
-          for (int i = 0; i < n_rp; ++i)
-            if (rule.reactant_pattern_starts[i] <= mi)
-              p = i;
-          return p;
-        };
-        // flat reactant component index -> pattern molecule index
-        auto mol_of_flat = [&](int flat) -> int {
-          int base = 0;
-          for (int mi = 0; mi < n_rp_mols; ++mi) {
-            int const nc = static_cast<int>(rule.reactant_pattern.molecules[mi].components.size());
-            if (flat >= base && flat < base + nc)
-              return mi;
-            base += nc;
-          }
-          return -1;
-        };
-        std::vector<char> transformed(std::max(n_rp, 0), 0);
-        bool resolvable = n_rp > 0;
-        auto touch_flat = [&](int flat) {
-          int const mi = mol_of_flat(flat);
-          int const p = (mi >= 0) ? rp_of_mol(mi) : -1;
-          if (p < 0)
-            resolvable = false;
-          else
-            transformed[p] = 1;
-        };
-        for (auto& op : rule.operations) {
-          switch (op.type) {
-          case OpType::StateChange:
-            if (op.comp_flat >= 0)
-              touch_flat(op.comp_flat);
-            else
-              resolvable = false;
-            break;
-          case OpType::AddBond:
-          case OpType::DeleteBond:
-            // Each endpoint is either a reactant component (transforms that
-            // pattern) or a component of a molecule the rule synthesizes
-            // (product-side only, transforms no reactant pattern).  Anything
-            // else is unresolved.
-            if (op.comp_flat_a >= 0)
-              touch_flat(op.comp_flat_a);
-            else if (op.product_mol_a < 0)
-              resolvable = false;
-            if (op.comp_flat_b >= 0)
-              touch_flat(op.comp_flat_b);
-            else if (op.product_mol_b < 0)
-              resolvable = false;
-            break;
-          case OpType::DeleteMolecule: {
-            int const mi = op.delete_pattern_mol_idx;
-            int const p = (mi >= 0) ? rp_of_mol(mi) : -1;
-            if (p < 0)
-              resolvable = false;
-            else
-              transformed[p] = 1;
-            break;
-          }
-          case OpType::AddMolecule:
-            break; // product side only
-          }
-        }
-        if (resolvable) {
-          rs.per_complex_a = (transformed[0] == 0);
-          if (n_rp > 1)
-            rs.per_complex_b = (transformed[1] == 0);
-        }
+        ReactantTransforms const rt = reactant_pattern_transforms(rule);
+        rs.per_complex_a = rt.is_context(0);
+        rs.per_complex_b = rt.is_context(1);
         // Scoped to the two-slot path.  A rule with three or more reactant
         // patterns takes the n-ary machinery, whose propensity is a
         // distinct-tuple sum over the partition lattice of the slots — defined
@@ -4026,7 +3951,7 @@ struct Engine::Impl {
         // n-ary slot cannot half-enter this path — the n-ary rescan does not
         // build a tally, and an empty tally read as a count would take the
         // rule to zero propensity.
-        if (n_rp > 2 || rule.molecularity > 2) {
+        if (rule.reactant_pattern_starts.size() > 2 || rule.molecularity > 2) {
           rs.per_complex_a = false;
           rs.per_complex_b = false;
         }

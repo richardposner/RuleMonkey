@@ -2307,6 +2307,119 @@ Model load_model(const std::string& xml_path,
                "--ignore-unsupported to run anyway; the rule's propensity is clamped "
                "to zero, so it will not fire."});
     }
+
+    // WARN-level: MM constructs where RM cannot reproduce BNG2 (issue #45).
+    // BNG2.pl is the reference RM is written against, so both entries below
+    // are divergences from it and both say so.  They warn rather than refuse
+    // because the constructs are idiomatic BNGL — refusing would put a large
+    // share of real MM models out of reach — and because RM's own reading is
+    // well defined.  What the warning buys is that the divergence is named at
+    // load rather than discovered by diffing trajectories.
+    for (const auto& rule : model.rules) {
+      if (rule.rate_law.type != RateLawType::MM)
+        continue;
+
+      // (a) A reactant pattern that can match more than one species.  BNG2's
+      // network expansion emits one MM reaction per matching (substrate,
+      // enzyme) species PAIR, each evaluating the law on that pair's own
+      // counts, while RM applies one law to the summed match counts.
+      // Measured: a substrate pattern matching two species runs 2.00x faster
+      // under BNG2 in saturation (the factor is the number of matching
+      // substrate species), and an ENZYME pattern matching two species runs
+      // 1.81x faster with the enzyme in excess, since the law is not linear
+      // in the enzyme count either.  Both axes vanish where the law is
+      // linear.
+      //
+      // Matching BNG2 would need a live map from species canonical form to
+      // match count on each slot, maintained per event so the law could be
+      // evaluated once per species pair.  That is species-level bookkeeping
+      // of the kind a network-free engine exists to avoid, and it costs most
+      // on the very models that carry this construct: CaMKII_holo in the
+      // reference corpus leaves six of seven components open on its
+      // substrate pattern and has large complexes to canonicalize.  RM keeps
+      // the pooled reading and names the divergence.
+      //
+      // BNG2 warns about the substrate axis at rule-read time via
+      // checkSpeciesGraph(..., IsSpecies => 1) and the warning does not
+      // survive into the XML, so RM recomputes the predicate: a pattern
+      // matches at most one species iff every molecule specifies every
+      // component its type declares, each with a definite state and a
+      // definite bond status.  BNG2 runs that check on the substrate only,
+      // so the enzyme axis is silent in BNG2 as well; RM checks both slots.
+      {
+        auto multi_species_reason = [&](int start, int end) -> std::string {
+          for (int mi = start; mi < end; ++mi) {
+            const auto& pm = rule.reactant_pattern.molecules[mi];
+            if (pm.type_index < 0 || pm.type_index >= static_cast<int>(model.molecule_types.size()))
+              continue;
+            const auto& mt = model.molecule_types[pm.type_index];
+            if (pm.components.size() < mt.components.size())
+              return "molecule " + pm.type_name + " leaves " +
+                     std::to_string(mt.components.size() - pm.components.size()) +
+                     " of its components unspecified";
+            for (const auto& pc : pm.components) {
+              bool const stateful = pc.comp_type_index >= 0 &&
+                                    pc.comp_type_index < static_cast<int>(mt.components.size()) &&
+                                    mt.components[pc.comp_type_index].allowed_states.size() > 1;
+              if (stateful && pc.required_state_index < 0)
+                return "component " + pm.type_name + "." + pc.name + " has no definite state";
+              if (pc.bond_constraint == BondConstraint::Wildcard ||
+                  pc.bond_constraint == BondConstraint::Bound)
+                return "component " + pm.type_name + "." + pc.name + " has no definite bond status";
+            }
+          }
+          return {};
+        };
+
+        int const n_mols = static_cast<int>(rule.reactant_pattern.molecules.size());
+        int const n_rp = static_cast<int>(rule.reactant_pattern_starts.size());
+        for (int slot = 0; slot < n_rp && slot < 2; ++slot) {
+          int const start = rule.reactant_pattern_starts[slot];
+          int const end = (slot + 1 < n_rp) ? rule.reactant_pattern_starts[slot + 1] : n_mols;
+          std::string const why = multi_species_reason(start, end);
+          if (why.empty())
+            continue;
+          const char* const which = (slot == 0) ? "substrate" : "enzyme";
+          unsupported_out->push_back(
+              {Severity::Warn, "RateLaw@type=MM",
+               "Rule '" + rule.id + "' (" + rule.name + ") has an MM(kcat,Km) rate law whose " +
+                   which + " pattern can match more than one species (" + why +
+                   "). BNG2 expands this into one MM reaction per matching species pair, each "
+                   "evaluating the law on that pair's own counts, so its ODE/SSA runs faster "
+                   "than RM (measured 2.00x for a two-species substrate in saturation, 1.81x "
+                   "for a two-species enzyme with the enzyme in excess). RM applies one "
+                   "Michaelis-Menten law to the summed match counts, since matching BNG2 would "
+                   "require tracking the matching species individually. Enumerate them in "
+                   "separate rules to get BNG2's reading, or write the enzyme mechanism "
+                   "explicitly (S + E <-> SE -> P + E), which both engines agree on."});
+        }
+      }
+
+      // (b) A symmetry_factor that cannot be attributed.  It belongs to the
+      // reactant pattern the rule transforms (issue #37); when the rule
+      // transforms BOTH, the scalar is a product of the two patterns' factors
+      // and the XML gives one number with no way to split it.  RM applies the
+      // whole factor to the substrate, which is right for the canonical shape
+      // and exact wherever the law is linear (the rate goes as S*E there), but
+      // up to 2x off in saturation if the symmetry was the enzyme slot's.
+      if (rule.symmetry_factor != 1.0) {
+        ReactantTransforms const rt = reactant_pattern_transforms(rule);
+        bool const both_transformed = rt.resolvable && rt.transformed.size() > 1 &&
+                                      rt.transformed[0] != 0 && rt.transformed[1] != 0;
+        if (both_transformed)
+          unsupported_out->push_back(
+              {Severity::Warn, "ReactionRule@symmetry_factor",
+               "Rule '" + rule.id + "' (" + rule.name +
+                   ") has symmetry_factor=" + std::to_string(rule.symmetry_factor) +
+                   " on an MM(kcat,Km) rate law and transforms both of its reactant "
+                   "patterns, so the factor cannot be attributed to one of them from "
+                   "the XML, the scalar being a product of both patterns\' factors. "
+                   "RM applies it to the substrate count, which reproduces BNG2 for "
+                   "the ordinary shape where the enzyme is a catalyst and anywhere "
+                   "the law is linear. If the symmetry is the enzyme pattern\'s, RM "
+                   "runs up to 2x fast against BNG2 in saturation."});
+      }
+    }
   }
 
   return model;
