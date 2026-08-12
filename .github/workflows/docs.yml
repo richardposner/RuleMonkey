@@ -6,9 +6,11 @@ name: docs
 # internal link fails the PR (mkdocs.yml sets strict: true).  Only pushes to
 # main publish.
 #
-# One-time repository setting: Settings -> Pages -> Build and deployment ->
-# Source must be "GitHub Actions".  Until that is set, the deploy job fails
-# and the build job still guards the docs.
+# Publishing needs one repository setting: Settings -> Pages -> Build and
+# deployment -> Source set to "GitHub Actions".  Until that is set the deploy
+# is SKIPPED rather than failed, so main does not carry a red X for a setting
+# no workflow can make for itself.  The moment Pages is enabled the next run
+# publishes, with no change needed here.
 
 on:
   push:
@@ -47,10 +49,33 @@ jobs:
         with:
           path: site
 
-  deploy:
+  # Is Pages actually enabled on this repository?  Creating a deployment
+  # against a repo with Pages off 404s, which would fail the run.  Probing for
+  # it first turns that into a skip with a warning annotation, while leaving a
+  # genuine deploy failure (bad artifact, expired token, Pages outage) loud.
+  pages-enabled:
     # Only publish from main; pull requests get the build check alone.
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: read
+    outputs:
+      enabled: ${{ steps.probe.outputs.enabled }}
+    steps:
+      - id: probe
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api "repos/${GITHUB_REPOSITORY}/pages" >/dev/null 2>&1; then
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=GitHub Pages is not enabled::The site built but was not published. Set Settings -> Pages -> Build and deployment -> Source to 'GitHub Actions', then re-run this workflow."
+          fi
+
+  deploy:
+    needs: [build, pages-enabled]
+    if: needs.pages-enabled.outputs.enabled == 'true'
     runs-on: ubuntu-latest
     permissions:
       pages: write
