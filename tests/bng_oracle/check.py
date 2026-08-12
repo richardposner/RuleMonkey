@@ -37,6 +37,7 @@ REF_DIR = os.path.join(SUITE_DIR, "reference")
 MODELS = {
     "context_symmetry": {"t_end": 2000, "n_steps": 2, "seeds": 24},
     "context_sampler": {"t_end": 500, "n_steps": 5, "seeds": 400},
+    "context_nary": {"t_end": 100, "n_steps": 2, "seeds": 48},
 }
 
 Z_THRESHOLD = 6.0

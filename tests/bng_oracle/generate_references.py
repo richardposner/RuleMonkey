@@ -18,7 +18,10 @@ Two reference kinds, chosen per model and recorded in MODELS below:
        the ODE's `[X]^2` differs from the SSA's `N(N-1)` and the ODE is
        therefore NOT the mean.  `context_sampler` is that case by construction
        (see its header) and would read 4/3 fast against an ODE reference for
-       reasons that have nothing to do with what it tests.
+       reasons that have nothing to do with what it tests.  `context_nary` is
+       the other case: its rate is a product of two pools that deplete together
+       and a catalyst population that fluctuates, so the ODE of the means is
+       not the mean either.
 
 Usage:
     BNG2=~/path/to/BNG2.pl python3 tests/bng_oracle/generate_references.py
@@ -50,6 +53,7 @@ BNG2 = os.environ.get("BNG2", "")
 MODELS = {
     "context_symmetry": {"kind": "ode", "t_end": 2000, "n_steps": 2},
     "context_sampler": {"kind": "ssa", "t_end": 500, "n_steps": 5, "reps": 2000},
+    "context_nary": {"kind": "ssa", "t_end": 100, "n_steps": 2, "reps": 600},
 }
 
 

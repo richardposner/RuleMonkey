@@ -1,0 +1,208 @@
+# Counting an untransformed (context) reactant pattern on a rule with THREE
+# reactant patterns (GH #42).
+#
+# The two-slot version of this is context_symmetry.bngl: BioNetGen gives a
+# reactant pattern the rule does not transform ONE reaction instance per
+# matching complex, however many molecules inside that complex match it. That
+# fix (GH #33) substituted a complex count for the per-molecule total in the
+# bimolecular propensity, and was scoped there. A rule with three or more
+# reactant patterns takes the n-ary machinery instead, whose propensity is the
+# distinct-tuple sum over the partition lattice of the slots -- every term of
+# which is defined over MOLECULES -- so it kept counting per molecule and kept
+# firing N times too fast.
+#
+# Every channel below encodes the same intended rate: k per (Sa, Sb, catalyst
+# complex) triple, on 40 catalyst complexes. So all six substrate pools must
+# follow the same curve, and any gap between a _sym pool and its _asym control
+# is the defect, whatever the absolute rate does:
+#
+#   Nary_sym / Nary_asym      Ez.Ez homodimer catalyst, static           2x
+#   Ring_sym / Ring_asym      Tz.Tz.Tz homotrimer ring catalyst, static  3x
+#   Churn_sym / Churn_asym    homodimer catalyst that forms and breaks   2x
+#
+# Ring_sym is the shape that separates per-complex counting from a fix
+# hardcoded to a factor of two, and it does it against a SINGLE-molecule
+# context pattern -- Tz(a!+) has no automorphism at all, so `embeddings /
+# |Aut(pattern)|` answers 3 where BNG answers 1. It is the n-ary counterpart of
+# context_symmetry's Sub_trimer.
+#
+# Churn_sym / Churn_asym is the pair the static ones cannot cover. The
+# per-complex count is not a property of the rule, it is maintained against a
+# moving pool, and there are three separate ways a molecule can leave the
+# complex it was counted in. All three run for the whole 100 time units here:
+#
+#   merge / split    Mz(d) + Mz(d) <-> Mz(d!1).Mz(d!1) at koff = 1, so every
+#                    catalyst dimer forms and breaks on the order of a hundred
+#                    times over the run
+#   creation         Wm() -> Mz(d), ~1200 new molecules over the run, which
+#                    have to enter the tally at ids past the end of its arrays
+#   deletion         Mz(d!+) -> Wm(), which deletes a BONDED subunit: the
+#                    molecule vanishes out of a complex that survives it, and
+#                    about half the time it is that complex's representative
+#
+# A count that is right at t=0 and never re-derived reads correct here and is
+# not. The turnover is balanced (subunits come from and return to a reservoir),
+# so the two pools hold ~39 and ~38 dimers and the pair still reads as a pair
+# to within about a percent; the reference is what scores them.
+#
+# Guard_trans is the guard in the other direction, the n-ary counterpart of
+# context_symmetry's Bind_sym: its catalyst dimer IS the reaction center -- the
+# rule flips p~0 to p~1 on one half of it -- so its two halves are two
+# genuinely distinct reactions and the 2x is correct. BNG says so in the
+# generated network, where this rule gets `2*k` against the `k` every context
+# rule above gets. Per-molecule counting is what reproduces that, so a fix that
+# collapses every multi-subunit slot rather than only the untransformed ones is
+# caught here.
+#
+# No context rule ever touches its own catalyst -- that is what makes the slot
+# context in the first place -- so what moves the churning pools is their own
+# binding and turnover rules and nothing else. Each channel has its own
+# molecule types, so the channels cannot cross-talk either.
+
+begin model
+begin parameters
+  X0    2000        # substrate pool, per slot, per channel
+  E0    40          # static catalyst complexes
+  D0    40          # churning catalyst dimers, at saturation
+  M0    2*D0        # homodimer channel needs two subunits per dimer
+  k     8.0e-8      # k*E0*X0*t_end = 0.64 at t_end = 100
+
+  kon   50.0        # dimerization; kon/koff = 50 keeps both pools near
+  koff  1.0         # saturation while still breaking ~100x per dimer per run
+
+  # Subunit turnover for the churning channels, balanced against a reservoir
+  # so the pools hold their size while every molecule in them is replaced
+  # ~15 times over the run. kdz acts on a BONDED subunit, so a death deletes
+  # a molecule out of a complex that outlives it.
+  kb    0.1
+  kdz   0.15
+  W0    120         # reservoir for the homodimer channel, 2x the control's
+
+  # Guard channel: undo the guard rule's own transformation fast enough that
+  # its catalyst is not consumed. Without this the channel exhausts its 2*E0
+  # p~0 subunits in 80 firings and then reads the same 1920 whether the slot
+  # was counted per molecule or per complex -- an exhaustion count, not a rate.
+  # At kreset = 100 the standing p~1 population is ~0.3 of 80.
+  kreset 100.0
+end parameters
+
+begin molecule types
+  # static homodimer catalyst and its heterodimer control
+  Sa(s~0~1)
+  Sb(s~0~1)
+  Ta(s~0~1)
+  Tb(s~0~1)
+  Ez(d)
+  Fz(d)
+  Gz(d)
+  # static homotrimer ring catalyst and its heterotrimer control
+  Ra(s~0~1)
+  Rb(s~0~1)
+  Qa(s~0~1)
+  Qb(s~0~1)
+  Tz(a,b)
+  Pz(a,b)
+  Qz(a,b)
+  Rz(a,b)
+  # churning homodimer catalyst and its heterodimer control
+  Ca(s~0~1)
+  Cb(s~0~1)
+  Da(s~0~1)
+  Db(s~0~1)
+  Mz(d)
+  Nz(d)
+  Oz(d)
+  Wm()
+  Wn()
+  Wo()
+  # transformed-slot guard
+  Ga(s~0~1)
+  Gb(s~0~1)
+  Hz(d,p~0~1)
+end molecule types
+
+begin seed species
+  Sa(s~0)   X0
+  Sb(s~0)   X0
+  Ta(s~0)   X0
+  Tb(s~0)   X0
+  Ra(s~0)   X0
+  Rb(s~0)   X0
+  Qa(s~0)   X0
+  Qb(s~0)   X0
+  Ca(s~0)   X0
+  Cb(s~0)   X0
+  Da(s~0)   X0
+  Db(s~0)   X0
+  Ga(s~0)   X0
+  Gb(s~0)   X0
+
+  Ez(d!1).Ez(d!1)                     E0
+  Fz(d!1).Gz(d!1)                     E0
+  Tz(a!1,b!3).Tz(a!2,b!1).Tz(a!3,b!2) E0
+  Pz(a!1,b!3).Qz(a!2,b!1).Rz(a!3,b!2) E0
+  Hz(d!1,p~0).Hz(d!1,p~0)             E0
+  # churning pools seeded as monomers; the binding rules take them to ~D0
+  # dimers within a few 1/kon and hold them there, breaking and reforming,
+  # while the turnover rules replace the molecules underneath
+  Mz(d)     M0
+  Nz(d)     D0
+  Oz(d)     D0
+  Wm()      W0
+  Wn()      W0/2
+  Wo()      W0/2
+end seed species
+
+begin observables
+  Molecules Nary_sym    Sa(s~0)
+  Molecules Nary_asym   Ta(s~0)
+  Molecules Ring_sym    Ra(s~0)
+  Molecules Ring_asym   Qa(s~0)
+  Molecules Churn_sym   Ca(s~0)
+  Molecules Churn_asym  Da(s~0)
+  Molecules Guard_trans Ga(s~0)
+  Molecules Dimers_sym  Mz(d!+)
+  Molecules Dimers_asym Nz(d!+)
+  # the turnover pools themselves, so a leak in either direction is legible
+  # as a pool that drifted rather than only as a substrate curve that moved
+  Molecules Pool_sym    Mz()
+  Molecules Pool_asym   Nz()
+end observables
+
+begin reaction rules
+  # Pure-context third slot: one instance per catalyst COMPLEX.
+  R_nary_sym:   Sa(s~0) + Sb(s~0) + Ez(d!+) -> Sa(s~1) + Sb(s~1) + Ez(d!+)  k
+  R_nary_asym:  Ta(s~0) + Tb(s~0) + Fz(d!+) -> Ta(s~1) + Tb(s~1) + Fz(d!+)  k
+  R_ring_sym:   Ra(s~0) + Rb(s~0) + Tz(a!+) -> Ra(s~1) + Rb(s~1) + Tz(a!+)  k
+  R_ring_asym:  Qa(s~0) + Qb(s~0) + Pz(a!+) -> Qa(s~1) + Qb(s~1) + Pz(a!+)  k
+  R_churn_sym:  Ca(s~0) + Cb(s~0) + Mz(d!+) -> Ca(s~1) + Cb(s~1) + Mz(d!+)  k
+  R_churn_asym: Da(s~0) + Db(s~0) + Nz(d!+) -> Da(s~1) + Db(s~1) + Nz(d!+)  k
+
+  # The catalyst complexes the churning channels count, forming and breaking
+  # underneath the tally for the whole run.
+  R_mz_bind: Mz(d) + Mz(d) <-> Mz(d!1).Mz(d!1)  kon, koff
+  R_nz_bind: Nz(d) + Oz(d) <-> Nz(d!1).Oz(d!1)  kon, koff
+
+  # ... and the subunits themselves turning over. The deaths take a BONDED
+  # subunit, so each one deletes a molecule out of a complex that survives it
+  # -- the case where the deleted molecule may be the complex's representative.
+  R_mz_birth: Wm() -> Mz(d)  kb
+  R_nz_birth: Wn() -> Nz(d)  kb
+  R_oz_birth: Wo() -> Oz(d)  kb
+  R_mz_death: Mz(d!+) -> Wm()  kdz  DeleteMolecules
+  R_nz_death: Nz(d!+) -> Wn()  kdz  DeleteMolecules
+  R_oz_death: Oz(d!+) -> Wo()  kdz  DeleteMolecules
+
+  # Guard: the rule TRANSFORMS this slot, so its two halves are two distinct
+  # reactions and the 2x is correct. BNG emits 2*k for it. Guard_trans must
+  # therefore decay at twice the rate of every _sym channel above, and a fix
+  # that collapses multi-subunit slots rather than untransformed ones lands it
+  # on their curve instead.
+  R_guard: Ga(s~0) + Gb(s~0) + Hz(d!+,p~0) -> Ga(s~1) + Gb(s~1) + Hz(d!+,p~1)  k
+  R_reset: Hz(p~1) -> Hz(p~0)  kreset
+end reaction rules
+end model
+
+begin actions
+  writeXML({overwrite=>1})
+end actions
