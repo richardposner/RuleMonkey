@@ -188,6 +188,19 @@ The runtime severity model is two-level:
   applies it to the substrate. The pinned NFsim release drops the factor
   here for the same reason it drops it on the local-function paths, so
   `ft_mm_ratelaw_sym` is verdicted against BNG2's ODE.
+  **`Km` must be > 0.** `Km = 0` is a removable singularity, not a zero: as
+  `Km → 0⁺` the law tends to `a = kcat·min(S, E)` (binding infinitely tight,
+  so turnover is substrate-limited when the enzyme is in excess and
+  enzyme-limited otherwise), and RM returns exactly that on the `Km = 0`
+  line. `Km < 0` is refused at load, or clamped to zero propensity with a
+  warning when it arrives through an override (issue #46). RM evaluates
+  `sFree` in the cancellation-free form `2·Km·S/(q − diff)` when
+  `diff = S − Km − E` is negative, which is where the textbook
+  `0.5·(diff + q)` loses its significant digits — against 60-digit
+  arithmetic the textbook form is off by up to 7.6e-2 relative (at
+  `S=50, E=1000, Km=1e-12`) while RM's stays within 2 ulp. BNG2 and NFsim
+  both use the textbook form, so RM is the more accurate of the three in
+  that corner; everywhere both are well-conditioned they agree to ~1e-15.
 - **`TFUN`** — table-function rate laws backed by external `.tfun`
   files. RM searches both the XML directory and one level up to handle
   both author-side and harness-side layouts. Counter sources may be
@@ -312,6 +325,7 @@ treat at least one of these as a signal to refuse the model.
 | An `RateLaw type="Arrhenius"` rule that is **not** a 2-reactant binding rule | eBNGL energy rules are expanded at load time (see "Energy-based BNGL" below), but only for the 2-reactant binding case — matching NFsim's own coverage. State-change energy rules, intramolecular ring-closure binding, and >2-reactant rules would be silently dropped, so they are refused. (2-reactant binding Arrhenius rules, and a bare `<ListOfEnergyPatterns>` with `Function`-type rate laws, are both fully supported and are **not** triggers.) |
 | A rule with three or more `<ReactantPattern>` children, where a pattern's `.`-joined molecules are not bonded to each other, the rate law is not `Ele`, or there are more than 6 patterns | Rules of 3-6 reactant patterns under an elementary rate law are simulated, each pattern a single molecule or a bonded complex (see "N-ary reactant rules" below). The shapes listed here fall outside that path and would drop onto the two-slot machinery, whose slot B merges patterns 2..n into one bond-free pattern that scores zero embeddings for free reactants — the rule would silently hold zero propensity and never fire, with mass still conserved so the trajectory looks valid (issues #24, #26). Rewrite as a sequence of at most bimolecular steps. |
 | Any rule with `RateLaw type="Sat"` | Deprecated; rewrite as `MM(kcat, Km)`. |
+| An `MM(kcat,Km)` rule whose `Km` resolves to a negative value | Outside the rate law's domain: the discriminant `(S−Km−E)² + 4·Km·S` can go negative, and where it does not the expression still yields a finite but meaningless rate (issue #46). A `Km` that arrives *after* load through `set_param` / `parameter_scan` cannot be caught here and is clamped to zero propensity with one warning per rule instead. |
 | Any rule with `RateLaw type="Hill"` | Network-only; use `generate_network()` + ODE/SSA instead of network-free. |
 | Any `<MoleculeType population="1">` | Hybrid particle-population SSA not implemented; would be silently treated as ordinary particles with diverging trajectories. |
 | Multi-molecule or bonded `<Species Fixed="1">` | RM currently supports only single-molecule, unbonded Fixed species. |

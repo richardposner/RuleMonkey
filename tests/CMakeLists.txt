@@ -100,6 +100,22 @@ add_test(
         ${_rulemonkey_test_dir}/cpp/mm_symmetry_model.xml
 )
 
+# The Km <= 0 boundary of MM(kcat,Km) (issue #46).  The division guard
+# answered 0 at Km == 0, where the limit is kcat*min(S,E), so the rule went
+# silently inert (and a model starting at S > E froze the moment its
+# substrate decayed to S == E); the naive sFree cancelled catastrophically on
+# the approach (17% fast at Km=1e-14, dead below ~1e-15); and a negative Km
+# passed its NaN through as the propensity, which the sampler then drew
+# events against.  Closed-form oracles, no external simulator.
+add_executable(mm_km_domain_test cpp/mm_km_domain_test.cpp)
+target_link_libraries(mm_km_domain_test PRIVATE rulemonkey)
+
+add_test(
+    NAME mm_km_domain_test
+    COMMAND mm_km_domain_test
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_mm_ratelaw.xml
+)
+
 # Observable scope inside a local function (issue #38): an observable applied
 # to the function's tag is local, a bare one is global, and BNG2's XML marks
 # both identically — the split only survives in the <Expression>.  RM

@@ -9,6 +9,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`MM(kcat,Km)` at the `Km <= 0` boundary: a rate of 0 where the limit is
+  `kcat*min(S,E)`, and a NaN propensity the sampler kept firing against
+  (issue #46).** The MM branch guarded its division with
+  `if (Km + sFree <= 0) return 0;`. That answers 0 where the limit is not 0,
+  and does not answer at all where the expression is NaN.
+
+  **`Km == 0` is a removable singularity, not a zero.** With `Km = 0`,
+  `sFree = max(S-E, 0)`, so `S > E` already read `kcat*E` but `S <= E` read
+  0/0 — and the limit there is `kcat*S`, since `sFree -> Km*S/(E-S)` as
+  `Km -> 0+`. The law on the whole `Km = 0` line is `a = kcat*min(S,E)`:
+  binding infinitely tight, so turnover is substrate-limited when the enzyme
+  is in excess and enzyme-limited otherwise. RM returned 0 instead, which
+  left the rule silently inert — and froze a model that *started* in the
+  good branch: with `Km = 0, S0 = 200, E0 = 100` the run proceeded at
+  exactly `kcat*E` until the substrate decayed to `S == E`, then stopped
+  dead at `S = 100` forever, mass conserved, no warning.
+
+  **The approach to that limit was wrong before it was reached.** Taking
+  `sFree` as `0.5*(diff + sqrt(diff^2 + 4*Km*S))` cancels catastrophically
+  for `diff < 0`, which is exactly the regime `Km*S << (E-S)^2`. On
+  `S=100, E=200, kcat=1`, where the limit is 100, the old form read 100.093
+  at `Km=1e-12`, **117.392** at `1e-14`, and 0 from about `1e-15` down — so
+  a scan or a fit walking `Km` toward zero passed through a band where the
+  propensity was silently wrong by an arbitrary amount before going inert.
+  `sFree` is now taken in the conjugate form `2*Km*S/(q - diff)` when
+  `diff < 0`, which is algebraically identical and adds like-signed
+  quantities. Against 60-digit arithmetic over 171 `(S, E, Km)` points, the
+  old form's worst relative error is **7.6e-2** (at `S=50, E=1000,
+  Km=1e-12`) and the new form's is **3.7e-16**, i.e. under 2 ulp. BNG2 and
+  NFsim both use the textbook form, so in that corner RM is now the most
+  accurate of the three; wherever both forms are well-conditioned they agree
+  to ~1e-15, and all 88 feature-coverage models are byte-identical.
+
+  **`Km < 0` produced a NaN that the sampler drew events against.**
+  `set_rule_propensity` clamped on `new_value < 0`, which is false for NaN,
+  and `std::max` returned NaN unchanged — so `total_propensity` became NaN
+  and the SSA kept going. Measured: an MM rule with `Km = -1` fired **80
+  events** against a NaN propensity, exited 0, and wrote an
+  ordinary-looking `.gdat`. Three changes: the MM branch reports `Km < 0` as
+  a domain error rather than letting a half-defined expression through (with
+  a negative `Km` the discriminant can go negative, and where it does not
+  the rate is finite but meaningless); the clamp now tests `!(v >= 0)` so
+  NaN takes it too, from **any** rate law, and names a negative MM `Km` when
+  that is the cause; and a statically negative `Km` is refused at load as a
+  Tier-0 Error, since `Km` resolves through the parameter cascade. A `Km`
+  arriving later through `set_param` / `parameter_scan` cannot be caught at
+  load and takes the clamp — which is the reachable path, since `Km` is a
+  fitted parameter in RM's embedders.
+
+  Blast radius: all 88 feature-coverage models byte-identical against the
+  pre-fix binary at their own parameters, ctest 36/36, guard tier 29/29. The
+  new `mm_km_domain_test` drives `ft_mm_ratelaw` entirely through
+  `set_param` against closed-form oracles — with `Km = 0` and the enzyme in
+  excess the law is `kcat*S`, so the substrate is an exact binomial death
+  process `S(t) ~ Binomial(S0, exp(-kcat*t))` — and covers `Km = 0` on both
+  sides of `S = E`, the cancellation band at `Km = 1e-14` and `1e-16`, and a
+  negative `Km` arriving through an override. Against the pre-fix engine it
+  fails 15 of its checks.
+
 - **`MM(kcat,Km)` dropped BNG2's `symmetry_factor` — the last member of the
   set (issue #37).** `compute_propensity` applies the factor on every rate
   law it handles except the Michaelis-Menten branch, which returned

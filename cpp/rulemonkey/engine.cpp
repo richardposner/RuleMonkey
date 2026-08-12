@@ -2797,8 +2797,45 @@ double compute_propensity(const RuleState& rs, const Rule& rule, double rate, do
       return 0;
     double const kcat = rule.rate_law.mm_kcat;
     double const Km = rule.rate_law.mm_Km;
+
+    // Km <= 0 is outside the law as written (issue #46).
+    //
+    // Km == 0 is a removable singularity, not a zero.  With Km = 0,
+    // sFree = max(S-E, 0), so for S > E the law already reads kcat*E, while
+    // for S <= E it reads 0/0 — and the limit there is NOT zero:
+    //
+    //   sFree -> Km*S/(E-S)  as Km -> 0+   =>   a -> kcat*S
+    //
+    // i.e. a = kcat*min(S,E) on the whole Km = 0 line, which is the physical
+    // reading (binding infinitely tight: every substrate molecule is bound,
+    // so turnover is substrate-limited when the enzyme is in excess and
+    // enzyme-limited otherwise).  Returning 0 instead left the rule silently
+    // inert, and froze a Km = 0 model that started at S > E the moment its
+    // substrate decayed to S == E.
+    //
+    // Km < 0 has no reading at all — the discriminant can go negative, and
+    // where it does not the expression yields a finite but meaningless rate.
+    // Answer NaN so set_rule_propensity clamps it to zero and says so once;
+    // a statically negative Km is additionally refused at load.
+    if (Km <= 0) {
+      if (Km < 0)
+        return std::numeric_limits<double>::quiet_NaN();
+      return kcat * std::min(S, E);
+    }
+
+    // sFree is the positive root of sFree^2 + (Km + E - S)*sFree - Km*S = 0.
+    // Taking it as 0.5*(diff + sqrt(diff^2 + 4*Km*S)) cancels catastrophically
+    // when diff < 0 — the regime Km*S << (E - S)^2, i.e. exactly the approach
+    // to the Km = 0 limit above.  Measured on S=100, E=200, kcat=1, where the
+    // limit is 100: the naive form reads 100.093 at Km=1e-12, 117.392 at
+    // 1e-14, and 0 from ~1e-15 down.  The conjugate form
+    // 2*Km*S/(q - diff) is algebraically identical (their product of factors
+    // is q^2 - diff^2 = 4*Km*S) and adds like-signed quantities, so it holds
+    // the limit exactly.  diff >= 0 keeps the direct form, which is the
+    // well-conditioned branch there and stays finite as Km -> 0.
     double const diff = S - Km - E;
-    double const sFree = 0.5 * (diff + std::sqrt((diff * diff) + (4.0 * Km * S)));
+    double const q = std::sqrt((diff * diff) + (4.0 * Km * S));
+    double const sFree = (diff >= 0) ? (0.5 * (diff + q)) : ((2.0 * Km * S) / (q - diff));
     if (Km + sFree <= 0)
       return 0;
     return kcat * sFree * E / (Km + sFree);
@@ -3494,7 +3531,16 @@ struct Engine::Impl {
   int64_t events_since_propensity_rebaseline = 0;
 
   void set_rule_propensity(RuleState& rs, double new_value) {
-    if (new_value < 0 && !rs.clamp_warned) {
+    // `!(v >= 0)` rather than `v < 0` so NaN takes the clamp too (issue #46).
+    // A NaN comes from a rate law evaluated outside its domain — a negative
+    // MM Km is the reachable one, since Km is a parameter and an override or
+    // a fit can move it there after load.  NaN compares false against
+    // everything, so the old `v < 0` test passed it straight through and
+    // std::max returned it unchanged: total_propensity became NaN and the
+    // sampler kept drawing events off it.  Measured on an MM rule with
+    // Km = -1: 80 events fired against a NaN propensity, exit code 0, and an
+    // ordinary-looking .gdat.
+    if (!(new_value >= 0) && !rs.clamp_warned) {
       rs.clamp_warned = true;
       // rs is always inside rule_states (every call site indexes through
       // rule_states[ri] or iterates the vector), so pointer arithmetic to
@@ -3502,13 +3548,26 @@ struct Engine::Impl {
       auto const ri = static_cast<size_t>(&rs - rule_states.data());
       auto const& rule = model.rules[ri];
       const char* fn = rule.rate_law.function_name.c_str();
-      fprintf(stderr,
-              "WARN: rule '%s' (%s) propensity clamped to 0 — rate%s%s%s "
-              "evaluated to %g at t=%g; further clamps on this rule are silent\n",
-              rule.id.c_str(), rule.name.c_str(), (fn[0] != 0 ? " function '" : ""), fn,
-              (fn[0] != 0 ? "'" : ""), new_value, current_time);
+      // Name the cause when we know it: an MM rule reporting NaN with a
+      // negative Km is that Km, not an arithmetic accident downstream.
+      bool const mm_domain =
+          std::isnan(new_value) && rule.rate_law.type == RateLawType::MM && rule.rate_law.mm_Km < 0;
+      if (mm_domain) {
+        fprintf(stderr,
+                "WARN: rule '%s' (%s) propensity clamped to 0 — MM Km=%g is outside "
+                "the rate law's domain (Km must be > 0) at t=%g; further clamps on "
+                "this rule are silent\n",
+                rule.id.c_str(), rule.name.c_str(), rule.rate_law.mm_Km, current_time);
+      } else {
+        fprintf(stderr,
+                "WARN: rule '%s' (%s) propensity clamped to 0 — rate%s%s%s "
+                "evaluated to %g at t=%g; further clamps on this rule are silent\n",
+                rule.id.c_str(), rule.name.c_str(), (fn[0] != 0 ? " function '" : ""), fn,
+                (fn[0] != 0 ? "'" : ""), new_value, current_time);
+      }
     }
-    new_value = std::max<double>(new_value, 0);
+    if (!(new_value >= 0))
+      new_value = 0;
     total_propensity += new_value - rs.propensity;
     rs.propensity = new_value;
   }
