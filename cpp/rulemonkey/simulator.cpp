@@ -2281,6 +2281,32 @@ Model load_model(const std::string& xml_path,
                "at local and at global scope in one expression. RM evaluates it "
                "at local scope throughout; the bare reference reads the local "
                "value rather than the system-wide count."});
+    // ERROR-level: a negative Michaelis constant (issue #46).  The law's
+    // sFree is the positive root of a quadratic whose discriminant is
+    // (S-Km-E)^2 + 4*Km*S; with Km < 0 that can go negative, and where it
+    // does not the expression still yields a finite but meaningless rate, so
+    // the rule would run on a number that means nothing.  Refuse rather than
+    // simulate it.  Km is resolved through the parameter cascade here, so
+    // this catches a constant and a derived parameter alike; a value that
+    // arrives later through set_param / parameter_scan cannot be caught at
+    // load, and is clamped to zero with a warning by set_rule_propensity.
+    // `!(Km > 0) && Km != 0` refuses a negative Km and a NaN one (a parameter
+    // expression can evaluate to NaN) while leaving Km == 0 alone — that one
+    // is a removable singularity the engine reads as kcat*min(S,E).
+    for (const auto& rule : model.rules) {
+      double const km = rule.rate_law.mm_Km;
+      if (rule.rate_law.type != RateLawType::MM || km == 0 || km > 0)
+        continue;
+      unsupported_out->push_back(
+          {Severity::Error, "RateLaw@type=MM",
+           "Rule '" + rule.id + "' (" + rule.name +
+               ") has a Michaelis constant Km=" + std::to_string(km) +
+               " — MM(kcat,Km) requires Km > 0, and a negative Km puts the rate law "
+               "outside its domain (the rate is NaN wherever the discriminant goes "
+               "negative, and meaningless where it does not). Fix the parameter. Pass "
+               "--ignore-unsupported to run anyway; the rule's propensity is clamped "
+               "to zero, so it will not fire."});
+    }
   }
 
   return model;
