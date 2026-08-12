@@ -133,7 +133,7 @@ int main(int argc, char** argv) {
 
     // --- Km = 0 with the enzyme in excess: a = kcat*S, a pure death process.
     // The old code returned 0 here and the rule never fired at all.
-    for (double km : {0.0, 1e-14, 1e-16}) {
+    for (double const km : {0.0, 1e-14, 1e-16}) {
       sim.clear_param_overrides();
       sim.set_param("S0", 100);
       sim.set_param("E0", 200);
@@ -147,7 +147,7 @@ int main(int argc, char** argv) {
                 std::to_string(value_at(probe, "S_n", 0)) + ")");
 
       for (size_t ti = 1; ti <= 3; ++ti) {
-        double const t = static_cast<double>(ti);
+        auto const t = static_cast<double>(ti);
         Ensemble const e = run_ensemble(sim, ts, "S_n", ti, kReps);
         // S(t) ~ Binomial(100, exp(-kcat*t)) exactly.
         double const p = std::exp(-kKcat * t);
@@ -173,7 +173,7 @@ int main(int argc, char** argv) {
       sim.set_param("kcat", kKcat);
       sim.set_param("Km", 0.0);
       for (size_t ti = 1; ti <= 3; ++ti) {
-        double const t = static_cast<double>(ti);
+        auto const t = static_cast<double>(ti);
         Ensemble const e = run_ensemble(sim, ts, "S_n", ti, kReps);
         double const want = expected_substrate(200.0, 100.0, kKcat, t);
         double const tol = (4.0 * e.se) + (0.03 * want);
@@ -203,9 +203,9 @@ int main(int argc, char** argv) {
         double const p = value_at(r, "P_n", ti);
         check(!std::isnan(s) && !std::isnan(p),
               "Km<0: NaN reached the observables at t index " + std::to_string(ti));
-        check(s == 200.0 && p == 0.0,
-              "Km<0: rule fired (S_n=" + std::to_string(s) + ", P_n=" + std::to_string(p) +
-                  ") — a negative Km must clamp the propensity to zero");
+        check(s == 200.0 && p == 0.0, "Km<0: rule fired (S_n=" + std::to_string(s) +
+                                          ", P_n=" + std::to_string(p) +
+                                          ") — a negative Km must clamp the propensity to zero");
       }
       std::printf("Km=-1          S_n=%.3f P_n=%.3f at t_end (want 200/0, no NaN)\n",
                   value_at(r, "S_n", 3), value_at(r, "P_n", 3));

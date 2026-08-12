@@ -201,6 +201,37 @@ The runtime severity model is two-level:
   `S=50, E=1000, Km=1e-12`) while RM's stays within 2 ulp. BNG2 and NFsim
   both use the textbook form, so RM is the more accurate of the three in
   that corner; everywhere both are well-conditioned they agree to ~1e-15.
+  **When MM agrees with BNG2, and when to avoid it.** The law is defined
+  over species-level pools, and BNG2's network expansion evaluates it once
+  per matching *(substrate, enzyme) species pair*, on that pair's own counts.
+  A network-free engine has no species pools and evaluates it once on the
+  summed match counts. The two coincide exactly when **both reactant
+  patterns pin exactly one species each** — every molecule specifying every
+  component its type declares, each with a definite state and a definite
+  bond status. Under that condition RM reproduces BNG2 across the whole
+  parameter range (verified against BNG2 2.9.3 over twelve regimes spanning
+  `E << S`, `E ~ S ~ Km`, `E >> S`, `Km → 0` and `Km → ∞`, agreeing to
+  ≤5e-6). Outside it they diverge, by up to the number of matching substrate
+  species (measured 2.00x for two species in saturation) and by up to 1.81x
+  for a two-species enzyme with the enzyme in excess, since the law is
+  nonlinear in both counts. Both divergences vanish where the law is linear.
+  RM warns at load on either axis (issue #45). Warnings rather than
+  refusals, because both constructs are idiomatic BNGL.
+
+  Since MM exists to keep the *generated network* small and a network-free
+  engine never generates one, MM buys nothing here. Writing the mechanism
+  out — `S + E <-> SE` then `SE -> P + E` — costs one molecule type and two
+  rules, is exact in both engines, needs no warning, and gets multi-substrate
+  competition for a shared enzyme right, which neither MM reading does (BNG2's
+  per-species expansion hands each substrate species its own full enzyme
+  pool, so its total turnover can exceed `kcat·E_total`). Prefer the explicit
+  mechanism unless you are reproducing an existing MM model.
+
+  A **`symmetry_factor` on a rule that transforms both reactant patterns**
+  cannot be attributed to a slot from the XML, the scalar being a product of
+  both patterns' factors. RM applies it to the substrate, which reproduces
+  BNG2 for the ordinary shape and anywhere the law is linear, and runs up to
+  2x fast against BNG2 in saturation otherwise. Also warned at load.
 - **`TFUN`** — table-function rate laws backed by external `.tfun`
   files. RM searches both the XML directory and one level up to handle
   both author-side and harness-side layouts. Counter sources may be

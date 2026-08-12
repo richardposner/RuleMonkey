@@ -289,6 +289,115 @@ struct Rule {
   std::vector<Constraint> constraints;
 };
 
+// Which of a rule's reactant patterns does it TRANSFORM?
+//
+// A reactant pattern that no operation touches is pure context, and two
+// separate results follow from that one fact:
+//
+//   * every embedding of it yields the identical reaction, so it is counted
+//     once per matching COMPLEX rather than once per matching molecule
+//     (issue #33);
+//   * all of its automorphisms stabilize the reaction center, so it
+//     contributes 1 to BNG2's symmetry_factor — which is what makes the
+//     factor attributable to the transformed slot on an MM rule (issue #37).
+//
+// Both readers derive it from the flat reactant-pattern component indices the
+// operations already carry (RM stores no per-reactant transformation list,
+// but the mapping op -> pattern is exact), so the derivation lives here
+// rather than being written twice.
+//
+// The classification must be conservative: an operation whose reactant
+// endpoint failed to resolve at load leaves no trace on any pattern, and
+// silently reading that as "context" would halve a real rule's rate.  An
+// unresolved endpoint therefore clears `resolvable`, and callers must then
+// treat every pattern as transformed.
+struct ReactantTransforms {
+  std::vector<char> transformed; // one entry per reactant pattern, 1 = touched
+  bool resolvable = false;
+
+  // Convenience for the two-slot callers.  Answers "transformed" for any
+  // slot the derivation could not resolve or that does not exist.
+  bool is_context(size_t slot) const {
+    return resolvable && slot < transformed.size() && transformed[slot] == 0;
+  }
+};
+
+inline ReactantTransforms reactant_pattern_transforms(const Rule& rule) {
+  ReactantTransforms out;
+  int const n_rp = static_cast<int>(rule.reactant_pattern_starts.size());
+  int const n_rp_mols = static_cast<int>(rule.reactant_pattern.molecules.size());
+  if (n_rp <= 0)
+    return out;
+  out.transformed.assign(static_cast<size_t>(n_rp), 0);
+  out.resolvable = true;
+
+  // pattern molecule index -> reactant pattern index
+  auto rp_of_mol = [&](int mi) -> int {
+    int p = -1;
+    for (int i = 0; i < n_rp; ++i)
+      if (rule.reactant_pattern_starts[i] <= mi)
+        p = i;
+    return p;
+  };
+  // flat reactant component index -> pattern molecule index
+  auto mol_of_flat = [&](int flat) -> int {
+    int base = 0;
+    for (int mi = 0; mi < n_rp_mols; ++mi) {
+      int const nc = static_cast<int>(rule.reactant_pattern.molecules[mi].components.size());
+      if (flat >= base && flat < base + nc)
+        return mi;
+      base += nc;
+    }
+    return -1;
+  };
+  auto touch_flat = [&](int flat) {
+    int const mi = mol_of_flat(flat);
+    int const p = (mi >= 0) ? rp_of_mol(mi) : -1;
+    if (p < 0)
+      out.resolvable = false;
+    else
+      out.transformed[static_cast<size_t>(p)] = 1;
+  };
+
+  for (const auto& op : rule.operations) {
+    switch (op.type) {
+    case OpType::StateChange:
+      if (op.comp_flat >= 0)
+        touch_flat(op.comp_flat);
+      else
+        out.resolvable = false;
+      break;
+    case OpType::AddBond:
+    case OpType::DeleteBond:
+      // Each endpoint is either a reactant component (transforms that
+      // pattern) or a component of a molecule the rule synthesizes
+      // (product-side only, transforms no reactant pattern).  Anything else
+      // is unresolved.
+      if (op.comp_flat_a >= 0)
+        touch_flat(op.comp_flat_a);
+      else if (op.product_mol_a < 0)
+        out.resolvable = false;
+      if (op.comp_flat_b >= 0)
+        touch_flat(op.comp_flat_b);
+      else if (op.product_mol_b < 0)
+        out.resolvable = false;
+      break;
+    case OpType::DeleteMolecule: {
+      int const mi = op.delete_pattern_mol_idx;
+      int const p = (mi >= 0) ? rp_of_mol(mi) : -1;
+      if (p < 0)
+        out.resolvable = false;
+      else
+        out.transformed[static_cast<size_t>(p)] = 1;
+      break;
+    }
+    case OpType::AddMolecule:
+      break; // product side only
+    }
+  }
+  return out;
+}
+
 // ---- Observable ------------------------------------------------------------
 
 struct Observable {
