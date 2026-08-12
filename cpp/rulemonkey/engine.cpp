@@ -2401,6 +2401,54 @@ struct NaryPartition {
   std::vector<uint32_t> blocks; // block membership bitmasks
 };
 
+// Per-complex tally for one pure-context reactant slot (issue #33).
+//
+// BioNetGen gives a reactant pattern the rule does not transform ONE reaction
+// instance per matching complex, however many molecules inside that complex
+// match: every embedding yields the identical reaction, so there is only one.
+// Recomputing that count by walking the matched molecules and de-duplicating
+// their complex ids is O(N) on the propensity hot path, and measurably so —
+// 32x on `r08` (`DNA -> DNA + RNA`, `RNA -> RNA + Protein`), where the context
+// pattern's population is the one that grows.  So it is maintained instead:
+// `list.size()` is the count, delta-updated as molecules start and stop
+// matching and as complexes merge and split.
+//
+// `rep` is the instance that actually fires.  The count and the draw have to
+// agree: a bimolecular rule rejects draws that put both reactants in the same
+// complex, and that rejection only offsets the propensity when the reactant is
+// drawn the same way it is counted.  Counting per complex while drawing per
+// molecule leaves a systematic bias wherever complexes hold unequal numbers of
+// context matches (tests/bng_oracle/models/context_sampler.bngl pins it).
+// Which instance is chosen is otherwise immaterial — the rule changes nothing
+// about it — so `rep` is simply the lowest live matching molecule id, which
+// makes it a function of the pool state rather than of event history.
+//
+// `rate_sum` is the DOR case: a pure-context pattern may still carry a local
+// function tag, and then the collapsed instances have different rates.  BNG2
+// cannot arbitrate — its network expansion has no local functions — so this
+// follows bngsim's patched NFsim (perComplexRateFactorSum) and prices one
+// representative per complex, which is also the instance `rep` fires.  An
+// n-ary rule leaves it at zero: nary_shape_supported refuses a local function
+// outright, so its collapsed instances all price the same.
+struct PerCxTally {
+  struct Entry {
+    int hits = 0;          // matching molecules of this slot inside the complex
+    int rep = -1;          // lowest live matching mol id
+    int pos = -1;          // index into `list`
+    double rep_rate = 0.0; // rep's local rate, as currently summed into rate_sum
+  };
+  std::unordered_map<int, Entry> entries;
+  std::vector<int> list; // complexes with hits > 0, dense, for O(1) uniform draw
+  double rate_sum = 0.0; // Σ rep_rate over `list` (local-rate rules only)
+
+  int size() const { return static_cast<int>(list.size()); }
+  void clear() {
+    entries.clear();
+    list.clear();
+    rate_sum = 0.0;
+  }
+};
+
 // Per-rule state for a rule with >= 3 reactant patterns.  Left disabled
 // (and unallocated) for every uni- and bimolecular rule.
 struct NaryState {
@@ -2419,6 +2467,45 @@ struct NaryState {
   bool any_multi = false;                       // any slot spans > 1 molecule
   std::vector<int> slot_type_index;             // molecule type of the seed, per slot
   std::vector<std::vector<int>> reacting_local; // per-slot reacting components
+
+  // Pure-context slots, counted once per matching COMPLEX (issue #42).
+  //
+  // The two-slot path substitutes the complex count for the per-molecule
+  // total in compute_propensity (issue #33).  There is nothing to substitute
+  // into here: the propensity is the distinct-tuple sum
+  //
+  //   D = Σ_{(m_0..m_{n-1}) all distinct} Π_i c_i(m_i)
+  //     = Σ_P μ(P) · Π_{B ∈ P} T_B ,   T_B = Σ_m Π_{i ∈ B} c_i(m)
+  //
+  // whose every term is defined over molecules — T_B couples slots AT the
+  // same molecule, and the distinctness the expansion enforces is
+  // distinctness of seed molecules.
+  //
+  // So the count moves instead of the sum.  Per-complex counting IS
+  // per-molecule counting with the slot's count function replaced by the
+  // indicator of one designated representative molecule per matching complex:
+  //
+  //   c_j(m) = 1 if m represents its complex for slot j, else 0
+  //
+  // Then Σ_m c_j(m) is the number of matching complexes, which is the count
+  // BNG's network expansion gives that slot, while D stays a molecule-level
+  // sum and the partition-lattice expansion, the seed-distinctness retry, the
+  // full-assignment injectivity check and the per-slot sampler all keep
+  // working unchanged.  The sampler in particular needs no per-complex case
+  // at all: drawing ∝ c_j(m) already draws a matching complex uniformly and
+  // fires its representative, which is exactly the count/draw agreement
+  // issue #33 had to add by hand on the two-slot path.
+  //
+  // `raw` is what the tally is built from — the slot's actual embedding count
+  // per molecule, which decides membership — and `counts` holds the indicator
+  // derived from it.  They are separate vectors because the tally has to be
+  // able to say "this molecule still matches, it just is not the
+  // representative any more".
+  std::vector<char> slot_context;      // 1 = the rule transforms nothing in this slot
+  bool any_context = false;            // any slot_context set
+  std::vector<PerCxTally> percx;       // per context slot; unused entries stay empty
+  std::vector<std::vector<int>> raw;   // per context slot, embeddings per molecule
+  std::vector<std::vector<int>> cx_of; // per context slot, complex credited, or -1
 
   // T_B for every subset mask in [0, 1<<n_slots).  Index 0 is unused.
   std::vector<double> subset_totals;
@@ -2550,52 +2637,6 @@ bool nary_shape_supported(const Rule& rule) {
 
   return true;
 }
-
-// Per-complex tally for one pure-context reactant slot (issue #33).
-//
-// BioNetGen gives a reactant pattern the rule does not transform ONE reaction
-// instance per matching complex, however many molecules inside that complex
-// match: every embedding yields the identical reaction, so there is only one.
-// Recomputing that count by walking the matched molecules and de-duplicating
-// their complex ids is O(N) on the propensity hot path, and measurably so —
-// 32x on `r08` (`DNA -> DNA + RNA`, `RNA -> RNA + Protein`), where the context
-// pattern's population is the one that grows.  So it is maintained instead:
-// `list.size()` is the count, delta-updated as molecules start and stop
-// matching and as complexes merge and split.
-//
-// `rep` is the instance that actually fires.  The count and the draw have to
-// agree: a bimolecular rule rejects draws that put both reactants in the same
-// complex, and that rejection only offsets the propensity when the reactant is
-// drawn the same way it is counted.  Counting per complex while drawing per
-// molecule leaves a systematic bias wherever complexes hold unequal numbers of
-// context matches (tests/bng_oracle/models/context_sampler.bngl pins it).
-// Which instance is chosen is otherwise immaterial — the rule changes nothing
-// about it — so `rep` is simply the lowest live matching molecule id, which
-// makes it a function of the pool state rather than of event history.
-//
-// `rate_sum` is the DOR case: a pure-context pattern may still carry a local
-// function tag, and then the collapsed instances have different rates.  BNG2
-// cannot arbitrate — its network expansion has no local functions — so this
-// follows bngsim's patched NFsim (perComplexRateFactorSum) and prices one
-// representative per complex, which is also the instance `rep` fires.
-struct PerCxTally {
-  struct Entry {
-    int hits = 0;          // matching molecules of this slot inside the complex
-    int rep = -1;          // lowest live matching mol id
-    int pos = -1;          // index into `list`
-    double rep_rate = 0.0; // rep's local rate, as currently summed into rate_sum
-  };
-  std::unordered_map<int, Entry> entries;
-  std::vector<int> list; // complexes with hits > 0, dense, for O(1) uniform draw
-  double rate_sum = 0.0; // Σ rep_rate over `list` (local-rate rules only)
-
-  int size() const { return static_cast<int>(list.size()); }
-  void clear() {
-    entries.clear();
-    list.clear();
-    rate_sum = 0.0;
-  }
-};
 
 struct RuleState {
   std::vector<PerMolRuleData> mol_data; // indexed by mol_id
@@ -3942,15 +3983,15 @@ struct Engine::Impl {
         ReactantTransforms const rt = reactant_pattern_transforms(rule);
         rs.per_complex_a = rt.is_context(0);
         rs.per_complex_b = rt.is_context(1);
-        // Scoped to the two-slot path.  A rule with three or more reactant
-        // patterns takes the n-ary machinery, whose propensity is a
-        // distinct-tuple sum over the partition lattice of the slots — defined
-        // over MOLECULES, so a per-complex slot needs that sum re-derived
-        // rather than a count substituted into it.  Left per-molecule here and
-        // tracked separately (GH #42); the guard is explicit so a pure-context
-        // n-ary slot cannot half-enter this path — the n-ary rescan does not
-        // build a tally, and an empty tally read as a count would take the
-        // rule to zero propensity.
+        // These two flags are the TWO-SLOT path's, and only its: they gate
+        // bookkeeping (mol_data, percx_a/percx_b) that a rule with three or
+        // more reactant patterns never builds, because
+        // rescan_all_molecules_for_rule hands such a rule to nary_rescan
+        // first.  An n-ary rule's context slots are classified from the same
+        // ReactantTransforms in nary_setup and carried on NaryState, one per
+        // slot (issue #42).  Clearing here is what keeps a pure-context n-ary
+        // slot from half-entering the two-slot path, where an empty tally read
+        // as a count would take the rule to zero propensity.
         if (rule.reactant_pattern_starts.size() > 2 || rule.molecularity > 2) {
           rs.per_complex_a = false;
           rs.per_complex_b = false;
@@ -4238,6 +4279,21 @@ struct Engine::Impl {
     for (int ri = 0; ri < n_rules; ++ri) {
       auto& rule = model.rules[ri];
       auto& rs = rule_states[ri];
+      // An n-ary rule carries its context slots on NaryState, and any number
+      // of them (issue #42); the two-slot path carries at most the two.  The
+      // drain reads the same bucket for both and dispatches on nary.enabled.
+      if (rs.nary.enabled) {
+        for (int slot = 0; slot < rs.nary.n_slots; ++slot) {
+          if (rs.nary.slot_context[slot] == 0)
+            continue;
+          int const ti = rs.nary.slot_type_index[slot];
+          if (ti < 0 || ti >= static_cast<int>(percx_slots_by_type.size()))
+            continue;
+          percx_slots_by_type[ti].emplace_back(ri, slot);
+          any_percx = true;
+        }
+        continue;
+      }
       for (int slot = 0; slot < 2; ++slot) {
         if (!(slot == 0 ? rs.per_complex_a : rs.per_complex_b))
           continue;
@@ -4347,6 +4403,10 @@ struct Engine::Impl {
     ns.slot_type_index.assign(n, -1);
     ns.reacting_local.assign(n, {});
     ns.subset_totals.assign(std::size_t{1} << n, 0.0);
+    ns.slot_context.assign(n, 0);
+    ns.percx.assign(n, PerCxTally{});
+    ns.raw.assign(n, {});
+    ns.cx_of.assign(n, {});
     ns.slot_totals.assign(n, 0.0);
     ns.partitions = build_nary_partitions(n);
     ns.fenwick.resize(n);
@@ -4394,6 +4454,23 @@ struct Engine::Impl {
       for (int ci = 0; ci < static_cast<int>(pm.components.size()); ++ci)
         if (flat_reacting.count(flat_base + ci))
           ns.reacting_local[slot].push_back(ci);
+    }
+
+    // Which slots are pure context (issue #42).  Read from the same
+    // derivation the two-slot path uses, which already answers for every
+    // reactant pattern rather than just the first two — engine.cpp simply
+    // refused to act on slots 2..n-1 until this state existed to hold the
+    // answer.  `is_context` is false for a rule whose operations could not
+    // all be resolved to a reactant pattern, so an unresolved endpoint keeps
+    // the conservative per-molecule count rather than halving a real rate.
+    {
+      ReactantTransforms const rt = reactant_pattern_transforms(rule);
+      for (int slot = 0; slot < n; ++slot) {
+        if (!rt.is_context(static_cast<size_t>(slot)))
+          continue;
+        ns.slot_context[slot] = 1;
+        ns.any_context = true;
+      }
     }
   }
 
@@ -4447,6 +4524,186 @@ struct Engine::Impl {
                                 /*fm=*/nullptr, &ns.reacting_local[slot]);
   }
 
+  // --- Per-complex tallies for an n-ary rule's context slots (issue #42) ---
+  //
+  // The same tally and the same representative rule as the two-slot path,
+  // against different storage: an n-ary rule never builds `mol_data` —
+  // rescan_all_molecules_for_rule hands it straight to nary_rescan, before
+  // that bookkeeping starts — so a slot's match count and its membership
+  // record live in NaryState's own per-slot vectors instead.  `rate_sum` has
+  // no counterpart at all: nary_shape_supported refuses a local function, so
+  // there is no DOR case here to arbitrate.
+
+  static void nary_percx_grow(NaryState& ns, int slot, int mid) {
+    if (mid >= static_cast<int>(ns.raw[slot].size()))
+      ns.raw[slot].resize(mid + 1, 0);
+    if (mid >= static_cast<int>(ns.cx_of[slot].size()))
+      ns.cx_of[slot].resize(mid + 1, -1);
+  }
+
+  // Is `mid` the representative of the complex this slot credits it to?  This
+  // is c_j(mid) for a context slot — see the NaryState comment for why the
+  // per-complex count is carried as an indicator on one molecule.
+  static int nary_percx_indicator(const NaryState& ns, int slot, int mid) {
+    if (mid < 0 || mid >= static_cast<int>(ns.cx_of[slot].size()))
+      return 0;
+    int const cx = ns.cx_of[slot][mid];
+    if (cx < 0)
+      return 0;
+    auto it = ns.percx[slot].entries.find(cx);
+    return (it != ns.percx[slot].entries.end() && it->second.rep == mid) ? 1 : 0;
+  }
+
+  // Lowest molecule id this slot counts inside `cx`.  Membership is read off
+  // the tally's own record, exactly as percx_find_rep reads it, so a molecule
+  // that has already been retired from the slot cannot be elected.
+  int nary_percx_find_rep(const NaryState& ns, int slot, int cx) const {
+    int best = -1;
+    for (int const m : pool.molecules_in_complex(cx)) {
+      if (m >= static_cast<int>(ns.cx_of[slot].size()))
+        continue;
+      if (ns.cx_of[slot][m] != cx)
+        continue;
+      if (best < 0 || m < best)
+        best = m;
+    }
+    return best;
+  }
+
+  // Bring one context slot's tally in line with the pool for `mid`, appending
+  // every molecule whose representative status changed to `moved` — the
+  // caller owes those molecules a re-fold, since the indicator IS the count.
+  // The raw match count is read, not recomputed: the complex-move drain calls
+  // this for molecules a merge or split relocated without touching a bond of
+  // theirs, and those still match exactly what they matched before.
+  void nary_percx_sync(NaryState& ns, int slot, int mid, std::vector<int>& moved) const {
+    nary_percx_grow(ns, slot, mid);
+    PerCxTally& t = ns.percx[slot];
+    int& cur = ns.cx_of[slot][mid];
+    bool const live = mid < pool.molecule_count() && pool.molecule(mid).active;
+    int const want = (live && ns.raw[slot][mid] > 0) ? pool.complex_of(mid) : -1;
+    if (cur == want)
+      return;
+
+    if (cur >= 0) {
+      int const from = cur;
+      cur = -1; // before find_rep, which reads it — see percx_sync
+      auto it = t.entries.find(from);
+      if (it != t.entries.end()) {
+        int const old_rep = it->second.rep;
+        if (--it->second.hits > 0) {
+          if (old_rep == mid) {
+            it->second.rep = nary_percx_find_rep(ns, slot, from);
+            moved.push_back(mid);
+            if (it->second.rep >= 0)
+              moved.push_back(it->second.rep);
+          }
+        } else {
+          // Complex holds no match any more: swap-erase it out of the dense
+          // list so the count stays list.size().
+          int const pos = it->second.pos;
+          int const back = t.list.back();
+          t.list[pos] = back;
+          t.list.pop_back();
+          auto bit = t.entries.find(back);
+          if (bit != t.entries.end())
+            bit->second.pos = pos;
+          t.entries.erase(from);
+          if (old_rep >= 0)
+            moved.push_back(old_rep);
+        }
+      }
+    }
+
+    cur = want;
+    if (want < 0)
+      return;
+
+    PerCxTally::Entry& e = t.entries[want];
+    if (e.hits == 0) {
+      e.pos = static_cast<int>(t.list.size());
+      t.list.push_back(want);
+      e.rep = -1;
+    }
+    ++e.hits;
+    if (e.rep < 0 || mid < e.rep) {
+      if (e.rep >= 0)
+        moved.push_back(e.rep);
+      e.rep = mid;
+      moved.push_back(mid);
+    }
+  }
+
+  // Subtract / add one molecule's contribution to every subset total.  Every
+  // count change is bracketed by these two, one molecule at a time, so a
+  // representative moving between two molecules is two separate brackets and
+  // never a half-applied one.
+  static void nary_totals_sub(NaryState& ns, int mid) {
+    uint32_t const n_masks = uint32_t{1} << ns.n_slots;
+    for (uint32_t mask = 1; mask < n_masks; ++mask)
+      ns.subset_totals[mask] -= nary_mol_product(ns, mid, mask);
+  }
+  static void nary_totals_add(NaryState& ns, int mid) {
+    uint32_t const n_masks = uint32_t{1} << ns.n_slots;
+    for (uint32_t mask = 1; mask < n_masks; ++mask)
+      ns.subset_totals[mask] += nary_mol_product(ns, mid, mask);
+  }
+
+  // Write one slot count, keeping that slot's Fenwick sampler in step.
+  void nary_set_count(NaryState& ns, int slot, int mid, int new_count) const {
+    int const old_count = ns.counts[slot][mid];
+    if (new_count == old_count)
+      return;
+    ns.counts[slot][mid] = new_count;
+    if (ns.use_fenwick[slot] == 0)
+      return;
+    // Growing the tree in place would leave new ancestor nodes at zero,
+    // silently truncating prefix sums — rebuild, as the a/b path does.
+    if (mid >= ns.fenwick[slot].n) {
+      int const new_n = std::max(mid + 1, ns.fenwick[slot].n * 2);
+      ns.fenwick[slot].init(new_n);
+      for (int const m : pool.molecules_of_type(ns.slot_type_index[slot])) {
+        if (m < 0 || m >= pool.molecule_count() || !pool.molecule(m).active)
+          continue;
+        if (ns.count_for(slot, m) > 0)
+          ns.fenwick[slot].update(m, ns.count_for(slot, m));
+      }
+      return;
+    }
+    ns.fenwick[slot].update(mid, new_count - old_count);
+  }
+
+  // Re-derive every context slot's indicator at one molecule and fold the
+  // change into the subset totals.  Used for the molecules a representative
+  // change moved, which are not otherwise part of the event at all.
+  void nary_refold_context(NaryState& ns, int mid) const {
+    if (mid < 0)
+      return;
+    for (int slot = 0; slot < ns.n_slots; ++slot)
+      if (mid >= static_cast<int>(ns.counts[slot].size()))
+        ns.counts[slot].resize(mid + 1, 0);
+    nary_totals_sub(ns, mid);
+    for (int slot = 0; slot < ns.n_slots; ++slot)
+      if (ns.slot_context[slot] != 0)
+        nary_set_count(ns, slot, mid, nary_percx_indicator(ns, slot, mid));
+    nary_totals_add(ns, mid);
+    for (int slot = 0; slot < ns.n_slots; ++slot)
+      ns.slot_totals[slot] = ns.subset_totals[uint32_t{1} << slot];
+  }
+
+  // A molecule the pool moved between complexes, for every context slot its
+  // type can seed on this rule.  The n-ary half of percx_sync_all_slots.
+  void nary_percx_moved(int rule_idx, int slot, int mid) {
+    auto& ns = rule_states[rule_idx].nary;
+    nary_moved_scratch_.clear();
+    nary_percx_sync(ns, slot, mid, nary_moved_scratch_);
+    for (int const m : nary_moved_scratch_)
+      nary_refold_context(ns, m);
+    nary_moved_scratch_.clear();
+  }
+
+  std::vector<int> nary_moved_scratch_;
+
   // Full rescan of every slot's per-molecule counts, rebuilding the subset
   // totals from scratch.  Called from rescan_all_molecules_for_rule.
   void nary_rescan(int rule_idx) {
@@ -4459,12 +4716,39 @@ struct Engine::Impl {
       ns.counts[slot].assign(pool_size, 0);
     std::fill(ns.subset_totals.begin(), ns.subset_totals.end(), 0.0);
     std::fill(ns.slot_totals.begin(), ns.slot_totals.end(), 0.0);
+    if (ns.any_context) {
+      for (int slot = 0; slot < ns.n_slots; ++slot) {
+        if (ns.slot_context[slot] == 0)
+          continue;
+        ns.percx[slot].clear();
+        ns.raw[slot].assign(pool_size, 0);
+        ns.cx_of[slot].assign(pool_size, -1);
+      }
+    }
 
     for (int slot = 0; slot < ns.n_slots; ++slot) {
       for (int const mid : pool.molecules_of_type(ns.slot_type_index[slot])) {
         if (mid < 0 || mid >= pool_size || !pool.molecule(mid).active)
           continue;
-        ns.counts[slot][mid] = nary_slot_count(rule, ns, slot, mid);
+        int const c = nary_slot_count(rule, ns, slot, mid);
+        if (ns.slot_context[slot] == 0) {
+          ns.counts[slot][mid] = c;
+          continue;
+        }
+        // Context slot: the embedding count decides tally membership, and
+        // membership decides who represents the complex.  Counts are written
+        // once the whole slot has been walked, since the representative is
+        // not settled until then.
+        ns.raw[slot][mid] = c;
+        nary_percx_sync(ns, slot, mid, nary_moved_scratch_);
+      }
+      nary_moved_scratch_.clear();
+      if (ns.slot_context[slot] == 0)
+        continue;
+      for (int const cx : ns.percx[slot].list) {
+        auto it = ns.percx[slot].entries.find(cx);
+        if (it != ns.percx[slot].entries.end() && it->second.rep >= 0)
+          ns.counts[slot][it->second.rep] = 1;
       }
     }
 
@@ -4525,38 +4809,43 @@ struct Engine::Impl {
         ns.counts[slot].resize(mid + 1, 0);
     }
 
-    uint32_t const n_masks = uint32_t{1} << ns.n_slots;
-    for (uint32_t mask = 1; mask < n_masks; ++mask)
-      ns.subset_totals[mask] -= nary_mol_product(ns, mid, mask);
-
     bool const live = (mid < pool.molecule_count()) && pool.molecule(mid).active;
-    for (int slot = 0; slot < ns.n_slots; ++slot) {
-      int const old_count = ns.counts[slot][mid];
-      int new_count = 0;
-      if (live && pool.molecule(mid).type_index == ns.slot_type_index[slot])
-        new_count = nary_slot_count(rule, ns, slot, mid);
-      ns.counts[slot][mid] = new_count;
 
-      if (ns.use_fenwick[slot] != 0 && new_count != old_count) {
-        // Growing the tree in place would leave new ancestor nodes at zero,
-        // silently truncating prefix sums — rebuild, as the a/b path does.
-        if (mid >= ns.fenwick[slot].n) {
-          int const new_n = std::max(mid + 1, ns.fenwick[slot].n * 2);
-          ns.fenwick[slot].init(new_n);
-          for (int const m : pool.molecules_of_type(ns.slot_type_index[slot])) {
-            if (m < 0 || m >= pool.molecule_count() || !pool.molecule(m).active)
-              continue;
-            if (ns.count_for(slot, m) > 0)
-              ns.fenwick[slot].update(m, ns.count_for(slot, m));
-          }
-        } else {
-          ns.fenwick[slot].update(mid, new_count - old_count);
-        }
+    // Context slots settle their tallies first (issue #42).  The count this
+    // molecule carries for such a slot is not its embedding count but whether
+    // it represents its complex, and that is not knowable until membership is
+    // in: a molecule that stops matching hands the representation to another
+    // molecule, which is not part of this event and would otherwise keep a
+    // stale zero.  Collect those here, apply them below.
+    nary_moved_scratch_.clear();
+    if (ns.any_context) {
+      for (int slot = 0; slot < ns.n_slots; ++slot) {
+        if (ns.slot_context[slot] == 0)
+          continue;
+        nary_percx_grow(ns, slot, mid);
+        ns.raw[slot][mid] = (live && pool.molecule(mid).type_index == ns.slot_type_index[slot])
+                                ? nary_slot_count(rule, ns, slot, mid)
+                                : 0;
+        nary_percx_sync(ns, slot, mid, nary_moved_scratch_);
       }
     }
 
-    for (uint32_t mask = 1; mask < n_masks; ++mask)
-      ns.subset_totals[mask] += nary_mol_product(ns, mid, mask);
+    nary_totals_sub(ns, mid);
+    for (int slot = 0; slot < ns.n_slots; ++slot) {
+      int new_count = 0;
+      if (ns.any_context && ns.slot_context[slot] != 0)
+        new_count = nary_percx_indicator(ns, slot, mid);
+      else if (live && pool.molecule(mid).type_index == ns.slot_type_index[slot])
+        new_count = nary_slot_count(rule, ns, slot, mid);
+      nary_set_count(ns, slot, mid, new_count);
+    }
+    nary_totals_add(ns, mid);
+
+    for (int const m : nary_moved_scratch_)
+      if (m != mid)
+        nary_refold_context(ns, m);
+    nary_moved_scratch_.clear();
+
     for (int slot = 0; slot < ns.n_slots; ++slot)
       ns.slot_totals[slot] = ns.subset_totals[uint32_t{1} << slot];
   }
@@ -4720,8 +5009,21 @@ struct Engine::Impl {
     int const want = (live && count_of(md, slot) > 0) ? pool.complex_of(mid) : -1;
     if (cur == want)
       return;
-    if (cur >= 0)
-      percx_remove(rs, slot, cur, mid);
+    if (cur >= 0) {
+      // Retire the molecule's own membership record BEFORE the tally
+      // re-derives the representative.  percx_find_rep decides who is
+      // eligible by reading exactly this record, so leaving it standing lets
+      // the molecule on its way out be re-elected representative of the
+      // complex it is leaving.  Nothing then corrects it: the count is still
+      // right (the complex does hold another match), so the slot keeps its
+      // propensity, but every draw returns a molecule that no longer matches
+      // and null-events, and that complex silently stops reacting until a
+      // full rescan.  Measured at 1.8x too slow on a catalytic rule whose
+      // dimeric enzyme loses its lower-id subunit to a state change.
+      int const from = cur;
+      cur = -1;
+      percx_remove(rs, slot, from, mid);
+    }
     cur = want;
     if (want >= 0)
       percx_add(rs, slot, want, mid);
@@ -4737,8 +5039,12 @@ struct Engine::Impl {
     int const ti = pool.molecule(mid).type_index;
     if (ti < 0 || ti >= static_cast<int>(percx_slots_by_type.size()))
       return;
-    for (auto& [ri, slot] : percx_slots_by_type[ti])
-      percx_sync(ri, slot, mid);
+    for (auto& [ri, slot] : percx_slots_by_type[ti]) {
+      if (rule_states[ri].nary.enabled)
+        nary_percx_moved(ri, slot, mid);
+      else
+        percx_sync(ri, slot, mid);
+    }
   }
 
   // Drain the pool's complex-move side-channel.  Runs once per event, before

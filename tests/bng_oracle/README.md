@@ -34,12 +34,19 @@ ordinary deterministic-limit gap and says nothing about the model; it just means
 the deterministic solver is answering a different question than a 4-complex
 stochastic model asks. Same tool, same expanded network, stochastic integrator.
 
+`context_nary` takes it for the other reason: its rate is a product of two
+substrate pools that deplete together and a catalyst-complex population that
+fluctuates as dimers form and break, so the ODE of the means is not the mean of
+the SSA. A stochastic reference sidesteps the question entirely — it is the same
+process, not an approximation to it.
+
 ## Models
 
 | model | reference | pins |
 |---|---|---|
 | `context_symmetry` | ode | An untransformed (context) reactant pattern is counted once per matching **complex**, not once per matching molecule — including the `Bind_sym` guard in the other direction, where the rule *does* transform the pattern and the 2x is correct (GH #33). |
 | `context_sampler` | ssa | The same slot is **drawn** the way it is **counted**. Counting per complex while sampling per molecule leaves the same-complex rejection mis-weighted, which is a systematic bias wherever complexes hold unequal numbers of context matches (GH #33). |
+| `context_nary` | ssa | The same per-complex count on a rule with **three or more** reactant patterns, which takes the n-ary distinct-tuple machinery rather than the two-slot propensity (GH #42). Pins it on a static homodimer (2x), a static homotrimer ring against a single-molecule pattern (3x), and a catalyst dimer that forms and breaks for the whole run — plus `Guard_trans`, an n-ary rule that *does* transform its multi-subunit slot and must keep its 2x. |
 
 ## Running
 
