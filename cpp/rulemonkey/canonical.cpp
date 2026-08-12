@@ -37,7 +37,9 @@
 //   interchangeable same-name components by their refined color; emit
 //   BNGL `Type(comp~state!bond,...)` with bond labels assigned in
 //   first-encounter order along the walk.  The string is both the dedup
-//   key and the `.species` line.
+//   key and the `.species` line, and the walk order is returned with it
+//   as CanonForm::mol_order — see the header for why a caller may need
+//   to name one molecule of a complex isomorphism-invariantly.
 //
 //   Component-order contract: the renderer preserves the *name layout*
 //   of the input ComplexGraph (slot i keeps its declared name) and only
@@ -421,15 +423,22 @@ std::string render(const ComplexGraph& g, const Tables& tab, const std::vector<i
   return out;
 }
 
-// Render a leaf coloring: derive the canonical molecule order (sort by
-// refined color — at a leaf every molecule color is distinct, so this
-// is a total order) and the per-component bonded colors, then render.
-std::string render_leaf(const ComplexGraph& g, const Tables& tab, const std::vector<int>& color,
-                        const std::vector<int>& comp_vertex, int n_mol, Scratch& s) {
+// The canonical molecule order of a leaf coloring: sort by refined
+// color.  At a leaf every molecule color is distinct, so this is a
+// total order, and it is the order the render below walks in.
+const std::vector<int>& leaf_order(const std::vector<int>& color, int n_mol, Scratch& s) {
   s.order.resize(n_mol);
   for (int m = 0; m < n_mol; ++m)
     s.order[m] = m;
   std::sort(s.order.begin(), s.order.end(), [&](int a, int b) { return color[a] < color[b]; });
+  return s.order;
+}
+
+// Render a leaf coloring: take the canonical molecule order and the
+// per-component bonded colors, then render.
+std::string render_leaf(const ComplexGraph& g, const Tables& tab, const std::vector<int>& color,
+                        const std::vector<int>& comp_vertex, int n_mol, Scratch& s) {
+  leaf_order(color, n_mol, s);
   return render(g, tab, s.order, bonded_colors(g, color, comp_vertex), s);
 }
 
@@ -471,10 +480,11 @@ struct SearchState {
   Refiner* refiner;
   const std::vector<int>* comp_vertex;
   int n_mol;
-  long leaf_budget;      // remaining leaves before the §5 guard trips
-  bool best_set = false; // false until the first leaf is rendered
-  std::string best;      // lexicographically minimal leaf render so far
-  Scratch scratch;       // reused across every leaf this search visits
+  long leaf_budget;            // remaining leaves before the §5 guard trips
+  bool best_set = false;       // false until the first leaf is rendered
+  std::string best;            // lexicographically minimal leaf render so far
+  std::vector<int> best_order; // the molecule ordering `best` was rendered in
+  Scratch scratch;             // reused across every leaf this search visits
 };
 
 // Recurse: `color` is a WL-stable coloring.  At a leaf, render and keep
@@ -489,6 +499,9 @@ void search(SearchState& st, const std::vector<int>& color) {
     std::string label = render_leaf(*st.g, *st.tab, color, *st.comp_vertex, st.n_mol, st.scratch);
     if (!st.best_set || label < st.best) {
       st.best = std::move(label);
+      // render_leaf leaves the ordering it rendered in `scratch.order`;
+      // keep the winner's alongside the winning string.
+      st.best_order = st.scratch.order;
       st.best_set = true;
     }
     --st.leaf_budget;
@@ -518,12 +531,16 @@ void search(SearchState& st, const std::vector<int>& color) {
   }
 }
 
-} // namespace
-
-CanonForm canonicalize(const ComplexGraph& g) {
+// Shared body of canonicalize() and canonical_order().  `order_only`
+// suppresses the fast path's render — the one piece of work a caller
+// that wants the ordering alone has no use for.  It changes nothing
+// else: the fast path's ordering is sort-by-refined-color and does not
+// consult the string, and the search path renders regardless, since
+// there the strings are what select the canonical leaf.
+CanonForm canonicalize_impl(const ComplexGraph& g, bool order_only) {
   int const n_mol = g.molecule_count();
   if (n_mol == 0)
-    return {"", true};
+    return {"", true, {}};
 
   Tables const tab = build_tables(g);
 
@@ -603,8 +620,14 @@ CanonForm canonicalize(const ComplexGraph& g) {
   // the refined colors fix a unique isomorphism-invariant ordering;
   // render directly.  This is the overwhelmingly common case.
   Scratch scratch;
-  if (is_leaf(g, tab, color, comp_vertex, n_mol, scratch))
-    return {render_leaf(g, tab, color, comp_vertex, n_mol, scratch), /*fast_path=*/true};
+  if (is_leaf(g, tab, color, comp_vertex, n_mol, scratch)) {
+    if (order_only)
+      return {std::string{}, /*fast_path=*/true, leaf_order(color, n_mol, scratch)};
+    // render_leaf writes the ordering into scratch.order, so read it out
+    // after the call rather than before.
+    std::string label = render_leaf(g, tab, color, comp_vertex, n_mol, scratch);
+    return {std::move(label), /*fast_path=*/true, std::move(scratch.order)};
+  }
 
   // --- Individualization-refinement (plan §3.2 step 3) ---------------------
   //
@@ -613,12 +636,20 @@ CanonForm canonicalize(const ComplexGraph& g) {
   // re-refine, and recurse; the canonical label is the lexicographically
   // minimal leaf render.  This is a true canonical form — see search()
   // and pick_cell() for why the leaf set is isomorphism-invariant.
-  SearchState st{&g,          &tab,  &refiner,      &comp_vertex, n_mol,
-                 kLeafBudget, false, std::string{}, Scratch{}};
+  SearchState st{&g,          &tab,  &refiner,      &comp_vertex,       n_mol,
+                 kLeafBudget, false, std::string{}, std::vector<int>{}, Scratch{}};
   search(st, color);
-  return {st.best, /*fast_path=*/false};
+  return {std::move(st.best), /*fast_path=*/false, std::move(st.best_order)};
 }
 
+} // namespace
+
+CanonForm canonicalize(const ComplexGraph& g) { return canonicalize_impl(g, /*order_only=*/false); }
+
 std::string canonical_label(const ComplexGraph& g) { return canonicalize(g).label; }
+
+std::vector<int> canonical_order(const ComplexGraph& g) {
+  return canonicalize_impl(g, /*order_only=*/true).mol_order;
+}
 
 } // namespace rulemonkey::canonical

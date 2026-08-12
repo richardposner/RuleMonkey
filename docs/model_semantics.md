@@ -89,6 +89,24 @@ The runtime severity model is two-level:
     local function (DOR), function product, MM" as the affected set.
     `ft_local_fcn_bimol_sym` is verdicted against BNG2's ODE for that
     reason.
+  - **A per-molecule tag on a reactant pattern the rule does not
+    transform.** Such a pattern is *context*: every embedding of it yields
+    the identical reaction, so BNG2's network expansion emits one instance
+    per matching **complex** however many molecules inside that complex
+    match, and RM counts it the same way. Where several molecules of one
+    complex do match, the collapse then has to decide which of them the
+    surviving instance is priced at — and with a per-molecule tag they
+    price differently. RM
+    prices at the **canonically-first** matching molecule of the complex,
+    which is what BNG2's network expansion does: it evaluates the tagged
+    observable once and emits the result as a constant, at the first
+    matching molecule of the species' canonical form. The point of taking
+    it from the canonical form rather than from, say, the oldest molecule
+    is that every copy of a species then prices identically, however each
+    copy was assembled. A **complex-wide** tag raises no such question:
+    the observable is evaluated over the whole complex, so every molecule
+    in it reads the same value. `context_dor_price` in the BNG2-oracle
+    suite pins the three readings apart.
   - **Observable scope inside a local function.** An observable *applied
     to the function's own tag* — `Mod(x)` — is evaluated at the tagged
     molecule (per-molecule or complex-wide, per the tag). An observable

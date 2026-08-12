@@ -428,6 +428,7 @@ public:
     // a complex id that no longer exists.  Clearing the set here pairs with
     // the wholesale cx_label_cache_ clear in Engine::Impl::load_state_from.
     cxs_dirty_.clear();
+    cx_edits_.clear();
     for (int i = 0; i < n; ++i) {
       int cx, nm;
       is >> cx >> nm;
@@ -745,12 +746,38 @@ public:
   // existing* complex is the bug the decision-#6 self-check catches.
   std::unordered_set<int> cxs_dirty_;
 
+  // The same marks as `cxs_dirty_`, as a drainable list rather than a
+  // set — for an observer that has to SEE each edit rather than ask
+  // whether one is outstanding.  Two consumers cannot share the set: it
+  // is cleared by whoever reads it first, so the second never learns of
+  // the edit.
+  //
+  // Issue #52's canonical per-complex representative is the consumer: a
+  // state change inside a complex reorders its canonical form without
+  // moving any molecule between complexes, so `cx_moves_` above never
+  // mentions it, yet the molecule that should price the complex has
+  // changed.  Gated because it is pure overhead for every other model —
+  // the flag is set at rule setup only when some rule needs a canonical
+  // representative, which needs a pure-context reactant pattern carrying
+  // a per-molecule local function tag.  Duplicates are fine; the reader
+  // de-duplicates.
+  std::vector<int> cx_edits_;
+  bool track_cx_edits_ = false;
+  void consume_cx_edits(std::vector<int>& out) {
+    out.swap(cx_edits_);
+    cx_edits_.clear();
+  }
+
 private:
   // O(1) cache-invalidation hook for the structural mutators above: a
   // single set insert per edited complex.  This is the entire event-loop
   // cost the cached-incremental label mode adds (plan §5); canonical
   // labeling itself never runs here.
-  void mark_cx_dirty(int cx_id) { cxs_dirty_.insert(cx_id); }
+  void mark_cx_dirty(int cx_id) {
+    cxs_dirty_.insert(cx_id);
+    if (track_cx_edits_)
+      cx_edits_.push_back(cx_id);
+  }
 
   // P7: |edges| - |vertices| + 1 per complex, maintained incrementally.
   // Absent entries mean 0 (tree or unknown complex).
@@ -2419,21 +2446,43 @@ struct NaryPartition {
 // drawn the same way it is counted.  Counting per complex while drawing per
 // molecule leaves a systematic bias wherever complexes hold unequal numbers of
 // context matches (tests/bng_oracle/models/context_sampler.bngl pins it).
-// Which instance is chosen is otherwise immaterial — the rule changes nothing
-// about it — so `rep` is simply the lowest live matching molecule id, which
-// makes it a function of the pool state rather than of event history.
+// Which instance is chosen is immaterial WHEN THE INSTANCES ALL PRICE THE
+// SAME — the rule changes nothing about them — so `rep` is by default simply
+// the lowest live matching molecule id, which makes it a function of the pool
+// state rather than of event history and costs one integer compare to
+// maintain.
 //
 // `rate_sum` is the DOR case: a pure-context pattern may still carry a local
-// function tag, and then the collapsed instances have different rates.  BNG2
-// cannot arbitrate — its network expansion has no local functions — so this
-// follows bngsim's patched NFsim (perComplexRateFactorSum) and prices one
-// representative per complex, which is also the instance `rep` fires.  An
-// n-ary rule leaves it at zero: nary_shape_supported refuses a local function
-// outright, so its collapsed instances all price the same.
+// function tag, and then the collapsed instances DO price differently and
+// `rep` also decides the rate.  Lowest-id is not good enough there.  A
+// molecule id is a fact about pool history, so two chemically identical
+// complexes assembled in different orders price differently and the same
+// model answers differently depending on how its complexes were built —
+// measured at 5.5x against BNG2 and 5.7x against RuleMonkey itself (issue
+// #52).  BNG2 does arbitrate this, contrary to what issue #33 assumed: it
+// expands the rule to a ConstantExpression obtained by evaluating the tagged
+// observable at the species' canonically-FIRST matching molecule, which is a
+// property of the species, so every copy of a species prices identically.
+//
+// So a slot that prices per molecule takes `rep` from the complex's canonical
+// form instead (percx_canon_a/_b select it, percx_find_rep implements it).
+// The cost is one canonicalization per REP CHANGE on those slots only; a slot
+// whose instances all price the same — every rule with no local function, and
+// every complex-wide (`local_arg_is_molecule == false`) tag, where the
+// observable is evaluated over the whole complex and so reads the same at
+// every molecule in it — keeps the integer compare and never reaches
+// canonical.cpp.  That gate is what keeps the models this machinery exists
+// for (`r08`, `machine`, `ensemble`) off the canonicalizer entirely.
+//
+// An n-ary rule leaves `rate_sum` at zero: nary_shape_supported refuses a
+// local function outright, so its collapsed instances all price the same and
+// its rep stays lowest-id.
 struct PerCxTally {
   struct Entry {
     int hits = 0;          // matching molecules of this slot inside the complex
-    int rep = -1;          // lowest live matching mol id
+    int rep = -1;          // the matching molecule that prices and fires this
+                           // complex: lowest live id, or the canonically-first
+                           // when the slot prices per molecule
     int pos = -1;          // index into `list`
     double rep_rate = 0.0; // rep's local rate, as currently summed into rate_sum
   };
@@ -2665,6 +2714,14 @@ struct RuleState {
   // matching molecule (issue #33).  See PerCxTally.
   bool per_complex_a = false;
   bool per_complex_b = false;
+  // …and that collapsed instance also has to be PRICED, at one of the
+  // molecules the slot collapsed.  Set when the choice is observable — the
+  // slot carries a per-molecule local function tag, so its matching molecules
+  // inside one complex can price differently — and then the representative
+  // comes from the complex's canonical form rather than from id order (issue
+  // #52).  False everywhere else, which is where the cheap path stays.
+  bool percx_canon_a = false;
+  bool percx_canon_b = false;
   PerCxTally percx_a;
   PerCxTally percx_b;
   FenwickTree fenwick_a;      // O(log N) sampler for slot A (if active)
@@ -3841,8 +3898,11 @@ struct Engine::Impl {
     // Every pure-context tally was just rebuilt from the live pool, so the
     // moves this mutation logged have nothing left to say.  Draining them at
     // the next event would be harmless (percx_sync is idempotent) but would
-    // let the list grow across a paused session that adds many species.
+    // let the list grow across a paused session that adds many species.  The
+    // edit log is in the same position: the rebuild re-elected every
+    // canonical representative from the pool as it now stands.
     pool.cx_moves_.clear();
+    pool.cx_edits_.clear();
   }
 
   // Embedding overcounting is now corrected at count time inside
@@ -3996,6 +4056,17 @@ struct Engine::Impl {
           rs.per_complex_a = false;
           rs.per_complex_b = false;
         }
+        // Does the collapse also have to decide a RATE (issue #52)?  Only
+        // when the slot's local factor is evaluated per molecule and is not
+        // the constant 1 the DOR1 normalization puts on the untagged side: a
+        // complex-wide tag reads the same observable at every molecule of the
+        // complex, so every instance it collapsed prices identically and the
+        // cheap lowest-id representative is as good as any.
+        rs.percx_canon_a = rs.per_complex_a && rule.rate_law.is_local &&
+                           !rule.rate_law.unity_factor_a && rule.rate_law.local_arg_is_molecule;
+        rs.percx_canon_b = rs.per_complex_b && rule.rate_law.type == RateLawType::FunctionProduct &&
+                           rule.rate_law.is_local_b && !rule.rate_law.unity_factor_b &&
+                           rule.rate_law.local_arg_is_molecule_b;
       }
 
       // Relevant-component bitmask for the A-seed (P1 cache, step 1).
@@ -4276,6 +4347,7 @@ struct Engine::Impl {
     // all is every molecule, making the whole mechanism free there.
     percx_slots_by_type.assign(model.molecule_types.size(), {});
     any_percx = false;
+    percx_canon_slots.clear();
     for (int ri = 0; ri < n_rules; ++ri) {
       auto& rule = model.rules[ri];
       auto& rs = rule_states[ri];
@@ -4309,11 +4381,18 @@ struct Engine::Impl {
           continue;
         percx_slots_by_type[ti].emplace_back(ri, slot);
         any_percx = true;
+        if (slot == 0 ? rs.percx_canon_a : rs.percx_canon_b)
+          percx_canon_slots.emplace_back(ri, slot);
       }
     }
+    // Only now, with the canonical slots known, does the pool start logging
+    // per-complex edits — the list has no reader in any other model, and the
+    // mark it hangs off is on every structural mutator.
+    pool.track_cx_edits_ = !percx_canon_slots.empty();
     // The pool appends to its move side-channel unconditionally; if nothing
     // reads it, drop whatever accumulated during seeding.
     pool.cx_moves_.clear();
+    pool.cx_edits_.clear();
 
     // Precompute have_local_rules_ flag (Fix 3)
     have_local_rules_ = false;
@@ -4903,11 +4982,25 @@ struct Engine::Impl {
   bool any_percx = false;
   std::vector<int> percx_moved_scratch;
 
+  // The (rule, slot) pairs whose representative comes from the complex's
+  // canonical form (issue #52).  Empty for every model that does not put a
+  // per-molecule local function tag on a pure-context reactant pattern, and
+  // that emptiness is what keeps the canonicalizer off the event loop there.
+  std::vector<std::pair<int, int>> percx_canon_slots;
+  std::vector<int> percx_edit_scratch;
+  // The rebuild below elects representatives the cheap way and lets
+  // percx_resum_rates canonicalize each complex once at the end, rather than
+  // once per molecule that joins the tally on the way there.
+  bool percx_rebuilding = false;
+
   static PerCxTally& tally_of(RuleState& rs, int slot) {
     return (slot != 0) ? rs.percx_b : rs.percx_a;
   }
   static int& percx_cx_of(PerMolRuleData& md, int slot) {
     return (slot != 0) ? md.percx_cx_b : md.percx_cx_a;
+  }
+  static bool percx_canon_of(const RuleState& rs, int slot) {
+    return (slot != 0) ? rs.percx_canon_b : rs.percx_canon_a;
   }
   static int count_of(const PerMolRuleData& md, int slot) {
     return (slot != 0) ? md.count_b : md.count_a;
@@ -4934,17 +5027,20 @@ struct Engine::Impl {
     it->second.rep_rate = nv;
   }
 
-  // Lowest molecule id this slot currently counts inside `cx`.  Only runs when
-  // the sitting rep drops out, which is rare next to the count updates.
-  int percx_find_rep(RuleState& rs, int slot, int cx) const {
+  // Is molecule `m` one of the matches this slot currently credits to `cx`?
+  // Membership is read off the tally's own record rather than off the match
+  // count, so a molecule that has moved but not yet been re-synced cannot be
+  // promoted into a complex it is no longer credited to.
+  static bool percx_holds(RuleState& rs, int slot, int cx, int m) {
+    return m >= 0 && m < static_cast<int>(rs.mol_data.size()) &&
+           percx_cx_of(rs.mol_data[m], slot) == cx;
+  }
+
+  // Lowest live molecule id this slot counts inside `cx`.
+  int percx_lowest_rep(RuleState& rs, int slot, int cx) const {
     int best = -1;
     for (int const m : pool.molecules_in_complex(cx)) {
-      if (m >= static_cast<int>(rs.mol_data.size()))
-        continue;
-      // Membership is read off the tally's own record rather than off the
-      // match count, so a molecule that has moved but not yet been re-synced
-      // cannot be promoted into a complex it is no longer credited to.
-      if (percx_cx_of(rs.mol_data[m], slot) != cx)
+      if (!percx_holds(rs, slot, cx, m))
         continue;
       if (best < 0 || m < best)
         best = m;
@@ -4952,7 +5048,38 @@ struct Engine::Impl {
     return best;
   }
 
-  static void percx_add(RuleState& rs, int slot, int cx, int mid) {
+  // The molecule that represents `cx` for this slot.  Only runs when the
+  // sitting rep drops out or the complex is edited, which is rare next to the
+  // count updates.
+  //
+  // Lowest live matching id, unless the slot prices per molecule — then which
+  // one is observable, and the answer has to be a property of the species
+  // rather than of pool history, so it comes from the complex's canonical
+  // ordering (issue #52).  `mol_order` walks the complex in the order the
+  // canonical label writes it, so the first member it names that this slot
+  // still holds is the canonically-first match; that is the molecule BNG2's
+  // network expansion evaluates the tagged observable at.
+  //
+  // `hits` is the caller's count of matches inside `cx`.  At one match there
+  // is no election to hold — the two rules name the same molecule — so the
+  // canonicalizer is not asked, which is what keeps a single-subunit context
+  // pattern (the common shape) on the integer path even when the rule prices
+  // per molecule.
+  int percx_find_rep(RuleState& rs, int slot, int cx, int hits) const {
+    if (hits <= 1 || !percx_canon_of(rs, slot))
+      return percx_lowest_rep(rs, slot, cx);
+    const auto& members = pool.molecules_in_complex(cx);
+    const auto order = canonical::canonical_order(extract_complex(pool, model, members));
+    for (int const pos : order) {
+      if (pos < 0 || pos >= static_cast<int>(members.size()))
+        continue;
+      if (percx_holds(rs, slot, cx, members[pos]))
+        return members[pos];
+    }
+    return -1;
+  }
+
+  void percx_add(RuleState& rs, int slot, int cx, int mid) const {
     PerCxTally& t = tally_of(rs, slot);
     PerCxTally::Entry& e = t.entries[cx];
     if (e.hits == 0) {
@@ -4962,6 +5089,16 @@ struct Engine::Impl {
       e.rep_rate = 0.0;
     }
     ++e.hits;
+    if (percx_canon_of(rs, slot) && !percx_rebuilding && e.hits > 1) {
+      // Canonical order is not id order, so a joiner can displace the sitting
+      // rep from either side and there is no cheap compare to make: re-derive.
+      int const r = percx_find_rep(rs, slot, cx, e.hits);
+      if (r != e.rep) {
+        e.rep = r;
+        percx_refresh_rate(rs, slot, cx);
+      }
+      return;
+    }
     if (e.rep < 0 || mid < e.rep) {
       e.rep = mid;
       percx_refresh_rate(rs, slot, cx);
@@ -4978,7 +5115,7 @@ struct Engine::Impl {
         // The representative dropped out.  Re-derive it from the complex's
         // remaining members; this is the only O(complex) step in the tally,
         // and it runs on rep loss rather than on every count change.
-        it->second.rep = percx_find_rep(rs, slot, cx);
+        it->second.rep = percx_find_rep(rs, slot, cx, it->second.hits);
         percx_refresh_rate(rs, slot, cx);
       }
       return;
@@ -5052,12 +5189,57 @@ struct Engine::Impl {
   void percx_drain_moves() {
     if (!any_percx) {
       pool.cx_moves_.clear();
+      pool.cx_edits_.clear();
       return;
     }
     pool.consume_cx_moves(percx_moved_scratch);
     for (int const mid : percx_moved_scratch)
       percx_sync_all_slots(mid);
     percx_moved_scratch.clear();
+    percx_reelect_edited();
+  }
+
+  // Re-elect the representative of every complex this event edited, on the
+  // slots whose representative is canonical (issue #52).
+  //
+  // The membership drain above cannot stand in for this.  A state change
+  // inside a complex — the `m~0 -> m~1` of the issue's reproducer — moves no
+  // molecule between complexes and need not change which molecules match, yet
+  // it reorders the canonical form and so hands the complex to a different
+  // representative.  Nothing else in the event loop would notice: the count
+  // is unchanged, so the tally is never asked a question.
+  //
+  // Costs one canonicalization per (edited complex, canonical slot) pair per
+  // event, and runs at all only for a model that has such a slot.  That is
+  // the same order as the work `have_local_rules_` already does for such a
+  // model, which re-evaluates a local function at every member of every
+  // edited complex.
+  void percx_reelect_edited() {
+    if (percx_canon_slots.empty()) {
+      pool.cx_edits_.clear();
+      return;
+    }
+    pool.consume_cx_edits(percx_edit_scratch);
+    std::sort(percx_edit_scratch.begin(), percx_edit_scratch.end());
+    percx_edit_scratch.erase(std::unique(percx_edit_scratch.begin(), percx_edit_scratch.end()),
+                             percx_edit_scratch.end());
+    for (auto& [ri, slot] : percx_canon_slots) {
+      auto& rs = rule_states[ri];
+      PerCxTally& t = tally_of(rs, slot);
+      for (int const cx : percx_edit_scratch) {
+        auto it = t.entries.find(cx);
+        if (it == t.entries.end())
+          continue; // no match of this slot lives there
+        if (it->second.hits <= 1)
+          continue; // one candidate: the edit cannot have changed the answer
+        int const r = percx_find_rep(rs, slot, cx, it->second.hits);
+        if (r == it->second.rep)
+          continue;
+        it->second.rep = r;
+        percx_refresh_rate(rs, slot, cx);
+      }
+    }
+    percx_edit_scratch.clear();
   }
 
   // Rebuild one slot's tally from the current pool and match counts.
@@ -5074,20 +5256,36 @@ struct Engine::Impl {
             : ((!rule.reactant_pattern_starts.empty()) ? rule.reactant_pattern_starts[0] : 0);
     if (seed < 0 || seed >= static_cast<int>(rule.reactant_pattern.molecules.size()))
       return;
+    // Seed membership with the cheap representative and let percx_resum_rates
+    // canonicalize each complex once at the end.  Electing canonically here
+    // instead would canonicalize once per molecule that joins — the same
+    // complex, once per subunit — for the identical answer.
+    percx_rebuilding = true;
     for (int const mid : pool.molecules_of_type(rule.reactant_pattern.molecules[seed].type_index))
       percx_sync(ri, slot, mid);
+    percx_rebuilding = false;
   }
 
   // Re-sum every complex's representative rate.  The from-scratch rescan
   // computes per-molecule local rates AFTER it rebuilds membership, so
   // rate_sum has to be settled once those are in hand; the incremental path
   // keeps it current through percx_refresh_rate instead.
+  //
+  // This is also where a canonical slot's representatives are elected after a
+  // rebuild — one canonicalization per matching complex, which is what the
+  // rebuild deferred to here.  Rebuild and resum are always called as a pair
+  // on the canonical slots: percx_canon_a/_b imply a local-rate law, and
+  // every branch of rescan_all_molecules_for_rule that reads a local rate
+  // resums the slots it rebuilt.
   void percx_resum_rates(int ri, int slot) {
     auto& rs = rule_states[ri];
     PerCxTally& t = tally_of(rs, slot);
+    bool const canon = percx_canon_of(rs, slot);
     t.rate_sum = 0.0;
     for (int const cx : t.list) {
       auto& e = t.entries[cx];
+      if (canon && e.hits > 1)
+        e.rep = percx_find_rep(rs, slot, cx, e.hits);
       e.rep_rate = (e.rep >= 0 && e.rep < static_cast<int>(rs.mol_data.size()))
                        ? percx_rate_of(rs, rs.mol_data[e.rep], slot)
                        : 0.0;

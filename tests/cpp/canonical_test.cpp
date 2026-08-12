@@ -39,6 +39,7 @@
 #include <vector>
 
 using rulemonkey::canonical::canonical_label;
+using rulemonkey::canonical::canonical_order;
 using rulemonkey::canonical::canonicalize;
 using rulemonkey::canonical::ComplexGraph;
 
@@ -64,6 +65,21 @@ void check_eq(const std::string& got, const std::string& want, const std::string
 // Shorthand for an (name, state) component spec.
 using C = std::pair<std::string, std::string>;
 std::vector<C> comps(std::initializer_list<C> cs) { return {cs.begin(), cs.end()}; }
+
+// The `.`-separated molecule pieces of a canonical label.  Splitting on
+// `.` is safe: a BNGL molecule never contains one.
+std::vector<std::string> label_pieces(const std::string& label) {
+  std::vector<std::string> out;
+  size_t start = 0;
+  while (true) {
+    size_t const dot = label.find('.', start);
+    out.push_back(label.substr(start, dot - start));
+    if (dot == std::string::npos)
+      break;
+    start = dot + 1;
+  }
+  return out;
+}
 
 // ===========================================================================
 // 1. Hand-built unit tests — asymmetric shapes (fast path)
@@ -94,6 +110,39 @@ void test_asymmetric_dimer_order_invariant() {
   check_eq(canonical_label(g1), "A(a!1).B(b!1)", "asymmetric dimer canonical string");
   check_eq(canonical_label(g1), canonical_label(g2), "asymmetric dimer invariant to build order");
   check(canonicalize(g1).fast_path, "asymmetric dimer takes the fast path");
+
+  // mol_order names the INPUT molecule written at each position of the
+  // label, so it inverts with the build order while the label does not.
+  check(canonicalize(g1).mol_order == std::vector<int>{0, 1}, "dimer mol_order, A added first");
+  check(canonicalize(g2).mol_order == std::vector<int>{1, 0}, "dimer mol_order, B added first");
+}
+
+void test_mol_order_picks_the_same_subunit() {
+  // GH #52's shape: a homodimer whose two subunits differ only in the
+  // state of a free component.  Whichever order the pool happens to hold
+  // them in, mol_order must name the SAME subunit first — that is what
+  // lets a caller price one instance per complex without the answer
+  // depending on how the complex was assembled.  BNG2 prices this
+  // species at its `m~0` subunit; RuleMonkey's canonical order agrees,
+  // and this pins that agreement.
+  const auto build_dimer = [](bool mod_first) {
+    ComplexGraph g;
+    g.add_molecule("Wz", comps({{"d", ""}, {"m", mod_first ? "1" : "0"}}));
+    g.add_molecule("Wz", comps({{"d", ""}, {"m", mod_first ? "0" : "1"}}));
+    g.add_bond(0, 0, 1, 0);
+    return g;
+  };
+
+  ComplexGraph const g_unmod_first = build_dimer(false);
+  ComplexGraph const g_mod_first = build_dimer(true);
+  check_eq(canonical_label(g_unmod_first), "Wz(d!1,m~0).Wz(d!1,m~1)", "mixed dimer canonical form");
+  check_eq(canonical_label(g_mod_first), canonical_label(g_unmod_first),
+           "mixed dimer label invariant to build order");
+
+  // Position 0 is the `m~0` subunit in both, which is input molecule 0
+  // in one build order and input molecule 1 in the other.
+  check(canonicalize(g_unmod_first).mol_order.front() == 0, "m~0 subunit leads, unmod built first");
+  check(canonicalize(g_mod_first).mol_order.front() == 1, "m~0 subunit leads, mod built first");
 }
 
 void test_within_molecule_symmetric_components() {
@@ -446,7 +495,9 @@ bool generate(std::mt19937& rng, GenComplex& out) {
 // Apply a random graph isomorphism: permute molecules, and within each
 // molecule permute components that share a name.  The result is the
 // same species, so its canonical label must be unchanged.
-GenComplex permute(std::mt19937& rng, const GenComplex& in) {
+// `pi_out`, when given, receives the molecule permutation: new molecule
+// k is old molecule (*pi_out)[k].
+GenComplex permute(std::mt19937& rng, const GenComplex& in, std::vector<int>* pi_out = nullptr) {
   int const n = static_cast<int>(in.type_idx.size());
 
   // pi: new molecule k <- old molecule pi[k].
@@ -500,6 +551,8 @@ GenComplex permute(std::mt19937& rng, const GenComplex& in) {
     int const oa = b[0], ob = b[2];
     out.bonds.push_back({pi_inv[oa], sigma_inv[oa][b[1]], pi_inv[ob], sigma_inv[ob][b[3]]});
   }
+  if (pi_out != nullptr)
+    *pi_out = pi;
   return out;
 }
 
@@ -526,13 +579,57 @@ void test_property_based() {
     // Determinism: the same input must always produce the same label.
     check_eq(canonical_label(g), cf.label, "canonicalize is deterministic");
 
+    // The order-only entry point skips the fast path's render.  It must
+    // still answer identically — this is the check that keeps the two
+    // from drifting apart, since only one of them builds the string.
+    check(canonical_order(g) == cf.mol_order, "canonical_order matches canonicalize().mol_order");
+
     // (a) Isomorphism invariance — a HARD invariant on every input now
     // that individualization-refinement resolves all symmetry (step 3).
-    const GenComplex perm = permute(rng, gc);
+    std::vector<int> pi;
+    const GenComplex perm = permute(rng, gc, &pi);
     ComplexGraph gp = build(perm);
     auto cfp = canonicalize(gp);
     check_eq(cfp.label, cf.label, "canonical label is isomorphism-invariant");
     check(cfp.fast_path == cf.fast_path, "fast_path verdict is itself isomorphism-invariant");
+
+    // (a2) mol_order names the molecules the label writes, in order.
+    // The label's k-th `.`-piece must be molecule mol_order[k]'s, so at
+    // minimum its type name has to match — the check that catches an
+    // inverted or off-by-one permutation.
+    {
+      const auto pieces = label_pieces(cf.label);
+      bool const sized =
+          cf.mol_order.size() == gc.type_idx.size() && pieces.size() == cf.mol_order.size();
+      check(sized, "mol_order has one entry per molecule");
+      if (sized) {
+        std::vector<char> seen(cf.mol_order.size(), 0);
+        for (size_t k = 0; k < cf.mol_order.size(); ++k) {
+          int const m = cf.mol_order[k];
+          bool const in_range = m >= 0 && m < static_cast<int>(seen.size());
+          check(in_range && seen[m] == 0, "mol_order is a permutation of the molecules");
+          if (!in_range)
+            break;
+          seen[m] = 1;
+          const std::string& want = types()[gc.type_idx[m]].first;
+          check(pieces[k].compare(0, want.size(), want) == 0 && pieces[k][want.size()] == '(',
+                "mol_order[k] is the molecule the label writes at position k");
+        }
+      }
+    }
+
+    // (a3) On the fast path every molecule vertex ends in its own
+    // refined color, so the canonical order is FORCED — there is no
+    // automorphism left to permute it.  The two orderings must then
+    // name corresponding molecules, element for element.  (Off the fast
+    // path the complex has genuine symmetry and interchangeable
+    // molecules may legitimately swap, so only (a2) applies.)
+    if (cf.fast_path && cfp.mol_order.size() == cf.mol_order.size()) {
+      bool matched = true;
+      for (size_t k = 0; k < cf.mol_order.size(); ++k)
+        matched = matched && pi[cfp.mol_order[k]] == cf.mol_order[k];
+      check(matched, "fast-path mol_order tracks the isomorphism");
+    }
 
     // (b) A targeted structural change must change the label: flip the
     // state of one component.
@@ -562,6 +659,7 @@ int main() {
   try {
     test_single_molecule();
     test_asymmetric_dimer_order_invariant();
+    test_mol_order_picks_the_same_subunit();
     test_within_molecule_symmetric_components();
     test_chain_order_invariant();
     test_self_bond_ring();

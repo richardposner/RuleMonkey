@@ -95,16 +95,44 @@ struct CanonForm {
                      // false -> the complex had genuine symmetry (a ring
                      //          or homo-oligomer) and `label` was found
                      //          by individualization-refinement search.
+
+  // The molecule ordering `label` was rendered in: mol_order[k] is the
+  // INPUT molecule index that `label` writes at position k.  Size
+  // molecule_count(); a permutation of [0, molecule_count()).
+  //
+  // This is the label's own ordering, so it inherits the label's
+  // guarantee: isomorphic complexes order corresponding molecules
+  // identically.  That makes "the molecule at position 0" a property of
+  // the species rather than of how the complex happened to be built,
+  // which is what a caller needs when it has to pick ONE molecule of a
+  // complex and have every copy of that species pick the same one —
+  // BioNetGen prices a collapsed reaction instance at exactly this
+  // molecule (GH #52).
+  //
+  // Within an orbit of the complex's automorphism group the choice is
+  // arbitrary but deterministic: interchangeable molecules are
+  // interchangeable, so which one lands first cannot be observed.
+  std::vector<int> mol_order;
 };
 
 // Canonicalize a complex: 1-WL color refinement, the all-distinct fast
 // path, and individualization-refinement search for symmetric residue
 // (plan §3.2).  Pure function of the graph; `label` is a true canonical
-// form on every input.  `fast_path` reports which path was taken.
+// form on every input.  `fast_path` reports which path was taken, and
+// `mol_order` the ordering `label` was rendered in.
 CanonForm canonicalize(const ComplexGraph& g);
 
 // Convenience wrapper: the canonical BNGL string only.  This is the
 // signature pinned by the plan (§4); both calling modes use it.
 std::string canonical_label(const ComplexGraph& g);
+
+// CanonForm::mol_order only — for a caller that needs to name a molecule
+// isomorphism-invariantly and has no use for the string.  Identical
+// output to `canonicalize(g).mol_order`, but on the fast path (where
+// refinement alone fixes the order) it skips rendering the label, which
+// that caller would only throw away.  The individualization-refinement
+// path still renders: there the canonical order IS the one belonging to
+// the lexicographically minimal render, so the strings are what pick it.
+std::vector<int> canonical_order(const ComplexGraph& g);
 
 } // namespace rulemonkey::canonical

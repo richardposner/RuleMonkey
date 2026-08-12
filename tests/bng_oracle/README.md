@@ -25,6 +25,8 @@ Recorded per model in `generate_references.py`.
 what the issue tables are read off. Valid when populations are large enough
 that the mass-action ODE *is* the mean of the SSA; for a catalytic rule with a
 conserved catalyst the substrate decay is pseudo-first-order, so it is exact.
+`context_dor_price` qualifies for the same reason once its catalysts have
+settled, which they do inside the first 1% of the run.
 
 **`ssa`** — `generate_network()` + an ensemble of `simulate(method=>"ssa")`
 reps, with mean and SEM committed. Needed for a model that deliberately runs at
@@ -47,6 +49,7 @@ process, not an approximation to it.
 | `context_symmetry` | ode | An untransformed (context) reactant pattern is counted once per matching **complex**, not once per matching molecule — including the `Bind_sym` guard in the other direction, where the rule *does* transform the pattern and the 2x is correct (GH #33). |
 | `context_sampler` | ssa | The same slot is **drawn** the way it is **counted**. Counting per complex while sampling per molecule leaves the same-complex rejection mis-weighted, which is a systematic bias wherever complexes hold unequal numbers of context matches (GH #33). |
 | `context_nary` | ssa | The same per-complex count on a rule with **three or more** reactant patterns, which takes the n-ary distinct-tuple machinery rather than the two-slot propensity (GH #42). Pins it on a static homodimer (2x), a static homotrimer ring against a single-molecule pattern (3x), and a catalyst dimer that forms and breaks for the whole run — plus `Guard_trans`, an n-ary rule that *does* transform its multi-subunit slot and must keep its 2x. |
+| `context_dor_price` | ode | **Which** molecule of the collapsed complex prices the surviving instance, when the context pattern also carries a per-molecule local function tag: the species' canonically-first match, as BNG2 expands it, and not the lowest live molecule id (GH #52). Three columns of the same chemistry that BNG gives the identical rate — seeded, assembled in-run, and one whose canonically-first molecule carries the *larger* value — so any disagreement between them is the defect. |
 
 ## Running
 
