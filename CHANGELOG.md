@@ -147,6 +147,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   under ASan+UBSan, 29/29 corpus guard tier, 88/88 feature coverage,
   `bng_oracle` green.
 
+  Pinning those counts needed one adjacent fix, which CI found: the property
+  generator drew through `std::uniform_int_distribution` and `std::shuffle`,
+  and neither is portable. Same engine, same seed, three different samples —
+  3927 complexes under libc++, 3919 under libstdc++, 3892 under the MSVC
+  STL. The file already says a property test must be reproducible so a
+  failure is re-runnable, and it was reproducible only across runs on one
+  platform: a failure CI reports from Linux could not be re-run on a
+  developer's mac. The generator draws through a hand-rolled `pick` and
+  Fisher-Yates `shuffle_v` now, so every platform walks the same sample and
+  the counts are a property of the canonicalizer rather than of the standard
+  library. Building the new test against the pre-change canonicalizer gives
+  the identical 3586 / 345 / 7788 / 74, which is what makes them a
+  regression gate at all.
+
 - **The canonical-representative election no longer builds a string, cutting
   its cost 5.4x where it is live (issue #53).** #52 prices a pure-context
   reactant slot carrying a per-molecule local function tag at the complex's

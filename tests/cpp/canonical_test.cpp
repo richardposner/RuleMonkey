@@ -630,6 +630,24 @@ const std::vector<int>& type_pool() {
   return pool;
 }
 
+// Uniform draw from [0, n), and a Fisher-Yates shuffle, both hand-rolled.
+//
+// std::uniform_int_distribution and std::shuffle are deterministic for a
+// given seed but NOT portable: libc++ and libstdc++ turn the same engine
+// output into different draws, so the same seed walks a different sample
+// on macOS than on Linux.  That is fine for "a random complex" and fatal
+// for anything that pins WHICH complexes the run produced — the fast-path
+// / search split below is exactly such a pin, and it is what says
+// refinement is as powerful as it was (GH #56).  These two make the whole
+// property test reproducible across platforms instead of only across runs
+// on one.  Modulo bias is irrelevant at these ranges.
+int pick(std::mt19937& rng, int n) { return static_cast<int>(rng() % static_cast<unsigned>(n)); }
+
+template <class T> void shuffle_v(std::vector<T>& v, std::mt19937& rng) {
+  for (size_t i = v.size(); i > 1; --i)
+    std::swap(v[i - 1], v[static_cast<size_t>(pick(rng, static_cast<int>(i)))]);
+}
+
 // A generated complex, kept in a form the isomorphism applicator can
 // permute: per-molecule type index + per-component state, plus a bond
 // list addressed as (molecule, local component).
@@ -661,24 +679,21 @@ ComplexGraph build(const GenComplex& gc) {
 // are added to close rings.
 bool generate(std::mt19937& rng, GenComplex& out) {
   out = GenComplex{};
-  std::uniform_int_distribution<int> n_mol_d(1, 7);
-  int const n_mol = n_mol_d(rng);
+  int const n_mol = 1 + pick(rng, 7);
 
-  std::uniform_int_distribution<int> pool_d(0, static_cast<int>(type_pool().size()) - 1);
+  int const n_pool = static_cast<int>(type_pool().size());
   // One run in three is a pure homo-oligomer: all molecules one type.
-  std::uniform_int_distribution<int> mono_d(0, 2);
-  bool const mono = mono_d(rng) == 0;
-  int const mono_type = type_pool()[pool_d(rng)];
+  bool const mono = pick(rng, 3) == 0;
+  int const mono_type = type_pool()[pick(rng, n_pool)];
 
   for (int m = 0; m < n_mol; ++m) {
-    int const t = mono ? mono_type : type_pool()[pool_d(rng)];
+    int const t = mono ? mono_type : type_pool()[pick(rng, n_pool)];
     out.type_idx.push_back(t);
     std::vector<std::string> st;
     // 0 = stateless; `p`/`pq` are a prefix pair, so state ordering is
     // exercised at the one place it could go wrong (GH #53).
-    std::uniform_int_distribution<int> state_d(0, 3);
     for (size_t i = 0; i < types()[t].second.size(); ++i) {
-      int const s = state_d(rng);
+      int const s = pick(rng, 4);
       st.emplace_back(s == 0 ? "" : (s == 1 ? "p" : (s == 2 ? "q" : "pq")));
     }
     out.states.push_back(std::move(st));
@@ -691,8 +706,7 @@ bool generate(std::mt19937& rng, GenComplex& out) {
       free[m].push_back(static_cast<int>(i));
 
   auto take_free = [&](int m) -> int {
-    std::uniform_int_distribution<int> d(0, static_cast<int>(free[m].size()) - 1);
-    int const idx = d(rng);
+    int const idx = pick(rng, static_cast<int>(free[m].size()));
     int const comp = free[m][idx];
     free[m].erase(free[m].begin() + idx);
     return comp;
@@ -706,15 +720,13 @@ bool generate(std::mt19937& rng, GenComplex& out) {
         parents.push_back(j);
     if (parents.empty() || free[k].empty())
       return false; // cannot keep the complex connected — retry
-    std::uniform_int_distribution<int> pd(0, static_cast<int>(parents.size()) - 1);
-    int const j = parents[pd(rng)];
+    int const j = parents[pick(rng, static_cast<int>(parents.size()))];
     out.bonds.push_back({k, take_free(k), j, take_free(j)});
   }
 
   // Several extra bonds add cycles (and self-bonds) — biases the sample
   // toward ring-bearing, symmetric complexes.
-  std::uniform_int_distribution<int> extra_d(0, 5);
-  int const extra = extra_d(rng);
+  int const extra = pick(rng, 6);
   for (int e = 0; e < extra; ++e) {
     std::vector<int> have;
     for (int m = 0; m < n_mol; ++m)
@@ -722,8 +734,7 @@ bool generate(std::mt19937& rng, GenComplex& out) {
         have.push_back(m);
     if (have.empty())
       break;
-    std::uniform_int_distribution<int> hd(0, static_cast<int>(have.size()) - 1);
-    int const ma = have[hd(rng)];
+    int const ma = have[pick(rng, static_cast<int>(have.size()))];
     int const ca = take_free(ma);
     // pick a second endpoint (possibly the same molecule)
     have.clear();
@@ -732,8 +743,7 @@ bool generate(std::mt19937& rng, GenComplex& out) {
         have.push_back(m);
     if (have.empty())
       break;
-    std::uniform_int_distribution<int> hd2(0, static_cast<int>(have.size()) - 1);
-    int const mb = have[hd2(rng)];
+    int const mb = have[pick(rng, static_cast<int>(have.size()))];
     int const cb = take_free(mb);
     out.bonds.push_back({ma, ca, mb, cb});
   }
@@ -752,7 +762,7 @@ GenComplex permute(std::mt19937& rng, const GenComplex& in, std::vector<int>* pi
   std::vector<int> pi(n);
   for (int i = 0; i < n; ++i)
     pi[i] = i;
-  std::shuffle(pi.begin(), pi.end(), rng);
+  shuffle_v(pi, rng);
   std::vector<int> pi_inv(n);
   for (int k = 0; k < n; ++k)
     pi_inv[pi[k]] = k;
@@ -772,7 +782,7 @@ GenComplex permute(std::mt19937& rng, const GenComplex& in, std::vector<int>* pi
       groups[names[i]].push_back(i);
     for (auto& [name, slots] : groups) {
       std::vector<int> shuffled = slots;
-      std::shuffle(shuffled.begin(), shuffled.end(), rng);
+      shuffle_v(shuffled, rng);
       for (size_t i = 0; i < slots.size(); ++i)
         sig[slots[i]] = shuffled[i]; // newlocal slots[i] <- old slot shuffled[i]
     }
@@ -805,8 +815,10 @@ GenComplex permute(std::mt19937& rng, const GenComplex& in, std::vector<int>* pi
 }
 
 void test_property_based() {
-  // Fixed seed: a property test must be reproducible so a failure is
-  // re-runnable. NOLINTNEXTLINE(bugprone-random-generator-seed)
+  // Fixed seed, and `pick`/`shuffle_v` rather than the standard
+  // distributions, so the sample is the same everywhere and a failure
+  // reported by one platform's CI is re-runnable on another's.
+  // NOLINTNEXTLINE(bugprone-random-generator-seed)
   std::mt19937 rng(0xC0FFEEU);
   int const kRuns = 4000;
   int generated = 0, fast = 0, searched = 0;
@@ -936,10 +948,10 @@ void test_property_based() {
   // Re-record all four from the line the test prints if the generator or
   // its alphabet changes; do NOT re-record them for a change to
   // canonicalization itself without knowing which complexes moved and why.
-  check(fast == 3623, "fast-path count is unchanged");
-  check(searched == 304, "individualization-search count is unchanged");
-  check(ranked_answered == 7800, "integer entry point answers as often as before");
-  check(ranked_declined == 54, "…and declines as often as before");
+  check(fast == 3586, "fast-path count is unchanged");
+  check(searched == 345, "individualization-search count is unchanged");
+  check(ranked_answered == 7788, "integer entry point answers as often as before");
+  check(ranked_declined == 74, "…and declines as often as before");
 }
 
 } // namespace
