@@ -259,6 +259,72 @@ void test_self_bond_ring() {
   check(canonicalize(g).fast_path, "self-bonded molecule takes the fast path");
 }
 
+// A chain of `n` copies of A(l,r): position p's `r` bonds position p+1's
+// `l`, and the chain does NOT close, so the two ends carry a free `l` and
+// a free `r`.  `rot` shifts the position -> molecule-index map, so every
+// rot builds the same chain in a different order.
+ComplexGraph make_lr_chain(int n, int rot) {
+  ComplexGraph g;
+  auto mol_of = [&](int p) { return (p + rot) % n; };
+  for (int k = 0; k < n; ++k)
+    g.add_molecule("A", comps({{"l", ""}, {"r", ""}}));
+  for (int p = 0; p + 1 < n; ++p)
+    g.add_bond(mol_of(p), 1, mol_of(p + 1), 0); // p.r -- (p+1).l
+  return g;
+}
+
+void test_lr_chain_refines_all_the_way() {
+  // The shape that asks the most of refinement.  `l` and `r` are different
+  // component names, so reversing the chain is not an automorphism and the
+  // complex is asymmetric — but 1-WL only learns that one hop per round, so
+  // the colors have to walk in from the two ends and a chain of n needs on
+  // the order of n rounds to separate every molecule.
+  //
+  // That is what makes it the regression test for GH #56's worklist
+  // refinement, which skips the cells a round cannot split: a cell it
+  // wrongly fails to mark simply stops splitting, and refinement then
+  // returns a partition that is too coarse.  Nothing about that is loud —
+  // the individualization search still finds a correct canonical form — so
+  // the assertion that catches it is `fast_path`, which says 1-WL alone
+  // separated the complex and is FALSE the moment refinement gives up
+  // early.  A 24-chain needs ~24 rounds, deep enough that a worklist that
+  // ran dry after a couple would be caught here.
+  // Molecules are emitted in refined-color order, not chain-walk order, so
+  // the bond labels come out shuffled — same as the 4-ring below.
+  check_eq(canonical_label(make_lr_chain(4, 0)), "A(l!1,r!2).A(l!3,r!1).A(l,r!3).A(l!2,r)",
+           "4-chain canonical string");
+  for (int const n : {2, 3, 4, 8, 24}) {
+    std::string const canon = canonical_label(make_lr_chain(n, 0));
+    check(canonicalize(make_lr_chain(n, 0)).fast_path,
+          "the " + std::to_string(n) + "-chain refines without the search");
+    for (int rot = 0; rot < n; ++rot) {
+      check_eq(canonical_label(make_lr_chain(n, rot)), canon,
+               "the " + std::to_string(n) + "-chain is invariant to build order");
+      check(check_ranked_agrees(make_lr_chain(n, rot),
+                                std::to_string(n) + "-chain rot " + std::to_string(rot)),
+            "the " + std::to_string(n) + "-chain answers on the int path");
+    }
+  }
+
+  // The same chain carrying a per-molecule state, which is the live shape
+  // (GH #52's tagged catalyst, edited by a toggle rule).  States break the
+  // symmetry sooner in some places and later in others, so the refinement
+  // ends up with cells splitting in different rounds — the case where a
+  // stale worklist entry would matter.
+  for (int pattern = 0; pattern < 8; ++pattern) {
+    ComplexGraph g;
+    int const n = 12;
+    for (int k = 0; k < n; ++k)
+      g.add_molecule("W",
+                     comps({{"l", ""}, {"r", ""}, {"m", ((pattern >> (k % 3)) & 1) ? "1" : "0"}}));
+    for (int p = 0; p + 1 < n; ++p)
+      g.add_bond(p, 1, p + 1, 0);
+    check(canonicalize(g).fast_path, "a state-carrying 12-chain refines without the search");
+    check(check_ranked_agrees(g, "state-carrying 12-chain"),
+          "a state-carrying 12-chain answers on the int path");
+  }
+}
+
 void test_non_isomorphic_differ() {
   // The same shape, one component state flipped — must get a different
   // label so the species do not collapse in the dedup map.
@@ -856,6 +922,24 @@ void test_property_based() {
   // homodimer in test_ranked_declines_symmetric is what pins the
   // fallback's behaviour; this only asserts the sample reaches it.
   check(ranked_declined > 20, "…and its decline path is exercised too");
+
+  // The bounds above say the sample is healthy.  These say refinement is
+  // exactly as POWERFUL as it was, which the bounds cannot: the generator
+  // is seeded and canonicalization is deterministic, so the split between
+  // the fast path and the search is a property of the code under test, and
+  // refinement that stops one round early moves complexes across it
+  // without failing anything else — every label stays a correct canonical
+  // form, just a different one (GH #56).  The same goes for the integer
+  // entry point, which declines exactly when refinement leaves two
+  // molecules sharing a color.
+  //
+  // Re-record all four from the line the test prints if the generator or
+  // its alphabet changes; do NOT re-record them for a change to
+  // canonicalization itself without knowing which complexes moved and why.
+  check(fast == 3623, "fast-path count is unchanged");
+  check(searched == 304, "individualization-search count is unchanged");
+  check(ranked_answered == 7800, "integer entry point answers as often as before");
+  check(ranked_declined == 54, "…and declines as often as before");
 }
 
 } // namespace
@@ -869,6 +953,7 @@ int main() {
     test_ranked_declines_symmetric();
     test_within_molecule_symmetric_components();
     test_chain_order_invariant();
+    test_lr_chain_refines_all_the_way();
     test_self_bond_ring();
     test_non_isomorphic_differ();
     test_homodimer_symmetric();

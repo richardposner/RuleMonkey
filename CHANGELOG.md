@@ -68,6 +68,85 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **1-WL color refinement runs as a worklist over the cells that can still
+  split, cutting the representative election 2.6x on a 80-subunit catalyst
+  and the `.species` sweep 1.7x (issue #56).** #53 left the election's cost
+  almost entirely inside the refinement itself, recomputed from scratch on
+  every edit of a tagged complex however small the edit was. Re-measured
+  here by an early return placed between the two stages, the split is 0.04 s
+  of graph building against 2.43 s of refinement on the 20-subunit probe:
+  the bridge is 2% and the refinement is the rest.
+
+  The textbook round recolors *every* vertex by (own color, sorted neighbor
+  colors) and re-ranks the whole vertex set, which is `O(rounds × V log V)`
+  — and a chain needs on the order of `O(n)` rounds for the colors to
+  propagate in from its ends. Most of that work is provably empty. A round
+  never merges two cells and never reorders them (the own color leads the
+  signature, so a round splits each cell *internally* and orders the pieces
+  among themselves), so a cell whose members all carry the same
+  neighbor-color slice comes out whole, and it can only stop carrying the
+  same slice when a cell holding one of their neighbors splits. A round
+  therefore examines the cells marked by the previous round's splits —
+  every cell, on the first round — and nothing else.
+
+  This is a change of *which cells a round looks at*, not of the rounds. A
+  cell's color while refining is now its start index in the partition array,
+  which is order-preserving and leaves an untouched cell's color literally
+  unchanged, so nothing is renumbered that was not split; one pass at the
+  end recovers the dense `0..k-1` ranking. The output is the same coloring,
+  which is what keeps every canonical label and every elected representative
+  byte-for-byte what they were. Two small-case specializations ride along:
+  degree 2 is the common case for a slice sort (a bonded-component vertex
+  has exactly two edges by construction, and those vertices outnumber the
+  molecules), and the two-member cell is what most of a refinement's
+  trailing rounds are cutting.
+
+  Election overhead against the same model with the election gated off,
+  best of 5, `--preset release`, on #53's probe shape — a chain of
+  `W(l,r,m~0~1)` carrying the tag on a pure-context slot, with a toggle rule
+  editing the chain on essentially every event and `0*Mod(x)` keeping every
+  instance priced the same. `t_end` is scaled as `400/n` so every column
+  runs the same number of events:
+
+  | chain | before | after | |
+  |---|---:|---:|---:|
+  | 5-subunit | 0.150 s | 0.140 s | 1.1x |
+  | 10-subunit | 0.550 s | 0.340 s | 1.6x |
+  | 20-subunit | 2.550 s | 1.430 s | 1.8x |
+  | 40-subunit | 7.260 s | 3.420 s | 2.1x |
+  | 80-subunit | 18.080 s | 6.900 s | **2.6x** |
+
+  Which is the point: #53's fix scaled the wrong way (5.4x on a 5-subunit
+  catalyst, 1.8x on a 20-subunit one) because it removed a per-call constant
+  and left the per-vertex work alone. This one grows the other way, taking
+  the measured exponent from `n^1.73` to `n^1.40`. The 5-subunit column
+  barely moves and is expected not to: at 13 vertices there are three
+  refinement rounds to skip work in.
+
+  The `.species` batch sweep is the other consumer and the one with the
+  large complexes. Output is byte-identical on `machine`, `ensemble`,
+  `egfr_net`, `egfr_nf_iter5p12h10`, `bench_tlbr_yang2008`, `rm_tlbr_rings`
+  and `tlbr`; the `tlbr` sweep (largest complex 2757 molecules) runs 356.4 s
+  → 210.0 s, and the models whose complexes are small are unchanged inside
+  noise. A differential harness over 10,032 generated complexes — random
+  connected complexes up to 20 molecules, plus chains, rings, state-carrying
+  chains and stars up to 129 molecules — puts `canonicalize().label`,
+  `.mol_order`, `canonical_order()` and `canonical_order_fast()`
+  byte-identical against the pre-change canonicalizer.
+
+  `canonical_test` gains the two things that catch this going wrong. An
+  under-refining worklist is silent — the individualization search still
+  finds a correct canonical form, just a different one — so the assertion
+  that catches it is `fast_path`, and the new `lr_chain` shapes are chains
+  of `A(l,r)` up to 24 long, asymmetric (the reversal is not an
+  automorphism, `l` and `r` being different names) but only one hop per
+  round to prove it, plus 12-chains carrying per-molecule states. And the
+  property test's fast-path / search / answered / declined counts are now
+  pinned exactly rather than bounded, since that split is precisely what
+  moves when refinement stops one round early. 37/37 ctest under release and
+  under ASan+UBSan, 29/29 corpus guard tier, 88/88 feature coverage,
+  `bng_oracle` green.
+
 - **The canonical-representative election no longer builds a string, cutting
   its cost 5.4x where it is live (issue #53).** #52 prices a pure-context
   reactant slot carrying a per-molecule local function tag at the complex's

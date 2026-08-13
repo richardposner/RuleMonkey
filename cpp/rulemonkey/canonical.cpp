@@ -66,6 +66,14 @@
 //   refinement it runs is the same refinement `canonicalize` would have
 //   run on the same complex; `ranked_initial_colors` is where the two
 //   meet and `rank_*` is the correspondence that keeps them equal.
+//
+//   With the allocations gone, step 1 was what the election cost, and a
+//   round that recolors every vertex is `O(rounds x V log V)` on a graph
+//   whose rounds grow with its diameter.  Refinement is a worklist over
+//   the cells a round can still split now (GH #56) — same rounds, same
+//   partitions, same ranking, so every label and every elected
+//   representative is unchanged; see Refiner for why the cells it skips
+//   are provably whole.
 
 #include "canonical.hpp"
 
@@ -203,39 +211,73 @@ CompKey comp_key(int bonded_color, int state_id) {
   return {1, bonded_color, 0};
 }
 
-// 1-WL color refinement with reusable, allocation-light scratch.
+// 1-WL color refinement, run as a worklist over the cells that can
+// still split (GH #56).
 //
-// The algorithm is the textbook one: each round recolors a vertex by
-// (own color, sorted neighbor colors); signatures are ranked, so the
+// The rounds are the textbook ones: a round recolors each vertex by
+// (own color, sorted neighbor colors) and ranks the signatures, so the
 // output colors are a canonical 0..k-1 ranking derived purely from
-// structure.  The own-color term means refinement only ever splits
-// classes — it has converged once the class count stops rising.
-// Accepts any integer colors on input (individualization passes a
-// vertex an out-of-range marker color; the first round re-ranks
-// everything), so it doubles as the post-individualization re-refine
-// step.
+// structure.  The own-color term means a round only ever SPLITS cells —
+// it has converged once nothing splits.  Any integer colors are
+// accepted on input (individualization passes a vertex an out-of-range
+// marker color; the first round re-ranks everything), so this doubles
+// as the post-individualization re-refine step.
 //
-// The Refiner wrapper exists for speed only (plan §5, step 7): the
-// adjacency is held CSR (flat arrays), and the per-round signature
-// scratch — sorted neighbor colors and the vertex ordering — lives in
-// buffers reused across every refine() call.  Individualization-
-// refinement calls refine() once per search node; on a large symmetric
-// complex that is the dominant allocation cost, and reuse removes it.
-// build() extends that reuse across whole canonicalizations, for a caller
-// that keeps its Refiner in a Workspace (GH #53).
+// What the worklist changes is only WHICH cells a round looks at.
+// Recoloring every vertex every round costs O(rounds x V log V), and a
+// chain needs on the order of O(n) rounds for the colors to propagate
+// in from its ends — 259 ms of a 20-subunit tagged catalyst's 264 ms
+// election overhead before this (GH #56).  Two facts make most of that
+// work provably empty:
+//
+//   * A round never merges two cells and never reorders them.  The own
+//     color leads the signature, so a round splits each cell
+//     INTERNALLY and orders the pieces among themselves; cells keep
+//     their relative order, and so therefore do the colors.
+//   * So a cell whose members all carry the same sorted neighbor-color
+//     slice comes out whole, and it can only STOP carrying the same
+//     slice when one of its members gains a neighbor in a different
+//     cell — that is, when a cell holding one of their neighbors splits.
+//
+// A round therefore examines the cells marked by the previous round's
+// splits (every cell, on the first round) and nothing else: an unmarked
+// cell cannot split, so not examining it changes neither the partition
+// nor the ranking.  The output is the same coloring the every-vertex
+// version produced, which is what lets `.species` labels and the
+// election's answer stay byte-for-byte what they were.
+//
+// A cell's color WHILE REFINING is its start index in `cell`.  That is
+// order-preserving — a piece starts inside its parent's old span — and
+// it leaves an untouched cell's color literally unchanged, so a round
+// renumbers nothing it did not split.  One pass at the end turns the
+// start indices into the dense 0..k-1 ranking callers see.
+//
+// The Refiner wrapper also exists for speed (plan §5, step 7): the
+// adjacency is held CSR (flat arrays) and every buffer a round touches
+// is reused across refine() calls.  Individualization-refinement calls
+// refine() once per search node; on a large symmetric complex that was
+// the dominant allocation cost, and reuse removes it.  build() extends
+// that reuse across whole canonicalizations, for a caller that keeps
+// its Refiner in a Workspace (GH #53).
 //
 // Ranking by signature also means refinement never REORDERS colors that
-// already differ: sig_less compares the own color first, so
-// color[a] < color[b] implies next_color[a] < next_color[b].  That is what
-// lets an order-only caller stop as soon as the molecule colors are
-// distinct — see mol_colors_distinct.
+// already differ.  That is what lets an order-only caller stop as soon
+// as the molecule colors are distinct — see mol_colors_distinct.
 struct Refiner {
   std::vector<int> adj_off;  // CSR offsets, size n_vert + 1
   std::vector<int> adj_flat; // CSR neighbor lists, size = total degree
-  std::vector<int> next_color;
-  std::vector<int> order;  // vertex permutation scratch
-  std::vector<int> nbr;    // per-vertex sorted neighbor colors, CSR-laid
-  std::vector<int> cursor; // build(): per-vertex CSR fill position
+  std::vector<int> nbr;      // per-vertex sorted neighbor colors, CSR-laid
+  std::vector<int> cursor;   // build(): per-vertex CSR fill position
+
+  // The ordered partition and the worklist over it.  `cell` holds every
+  // vertex grouped by cell, cells in color order; a cell is named by its
+  // start index there, which is also its color while refining.
+  std::vector<int> cell;
+  std::vector<int> cell_end; // cell start -> end index, exclusive
+  std::vector<int> queue;    // cell starts to examine this round
+  std::vector<int> next_queue;
+  std::vector<char> queued;               // cell start -> already in next_queue?
+  std::vector<std::pair<int, int>> split; // [start, end) of this round's recolored vertices
 
   // (Re)point the refiner at an undirected graph given as an edge list.
   // Every buffer is resized rather than rebuilt, so a workspace that has
@@ -254,17 +296,18 @@ struct Refiner {
       adj_flat[cursor[a]++] = b;
       adj_flat[cursor[b]++] = a;
     }
-    next_color.resize(n_vert);
-    order.resize(n_vert);
     nbr.resize(adj_flat.size());
+    cell.resize(n_vert);
+    cell_end.resize(n_vert);
+    queued.assign(n_vert, 0);
   }
 
-  // Lexicographic compare of vertices a and b by this round's signature
-  // — (own color, sorted neighbor-color slice).  `nbr` must already hold
-  // the sorted neighbor colors for this round.
-  bool sig_less(const std::vector<int>& color, int a, int b) const {
-    if (color[a] != color[b])
-      return color[a] < color[b];
+  // Lexicographic compare of the sorted neighbor-color slices of a and
+  // b, shorter-is-less on a tie.  `nbr` must already hold this round's
+  // sorted neighbor colors.  Only ever called on two vertices of the
+  // SAME cell, where the own-color half of the signature is equal by
+  // construction — which is why it is not compared here.
+  bool nbr_less(int a, int b) const {
     int const la = adj_off[a + 1] - adj_off[a];
     int const lb = adj_off[b + 1] - adj_off[b];
     int const l = std::min(la, lb);
@@ -274,10 +317,8 @@ struct Refiner {
     return la < lb;
   }
 
-  // True iff a and b carry an identical signature this round.
-  bool same_sig(const std::vector<int>& color, int a, int b) const {
-    if (color[a] != color[b])
-      return false;
+  // True iff a and b, cellmates, carry an identical signature this round.
+  bool nbr_same(int a, int b) const {
     int const la = adj_off[a + 1] - adj_off[a];
     int const lb = adj_off[b + 1] - adj_off[b];
     if (la != lb)
@@ -292,33 +333,118 @@ struct Refiner {
     int const n = static_cast<int>(color.size());
     if (n == 0)
       return;
-    int n_classes = 0;
-    bool first = true;
-    while (true) {
-      for (int v = 0; v < n; ++v) {
-        int const b = adj_off[v];
-        int const e = adj_off[v + 1];
-        for (int k = b; k < e; ++k)
-          nbr[k] = color[adj_flat[k]];
-        std::sort(nbr.begin() + b, nbr.begin() + e);
+
+    // --- the input coloring, restated as an ordered partition --------------
+    //
+    // Vertices grouped by input color, groups in ascending color order —
+    // which is what a round with the own color leading its signature would
+    // have produced.  From here on a vertex's color is its cell's start.
+    for (int v = 0; v < n; ++v)
+      cell[v] = v;
+    std::sort(cell.begin(), cell.begin() + n, [&](int a, int b) { return color[a] < color[b]; });
+    queue.clear();
+    int n_cells = 0;
+    for (int i = 0; i < n;) {
+      int const c = color[cell[i]];
+      int j = i + 1;
+      while (j < n && color[cell[j]] == c)
+        ++j;
+      for (int k = i; k < j; ++k)
+        color[cell[k]] = i;
+      cell_end[i] = j;
+      queue.push_back(i);
+      ++n_cells;
+      i = j;
+    }
+
+    // --- rounds -------------------------------------------------------------
+    while (!queue.empty() && n_cells < n) {
+      // Every signature this round reads the colors the last round left, so
+      // all the slices are taken before any of this round's splits land.
+      for (int const s : queue) {
+        if (cell_end[s] - s < 2)
+          continue; // a singleton cannot split, so nothing reads its slice
+        for (int i = s; i < cell_end[s]; ++i) {
+          int const v = cell[i];
+          int const b = adj_off[v];
+          int const e = adj_off[v + 1];
+          for (int k = b; k < e; ++k)
+            nbr[k] = color[adj_flat[k]];
+          // Degree 2 is not a special case here, it is the common one: a
+          // bonded-component vertex has exactly two edges by construction,
+          // one to its molecule and one to its partner, and those vertices
+          // outnumber the molecules.
+          if (e - b == 2) {
+            if (nbr[b] > nbr[b + 1])
+              std::swap(nbr[b], nbr[b + 1]);
+          } else if (e - b > 2) {
+            std::sort(nbr.begin() + b, nbr.begin() + e);
+          }
+        }
       }
-      for (int v = 0; v < n; ++v)
-        order[v] = v;
-      std::sort(order.begin(), order.end(), [&](int a, int b) { return sig_less(color, a, b); });
-      int rank = -1;
-      for (int i = 0; i < n; ++i) {
-        if (i == 0 || !same_sig(color, order[i - 1], order[i]))
-          ++rank;
-        next_color[order[i]] = rank;
+
+      split.clear();
+      for (int const s : queue) {
+        int const e = cell_end[s];
+        if (e - s < 2)
+          continue;
+        // Likewise the two-member cell, which is what most of a refinement's
+        // trailing rounds are cutting.
+        if (e - s == 2) {
+          if (nbr_less(cell[s + 1], cell[s]))
+            std::swap(cell[s], cell[s + 1]);
+        } else {
+          std::sort(cell.begin() + s, cell.begin() + e,
+                    [&](int a, int b) { return nbr_less(a, b); });
+        }
+        for (int i = s + 1, start = s; i <= e; ++i) {
+          if (i < e && nbr_same(cell[i - 1], cell[i]))
+            continue;
+          cell_end[start] = i;
+          if (start != s)
+            ++n_cells;
+          start = i;
+        }
+        if (cell_end[s] == e)
+          continue; // one piece: the cell held together
+        // Recolor only now.  The scan above compares slices alone, so
+        // leaving the colors put keeps it independent of the order the
+        // round happens to cut its cells in.
+        for (int b = s; b < e; b = cell_end[b])
+          for (int k = b; k < cell_end[b]; ++k)
+            color[cell[k]] = b;
+        // The leading piece inherits the cell's own start, so its members
+        // keep the color they had and cannot have changed any neighbor's
+        // signature.  Only the rest are news to anybody.
+        split.emplace_back(cell_end[s], e);
       }
-      int const new_classes = rank + 1;
-      color.swap(next_color);
-      if (new_classes == n)
-        break; // discrete: every vertex alone, so the next round is the identity
-      if (!first && new_classes == n_classes)
-        break; // partition stable
-      first = false;
-      n_classes = new_classes;
+
+      // Mark next round's work: the cells holding a neighbor of a vertex
+      // this round recolored.  Every other cell is provably whole.
+      next_queue.clear();
+      for (const auto& [s, e] : split) {
+        for (int i = s; i < e; ++i) {
+          int const v = cell[i];
+          for (int k = adj_off[v]; k < adj_off[v + 1]; ++k) {
+            int const c = color[adj_flat[k]];
+            if (queued[c] == 0) {
+              queued[c] = 1;
+              next_queue.push_back(c);
+            }
+          }
+        }
+      }
+      for (int const s : next_queue)
+        queued[s] = 0; // leave the flags clear for the next round
+      queue.swap(next_queue);
+    }
+
+    // --- the dense 0..k-1 ranking the callers see ---------------------------
+    int rank = -1;
+    for (int i = 0; i < n; i = cell_end[i]) {
+      ++rank;
+      for (int k = i; k < cell_end[i]; ++k)
+        color[cell[k]] = rank;
     }
   }
 };
