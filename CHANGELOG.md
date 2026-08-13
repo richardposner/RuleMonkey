@@ -68,6 +68,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A pure-context reactant pattern carrying a per-molecule local function
+  tag was priced at the lowest-id matching molecule, so two identical
+  complexes charged different rates (issue #52).** #33 gives a reactant
+  pattern the rule does not transform one instance per matching *complex*.
+  When that pattern also carries a per-molecule tag, the collapse has to
+  decide *which* of the complex's matching molecules prices the survivor,
+  and the candidates price differently. RM picked the lowest live molecule
+  id — a fact about pool history, not about the complex — so the same
+  species answered differently depending on how each copy was assembled.
+
+  On the reproducer, a homodimer catalyst holding one modified and one
+  unmodified subunit against 4000 substrate, RM ran **5.5x** fast against
+  BNG2 and disagreed with **itself** by 5.7x across two seedings of the
+  same chemical state: seeded pre-formed it converted 1.95 substrate by
+  `t = 1` against BNG2's 2.00, but assembled during the run it converted
+  11.09 — the half-and-half average of the two candidate prices, since the
+  assembling rule modifies either subunit with equal probability.
+
+  #33's commit recorded that BNG2 "cannot arbitrate — its network expansion
+  has no local functions". That is not what BNG2 does. It expands the rule
+  to a `ConstantExpression` obtained by evaluating the tagged observable at
+  the **canonically-first** matching molecule of the species, which is a
+  property of the species, so every copy of a species prices identically.
+  Confirmed against BNG2 2.9.3 by generating the network with the observable
+  reading each state in turn: flipping which state it counts flips the
+  emitted constant, and both times it lands on the canonically-first subunit
+  rather than on the smaller value — so this is neither a default to zero
+  nor a minimum.
+
+  RM now takes the representative from the complex's canonical form, via a
+  new `canonical::canonical_order` — the ordering the canonical label is
+  rendered in, which inherits the label's guarantee that isomorphic
+  complexes order corresponding molecules identically. The representative is
+  what both prices the complex and fires, so count, price and draw stay
+  mutually consistent as #33 left them.
+
+  **The canonicalizer stays off the hot path for everything else.** The
+  election runs only where the choice is observable — a pure-context slot
+  whose local factor is evaluated *per molecule* and is not the constant 1
+  the DOR1 normalization puts on the untagged side — and, within that, only
+  on complexes holding more than one match, since one candidate needs no
+  election. A complex-wide tag evaluates its observable over the whole
+  complex, so every molecule in it prices the same and the cheap lowest-id
+  representative is kept. Every rule with no local function keeps it too.
+  Measured on the three corpus models that carry per-complex tallies:
+  `r08` -0.9%, `machine` +0.7%, `ensemble` -1.5% — all inside run-to-run
+  noise, and none of them reaches `canonical.cpp` at all. Where the
+  election *is* live the cost is real: a probe with a 5-subunit tagged
+  catalyst that every event edits runs **4.3x** slow, three quarters of it
+  inside the canonicalizer's allocations. That shape was previously wrong
+  by 5.5x, so the trade is taken; making the canonical order allocation-free
+  from the engine side is its own piece of work.
+
+  Re-electing on the right events needed one new signal: a state change
+  inside a complex reorders its canonical form without moving any molecule
+  between complexes, so #33's complex-move side-channel never mentions it
+  even though the molecule that should price the complex has changed. The
+  pool now also logs edited complex ids, gated on some rule actually needing
+  a canonical representative, so it is a predictable branch and nothing else
+  for every other model.
+
+  `tests/bng_oracle/models/context_dor_price.bngl` pins it against BNG2's own
+  expansion: three columns of the same chemistry that BNG2 gives the
+  identical rate — the dimer seeded pre-formed, the identical species
+  assembled in-run, and one whose canonically-first molecule carries the
+  *larger* value, which is the discriminator against "price at the cheapest
+  instance". The suite scores **137 sigma** against the pre-fix engine and
+  1.4 after.
+
 - **`MM(kcat,Km)` at the `Km <= 0` boundary: a rate of 0 where the limit is
   `kcat*min(S,E)`, and a NaN propensity the sampler kept firing against
   (issue #46).** The MM branch guarded its division with

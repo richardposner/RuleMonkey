@@ -1,0 +1,123 @@
+# Which molecule prices a collapsed context instance (GH #52).
+#
+# GH #33 established that a reactant pattern the rule does not transform gets
+# ONE reaction instance per matching complex. When that pattern ALSO carries a
+# per-molecule local function tag, the collapse has to decide which of the
+# complex's matching molecules the surviving instance is priced at -- and the
+# candidates price differently, so the choice is observable.
+#
+# BioNetGen answers with the species' canonically-FIRST matching molecule. That
+# is a property of the species, so every copy of a species prices identically,
+# always. RuleMonkey used to answer with the lowest live molecule id, which is a
+# property of pool history: two chemically identical complexes in the same run
+# priced differently depending on how each was assembled.
+#
+# All three subsystems below are the SAME chemistry seen three ways, tuned so
+# that BNG gives all three the identical per-substrate rate
+#
+#   mu = kcat*E0 = 5e-4        (mu*t = 0.5 at t_end = 1000)
+#
+# and therefore the identical X0*exp(-mu*t). A gap between the three columns IS
+# the defect; there is no other reading of them.
+#
+#   Dor_seeded     Wa(m~0).Wa(m~1) seeded pre-formed. RuleMonkey's ids follow
+#                  the order BNG2 wrote the molecules in the XML, which is
+#                  canonical order, so "lowest id" and "canonically first" name
+#                  the same subunit here BY COINCIDENCE OF SEEDING. This column
+#                  passed before the fix and still has to: it is the control
+#                  that says the canonical representative did not move the
+#                  answer where the answer was already right.
+#
+#   Dor_assembled  The identical species, assembled during the run instead --
+#                  Flip modifies one subunit of an m~0/m~0 homodimer, and which
+#                  subunit it picks is a coin flip, so about half the dimers end
+#                  up with the modified subunit at the lower id. This is the
+#                  column that fails: at 5.5x, the half-and-half average of the
+#                  two candidate prices (1x at an m~0 subunit, 10x at an m~1
+#                  one). Nothing about the chemistry differs from Dor_seeded --
+#                  Mod is 50 in both, against 4000 substrate, within the first
+#                  1% of the run.
+#
+#   Dor_high       The discriminator against "price at the cheapest instance",
+#                  which would reproduce the two columns above for the wrong
+#                  reason. Same mixed dimer, but the observable counts m~0, so
+#                  the canonically-first subunit is the one with the LARGER
+#                  value and BNG emits kcat*(1+(9*1)) rather than kcat*(1+(9*0))
+#                  -- verified by generating the network both ways. Priced at
+#                  the canonically-first subunit this column tracks the other
+#                  two; priced at the cheaper one it runs 10x slow.
+#
+# Dor_seeded doubles as the guard against summing over the complex's matching
+# molecules, the other candidate reading: a sum would price the mixed dimer at
+# 11*kcat and run 11x fast.
+#
+# Why this is not covered by context_symmetry, which also has a DOR pair:
+# its `locs(x) = kcat*Obs_Src + 0*Cnt_Wz(x)` is deliberately built so that the
+# `0*` makes every instance in a complex price the SAME. That pins the DOR path
+# without ever pinning the arbitration, which is exactly the hole this file
+# fills.
+
+begin model
+begin parameters
+  X0     4000
+  E0     50
+
+  # 1x at an m~0 subunit, 10x at an m~1 subunit. mu = kcat*E0 = 5e-4.
+  kcat   1.0e-5
+
+  # Dor_high reads the observable the other way round, so its canonically-first
+  # subunit is the 10x one; kcatH is kcat/10 so that 10*kcatH lands back on the
+  # same mu and all three columns must coincide.
+  kcatH  1.0e-6
+
+  # Fast enough that every Dor_assembled dimer has flipped inside the first 1%
+  # of the run, and self-limiting: a flipped dimer no longer matches Flip.
+  kflip  100
+end parameters
+
+begin molecule types
+  Sa(s~0~1)
+  Sc(s~0~1)
+  Sh(s~0~1)
+  Wa(d,m~0~1)
+  Wc(d,m~0~1)
+  Wh(d,m~0~1)
+end molecule types
+
+begin seed species
+  Sa(s~0)  X0
+  Sc(s~0)  X0
+  Sh(s~0)  X0
+  Wa(d!1,m~0).Wa(d!1,m~1)  E0
+  Wc(d!1,m~0).Wc(d!1,m~0)  E0
+  Wh(d!1,m~0).Wh(d!1,m~1)  E0
+end seed species
+
+begin observables
+  Molecules Dor_seeded     Sa(s~0)
+  Molecules Dor_assembled  Sc(s~0)
+  Molecules Dor_high       Sh(s~0)
+  # Tagged by the local functions below; also emitted, where they pin that all
+  # three catalyst pools really do reach one modified subunit per dimer.
+  Molecules ModA  Wa(m~1)
+  Molecules ModC  Wc(m~1)
+  Molecules ModH  Wh(m~0)
+end observables
+
+begin functions
+  lfa(x) = kcat*(1 + 9*ModA(x))
+  lfc(x) = kcat*(1 + 9*ModC(x))
+  lfh(x) = kcatH*(1 + 9*ModH(x))
+end functions
+
+begin reaction rules
+  Ra: Sa(s~0) + Wa(d!+)%x -> Sa(s~1) + Wa(d!+)%x  lfa(x)
+  Rc: Sc(s~0) + Wc(d!+)%x -> Sc(s~1) + Wc(d!+)%x  lfc(x)
+  Rh: Sh(s~0) + Wh(d!+)%x -> Sh(s~1) + Wh(d!+)%x  lfh(x)
+  Flip: Wc(d!1,m~0).Wc(d!1,m~0) -> Wc(d!1,m~1).Wc(d!1,m~0)  kflip
+end reaction rules
+end model
+
+begin actions
+  writeXML({overwrite=>1})
+end actions
