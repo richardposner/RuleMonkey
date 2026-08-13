@@ -57,11 +57,22 @@
 //   instead of rebuilding std::map<std::string,…> per call.  The
 //   algorithm and the emitted label are unchanged — this is purely the
 //   §5 "speed by design" cleanup, profiled and applied in step 7.
+//
+//   Reuse ACROSS calls (GH #53) is the other half of that story, and it
+//   needs a caller that can hold state: `canonical_order_fast` takes a
+//   RankedComplex plus a Workspace, and every buffer the refinement
+//   touches lives in that workspace rather than on the stack of a pure
+//   function.  The integer ranks stand in for the color strings, so the
+//   refinement it runs is the same refinement `canonicalize` would have
+//   run on the same complex; `ranked_initial_colors` is where the two
+//   meet and `rank_*` is the correspondence that keeps them equal.
 
 #include "canonical.hpp"
 
 #include <algorithm>
 #include <map>
+#include <memory>
+#include <numeric>
 #include <string>
 #include <tuple>
 #include <utility>
@@ -210,24 +221,42 @@ CompKey comp_key(int bonded_color, int state_id) {
 // buffers reused across every refine() call.  Individualization-
 // refinement calls refine() once per search node; on a large symmetric
 // complex that is the dominant allocation cost, and reuse removes it.
+// build() extends that reuse across whole canonicalizations, for a caller
+// that keeps its Refiner in a Workspace (GH #53).
+//
+// Ranking by signature also means refinement never REORDERS colors that
+// already differ: sig_less compares the own color first, so
+// color[a] < color[b] implies next_color[a] < next_color[b].  That is what
+// lets an order-only caller stop as soon as the molecule colors are
+// distinct — see mol_colors_distinct.
 struct Refiner {
   std::vector<int> adj_off;  // CSR offsets, size n_vert + 1
   std::vector<int> adj_flat; // CSR neighbor lists, size = total degree
   std::vector<int> next_color;
-  std::vector<int> order; // vertex permutation scratch
-  std::vector<int> nbr;   // per-vertex sorted neighbor colors, CSR-laid
+  std::vector<int> order;  // vertex permutation scratch
+  std::vector<int> nbr;    // per-vertex sorted neighbor colors, CSR-laid
+  std::vector<int> cursor; // build(): per-vertex CSR fill position
 
-  explicit Refiner(const std::vector<std::vector<int>>& adj) {
-    int const n = static_cast<int>(adj.size());
-    adj_off.assign(n + 1, 0);
-    for (int v = 0; v < n; ++v)
-      adj_off[v + 1] = adj_off[v] + static_cast<int>(adj[v].size());
-    adj_flat.resize(adj_off[n]);
-    for (int v = 0; v < n; ++v)
-      std::copy(adj[v].begin(), adj[v].end(), adj_flat.begin() + adj_off[v]);
-    next_color.resize(n);
-    order.resize(n);
-    nbr.resize(adj_off[n]);
+  // (Re)point the refiner at an undirected graph given as an edge list.
+  // Every buffer is resized rather than rebuilt, so a workspace that has
+  // already seen a complex this size allocates nothing here.
+  void build(int n_vert, const std::vector<std::pair<int, int>>& edges) {
+    adj_off.assign(n_vert + 1, 0);
+    for (const auto& [a, b] : edges) {
+      ++adj_off[a + 1];
+      ++adj_off[b + 1];
+    }
+    for (int v = 0; v < n_vert; ++v)
+      adj_off[v + 1] += adj_off[v];
+    adj_flat.resize(adj_off[n_vert]);
+    cursor.assign(adj_off.begin(), adj_off.begin() + n_vert);
+    for (const auto& [a, b] : edges) {
+      adj_flat[cursor[a]++] = b;
+      adj_flat[cursor[b]++] = a;
+    }
+    next_color.resize(n_vert);
+    order.resize(n_vert);
+    nbr.resize(adj_flat.size());
   }
 
   // Lexicographic compare of vertices a and b by this round's signature
@@ -284,6 +313,8 @@ struct Refiner {
       }
       int const new_classes = rank + 1;
       color.swap(next_color);
+      if (new_classes == n)
+        break; // discrete: every vertex alone, so the next round is the identity
       if (!first && new_classes == n_classes)
         break; // partition stable
       first = false;
@@ -302,6 +333,29 @@ struct Scratch {
   std::vector<int> comp_label;            // render: bond-label assignment
 };
 
+// Everything one canonicalization needs that is not the input graph.
+// canonicalize() holds one on the stack for the duration of a call;
+// canonical_order_fast holds one in the caller's Workspace and reuses it
+// call after call, which is what makes the election allocation-free
+// once warm (GH #53).
+struct Core {
+  // Port graph (plan §3.1).
+  std::vector<int> comp_vertex; // global comp index -> vertex id, -1 if free
+  std::vector<int> vertex_comp; // component-vertex index -> global comp index
+  std::vector<int> comp_to_mol; // global comp index -> molecule index
+  std::vector<std::pair<int, int>> edges;
+
+  // Initial colors, as the key slices ranked_initial_colors ranks.
+  std::vector<int> key_data;
+  std::vector<int> key_off; // vertex -> [key_off[v], key_off[v+1]) in key_data
+  std::vector<int> key_order;
+  std::vector<std::pair<int, int>> free_pairs; // one molecule's unbonded comps
+
+  std::vector<int> color;
+  Refiner refiner;
+  Scratch scratch;
+};
+
 // Refined color of each bonded component's vertex (-1 if free) — the
 // renderer's within-molecule ordering key.
 std::vector<int> bonded_colors(const ComplexGraph& g, const std::vector<int>& color,
@@ -312,6 +366,25 @@ std::vector<int> bonded_colors(const ComplexGraph& g, const std::vector<int>& co
       bc[gc] = color[comp_vertex[gc]];
   }
   return bc;
+}
+
+// Half of the leaf test: did every molecule vertex land in its own color
+// class?  That half is the WHOLE test for the molecule ordering, which is
+// sort-by-refined-color over the molecule vertices and nothing else.
+//
+// Once it holds, no leaf below this coloring can order the molecules
+// differently: individualization only ever splits classes, and refine()
+// never reorders colors that already differ (see Refiner), so every leaf
+// in the subtree sorts the molecules exactly as this coloring does.  That
+// is why an order-only caller stops here while canonicalize, which still
+// has to pick a RENDER, does not.
+bool mol_colors_distinct(const std::vector<int>& color, int n_mol, Scratch& s) {
+  s.mol_colors.assign(color.begin(), color.begin() + n_mol);
+  std::sort(s.mol_colors.begin(), s.mol_colors.end());
+  for (int i = 1; i < n_mol; ++i)
+    if (s.mol_colors[i] == s.mol_colors[i - 1])
+      return false;
+  return true;
 }
 
 // Leaf test: is `color` discriminating enough that `render` produces a
@@ -325,11 +398,8 @@ std::vector<int> bonded_colors(const ComplexGraph& g, const std::vector<int>& co
 // render, so it does not block a leaf.)
 bool is_leaf(const ComplexGraph& g, const Tables& tab, const std::vector<int>& color,
              const std::vector<int>& comp_vertex, int n_mol, Scratch& s) {
-  s.mol_colors.assign(color.begin(), color.begin() + n_mol);
-  std::sort(s.mol_colors.begin(), s.mol_colors.end());
-  for (int i = 1; i < n_mol; ++i)
-    if (s.mol_colors[i] == s.mol_colors[i - 1])
-      return false;
+  if (!mol_colors_distinct(color, n_mol, s))
+    return false;
   for (int m = 0; m < n_mol; ++m) {
     const auto& mol = g.molecules[m];
     s.pairs.clear();
@@ -531,12 +601,145 @@ void search(SearchState& st, const std::vector<int>& color) {
   }
 }
 
+// Build the port graph (plan §3.1) into `core` and return the vertex
+// count.  Shared by both entry points, which differ only in where their
+// molecule spans and bond partners come from:
+//
+//   Vertices: [0, n_mol)        molecule vertices
+//             [n_mol, n_vert)   one per bonded component
+//
+// comp_vertex[gc] is the vertex id of bonded component `gc`, or -1 for an
+// unbonded component (no vertex — it folds into its molecule's color).
+// Edges are molecule <-> each of its bonded components, plus one per bond.
+//
+// `mol_span(m)` gives molecule m's (first_comp, n_comp) and
+// `partner_of(gc)` component gc's bond partner (-1 = free).
+template <class MolSpan, class PartnerOf>
+int build_port_graph(int n_mol, int n_comp, MolSpan mol_span, PartnerOf partner_of, Core& core) {
+  core.comp_vertex.assign(n_comp, -1);
+  core.comp_to_mol.assign(n_comp, -1);
+  core.vertex_comp.clear();
+  for (int m = 0; m < n_mol; ++m) {
+    const auto [first, count] = mol_span(m);
+    for (int i = 0; i < count; ++i) {
+      int const gc = first + i;
+      core.comp_to_mol[gc] = m;
+      if (partner_of(gc) >= 0) {
+        core.comp_vertex[gc] = n_mol + static_cast<int>(core.vertex_comp.size());
+        core.vertex_comp.push_back(gc);
+      }
+    }
+  }
+  int const n_cv = static_cast<int>(core.vertex_comp.size());
+  core.edges.clear();
+  for (int cv = 0; cv < n_cv; ++cv)
+    core.edges.emplace_back(n_mol + cv, core.comp_to_mol[core.vertex_comp[cv]]);
+  for (int cv = 0; cv < n_cv; ++cv) {
+    int const gc = core.vertex_comp[cv];
+    int const partner = partner_of(gc);
+    if (gc < partner) // emit each bond edge once
+      core.edges.emplace_back(n_mol + cv, core.comp_vertex[partner]);
+  }
+  return n_mol + n_cv;
+}
+
+// Initial vertex colors for a RankedComplex — the integer counterpart of
+// molecule_color / component_color plus canonicalize_impl's intern map.
+//
+// Each vertex gets a KEY SLICE in core.key_data:
+//
+//   component vertex : [0, name_rank, state_rank]
+//   molecule vertex  : [1, type_rank, then (name_rank, state_rank) for
+//                       each UNBONDED component, ascending]
+//
+// and the colors are the dense rank of those slices in lexicographic
+// order.  That reproduces the string ranking exactly:
+//
+//   * `C:` sorts before `M:` — the leading 0 / 1.
+//   * A molecule color writes its free components as a `,`-joined list
+//     inside `(...)`, and `(`, `,` and `)` are all outranked by every
+//     character a BNGL identifier may hold.  So comparing the joined
+//     lists is comparing the element sequences, and a shorter list that
+//     is a prefix of a longer one sorts first — which is what comparing
+//     a shorter key slice does.
+//   * Element order, and name/state order within an element, are carried
+//     by the ranks themselves: see rank_component_names / rank_state_names.
+void ranked_initial_colors(const RankedComplex& c, int n_mol, Core& core) {
+  int const n_cv = static_cast<int>(core.vertex_comp.size());
+  int const n_vert = n_mol + n_cv;
+  core.key_data.clear();
+  core.key_off.assign(n_vert + 1, 0);
+
+  for (int m = 0; m < n_mol; ++m) {
+    const auto& mol = c.molecules[m];
+    core.key_data.push_back(1);
+    core.key_data.push_back(mol.type_rank);
+    core.free_pairs.clear();
+    for (int i = 0; i < mol.n_comp; ++i) {
+      const auto& comp = c.components[mol.first_comp + i];
+      if (comp.partner < 0)
+        core.free_pairs.emplace_back(comp.name_rank, comp.state_rank);
+    }
+    std::sort(core.free_pairs.begin(), core.free_pairs.end());
+    for (const auto& [name, state] : core.free_pairs) {
+      core.key_data.push_back(name);
+      core.key_data.push_back(state);
+    }
+    core.key_off[m + 1] = static_cast<int>(core.key_data.size());
+  }
+  for (int cv = 0; cv < n_cv; ++cv) {
+    const auto& comp = c.components[core.vertex_comp[cv]];
+    core.key_data.push_back(0);
+    core.key_data.push_back(comp.name_rank);
+    core.key_data.push_back(comp.state_rank);
+    core.key_off[n_mol + cv + 1] = static_cast<int>(core.key_data.size());
+  }
+
+  const int* kd = core.key_data.data();
+  const auto& off = core.key_off;
+  auto slice_less = [&](int a, int b) {
+    return std::lexicographical_compare(kd + off[a], kd + off[a + 1], kd + off[b], kd + off[b + 1]);
+  };
+  auto slice_equal = [&](int a, int b) {
+    return off[a + 1] - off[a] == off[b + 1] - off[b] &&
+           std::equal(kd + off[a], kd + off[a + 1], kd + off[b]);
+  };
+
+  core.key_order.resize(n_vert);
+  std::iota(core.key_order.begin(), core.key_order.end(), 0);
+  std::sort(core.key_order.begin(), core.key_order.end(), slice_less);
+  core.color.assign(n_vert, 0);
+  int rank = -1;
+  for (int i = 0; i < n_vert; ++i) {
+    if (i == 0 || !slice_equal(core.key_order[i - 1], core.key_order[i]))
+      ++rank;
+    core.color[core.key_order[i]] = rank;
+  }
+}
+
+// Dense ranks of `keys` in lexicographic order: equal strings share a
+// rank, and rank(a) < rank(b) iff a < b.  Runs once per model.
+std::vector<int> dense_ranks(const std::vector<std::string>& keys) {
+  std::vector<int> idx(keys.size());
+  std::iota(idx.begin(), idx.end(), 0);
+  std::sort(idx.begin(), idx.end(), [&](int a, int b) { return keys[a] < keys[b]; });
+  std::vector<int> out(keys.size(), 0);
+  int rank = -1;
+  for (size_t i = 0; i < idx.size(); ++i) {
+    if (i == 0 || keys[idx[i]] != keys[idx[i - 1]])
+      ++rank;
+    out[idx[i]] = rank;
+  }
+  return out;
+}
+
 // Shared body of canonicalize() and canonical_order().  `order_only`
-// suppresses the fast path's render — the one piece of work a caller
-// that wants the ordering alone has no use for.  It changes nothing
-// else: the fast path's ordering is sort-by-refined-color and does not
-// consult the string, and the search path renders regardless, since
-// there the strings are what select the canonical leaf.
+// suppresses the render on every coloring that already fixes the molecule
+// ordering — the one piece of work a caller that wants the ordering alone
+// has no use for.  It changes nothing else: the ordering is
+// sort-by-refined-color and does not consult the string, and a coloring
+// that still ties two molecules renders regardless, since there the
+// strings are what select the canonical leaf.
 CanonForm canonicalize_impl(const ComplexGraph& g, bool order_only) {
   int const n_mol = g.molecule_count();
   if (n_mol == 0)
@@ -545,58 +748,29 @@ CanonForm canonicalize_impl(const ComplexGraph& g, bool order_only) {
   Tables const tab = build_tables(g);
 
   // --- Build the port graph ------------------------------------------------
-  //
-  // Vertices: [0, n_mol)        molecule vertices
-  //           [n_mol, n_vert)   one per bonded component
-  //
-  // comp_vertex[gc] is the vertex id of bonded component `gc`, or -1
-  // for an unbonded component (no vertex — it folds into its molecule's
-  // color).
-  std::vector<int> comp_vertex(g.components.size(), -1);
-  std::vector<int> vertex_comp; // component-vertex index -> global comp index
-  std::vector<int> comp_to_mol(g.components.size(), -1);
-  for (int m = 0; m < n_mol; ++m) {
-    const auto& mol = g.molecules[m];
-    for (int i = 0; i < mol.n_comp; ++i) {
-      int const gc = mol.first_comp + i;
-      comp_to_mol[gc] = m;
-      if (g.components[gc].partner >= 0) {
-        comp_vertex[gc] = n_mol + static_cast<int>(vertex_comp.size());
-        vertex_comp.push_back(gc);
-      }
-    }
-  }
-  int const n_vert = n_mol + static_cast<int>(vertex_comp.size());
-
-  // Adjacency: molecule <-> bonded-component edges, then bond edges.
-  std::vector<std::vector<int>> adj(n_vert);
-  for (int cv = 0; cv < static_cast<int>(vertex_comp.size()); ++cv) {
-    int const vid = n_mol + cv;
-    int const mv = comp_to_mol[vertex_comp[cv]];
-    adj[vid].push_back(mv);
-    adj[mv].push_back(vid);
-  }
-  for (int cv = 0; cv < static_cast<int>(vertex_comp.size()); ++cv) {
-    int const gc = vertex_comp[cv];
-    int const partner = g.components[gc].partner;
-    if (gc < partner) { // emit each bond edge once
-      int const va = n_mol + cv;
-      int const vb = comp_vertex[partner];
-      adj[va].push_back(vb);
-      adj[vb].push_back(va);
-    }
-  }
+  Core core;
+  int const n_vert = build_port_graph(
+      n_mol, g.component_count(),
+      [&](int m) {
+        return std::pair<int, int>{g.molecules[m].first_comp, g.molecules[m].n_comp};
+      },
+      [&](int gc) { return g.components[gc].partner; }, core);
+  const std::vector<int>& comp_vertex = core.comp_vertex;
 
   // --- Initial colors ------------------------------------------------------
   //
   // Intern color strings through a sorted map, so the assigned integers
   // follow lexicographic string order — the integer colors are a
   // canonical, structure-derived ranking from round zero.
+  //
+  // ranked_initial_colors above is the integer twin of this block.  The
+  // two must produce the same RANKING, or the two entry points would
+  // answer different orders for the same complex.
   std::vector<std::string> init_str(n_vert);
   for (int m = 0; m < n_mol; ++m)
     init_str[m] = molecule_color(g, g.molecules[m]);
-  for (int cv = 0; cv < static_cast<int>(vertex_comp.size()); ++cv)
-    init_str[n_mol + cv] = component_color(g.components[vertex_comp[cv]]);
+  for (int cv = 0; cv < static_cast<int>(core.vertex_comp.size()); ++cv)
+    init_str[n_mol + cv] = component_color(g.components[core.vertex_comp[cv]]);
 
   std::map<std::string, int> intern;
   for (const auto& s : init_str)
@@ -606,23 +780,28 @@ CanonForm canonicalize_impl(const ComplexGraph& g, bool order_only) {
     for (auto& [str, id] : intern)
       id = next++;
   }
-  std::vector<int> color(n_vert);
+  std::vector<int>& color = core.color;
+  color.resize(n_vert);
   for (int v = 0; v < n_vert; ++v)
     color[v] = intern[init_str[v]];
 
   // --- 1-WL color refinement ----------------------------------------------
-  Refiner refiner(adj);
+  Refiner& refiner = core.refiner;
+  refiner.build(n_vert, core.edges);
   refiner.refine(color);
 
   // --- Fast path -----------------------------------------------------------
   //
   // If refinement alone discriminated the complex (plan §3.2 step 2),
   // the refined colors fix a unique isomorphism-invariant ordering;
-  // render directly.  This is the overwhelmingly common case.
-  Scratch scratch;
-  if (is_leaf(g, tab, color, comp_vertex, n_mol, scratch)) {
-    if (order_only)
+  // render directly.  This is the overwhelmingly common case.  A caller
+  // that wants only the ordering stops one condition earlier — see
+  // mol_colors_distinct.
+  Scratch& scratch = core.scratch;
+  if (order_only) {
+    if (mol_colors_distinct(color, n_mol, scratch))
       return {std::string{}, /*fast_path=*/true, leaf_order(color, n_mol, scratch)};
+  } else if (is_leaf(g, tab, color, comp_vertex, n_mol, scratch)) {
     // render_leaf writes the ordering into scratch.order, so read it out
     // after the call rather than before.
     std::string label = render_leaf(g, tab, color, comp_vertex, n_mol, scratch);
@@ -650,6 +829,77 @@ std::string canonical_label(const ComplexGraph& g) { return canonicalize(g).labe
 
 std::vector<int> canonical_order(const ComplexGraph& g) {
   return canonicalize_impl(g, /*order_only=*/true).mol_order;
+}
+
+// ===========================================================================
+// The integer entry point (GH #53)
+// ===========================================================================
+
+// A molecule type name is written `M:Name(`, and `(` is outranked by every
+// character a BNGL identifier may hold, so a name that is a prefix of
+// another sorts FIRST.  Ranking `name + '('` says exactly that, whatever
+// the characters turn out to be.
+std::vector<int> rank_molecule_type_names(const std::vector<std::string>& names) {
+  std::vector<std::string> keys;
+  keys.reserve(names.size());
+  for (const auto& n : names)
+    keys.push_back(n + '(');
+  return dense_ranks(keys);
+}
+
+// A component name is always written with its state behind a `~`, and `~`
+// (0x7E) OUTRANKS every character a BNGL identifier may hold.  So `ab`
+// sorts before `a` here — the opposite of the molecule-type rule above,
+// and the reason these are two functions and not one.
+std::vector<int> rank_component_names(const std::vector<std::string>& names) {
+  std::vector<std::string> keys;
+  keys.reserve(names.size());
+  for (const auto& n : names)
+    keys.push_back(n + '~');
+  return dense_ranks(keys);
+}
+
+// A state is written last in its color string, and inside a molecule color
+// it is followed by `,` or `)` — both outranked by every identifier
+// character, exactly as end-of-string is.  So plain lexicographic order,
+// and "" (a component with no internal state) ranks first.
+std::vector<int> rank_state_names(const std::vector<std::string>& states) {
+  return dense_ranks(states);
+}
+
+struct Workspace::Impl {
+  Core core;
+};
+
+Workspace::Workspace() : impl_(std::make_unique<Impl>()) {}
+Workspace::~Workspace() = default;
+Workspace::Workspace(Workspace&&) noexcept = default;
+Workspace& Workspace::operator=(Workspace&&) noexcept = default;
+
+bool canonical_order_fast(const RankedComplex& c, Workspace& ws, std::vector<int>& out) {
+  Core& core = ws.impl_->core;
+  int const n_mol = c.molecule_count();
+  if (n_mol == 0) {
+    out.clear();
+    return true;
+  }
+
+  int const n_vert = build_port_graph(
+      n_mol, c.component_count(),
+      [&](int m) {
+        return std::pair<int, int>{c.molecules[m].first_comp, c.molecules[m].n_comp};
+      },
+      [&](int gc) { return c.components[gc].partner; }, core);
+
+  ranked_initial_colors(c, n_mol, core);
+  core.refiner.build(n_vert, core.edges);
+  core.refiner.refine(core.color);
+
+  if (!mol_colors_distinct(core.color, n_mol, core.scratch))
+    return false; // interchangeable molecules — only the render can choose
+  const std::vector<int>& order = leaf_order(core.color, n_mol, core.scratch);
+  out.assign(order.begin(), order.end());
+  return true;
 }
 
 } // namespace rulemonkey::canonical

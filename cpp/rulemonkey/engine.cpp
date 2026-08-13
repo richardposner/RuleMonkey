@@ -340,6 +340,11 @@ public:
 
   int molecule_count() const { return static_cast<int>(molecules_.size()); }
 
+  // High-water mark of the component arena, INCLUDING slots currently on
+  // the free list.  A caller that wants an O(1) side table keyed by
+  // global component id sizes it by this, not by the live count.
+  int component_slot_count() const { return static_cast<int>(components_.size()); }
+
   // Increment / decrement state
   void increment_state(int comp_id) {
     auto& c = components_[comp_id];
@@ -4261,6 +4266,13 @@ struct Engine::Impl {
 
       nary_setup(ri);
 
+      // The rescan below already elects representatives, so the election's
+      // rank tables have to exist before it runs (issue #53).  Built at the
+      // first rule that elects, which means a model without the construct
+      // never builds them at all.
+      if ((rs.percx_canon_a || rs.percx_canon_b) && canon_type_rank_.empty())
+        build_canon_ranks();
+
       rescan_all_molecules_for_rule(ri);
     }
 
@@ -4988,6 +5000,32 @@ struct Engine::Impl {
   // that emptiness is what keeps the canonicalizer off the event loop there.
   std::vector<std::pair<int, int>> percx_canon_slots;
   std::vector<int> percx_edit_scratch;
+
+  // The canonicalizer's integer entry point and everything it needs
+  // (issue #53).  Electing a representative asks the canonicalizer for one
+  // permutation and throws the rest away; going through ComplexGraph to get
+  // it meant building a std::string per molecule and per bonded component
+  // and interning them through a std::map, on every edit of a tagged
+  // complex.  These describe the same complex in ranks instead, so the
+  // election costs no allocation at all once the buffers are warm.
+  //
+  // The ranks are NOT the engine's own indices: they have to sort the way
+  // the color strings do or the two entry points would elect different
+  // molecules.  canonical::rank_* is what derives them, and it is deliberately
+  // the only place that correspondence is written down.  Built by
+  // build_canon_ranks() when the first canonical slot is registered, and
+  // read-only afterwards — molecule types cannot change mid-session.
+  std::vector<int> canon_type_rank_;  // model type_index -> rank
+  std::vector<int> canon_comp_first_; // model type_index -> base into the two below
+  std::vector<int> canon_comp_name_rank_;
+  std::vector<int> canon_state_first_;    // flat comp index -> base into ranks
+  std::vector<int> canon_state_rank_;     // flat (comp, state_index) -> rank
+  int canon_stateless_rank_ = 0;          // the rank of "", for a stateless component
+  mutable canonical::Workspace canon_ws_; // reused refinement buffers
+  mutable canonical::RankedComplex canon_rc_;
+  mutable std::vector<int> canon_order_;
+  mutable std::vector<int> canon_comp_slot_; // global comp id -> index within canon_rc_
+
   // The rebuild below elects representatives the cheap way and lets
   // percx_resum_rates canonicalize each complex once at the end, rather than
   // once per molecule that joins the tally on the way there.
@@ -5036,6 +5074,89 @@ struct Engine::Impl {
            percx_cx_of(rs.mol_data[m], slot) == cx;
   }
 
+  // Rank every name in the model the way the canonical color strings order
+  // them, so the election can describe a complex in integers (issue #53).
+  // Model-wide rather than per-complex: only the RELATIVE order of the
+  // ranks matters, and a table that covers every name covers every subset
+  // of them.  Run once, off the event loop.
+  void build_canon_ranks() {
+    int const n_types = static_cast<int>(model.molecule_types.size());
+    std::vector<std::string> type_names;
+    type_names.reserve(n_types);
+    for (const auto& mt : model.molecule_types)
+      type_names.push_back(mt.name);
+    canon_type_rank_ = canonical::rank_molecule_type_names(type_names);
+
+    // Component names and state strings both flatten across the whole model:
+    // two molecule types sharing a component name compare their states
+    // against each other inside one color string, so the state universe has
+    // to be global too.  "" goes in last and is the stateless rank.
+    canon_comp_first_.assign(n_types + 1, 0);
+    std::vector<std::string> comp_names;
+    std::vector<std::string> state_names;
+    std::vector<int> state_first;
+    for (int ti = 0; ti < n_types; ++ti) {
+      canon_comp_first_[ti] = static_cast<int>(comp_names.size());
+      for (const auto& ct : model.molecule_types[ti].components) {
+        comp_names.push_back(ct.name);
+        state_first.push_back(static_cast<int>(state_names.size()));
+        for (const auto& s : ct.allowed_states)
+          state_names.push_back(s);
+      }
+    }
+    canon_comp_first_[n_types] = static_cast<int>(comp_names.size());
+    state_first.push_back(static_cast<int>(state_names.size()));
+    state_names.emplace_back(); // the stateless "" — ranks first, by construction
+
+    canon_comp_name_rank_ = canonical::rank_component_names(comp_names);
+    canon_state_rank_ = canonical::rank_state_names(state_names);
+    canon_stateless_rank_ = canon_state_rank_.back();
+    canon_state_first_ = std::move(state_first);
+  }
+
+  // Restate `mol_ids` — one connected complex — as a RankedComplex, in
+  // buffers the next call reuses.  The integer twin of extract_complex; the
+  // two must describe isomorphic graphs, or the election would answer for a
+  // different complex than the label does.
+  void build_ranked_complex(const std::vector<int>& mol_ids) const {
+    canon_rc_.clear();
+    // Grown, never refilled: the slot of a component outside this complex is
+    // never read, so stale entries cost nothing, and growing leaves the
+    // vector's geometric reallocation to absorb a pool that keeps expanding.
+    if (static_cast<int>(canon_comp_slot_.size()) < pool.component_slot_count())
+      canon_comp_slot_.resize(pool.component_slot_count(), -1);
+    for (int const mid : mol_ids) {
+      const auto& mol = pool.molecule(mid);
+      int const base = canon_comp_first_[mol.type_index];
+      canon_rc_.molecules.push_back({canon_type_rank_[mol.type_index], canon_rc_.component_count(),
+                                     static_cast<int>(mol.comp_ids.size())});
+      for (int li = 0; li < static_cast<int>(mol.comp_ids.size()); ++li) {
+        int const cid = mol.comp_ids[li];
+        int const si = pool.component(cid).state_index;
+        int const sbase = canon_state_first_[base + li];
+        int const state_rank = (si >= 0 && sbase + si < canon_state_first_[base + li + 1])
+                                   ? canon_state_rank_[sbase + si]
+                                   : canon_stateless_rank_;
+        canon_comp_slot_[cid] = canon_rc_.component_count();
+        canon_rc_.components.push_back({canon_comp_name_rank_[base + li], state_rank, -1});
+      }
+    }
+    // Every component of the complex now has a slot, so the bond pass can
+    // resolve both endpoints without a lookup table — a complex is closed
+    // under its own bonds.  Each bond is written once, from its lower-id end.
+    for (int const mid : mol_ids) {
+      for (int const cid : pool.molecule(mid).comp_ids) {
+        int const partner = pool.component(cid).bond_partner;
+        if (partner > cid) {
+          int const a = canon_comp_slot_[cid];
+          int const b = canon_comp_slot_[partner];
+          canon_rc_.components[a].partner = b;
+          canon_rc_.components[b].partner = a;
+        }
+      }
+    }
+  }
+
   // Lowest live molecule id this slot counts inside `cx`.
   int percx_lowest_rep(RuleState& rs, int slot, int cx) const {
     int best = -1;
@@ -5069,8 +5190,16 @@ struct Engine::Impl {
     if (hits <= 1 || !percx_canon_of(rs, slot))
       return percx_lowest_rep(rs, slot, cx);
     const auto& members = pool.molecules_in_complex(cx);
-    const auto order = canonical::canonical_order(extract_complex(pool, model, members));
-    for (int const pos : order) {
+    // The integer entry point answers whenever refinement alone separates
+    // the complex's molecules, which is all but the genuinely symmetric ones
+    // (issue #53).  Where it declines — a ring, a homo-oligomer — the
+    // canonical order is the one belonging to the lexicographically minimal
+    // render, so only the strings can pick it and the ComplexGraph path
+    // stands; the two answer identically either way.
+    build_ranked_complex(members);
+    if (!canonical::canonical_order_fast(canon_rc_, canon_ws_, canon_order_))
+      canon_order_ = canonical::canonical_order(extract_complex(pool, model, members));
+    for (int const pos : canon_order_) {
       if (pos < 0 || pos >= static_cast<int>(members.size()))
         continue;
       if (percx_holds(rs, slot, cx, members[pos]))

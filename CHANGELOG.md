@@ -66,6 +66,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `mm_symmetry_model` (four MM rules, including #37's enzyme-slot arm whose
   factor *is* attributable) as the negative control.
 
+### Changed
+
+- **The canonical-representative election no longer builds a string, cutting
+  its cost 5.4x where it is live (issue #53).** #52 prices a pure-context
+  reactant slot carrying a per-molecule local function tag at the complex's
+  canonically-first matching molecule. Getting that one permutation cost a
+  `canonical::canonical_order` call per representative change, and that call
+  went through the pure core built for the `.species` batch sweep: a
+  `std::string` per molecule and per bonded component, interned through a
+  `std::map`, on top of a fresh `ComplexGraph`, adjacency and refinement
+  scratch every time — on the order of 50 heap allocations to answer with
+  one integer.
+
+  The canonicalizer now also takes integers. `RankedComplex` describes the
+  same port graph with a dense rank in place of every name, `Workspace`
+  holds the refinement buffers across calls, and `canonical_order_fast`
+  answers from those with no allocation once warm. The ranks are not free
+  integers — the refined colors, and so the ordering, depend on the *order*
+  of the initial colors and not only on which vertices share one — so
+  `rank_molecule_type_names` / `rank_component_names` / `rank_state_names`
+  derive them from the names and are the single place that correspondence is
+  written down. The three are not one rule: a color string writes a molecule
+  type as `Type(` and a component as `name~`, and `~` outranks every
+  character a BNGL identifier may hold while `(` is outranked by all of
+  them, so a name that is a prefix of another sorts *before* it as a
+  molecule type and *after* it as a component name.
+
+  The engine builds a RankedComplex straight off the pool — `type_index`,
+  `comp_type_index`, `state_index` and `bond_partner` are all already dense
+  integers — into buffers the next election reuses. The rank tables are
+  model-wide and built at the first rule that elects, so a model without the
+  construct never builds them.
+
+  Where refinement leaves two molecules genuinely interchangeable (a ring, a
+  homo-oligomer) the canonical order is the one belonging to the
+  lexicographically minimal *render*, so only the strings can pick it and
+  the election falls back to the `ComplexGraph` path. That gate is
+  deliberately weaker than a canonical leaf: individualization only ever
+  splits color classes and refinement never reorders colors that already
+  differ, so once the molecule colors are distinct no leaf the search could
+  reach can reorder them. `canonical_order` uses the same relaxed gate now
+  and skips the search entirely on a complex whose only residual symmetry is
+  *within* a molecule — 277 of the 304 complexes the property test sends to
+  the search.
+
+  Measured on #53's probe (best of 5, `--preset release`), a tagged catalyst
+  chain that a toggle rule edits on essentially every event, against the
+  same model with the election gated off:
+
+  | | 5-subunit catalyst | 20-subunit catalyst |
+  |---|---:|---:|
+  | no election | 0.079 s | 0.062 s |
+  | before (`d9880f4`) | 0.286 s | 0.515 s |
+  | after | 0.117 s | 0.316 s |
+  | election overhead | 0.207 → 0.038 s (**5.4x**) | 0.453 → 0.254 s (1.8x) |
+
+  What is left is the refinement itself. The engine → graph bridge is down
+  from 23% of the added cost to 2–3%, and 97% of what remains is 1-WL
+  refinement recomputed from scratch on every edit. The 20-subunit column is
+  the honest one: allocation was never the whole cost on a large complex,
+  and making the refinement itself cheaper — an incremental or cached order
+  — is a different change with a different blast radius.
+
+  The `.species` batch sweep, the canonicalizer's other consumer, got faster
+  too, with unchanged output: both entry points now build the port graph
+  into one shared reusable core with a flat edge list rather than a
+  `vector<vector<int>>` per vertex, and refinement stops on a discrete
+  partition instead of spending one more round proving it is stable.
+  `.species` is byte-identical on `machine`, `ensemble`, `egfr_net`,
+  `egfr_nf_iter5p12h10`, `bench_tlbr_yang2008`, `rm_tlbr_rings` and `tlbr`
+  (whose largest complex is 2757 molecules); the `tlbr` sweep runs 282.8 s →
+  243.8 s.
+
+  `canonical_test` is what pins the two rankings together: every hand-built
+  shape and every complex the property test generates also goes through
+  `canonical_order_fast`, checked against `canonicalize().mol_order` — 7800
+  answers and 54 declines — and the generator's alphabet gained the
+  prefix-name and prefix-state shapes that are the only way the rankings
+  could silently disagree. Dropping the `~` from `rank_component_names`
+  fails 354 assertions, two of them in the deterministic hand-built cases.
+  29/29 corpus guard tier, 88/88 feature coverage, 37/37 ctest under both
+  release and ASan.
+
+- **`ctest --preset asan` instruments the test executables too.** The
+  sanitizer flags reached the library, the vendored expression object
+  library and the two CLIs, but not `tests/`. libc++ emits container
+  annotations only from instrumented code, so a test TU that hands a
+  `std::vector` to the library to fill desynchronizes them, and ASan reports
+  a container-overflow against an ordinary `resize` inside the library —
+  the same failure mode the `rm_bngsim_expr` case already documents, one
+  boundary further out. The flags are now applied directory-wide below the
+  CLI targets, which also means the test harnesses' own code is sanitized
+  for the first time. All 37 tests pass with it on.
+
 ### Fixed
 
 - **A pure-context reactant pattern carrying a per-molecule local function

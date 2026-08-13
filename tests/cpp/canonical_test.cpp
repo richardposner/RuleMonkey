@@ -25,6 +25,15 @@
 // not — has a true canonical form.  The property test therefore asserts
 // isomorphism invariance as a HARD invariant on every generated input
 // (no fully-refined gate), and counts how many inputs needed the search.
+//
+// The integer entry point (GH #53) rides on the same two layers.  Every
+// hand-built shape and every generated complex is ALSO put through
+// `canonical_order_fast` over the RankedComplex the `rank_*` tables
+// build from its own names, and the answer is pinned against
+// `canonicalize().mol_order`.  That is the check that matters for #53:
+// the two paths derive their initial colors completely differently —
+// one interns strings, the other ranks integers — and the whole fix
+// rests on those two rankings being the same ranking.
 
 #include "canonical.hpp"
 
@@ -40,8 +49,14 @@
 
 using rulemonkey::canonical::canonical_label;
 using rulemonkey::canonical::canonical_order;
+using rulemonkey::canonical::canonical_order_fast;
 using rulemonkey::canonical::canonicalize;
 using rulemonkey::canonical::ComplexGraph;
+using rulemonkey::canonical::rank_component_names;
+using rulemonkey::canonical::rank_molecule_type_names;
+using rulemonkey::canonical::rank_state_names;
+using rulemonkey::canonical::RankedComplex;
+using rulemonkey::canonical::Workspace;
 
 namespace {
 
@@ -79,6 +94,56 @@ std::vector<std::string> label_pieces(const std::string& label) {
     start = dot + 1;
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// The integer entry point, driven exactly as the engine drives it: rank
+// the graph's own names through the canonicalizer's tables, restate the
+// complex as a RankedComplex, ask canonical_order_fast.
+//
+// The rank_* tables take names in the caller's indexing and tolerate
+// duplicates, so the graph's flat component array can be ranked whole.
+// ---------------------------------------------------------------------------
+RankedComplex to_ranked(const ComplexGraph& g) {
+  std::vector<std::string> types, names, states;
+  types.reserve(g.molecules.size());
+  names.reserve(g.components.size());
+  states.reserve(g.components.size());
+  for (const auto& m : g.molecules)
+    types.push_back(m.type_name);
+  for (const auto& c : g.components) {
+    names.push_back(c.name);
+    states.push_back(c.state);
+  }
+  const auto type_rank = rank_molecule_type_names(types);
+  const auto name_rank = rank_component_names(names);
+  const auto state_rank = rank_state_names(states);
+
+  RankedComplex rc;
+  rc.molecules.resize(g.molecules.size());
+  for (size_t m = 0; m < g.molecules.size(); ++m)
+    rc.molecules[m] = {type_rank[m], g.molecules[m].first_comp, g.molecules[m].n_comp};
+  rc.components.resize(g.components.size());
+  for (size_t c = 0; c < g.components.size(); ++c)
+    rc.components[c] = {name_rank[c], state_rank[c], g.components[c].partner};
+  return rc;
+}
+
+// Whenever the integer path answers, it must answer exactly what
+// canonicalize() does; and it must answer at least everywhere the
+// string fast path does, since its gate is the weaker of the two.
+// Returns whether it answered, so a caller can pin the fallback too.
+bool check_ranked_agrees(const ComplexGraph& g, const std::string& msg) {
+  static Workspace ws; // one workspace, reused — the shape #53 is about
+  const auto cf = canonicalize(g);
+  const RankedComplex rc = to_ranked(g);
+  std::vector<int> order;
+  bool const answered = canonical_order_fast(rc, ws, order);
+  if (answered)
+    check(order == cf.mol_order, "canonical_order_fast matches mol_order: " + msg);
+  else
+    check(!cf.fast_path, "canonical_order_fast declines only a searched complex: " + msg);
+  return answered;
 }
 
 // ===========================================================================
@@ -208,6 +273,119 @@ void test_non_isomorphic_differ() {
   g2.add_bond(0, 0, 1, 0);
 
   check(canonical_label(g1) != canonical_label(g2), "state difference yields a distinct label");
+}
+
+// ===========================================================================
+// 1a. The integer entry point — the rank rules that could silently
+//     diverge from the color strings (GH #53)
+// ===========================================================================
+
+void test_ranked_rank_rules() {
+  // A component name is written `name~state`, and `~` outranks every
+  // character a BNGL identifier may hold, so `ab~` sorts BEFORE `a~`.
+  // Rank component names in plain lexicographic order instead and this
+  // complex comes out in the opposite order — the two molecules differ
+  // only in which of their prefix-named components carries the state.
+  //
+  //   M0 color: M:E(ab~,a~p)     M1 color: M:E(ab~p,a~)
+  //             -> M0 < M1, because `,` < `p`
+  //
+  // Under a plain-lexicographic component-name rank the keys would read
+  // (a,p),(ab,"") and (a,""),(ab,p), putting M1 first.  So this shape
+  // fails loudly if rank_component_names ever loses its `~`.
+  ComplexGraph g;
+  g.add_molecule("E", comps({{"a", "p"}, {"ab", ""}, {"l", ""}}));
+  g.add_molecule("E", comps({{"a", ""}, {"ab", "p"}, {"l", ""}}));
+  g.add_bond(0, 2, 1, 2);
+  check(canonicalize(g).mol_order == std::vector<int>{0, 1},
+        "prefix component names order M0 first");
+  check(check_ranked_agrees(g, "prefix component names"),
+        "prefix-name dimer answers on the int path");
+
+  // The same shape with the state carried by the *shorter*-named
+  // component on the other molecule — the mirror image, to catch a rank
+  // rule that happens to agree on one arrangement by luck.
+  ComplexGraph gm;
+  gm.add_molecule("E", comps({{"a", ""}, {"ab", "p"}, {"l", ""}}));
+  gm.add_molecule("E", comps({{"a", "p"}, {"ab", ""}, {"l", ""}}));
+  gm.add_bond(0, 2, 1, 2);
+  check(canonicalize(gm).mol_order == std::vector<int>{1, 0}, "prefix component names, mirrored");
+  check_ranked_agrees(gm, "prefix component names, mirrored");
+
+  // A molecule type name is written `Type(`, and `(` is outranked by
+  // every identifier character, so a prefix type name sorts FIRST —
+  // the opposite convention from component names.
+  ComplexGraph gt;
+  gt.add_molecule("Ez", comps({{"l", ""}}));
+  gt.add_molecule("E", comps({{"a", ""}, {"ab", ""}, {"l", ""}}));
+  gt.add_bond(0, 0, 1, 2);
+  check(canonicalize(gt).mol_order == std::vector<int>{1, 0},
+        "prefix molecule type names order E first");
+  check_ranked_agrees(gt, "prefix molecule type names");
+
+  // A state is written last, so a prefix state sorts first, and a
+  // component with no internal state ("") sorts ahead of every state.
+  ComplexGraph gs;
+  gs.add_molecule("C", comps({{"x", "pq"}, {"y", ""}}));
+  gs.add_molecule("C", comps({{"x", "p"}, {"y", ""}}));
+  gs.add_bond(0, 1, 1, 1);
+  check(canonicalize(gs).mol_order == std::vector<int>{1, 0}, "prefix states order `p` first");
+  check_ranked_agrees(gs, "prefix states");
+
+  // A shorter free-component list is a prefix of a longer one and sorts
+  // first, exactly as `)` < `,` makes it in the color string.  F0 has
+  // `b` taken by the D, so its color is `M:F(a~)` against F1's
+  // `M:F(a~,b~)` and F0 must be written first.
+  ComplexGraph gf;
+  gf.add_molecule("F", comps({{"a", ""}, {"b", ""}, {"l", ""}}));
+  gf.add_molecule("F", comps({{"a", ""}, {"b", ""}, {"l", ""}}));
+  gf.add_molecule("D", comps({{"s", ""}}));
+  gf.add_bond(0, 2, 1, 2); // the two F's are joined through `l`
+  gf.add_bond(0, 1, 2, 0); // ...and F0's `b` is taken, shortening its free list
+  const auto gf_order = canonicalize(gf).mol_order;
+  const auto at = [&](int mol) {
+    return std::find(gf_order.begin(), gf_order.end(), mol) - gf_order.begin();
+  };
+  check(at(0) < at(1), "the shorter free-component list leads");
+  check_ranked_agrees(gf, "free-component list length");
+
+  // Degenerate inputs the engine can hand it: an empty complex, and a
+  // lone molecule (which the engine short-circuits, but the entry point
+  // must still answer).
+  ComplexGraph const empty;
+  std::vector<int> order{7, 7, 7};
+  Workspace ws;
+  check(canonical_order_fast(to_ranked(empty), ws, order), "empty complex answers");
+  check(order.empty(), "empty complex has an empty order");
+  ComplexGraph one;
+  one.add_molecule("A", comps({{"a", ""}, {"b", "x"}}));
+  check(check_ranked_agrees(one, "single molecule"), "single molecule answers on the int path");
+}
+
+void test_ranked_declines_symmetric() {
+  // A homodimer's two molecules are interchangeable, so refinement
+  // leaves them sharing a color and only the RENDER can pick between
+  // them.  The integer path has no strings and must say so.
+  ComplexGraph g;
+  g.add_molecule("A", comps({{"s", ""}, {"s", ""}, {"s", ""}}));
+  g.add_molecule("A", comps({{"s", ""}, {"s", ""}, {"s", ""}}));
+  g.add_bond(0, 0, 1, 0);
+  Workspace ws;
+  std::vector<int> order;
+  check(!canonical_order_fast(to_ranked(g), ws, order), "homodimer declines on the int path");
+
+  // But a molecule with two interchangeable bonded components is NOT a
+  // reason to decline: the molecules already sit in distinct color
+  // classes, so no leaf below can reorder them even though the string
+  // path still has to search to pick a render.
+  ComplexGraph gt;
+  gt.add_molecule("A", comps({{"s", ""}, {"s", ""}, {"s", ""}}));
+  gt.add_molecule("B", comps({{"s", ""}, {"s", ""}}));
+  gt.add_bond(0, 0, 1, 0);
+  gt.add_bond(0, 1, 1, 1);
+  check(!canonicalize(gt).fast_path, "the two-bond A/B pair still searches for its label");
+  check(check_ranked_agrees(gt, "two interchangeable bonds"),
+        "a within-molecule tie alone does not make the int path decline");
 }
 
 // ===========================================================================
@@ -361,16 +539,16 @@ void test_tlbr_ring() {
 
 // Molecule-type alphabet for the random generator.  `A`/`B` have
 // interchangeable components (the symmetry-prone types), `C` has
-// distinct ones, `D` is monovalent.  Held behind an accessor
-// (function-local static) so its allocating constructor never runs
-// before main.
+// distinct ones, `D` is monovalent.  `E`/`Ez` carry the name shapes
+// that separate the color-string order from a naive one (GH #53): a
+// component name that is a prefix of another, and a type name that is a
+// prefix of another.  Held behind an accessor (function-local static)
+// so its allocating constructor never runs before main.
 using TypeAlphabet = std::vector<std::pair<std::string, std::vector<std::string>>>;
 const TypeAlphabet& types() {
   static const TypeAlphabet t = {
-      {"A", {"s", "s", "s"}},
-      {"B", {"s", "s"}},
-      {"C", {"x", "y"}},
-      {"D", {"s"}},
+      {"A", {"s", "s", "s"}}, {"B", {"s", "s"}},  {"C", {"x", "y"}},
+      {"D", {"s"}},           {"E", {"a", "ab"}}, {"Ez", {"a", "ab"}},
   };
   return t;
 }
@@ -380,7 +558,9 @@ const TypeAlphabet& types() {
 // (rings, homo-oligomers) and the individualization search is the path
 // being exercised, not the fast path.
 const std::vector<int>& type_pool() {
-  static const std::vector<int> pool = {0, 0, 0, 0, 1, 1, 1, 2, 3}; // A x4, B x3, C, D
+  // A x6, B x5, C, D, E, Ez — A and B keep the same share of the pool
+  // they had before E/Ez joined it, so the symmetric bias is unchanged.
+  static const std::vector<int> pool = {0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 2, 3, 4, 5};
   return pool;
 }
 
@@ -428,10 +608,12 @@ bool generate(std::mt19937& rng, GenComplex& out) {
     int const t = mono ? mono_type : type_pool()[pool_d(rng)];
     out.type_idx.push_back(t);
     std::vector<std::string> st;
-    std::uniform_int_distribution<int> state_d(0, 2); // 0 = stateless
+    // 0 = stateless; `p`/`pq` are a prefix pair, so state ordering is
+    // exercised at the one place it could go wrong (GH #53).
+    std::uniform_int_distribution<int> state_d(0, 3);
     for (size_t i = 0; i < types()[t].second.size(); ++i) {
       int const s = state_d(rng);
-      st.emplace_back(s == 0 ? "" : (s == 1 ? "p" : "q"));
+      st.emplace_back(s == 0 ? "" : (s == 1 ? "p" : (s == 2 ? "q" : "pq")));
     }
     out.states.push_back(std::move(st));
   }
@@ -562,6 +744,7 @@ void test_property_based() {
   std::mt19937 rng(0xC0FFEEU);
   int const kRuns = 4000;
   int generated = 0, fast = 0, searched = 0;
+  int ranked_answered = 0, ranked_declined = 0;
 
   for (int run = 0; run < kRuns; ++run) {
     GenComplex gc;
@@ -584,6 +767,16 @@ void test_property_based() {
     // from drifting apart, since only one of them builds the string.
     check(canonical_order(g) == cf.mol_order, "canonical_order matches canonicalize().mol_order");
 
+    // Same question of the integer entry point, which reaches its
+    // initial colors through the rank_* tables rather than through the
+    // color strings (GH #53).  It may decline — a complex with
+    // interchangeable molecules needs the render to choose — but when
+    // it answers, it answers the same thing.
+    if (check_ranked_agrees(g, "generated complex"))
+      ++ranked_answered;
+    else
+      ++ranked_declined;
+
     // (a) Isomorphism invariance — a HARD invariant on every input now
     // that individualization-refinement resolves all symmetry (step 3).
     std::vector<int> pi;
@@ -592,6 +785,10 @@ void test_property_based() {
     auto cfp = canonicalize(gp);
     check_eq(cfp.label, cf.label, "canonical label is isomorphism-invariant");
     check(cfp.fast_path == cf.fast_path, "fast_path verdict is itself isomorphism-invariant");
+    if (check_ranked_agrees(gp, "permuted complex"))
+      ++ranked_answered;
+    else
+      ++ranked_declined;
 
     // (a2) mol_order names the molecules the label writes, in order.
     // The label's k-th `.`-piece must be molecule mol_order[k]'s, so at
@@ -646,11 +843,19 @@ void test_property_based() {
 
   std::fprintf(stderr,
                "property test: %d complexes generated, %d fast path, "
-               "%d needed individualization search\n",
-               generated, fast, searched);
+               "%d needed individualization search; integer entry point "
+               "answered %d, declined %d\n",
+               generated, fast, searched, ranked_answered, ranked_declined);
   check(generated > 1000, "generator produced a healthy sample");
   check(fast > 200, "a substantial fraction of complexes hit the fast path");
   check(searched > 200, "the symmetric bias exercises the individualization search");
+  check(ranked_answered > 200, "the integer entry point answers on a healthy sample");
+  // Declines are rare on purpose: the gate is "molecules in distinct
+  // color classes", so a complex that needs the search to pick a LABEL
+  // usually still has its ORDER fixed already.  The deterministic
+  // homodimer in test_ranked_declines_symmetric is what pins the
+  // fallback's behaviour; this only asserts the sample reaches it.
+  check(ranked_declined > 20, "…and its decline path is exercised too");
 }
 
 } // namespace
@@ -660,6 +865,8 @@ int main() {
     test_single_molecule();
     test_asymmetric_dimer_order_invariant();
     test_mol_order_picks_the_same_subunit();
+    test_ranked_rank_rules();
+    test_ranked_declines_symmetric();
     test_within_molecule_symmetric_components();
     test_chain_order_invariant();
     test_self_bond_ring();

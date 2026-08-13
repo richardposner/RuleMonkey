@@ -202,6 +202,15 @@ if(RULEMONKEY_ENABLE_ASAN)
             target_compile_options(${_rm_cli_target} PRIVATE ${_rm_asan_flags})
         endif()
     endforeach()
+    # Everything declared BELOW this point — tests/ and examples/ — gets the
+    # flags directory-wide.  Same reason as rm_bngsim_expr above, one boundary
+    # further out: a test TU builds a std::vector and hands it to the library
+    # to fill, and libc++ emits container annotations only from instrumented
+    # code, so an uninstrumented test TU desynchronizes them and ASan reports a
+    # container-overflow against a perfectly ordinary resize inside the
+    # library.  It also means `ctest --preset asan` actually sanitizes the test
+    # harnesses' own code, which it did not before.
+    add_compile_options(${_rm_asan_flags})
 endif()
 
 # ---------------------------------------------------------------------------
