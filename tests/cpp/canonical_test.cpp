@@ -259,6 +259,72 @@ void test_self_bond_ring() {
   check(canonicalize(g).fast_path, "self-bonded molecule takes the fast path");
 }
 
+// A chain of `n` copies of A(l,r): position p's `r` bonds position p+1's
+// `l`, and the chain does NOT close, so the two ends carry a free `l` and
+// a free `r`.  `rot` shifts the position -> molecule-index map, so every
+// rot builds the same chain in a different order.
+ComplexGraph make_lr_chain(int n, int rot) {
+  ComplexGraph g;
+  auto mol_of = [&](int p) { return (p + rot) % n; };
+  for (int k = 0; k < n; ++k)
+    g.add_molecule("A", comps({{"l", ""}, {"r", ""}}));
+  for (int p = 0; p + 1 < n; ++p)
+    g.add_bond(mol_of(p), 1, mol_of(p + 1), 0); // p.r -- (p+1).l
+  return g;
+}
+
+void test_lr_chain_refines_all_the_way() {
+  // The shape that asks the most of refinement.  `l` and `r` are different
+  // component names, so reversing the chain is not an automorphism and the
+  // complex is asymmetric — but 1-WL only learns that one hop per round, so
+  // the colors have to walk in from the two ends and a chain of n needs on
+  // the order of n rounds to separate every molecule.
+  //
+  // That is what makes it the regression test for GH #56's worklist
+  // refinement, which skips the cells a round cannot split: a cell it
+  // wrongly fails to mark simply stops splitting, and refinement then
+  // returns a partition that is too coarse.  Nothing about that is loud —
+  // the individualization search still finds a correct canonical form — so
+  // the assertion that catches it is `fast_path`, which says 1-WL alone
+  // separated the complex and is FALSE the moment refinement gives up
+  // early.  A 24-chain needs ~24 rounds, deep enough that a worklist that
+  // ran dry after a couple would be caught here.
+  // Molecules are emitted in refined-color order, not chain-walk order, so
+  // the bond labels come out shuffled — same as the 4-ring below.
+  check_eq(canonical_label(make_lr_chain(4, 0)), "A(l!1,r!2).A(l!3,r!1).A(l,r!3).A(l!2,r)",
+           "4-chain canonical string");
+  for (int const n : {2, 3, 4, 8, 24}) {
+    std::string const canon = canonical_label(make_lr_chain(n, 0));
+    check(canonicalize(make_lr_chain(n, 0)).fast_path,
+          "the " + std::to_string(n) + "-chain refines without the search");
+    for (int rot = 0; rot < n; ++rot) {
+      check_eq(canonical_label(make_lr_chain(n, rot)), canon,
+               "the " + std::to_string(n) + "-chain is invariant to build order");
+      check(check_ranked_agrees(make_lr_chain(n, rot),
+                                std::to_string(n) + "-chain rot " + std::to_string(rot)),
+            "the " + std::to_string(n) + "-chain answers on the int path");
+    }
+  }
+
+  // The same chain carrying a per-molecule state, which is the live shape
+  // (GH #52's tagged catalyst, edited by a toggle rule).  States break the
+  // symmetry sooner in some places and later in others, so the refinement
+  // ends up with cells splitting in different rounds — the case where a
+  // stale worklist entry would matter.
+  for (int pattern = 0; pattern < 8; ++pattern) {
+    ComplexGraph g;
+    int const n = 12;
+    for (int k = 0; k < n; ++k)
+      g.add_molecule("W",
+                     comps({{"l", ""}, {"r", ""}, {"m", ((pattern >> (k % 3)) & 1) ? "1" : "0"}}));
+    for (int p = 0; p + 1 < n; ++p)
+      g.add_bond(p, 1, p + 1, 0);
+    check(canonicalize(g).fast_path, "a state-carrying 12-chain refines without the search");
+    check(check_ranked_agrees(g, "state-carrying 12-chain"),
+          "a state-carrying 12-chain answers on the int path");
+  }
+}
+
 void test_non_isomorphic_differ() {
   // The same shape, one component state flipped — must get a different
   // label so the species do not collapse in the dedup map.
@@ -564,6 +630,24 @@ const std::vector<int>& type_pool() {
   return pool;
 }
 
+// Uniform draw from [0, n), and a Fisher-Yates shuffle, both hand-rolled.
+//
+// std::uniform_int_distribution and std::shuffle are deterministic for a
+// given seed but NOT portable: libc++ and libstdc++ turn the same engine
+// output into different draws, so the same seed walks a different sample
+// on macOS than on Linux.  That is fine for "a random complex" and fatal
+// for anything that pins WHICH complexes the run produced — the fast-path
+// / search split below is exactly such a pin, and it is what says
+// refinement is as powerful as it was (GH #56).  These two make the whole
+// property test reproducible across platforms instead of only across runs
+// on one.  Modulo bias is irrelevant at these ranges.
+int pick(std::mt19937& rng, int n) { return static_cast<int>(rng() % static_cast<unsigned>(n)); }
+
+template <class T> void shuffle_v(std::vector<T>& v, std::mt19937& rng) {
+  for (size_t i = v.size(); i > 1; --i)
+    std::swap(v[i - 1], v[static_cast<size_t>(pick(rng, static_cast<int>(i)))]);
+}
+
 // A generated complex, kept in a form the isomorphism applicator can
 // permute: per-molecule type index + per-component state, plus a bond
 // list addressed as (molecule, local component).
@@ -595,24 +679,21 @@ ComplexGraph build(const GenComplex& gc) {
 // are added to close rings.
 bool generate(std::mt19937& rng, GenComplex& out) {
   out = GenComplex{};
-  std::uniform_int_distribution<int> n_mol_d(1, 7);
-  int const n_mol = n_mol_d(rng);
+  int const n_mol = 1 + pick(rng, 7);
 
-  std::uniform_int_distribution<int> pool_d(0, static_cast<int>(type_pool().size()) - 1);
+  int const n_pool = static_cast<int>(type_pool().size());
   // One run in three is a pure homo-oligomer: all molecules one type.
-  std::uniform_int_distribution<int> mono_d(0, 2);
-  bool const mono = mono_d(rng) == 0;
-  int const mono_type = type_pool()[pool_d(rng)];
+  bool const mono = pick(rng, 3) == 0;
+  int const mono_type = type_pool()[pick(rng, n_pool)];
 
   for (int m = 0; m < n_mol; ++m) {
-    int const t = mono ? mono_type : type_pool()[pool_d(rng)];
+    int const t = mono ? mono_type : type_pool()[pick(rng, n_pool)];
     out.type_idx.push_back(t);
     std::vector<std::string> st;
     // 0 = stateless; `p`/`pq` are a prefix pair, so state ordering is
     // exercised at the one place it could go wrong (GH #53).
-    std::uniform_int_distribution<int> state_d(0, 3);
     for (size_t i = 0; i < types()[t].second.size(); ++i) {
-      int const s = state_d(rng);
+      int const s = pick(rng, 4);
       st.emplace_back(s == 0 ? "" : (s == 1 ? "p" : (s == 2 ? "q" : "pq")));
     }
     out.states.push_back(std::move(st));
@@ -625,8 +706,7 @@ bool generate(std::mt19937& rng, GenComplex& out) {
       free[m].push_back(static_cast<int>(i));
 
   auto take_free = [&](int m) -> int {
-    std::uniform_int_distribution<int> d(0, static_cast<int>(free[m].size()) - 1);
-    int const idx = d(rng);
+    int const idx = pick(rng, static_cast<int>(free[m].size()));
     int const comp = free[m][idx];
     free[m].erase(free[m].begin() + idx);
     return comp;
@@ -640,15 +720,13 @@ bool generate(std::mt19937& rng, GenComplex& out) {
         parents.push_back(j);
     if (parents.empty() || free[k].empty())
       return false; // cannot keep the complex connected — retry
-    std::uniform_int_distribution<int> pd(0, static_cast<int>(parents.size()) - 1);
-    int const j = parents[pd(rng)];
+    int const j = parents[pick(rng, static_cast<int>(parents.size()))];
     out.bonds.push_back({k, take_free(k), j, take_free(j)});
   }
 
   // Several extra bonds add cycles (and self-bonds) — biases the sample
   // toward ring-bearing, symmetric complexes.
-  std::uniform_int_distribution<int> extra_d(0, 5);
-  int const extra = extra_d(rng);
+  int const extra = pick(rng, 6);
   for (int e = 0; e < extra; ++e) {
     std::vector<int> have;
     for (int m = 0; m < n_mol; ++m)
@@ -656,8 +734,7 @@ bool generate(std::mt19937& rng, GenComplex& out) {
         have.push_back(m);
     if (have.empty())
       break;
-    std::uniform_int_distribution<int> hd(0, static_cast<int>(have.size()) - 1);
-    int const ma = have[hd(rng)];
+    int const ma = have[pick(rng, static_cast<int>(have.size()))];
     int const ca = take_free(ma);
     // pick a second endpoint (possibly the same molecule)
     have.clear();
@@ -666,8 +743,7 @@ bool generate(std::mt19937& rng, GenComplex& out) {
         have.push_back(m);
     if (have.empty())
       break;
-    std::uniform_int_distribution<int> hd2(0, static_cast<int>(have.size()) - 1);
-    int const mb = have[hd2(rng)];
+    int const mb = have[pick(rng, static_cast<int>(have.size()))];
     int const cb = take_free(mb);
     out.bonds.push_back({ma, ca, mb, cb});
   }
@@ -686,7 +762,7 @@ GenComplex permute(std::mt19937& rng, const GenComplex& in, std::vector<int>* pi
   std::vector<int> pi(n);
   for (int i = 0; i < n; ++i)
     pi[i] = i;
-  std::shuffle(pi.begin(), pi.end(), rng);
+  shuffle_v(pi, rng);
   std::vector<int> pi_inv(n);
   for (int k = 0; k < n; ++k)
     pi_inv[pi[k]] = k;
@@ -706,7 +782,7 @@ GenComplex permute(std::mt19937& rng, const GenComplex& in, std::vector<int>* pi
       groups[names[i]].push_back(i);
     for (auto& [name, slots] : groups) {
       std::vector<int> shuffled = slots;
-      std::shuffle(shuffled.begin(), shuffled.end(), rng);
+      shuffle_v(shuffled, rng);
       for (size_t i = 0; i < slots.size(); ++i)
         sig[slots[i]] = shuffled[i]; // newlocal slots[i] <- old slot shuffled[i]
     }
@@ -739,8 +815,10 @@ GenComplex permute(std::mt19937& rng, const GenComplex& in, std::vector<int>* pi
 }
 
 void test_property_based() {
-  // Fixed seed: a property test must be reproducible so a failure is
-  // re-runnable. NOLINTNEXTLINE(bugprone-random-generator-seed)
+  // Fixed seed, and `pick`/`shuffle_v` rather than the standard
+  // distributions, so the sample is the same everywhere and a failure
+  // reported by one platform's CI is re-runnable on another's.
+  // NOLINTNEXTLINE(bugprone-random-generator-seed)
   std::mt19937 rng(0xC0FFEEU);
   int const kRuns = 4000;
   int generated = 0, fast = 0, searched = 0;
@@ -856,6 +934,24 @@ void test_property_based() {
   // homodimer in test_ranked_declines_symmetric is what pins the
   // fallback's behaviour; this only asserts the sample reaches it.
   check(ranked_declined > 20, "…and its decline path is exercised too");
+
+  // The bounds above say the sample is healthy.  These say refinement is
+  // exactly as POWERFUL as it was, which the bounds cannot: the generator
+  // is seeded and canonicalization is deterministic, so the split between
+  // the fast path and the search is a property of the code under test, and
+  // refinement that stops one round early moves complexes across it
+  // without failing anything else — every label stays a correct canonical
+  // form, just a different one (GH #56).  The same goes for the integer
+  // entry point, which declines exactly when refinement leaves two
+  // molecules sharing a color.
+  //
+  // Re-record all four from the line the test prints if the generator or
+  // its alphabet changes; do NOT re-record them for a change to
+  // canonicalization itself without knowing which complexes moved and why.
+  check(fast == 3586, "fast-path count is unchanged");
+  check(searched == 345, "individualization-search count is unchanged");
+  check(ranked_answered == 7788, "integer entry point answers as often as before");
+  check(ranked_declined == 74, "…and declines as often as before");
 }
 
 } // namespace
@@ -869,6 +965,7 @@ int main() {
     test_ranked_declines_symmetric();
     test_within_molecule_symmetric_components();
     test_chain_order_invariant();
+    test_lr_chain_refines_all_the_way();
     test_self_bond_ring();
     test_non_isomorphic_differ();
     test_homodimer_symmetric();
