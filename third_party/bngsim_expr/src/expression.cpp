@@ -29,6 +29,7 @@
 #include <cstring>
 #include <initializer_list>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
@@ -473,9 +474,42 @@ struct ExprTkEvaluator::Impl {
     using Parser = exprtk::parser<double>;
 
     SymbolTable symbol_table;
-    // Parser is shared across clones to avoid re-constructing the ~100KB
-    // template object. The parser is stateless between compile() calls.
-    std::shared_ptr<Parser> parser;
+    // The parser belongs to THIS evaluator and to no other (issue #257), and is
+    // built on first compile rather than in the constructor.
+    //
+    // It used to be a shared_ptr handed to every clone, with a mutex alongside
+    // it, because compile() is not reentrant: it drives a lexer, a token scanner
+    // and an error list that all live in the parser, so two threads compiling
+    // through one parser corrupt each other (issue #201 — SIGSEGV/SIGABRT/SIGBUS,
+    // or an ERR244 "unregistered symbol" when one compile's symbol resolution is
+    // clobbered by another). Serializing compile() was necessary but not
+    // sufficient, and the residue was the ~10% flake in
+    // test_expression_parser_thread_safety.py: exprtk's compile() ends with
+    //
+    //     symtab_store_.symtab_list_ = expr.get_symbol_table_list();
+    //
+    // and never clears it, so the parser holds a strong handle on the symbol
+    // table of the last expression compiled through it. symbol_table's refcount
+    // is a plain std::size_t. Two evaluators behind one parser therefore means
+    // thread B's compile (inside the mutex) dropping thread A's symbol table
+    // while thread A churns that same counter outside it — in
+    // register_symbol_table() below, in the growth of `expressions`, and in its
+    // own destructor. A lost update runs clear() on a symbol table whose
+    // variable addresses are already baked into A's compiled nodes, and the
+    // crash surfaces wherever the corrupted heap is next touched: the reported
+    // one is a malloc freelist trap (SIGTRAP) in an unrelated allocation.
+    //
+    // Nothing about that was fixable with another lock, because the counter is
+    // touched on paths no evaluator API sees (vector growth, destruction). What
+    // is fixable is the sharing, and the sharing bought nothing: NetworkModel's
+    // default constructor builds an evaluator that clone() immediately replaces,
+    // so the parser construction the sharing "saved" was being paid and
+    // discarded on every clone anyway. Lazy construction genuinely saves it.
+    //
+    // Still NOT a hot path: evaluate() reads `expressions` and never touches the
+    // parser, so the integration loop is unaffected. Compilation happens at
+    // build, at clone, and in the lazy memos in model.cpp.
+    std::unique_ptr<Parser> parser;
     std::vector<Expression> expressions;
 
     // Cached preprocessed expression strings for efficient clone().
@@ -678,16 +712,19 @@ struct ExprTkEvaluator::Impl {
         symbol_table.add_function("time", time_func);
     }
 
-    Impl() : parser(std::make_shared<Parser>()) {
-        // Increase max stack depth for deeply nested if() expressions.
-        // ExprTk default is 400 (~200 nested if()), muParser handled 2000.
-        parser->settings().set_max_stack_depth(4096);
-        init_builtins();
-    }
+    Impl() { init_builtins(); }
 
-    // Constructor that shares an existing parser (for clone_empty)
-    explicit Impl(std::shared_ptr<Parser> shared_parser) : parser(std::move(shared_parser)) {
-        init_builtins();
+    // Build the parser on demand. An evaluator that never compiles anything —
+    // every discarded default-constructed one on the clone path, and every
+    // expression-free model — never pays for it.
+    Parser &acquire_parser() {
+        if (!parser) {
+            parser = std::make_unique<Parser>();
+            // Increase max stack depth for deeply nested if() expressions.
+            // ExprTk default is 400 (~200 nested if()), muParser handled 2000.
+            parser->settings().set_max_stack_depth(4096);
+        }
+        return *parser;
     }
 
     void set_time_ptr(double *ptr) { time_func.time_ptr = ptr; }
@@ -807,9 +844,14 @@ int ExprTkEvaluator::compile_preprocessed(const std::string &preprocessed_expr) 
     Impl::Expression expression;
     expression.register_symbol_table(impl_->symbol_table);
 
-    if (!impl_->parser->compile(preprocessed_expr, expression)) {
+    // No lock: the parser belongs to this evaluator alone (issue #257), so the
+    // error() read below can only be reporting this compile()'s own failure.
+    // With the parser shared, the two had to be one critical section, because
+    // error() reads state the next compile() on that parser overwrites (#201).
+    Impl::Parser &parser = impl_->acquire_parser();
+    if (!parser.compile(preprocessed_expr, expression)) {
         throw std::runtime_error("ExprTk compilation failed for expression: '" + preprocessed_expr +
-                                 "' — " + impl_->parser->error());
+                                 "' — " + parser.error());
     }
 
     int id = static_cast<int>(impl_->expressions.size());
@@ -865,18 +907,17 @@ double ExprTkEvaluator::evaluate(int expr_id) {
 
 void ExprTkEvaluator::set_time_ptr(double *time_addr) { impl_->set_time_ptr(time_addr); }
 
-// ─── Efficient clone support ─────────────────────────────────────────────────
-
-ExprTkEvaluator::ExprTkEvaluator(std::shared_ptr<void> shared_parser)
-    : impl_(std::make_unique<Impl>(std::static_pointer_cast<Impl::Parser>(shared_parser))) {}
+// ─── Clone support ───────────────────────────────────────────────────────────
 
 ExprTkEvaluator::ExprTkEvaluator(ExprTkEvaluator &&) noexcept = default;
 ExprTkEvaluator &ExprTkEvaluator::operator=(ExprTkEvaluator &&) noexcept = default;
 
+const void *ExprTkEvaluator::parser_identity() const { return impl_->parser.get(); }
+
 std::unique_ptr<ExprTkEvaluator> ExprTkEvaluator::clone_empty() const {
-    // Share the parser (heavyweight, stateless between calls)
-    // but create a fresh symbol table and expression list.
-    return std::unique_ptr<ExprTkEvaluator>(new ExprTkEvaluator(impl_->parser));
+    // Nothing is carried over — not the parser (issue #257), not the symbol
+    // table, not the expression list. The caller re-registers and re-compiles.
+    return std::make_unique<ExprTkEvaluator>();
 }
 
 // ─── Reserved names ──────────────────────────────────────────────────────────
