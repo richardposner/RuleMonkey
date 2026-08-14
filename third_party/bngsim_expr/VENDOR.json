@@ -5,11 +5,11 @@
     "name": "BNGsim",
     "repo_remote": "git@github.com:lanl/bngsim.git",
     "repo_subdir": ".",
-    "branch_or_ref": "5ce19a4f76f236030566b49ee5afa47733b9ba39",
+    "branch_or_ref": "eb80814",
     "current_branch": "main",
-    "commit": "5ce19a4f76f236030566b49ee5afa47733b9ba39"
+    "commit": "eb8081424a8a3793207f34bb8392541c2f54c570"
   },
-  "imported_at_utc": "2026-07-11T03:18:22+00:00",
+  "imported_at_utc": "2026-08-14T15:21:18+00:00",
   "files": {
     "exprtk_header": {
       "path": "third_party/exprtk/exprtk.hpp",
@@ -21,8 +21,8 @@
     "expression_header": {
       "path": "third_party/bngsim_expr/include/bngsim/expression.hpp",
       "source_path": "include/bngsim/expression.hpp",
-      "sha256": "ddbc1f8cba3050f1da4d85415b7b3e9104127b3a2bef30475bd205832bfb1fb7",
-      "bytes": 5823,
+      "sha256": "df9a4bb6fe952f03a9a1bb1139324f4f0890e170a583eaaa6d10a8590f1ea49e",
+      "bytes": 9062,
       "description": "BNGsim ExprTkEvaluator public wrapper header"
     },
     "expr_compat_header": {
@@ -35,8 +35,8 @@
     "expression_source": {
       "path": "third_party/bngsim_expr/src/expression.cpp",
       "source_path": "src/expression.cpp",
-      "sha256": "d72a2b77b155282e551ccb57d3fb8e68dc7e2ecf0987ea50058ff7aa3e27f668",
-      "bytes": 39062,
+      "sha256": "c155b91b4c4ed68f2044b5e8e6f2158f870e6065aa4e46bc352ee4ead5f37e8d",
+      "bytes": 41679,
       "description": "BNGsim ExprTkEvaluator implementation"
     }
   },
