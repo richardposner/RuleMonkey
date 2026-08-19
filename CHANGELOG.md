@@ -284,7 +284,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The engine resolves the placeholder against the rule being priced, using
   the same per-pattern match count that already multiplies the rate, and
   the load-time walk records per rule which counts its rate function reads
-  so models that never mention the construct pay nothing. Two shapes are
+  so models that never mention the construct pay nothing.  A placeholder is
+  not reported as a function: it has no value outside the rule that reads
+  it, and NFsim drops an empty-bodied declaration rather than creating a
+  function for one, so `function_names()`, `get_function_values()`,
+  `Result::function_names` and `rm_driver --print-functions` carry no column
+  named after one.  Rate laws that read a placeholder, `_rateLaw1` and the
+  like, report the value the engine actually uses. Two shapes are
   refused at load rather than resolved to zero: a count of a reactant the
   rule does not have (`reactant_2()` on a one-reactant rule), and a count
   read from a rate law that is also a local, per-instance function.
