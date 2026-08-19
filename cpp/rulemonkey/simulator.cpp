@@ -1393,6 +1393,16 @@ Model load_model(const std::string& xml_path,
           gf.expression_text = trim(expr_node->text);
       }
 
+      // `reactant_N()` placeholder (see GlobalFunction::reactant_count_index).
+      // Recognized by shape alone, since that is all BNG2 emits: the name
+      // `reactant_` plus a single digit 1-9, no arguments, and no expression
+      // body.  A function that has a body of its own is an ordinary function
+      // whatever it is called, so the model keeps whatever it wrote.
+      if (gf.expression_text.empty() && gf.argument_names.empty() && !gf.is_tfun &&
+          gf.name.size() == 10 && gf.name.compare(0, 9, "reactant_") == 0 && gf.name[9] >= '1' &&
+          gf.name[9] <= '9')
+        gf.reactant_count_index = gf.name[9] - '0';
+
       // Split the referenced observables by scope (issue #38).  An
       // observable is local iff the expression applies it to one of THIS
       // function's own arguments; a bare reference is the global,
@@ -2256,6 +2266,49 @@ Model load_model(const std::string& xml_path,
     }
   }
 
+  // ---- 8c. Rate laws that read `reactant_N()` (issue #59) ----
+  //
+  // The placeholder has no value of its own; it stands for the match count
+  // of the rule's Nth reactant pattern, so it can only be resolved once we
+  // know which rule is asking.  Record per rule the largest N its rate-law
+  // function chain reads, which is what the engine needs to bind the slots
+  // before evaluating the rate, and what the refusal below needs to check
+  // that the rule actually has that many reactant patterns.
+  //
+  // The walk follows function references, so a rate law that reaches the
+  // placeholder through a helper function is covered as well as the direct
+  // `reactant_1()*reactant_2()*f()` that BNG2 writes for the idiom.
+  {
+    std::unordered_map<std::string, int> fn_max;
+    std::unordered_set<std::string> in_progress;
+    auto max_index = [&](const std::string& fname, auto&& self) -> int {
+      auto fi = model.function_index.find(fname);
+      if (fi == model.function_index.end())
+        return 0;
+      if (auto memo = fn_max.find(fname); memo != fn_max.end())
+        return memo->second;
+      if (!in_progress.insert(fname).second)
+        return 0; // reference cycle: nothing more to learn down this arm
+      const auto& gf = model.functions[fi->second];
+      int best = gf.reactant_count_index;
+      for (const auto& tok : expr::collect_variables(gf.expression_text))
+        best = std::max(best, self(tok, self));
+      in_progress.erase(fname);
+      fn_max[fname] = best;
+      return best;
+    };
+
+    for (auto& rule : model.rules) {
+      auto& rl = rule.rate_law;
+      int best = 0;
+      if (!rl.function_name.empty())
+        best = std::max(best, max_index(rl.function_name, max_index));
+      if (!rl.function_name_b.empty())
+        best = std::max(best, max_index(rl.function_name_b, max_index));
+      rl.max_reactant_count_index = best;
+    }
+  }
+
   // Scan for unsupported features if requested
   if (unsupported_out) {
     *unsupported_out = scan_unsupported(*model_node);
@@ -2306,6 +2359,32 @@ Model load_model(const std::string& xml_path,
                "negative, and meaningless where it does not). Fix the parameter. Pass "
                "--ignore-unsupported to run anyway; the rule's propensity is clamped "
                "to zero, so it will not fire."});
+    }
+
+    // ERROR-level: a `reactant_N()` the engine cannot resolve (issue #59).
+    // Both cases below would leave the rule reading a placeholder that never
+    // gets a value, i.e. a rate of zero and a rule that never fires, which is
+    // the silent no-op this construct was reported for in the first place.
+    for (const auto& rule : model.rules) {
+      int const n = rule.rate_law.max_reactant_count_index;
+      if (n == 0)
+        continue;
+      std::string reason;
+      if (n > rule.molecularity) {
+        reason = "reads reactant_" + std::to_string(n) + "(), but the rule has " +
+                 std::to_string(rule.molecularity) +
+                 " reactant pattern(s), so there is no such reactant to count";
+      } else if (rule.rate_law.is_local || rule.rate_law.is_local_b) {
+        reason = "reads reactant_" + std::to_string(n) +
+                 "() from a rate law that is also a local (per-instance) function. "
+                 "RM resolves reactant counts for whole-rule rate functions only";
+      } else {
+        continue;
+      }
+      unsupported_out->push_back({Severity::Error, "RateLaw@type=Function",
+                                  "Rule '" + rule.id + "' (" + rule.name + ") " + reason +
+                                      ". Pass --ignore-unsupported to run anyway; the "
+                                      "placeholder reads zero, so the rule will not fire."});
     }
 
     // WARN-level: MM constructs where RM cannot reproduce BNG2 (issue #45).

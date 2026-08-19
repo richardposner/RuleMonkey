@@ -1,0 +1,37 @@
+# Issue #59's reported reproducer, verbatim apart from the writeXML action.
+#
+# The nucleation rule's rate is a product of the two reactant-count
+# placeholders and a global function.  RM read the placeholders as
+# empty-bodied functions, i.e. as the constant zero, so the rule's
+# propensity was zero and the run finished with no events at all.
+#
+# NucF gates on Dimer, so the rule can fire at most once whatever the
+# propensity is; what the paired C++ test measures is the propensity
+# itself, through the fraction of short runs in which it has fired.
+begin model
+begin parameters
+  kNuc  0.01
+  A0    200
+end parameters
+begin molecule types
+  A(b)
+end molecule types
+begin species
+  A(b) A0
+end species
+begin observables
+  Molecules Dimer A(b!1).A(b!1)
+  Molecules Atot  A()
+end observables
+begin functions
+  reactant_1()
+  reactant_2()
+  NucF()=if(Dimer<1,kNuc,0)
+end functions
+begin reaction rules
+  A(b) + A(b) -> A(b!1).A(b!1)  reactant_1()*reactant_2()*NucF()
+end reaction rules
+end model
+begin actions
+writeXML()
+end actions

@@ -3441,6 +3441,26 @@ struct Engine::Impl {
   uint64_t eval_vars_gen = 1;
   uint64_t eval_vars_seen_gen = 0;
 
+  // Eval-layout slots of the `reactant_N()` placeholders the model
+  // declares, as (N, slot) pairs in declaration order (issue #59).  The
+  // placeholder is an ordinary named slot — nothing else writes it, since
+  // it has no expression to evaluate — so binding a rule's reactant counts
+  // is a handful of stores into `eval_vars_flat` before the rate is
+  // evaluated.  Empty for the overwhelming majority of models, which never
+  // mention the construct.
+  std::vector<std::pair<int, int>> eval_reactant_slots;
+
+  // Which rule's counts a function should be evaluated against when the
+  // whole function table is settled (rebuild_eval_vars).  A rate law that
+  // reads a placeholder has no value outside the rule that owns it, so the
+  // settle pass binds that rule's counts first; -1 means the function does
+  // not read one.  Two rules sharing one rate function is not a shape BNG2
+  // writes — it names a fresh `_rateLawN` per rule — but if it happened the
+  // first owner wins and the settled value is that rule's.  Only the
+  // reported value is affected: evaluate_rate always binds the counts of
+  // the rule it was called for.
+  std::vector<int> gf_reactant_owner_rule_;
+
   // Slot index for each LOCAL function, precomputed once so
   // evaluate_local_rate can save/restore its overrides without
   // walking model.functions on every per-mol call.
@@ -3563,6 +3583,25 @@ struct Engine::Impl {
     for (int i = 0; i < static_cast<int>(model.functions.size()); ++i) {
       if (model.functions[i].is_local() && gf_expr_id_[i] >= 0)
         eval_local_fn_slots.push_back(i);
+    }
+
+    // `reactant_N()` placeholders and the rate laws that read them (#59).
+    eval_reactant_slots.clear();
+    gf_reactant_owner_rule_.assign(model.functions.size(), -1);
+    for (int i = 0; i < static_cast<int>(model.functions.size()); ++i) {
+      int const n = model.functions[i].reactant_count_index;
+      if (n > 0)
+        eval_reactant_slots.emplace_back(n, eval_gf_main_slot[i]);
+    }
+    if (!eval_reactant_slots.empty()) {
+      for (int ri = 0; ri < static_cast<int>(model.rules.size()); ++ri) {
+        const auto& rl = model.rules[ri].rate_law;
+        if (rl.max_reactant_count_index == 0 || rl.function_name.empty())
+          continue;
+        auto fit = model.function_index.find(rl.function_name);
+        if (fit != model.function_index.end() && gf_reactant_owner_rule_[fit->second] < 0)
+          gf_reactant_owner_rule_[fit->second] = ri;
+      }
     }
   }
 
@@ -5433,6 +5472,36 @@ struct Engine::Impl {
                                          : -1.0;
   }
 
+  // Match count of rule `ri`'s reactant pattern `slot` (0-based) — the same
+  // number compute_propensity multiplies the rate by, so a rate law that
+  // reads `reactant_N()` and one that does not are priced off one count
+  // (issue #59).  Out-of-range slots read 0; the loader refuses a rule whose
+  // rate law asks for more reactants than it has, so that is a floor and not
+  // a reachable answer.
+  double reactant_slot_count(int ri, int slot) const {
+    const auto& rs = rule_states[ri];
+    if (slot < 0 || slot >= model.rules[ri].molecularity)
+      return 0.0;
+    if (rs.nary.enabled)
+      return (slot < static_cast<int>(rs.nary.slot_totals.size())) ? rs.nary.slot_totals[slot]
+                                                                   : 0.0;
+    if (slot == 0) {
+      double const cx = percx_a(ri);
+      return (cx >= 0.0) ? cx : (rs.a_total / rs.embedding_correction_a);
+    }
+    double const cx = percx_b(ri);
+    return (cx >= 0.0) ? cx : (rs.b_total / rs.embedding_correction_b);
+  }
+
+  // Write rule `ri`'s reactant counts into the `reactant_N()` slots, so the
+  // next expression evaluation resolves them.  Passing ri = -1 clears them,
+  // which is what the settle pass leaves behind: outside a rule the
+  // placeholder stands for nothing.
+  void bind_reactant_counts(int ri) {
+    for (auto const& [n, slot] : eval_reactant_slots)
+      eval_vars_flat[slot] = (ri >= 0) ? reactant_slot_count(ri, n - 1) : 0.0;
+  }
+
   void rescan_all_molecules_for_rule(int rule_idx) {
     auto& rule = model.rules[rule_idx];
     auto& rs = rule_states[rule_idx];
@@ -5724,6 +5793,14 @@ struct Engine::Impl {
 
     update_eval_vars();
 
+    // `reactant_N()` stands for this rule's own reactant counts, so bind
+    // them before the expression is evaluated (issue #59).  `rule` is always
+    // an element of model.rules — every call site indexes through it — so
+    // recovering its index by pointer arithmetic is well-defined here, the
+    // same trick set_rule_propensity uses on rule_states.
+    if (rule.rate_law.max_reactant_count_index > 0)
+      bind_reactant_counts(static_cast<int>(&rule - model.rules.data()));
+
     if (!rule.rate_law.function_name.empty()) {
       auto fit = model.function_index.find(rule.rate_law.function_name);
       if (fit != model.function_index.end()) {
@@ -5837,6 +5914,12 @@ struct Engine::Impl {
       } else if (gf_expr_id_[i] >= 0) {
         if constexpr (kExprEvalProfile)
           expr_eval_profile_.global_fn_ast_evals++;
+        // A rate law that reads `reactant_N()` is only meaningful against
+        // the rule that owns it, so settle it against that rule's counts
+        // rather than against whatever was last bound (issue #59).
+        if (!eval_reactant_slots.empty() && gf_reactant_owner_rule_[i] >= 0 &&
+            gf_reactant_owner_rule_[i] < static_cast<int>(rule_states.size()))
+          bind_reactant_counts(gf_reactant_owner_rule_[i]);
         try {
           eval_vars_flat[eval_gf_main_slot[i]] = expr_eval_.evaluate(gf_expr_id_[i]);
         } catch (...) {
@@ -5844,6 +5927,12 @@ struct Engine::Impl {
         }
       }
     }
+
+    // The placeholders themselves have no value outside a rule; leave them
+    // at zero so a settled function table reads the same however the rules
+    // above happen to be ordered.
+    if (!eval_reactant_slots.empty())
+      bind_reactant_counts(-1);
 
     eval_vars_seen_gen = eval_vars_gen;
   }

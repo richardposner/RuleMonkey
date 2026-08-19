@@ -1,0 +1,103 @@
+# Feature: the `reactant_N()` placeholder in a rate law (issue #59).
+# Tests:   a model that wants the match count of a rule's Nth reactant
+#          pattern inside its own rate law declares an empty function by
+#          that name and writes it into the rate expression:
+#
+#              reactant_1()
+#              RU: U(s~0) -> U(s~1)   reactant_1()*kuF()
+#
+#          BNG2 emits it as an ordinary Function with an empty <Expression>,
+#          so the XML says nothing about what it means -- the name is the
+#          whole convention.  The rate law is NOT a total rate, so the count
+#          the placeholder supplies is multiplied in ON TOP of the ordinary
+#          mass-action count: RU runs at ku*Uoff^2, not at ku*Uoff.
+#
+# Oracle:  each test arm is paired with a control arm that states the same
+#          law through an ordinary observable, so the two must track each
+#          other rep for rep and no separate reference is needed to say what
+#          the placeholder is worth:
+#
+#              RU  reactant_1()*ku            RV  ku*Voff
+#              RA  reactant_1()*reactant_2()*kb   RC  kb*Cfree*Dfree
+#
+#          The closed forms follow, and NFsim agrees with both arms:
+#              Uoff(t)  = U0/(1 + ku*U0*t)                  (dN/dt = -ku*N^2)
+#              Afree(t) = (A0^-3 + 3*kb*t)^(-1/3)           (dN/dt = -kb*N^4)
+#
+# Tier:    network-free.
+# Expected (t_end = 100):
+#              Uoff  200 -> 200/(1+200*2e-4*100) = 40.0
+#              Voff  200 -> 40.0   (same law, written as an observable)
+#              Afree 100 -> (1e-6 + 3*2.5e-8*100)^(-1/3) = 49.0
+#              Cfree 100 -> 49.0   (same law, written as observables)
+# Regression: before the fix RM read the placeholder as a function with an
+#          empty body, i.e. the constant zero, so every rate law built on one
+#          evaluated to zero.  Both test arms stayed flat at their seed counts
+#          for the whole run, with no exception and no warning, while the
+#          control arms ran normally.
+# invariant: conserved Utot = 200
+# invariant: conserved Vtot = 200
+# invariant: nonneg
+
+begin model
+begin parameters
+    ku  2.0e-4
+    kb  2.5e-8
+    U0  200
+    X0  100
+end parameters
+
+begin molecule types
+    U(s~0~1)
+    V(s~0~1)
+    A(b)
+    B(b)
+    C(b)
+    D(b)
+end molecule types
+
+begin seed species
+    U(s~0)  U0
+    V(s~0)  U0
+    A(b)    X0
+    B(b)    X0
+    C(b)    X0
+    D(b)    X0
+end seed species
+
+begin observables
+    Molecules  Uoff   U(s~0)
+    Molecules  Voff   V(s~0)
+    Molecules  Utot   U()
+    Molecules  Vtot   V()
+    Molecules  Afree  A(b)
+    Molecules  Bfree  B(b)
+    Molecules  Cfree  C(b)
+    Molecules  Dfree  D(b)
+end observables
+
+begin functions
+    # The two placeholders.  An empty body is what declares them.
+    reactant_1()
+    reactant_2()
+
+    kuF()  = ku
+    kbF()  = kb
+    # Control-arm rates: the same laws written with ordinary observables.
+    kuG()  = ku*Voff
+    kbG()  = kb*Cfree*Dfree
+end functions
+
+begin reaction rules
+    # Unimolecular: one placeholder.
+    RU: U(s~0) -> U(s~1)              reactant_1()*kuF()
+    RV: V(s~0) -> V(s~1)              kuG()
+    # Bimolecular, two distinct reactants: both placeholders.
+    RA: A(b) + B(b) -> A(b!1).B(b!1)  reactant_1()*reactant_2()*kbF()
+    RC: C(b) + D(b) -> C(b!1).D(b!1)  kbG()
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>100,n_steps=>100})
+end actions

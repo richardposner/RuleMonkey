@@ -15,6 +15,7 @@
 | Reversible rules | forward + reverse RateLaw | all <-> models | PASS |
 | Elementary rate laws | RateLaw/@type="Ele" | most models | PASS |
 | Functional rate laws | RateLaw/@type="Function" | ft_functional_rate | PASS |
+| Reactant counts in a rate law (`reactant_N()`) | Function with an empty Expression | ft_reactant_count_rate | PASS (whole-rule rate functions; a local-function rate law, or an N the rule has no reactant pattern for, is refused at load) |
 | Local functions (tags) | Function with Arguments | ft_local_functions | PASS |
 | Local function on a bimolecular rule (DOR1) | Function with Arguments, 2 ReactantPatterns | ft_local_fcn_bimol | PASS |
 | symmetry_factor on a local-function rate law | @symmetry_factor + Function with Arguments | ft_local_fcn_bimol_sym | PASS (ODE verdict; NFsim 2.9.3 drops the factor) |
