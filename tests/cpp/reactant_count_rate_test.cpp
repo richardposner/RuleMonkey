@@ -32,8 +32,9 @@
 // Three things are checked here:
 //
 //   1. The reported value of the rate law is that 400 exactly, and the
-//      placeholders themselves report zero — they have no value outside the
-//      rule that asks for them.
+//      placeholders themselves are not reported as functions at all — they
+//      have no value outside the rule that asks for them, and NFsim drops an
+//      empty-bodied declaration rather than creating a function for it.
 //   2. The PROPENSITY is 7.96e6 and not merely non-zero.  NucF gates on
 //      Dimer, so the rule fires at most once whatever its rate; running many
 //      replicates to exactly the mean waiting time 1/a and counting how many
@@ -49,6 +50,7 @@
 
 #include "rulemonkey/simulator.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -81,6 +83,11 @@ double first_function_value(const rulemonkey::Result& r, const std::string& name
   throw std::runtime_error("function not found: " + name);
 }
 
+bool has_function(const rulemonkey::Result& r, const std::string& name) {
+  return std::any_of(r.function_names.begin(), r.function_names.end(),
+                     [&](const std::string& n) { return n == name; });
+}
+
 // ---------------------------------------------------------------------------
 // 1 + 2: the reported rate law, and the propensity behind it
 // ---------------------------------------------------------------------------
@@ -101,9 +108,20 @@ void test_nucleation_rate_value(const std::string& xml) {
   check(std::fabs(rate - kExpectedRate) < 1e-9, "_rateLaw1 reports reactant_1*reactant_2*NucF");
 
   // The placeholders have no value of their own: they stand for whichever
-  // rule is asking, so the settled function table leaves them at zero.
-  check(first_function_value(r, "reactant_1") == 0.0, "reactant_1 reports no global value");
-  check(first_function_value(r, "reactant_2") == 0.0, "reactant_2 reports no global value");
+  // rule is asking, so they are not reported as functions at all.  NFsim
+  // does not create a function for one either — an empty <Expression> makes
+  // it drop the declaration outright — so a column named after one would be
+  // an output RM invented.
+  check(!has_function(r, "reactant_1"), "reactant_1 is not reported as a function");
+  check(!has_function(r, "reactant_2"), "reactant_2 is not reported as a function");
+  // Everything else in the block still is.
+  check(has_function(r, "NucF"), "an ordinary function is still reported");
+
+  // The simulator's own name list has to agree with the Result's, or an
+  // embedder pairing get_function_values() against function_names() reads
+  // every column shifted by one.
+  check(sim.function_names() == r.function_names,
+        "function_names() agrees with the Result's function_names");
 
   // The pre-fix signature: nothing ever fires.  NucF closes the gate after
   // the first dimer, so Dimer counts 2 molecules and stops there.
@@ -131,7 +149,8 @@ void test_nucleation_propensity(const std::string& xml) {
   }
 
   double const p = static_cast<double>(fired) / kReps;
-  std::fprintf(stderr, "fired in %d/%d replicates at t = 1/a = %.3e: p=%.4f (expected %.4f, %.2f SE)\n",
+  std::fprintf(stderr,
+               "fired in %d/%d replicates at t = 1/a = %.3e: p=%.4f (expected %.4f, %.2f SE)\n",
                fired, kReps, t_end, p, p_expect, std::fabs(p - p_expect) / se);
   check(std::fabs(p - p_expect) < 4.0 * se,
         "firing fraction at the mean waiting time matches the expected propensity");
@@ -167,10 +186,12 @@ void test_coverage_arms(const std::string& xml) {
   double const v = v_sum / kCovReps;
   double const a = a_sum / kCovReps;
   double const c = c_sum / kCovReps;
-  std::fprintf(stderr, "unimolecular: reactant_1() arm=%.2f  observable arm=%.2f  closed form=%.2f\n",
-               u, v, uni_expect);
-  std::fprintf(stderr, "bimolecular:  reactant_N() arm=%.2f  observable arm=%.2f  closed form=%.2f\n",
-               a, c, bim_expect);
+  std::fprintf(stderr,
+               "unimolecular: reactant_1() arm=%.2f  observable arm=%.2f  closed form=%.2f\n", u, v,
+               uni_expect);
+  std::fprintf(stderr,
+               "bimolecular:  reactant_N() arm=%.2f  observable arm=%.2f  closed form=%.2f\n", a, c,
+               bim_expect);
 
   // A count applied zero times leaves the arm at its seed value; a count
   // applied once instead of twice leaves it near it (196 of 200, 100 of 100).
@@ -187,9 +208,8 @@ void test_coverage_arms(const std::string& xml) {
 // The two shapes RM refuses rather than resolving to zero
 // ---------------------------------------------------------------------------
 
-void test_refusal(const std::string& xml, const std::string& must_contain,
-                  const std::string& tag) {
-  rulemonkey::RuleMonkeySimulator sim(xml);
+void test_refusal(const std::string& xml, const std::string& must_contain, const std::string& tag) {
+  rulemonkey::RuleMonkeySimulator const sim(xml);
   bool found = false;
   for (const auto& u : sim.unsupported_features()) {
     if (u.severity == rulemonkey::Severity::Error &&

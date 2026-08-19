@@ -3423,8 +3423,12 @@ struct Engine::Impl {
   // Global (non-local) functions whose value is exposed to embedders via
   // Result::function_data and get_function_values().  Local functions are
   // excluded: they evaluate per-molecule and have no single global value.
-  // `output_function_indices` indexes into model.functions; the names are
-  // cached in declaration order to parallel Result::function_names.
+  // `reactant_N()` placeholders are excluded for the same reason one step
+  // further out — they have no value even at one molecule, only inside a
+  // rule — and NFsim does not create a function for one at all, so a column
+  // named after one would be RM inventing an output its reference does not
+  // have.  `output_function_indices` indexes into model.functions; the names
+  // are cached in declaration order to parallel Result::function_names.
   std::vector<int> output_function_indices;
   std::vector<std::string> output_function_names;
 
@@ -3573,7 +3577,7 @@ struct Engine::Impl {
     output_function_indices.clear();
     output_function_names.clear();
     for (int i = 0; i < static_cast<int>(model.functions.size()); ++i) {
-      if (!model.functions[i].is_local()) {
+      if (!model.functions[i].is_local() && model.functions[i].reactant_count_index == 0) {
         output_function_indices.push_back(i);
         output_function_names.push_back(model.functions[i].name);
       }

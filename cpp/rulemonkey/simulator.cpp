@@ -3356,11 +3356,13 @@ RuleMonkeySimulator::RuleMonkeySimulator(const std::string& xml_path, Method met
   impl_->base_parameters = impl_->model.parameters;
   impl_->obs_names = impl_->model.observable_names_ordered;
   impl_->param_names = impl_->model.parameter_names_ordered;
-  // Global (non-local) functions only — must use the same filter and
-  // declaration order as Engine::output_function_names so the simulator's
-  // function_names() agrees with a Result's function_names.
+  // Global (non-local) functions only, and not the `reactant_N()`
+  // placeholders, which have a value only inside a rule (issue #59) — must
+  // use the same filter and declaration order as
+  // Engine::output_function_names so the simulator's function_names()
+  // agrees with a Result's function_names.
   for (const auto& gf : impl_->model.functions) {
-    if (!gf.is_local())
+    if (!gf.is_local() && gf.reactant_count_index == 0)
       impl_->func_names.push_back(gf.name);
   }
 }
