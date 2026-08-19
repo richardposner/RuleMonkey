@@ -295,6 +295,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rule does not have (`reactant_2()` on a one-reactant rule), and a count
   read from a rate law that is also a local, per-instance function.
 
+  A third shape warns. A rate law that is not a total rate states the rate
+  *per set of reactants*, so the propensity is that value times the reactant
+  match counts, and `reactant_N()` supplies those same counts a second time
+  inside the rate. A bimolecular rule written `reactant_1()*reactant_2()*k`
+  is therefore priced at `(N1*N2)^2 * k`, not `N1*N2*k`, which is not what
+  the BNGL source reads like. NFsim does the same thing, so RM is not
+  diverging and does not refuse; the warning exists so that reading is named
+  at load instead of found by wondering why a rate constant is off by orders
+  of magnitude. `TotalRate` is the one shape where the construct means what
+  it looks like — there the rate function states the whole propensity, so
+  `reactant_1()*k` is exactly mass action at `k` — and the warning is silent
+  there. Verified against NFsim on a `TotalRate` model: RM 35.8, NFsim 37.7
+  over 20 seeds each, against the `100*exp(-1) = 36.8` the law predicts.
+
   Reported on `actin_branch_forFitToData.bngl`, whose only initially
   possible reaction is a nucleation rule of exactly this shape, so the whole
   model was inert. It now nucleates and grows a filament, and over twelve

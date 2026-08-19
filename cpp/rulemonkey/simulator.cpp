@@ -2361,14 +2361,17 @@ Model load_model(const std::string& xml_path,
                "to zero, so it will not fire."});
     }
 
-    // ERROR-level: a `reactant_N()` the engine cannot resolve (issue #59).
-    // Both cases below would leave the rule reading a placeholder that never
-    // gets a value, i.e. a rate of zero and a rule that never fires, which is
-    // the silent no-op this construct was reported for in the first place.
+    // `reactant_N()` in a rate law (issue #59): two shapes RM cannot resolve,
+    // and one it resolves in a way that is easy to write by accident.
     for (const auto& rule : model.rules) {
       int const n = rule.rate_law.max_reactant_count_index;
       if (n == 0)
         continue;
+
+      // ERROR-level.  Both of these would leave the rule reading a
+      // placeholder that never gets a value, i.e. a rate of zero and a rule
+      // that never fires, which is the silent no-op this construct was
+      // reported for in the first place.
       std::string reason;
       if (n > rule.molecularity) {
         reason = "reads reactant_" + std::to_string(n) + "(), but the rule has " +
@@ -2378,13 +2381,41 @@ Model load_model(const std::string& xml_path,
         reason = "reads reactant_" + std::to_string(n) +
                  "() from a rate law that is also a local (per-instance) function. "
                  "RM resolves reactant counts for whole-rule rate functions only";
-      } else {
+      }
+      if (!reason.empty()) {
+        unsupported_out->push_back({Severity::Error, "RateLaw@type=Function",
+                                    "Rule '" + rule.id + "' (" + rule.name + ") " + reason +
+                                        ". Pass --ignore-unsupported to run anyway; the "
+                                        "placeholder reads zero, so the rule will not fire."});
         continue;
       }
-      unsupported_out->push_back({Severity::Error, "RateLaw@type=Function",
-                                  "Rule '" + rule.id + "' (" + rule.name + ") " + reason +
-                                      ". Pass --ignore-unsupported to run anyway; the "
-                                      "placeholder reads zero, so the rule will not fire."});
+
+      // WARN-level: the counts land on the propensity twice.  A rate law
+      // that is not a total rate states the rate PER set of reactants, so
+      // the propensity is that value times the reactant match counts — and
+      // `reactant_N()` supplies those same counts a second time, inside the
+      // rate.  A bimolecular rule written `reactant_1()*reactant_2()*k` is
+      // therefore priced at `(N1*N2)^2 * k`, not `N1*N2*k`.
+      //
+      // This is not a divergence: NFsim multiplies by the counts after
+      // evaluating the rate function too, and RM matches it, which is why
+      // this warns rather than refusing.  What it buys is that a reading
+      // most people would not predict from the BNGL source is named at load
+      // instead of found by wondering why a rate constant is off by orders
+      // of magnitude.  `TotalRate` is the shape where the construct means
+      // what it looks like, and it is silent there.
+      if (!rule.rate_law.is_total_rate)
+        unsupported_out->push_back(
+            {Severity::Warn, "RateLaw@type=Function",
+             "Rule '" + rule.id + "' (" + rule.name +
+                 ") uses reactant_N() in its rate law and is not marked TotalRate. The "
+                 "value of a rate function is multiplied by the rule's reactant match "
+                 "counts to get the propensity, so the counts reactant_N() supplies are "
+                 "applied a second time: this rule's propensity grows with the square of "
+                 "each reactant count rather than in proportion to it. NFsim reads the "
+                 "same model the same way, so RM is not diverging from it here. If the "
+                 "rate law was meant to give the whole propensity on its own, mark the "
+                 "rule TotalRate."});
     }
 
     // WARN-level: MM constructs where RM cannot reproduce BNG2 (issue #45).

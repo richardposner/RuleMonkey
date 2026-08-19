@@ -44,9 +44,14 @@
 //      tracks a control arm that states the same law through ordinary
 //      observables, and both match the closed-form solution.
 //
-// Plus the two shapes RM refuses at load rather than resolving to zero: a
+// Plus the two shapes RM refuses at load rather than resolving to zero (a
 // count of a reactant the rule does not have, and a count read from a rate
-// law that is also a local (per-instance) function.
+// law that is also a local, per-instance function), and the load-time
+// warning that the counts land on the propensity twice.  That warning is
+// gated on the rule NOT being a total rate, because a total rate is the one
+// shape where the construct means what it looks like: there the rate
+// function states the whole propensity, so `reactant_1()*k` is exactly
+// ordinary mass action.  Both sides of that gate are checked.
 
 #include "rulemonkey/simulator.hpp"
 
@@ -205,6 +210,78 @@ void test_coverage_arms(const std::string& xml) {
 }
 
 // ---------------------------------------------------------------------------
+// The counts-applied-twice warning, and the TotalRate shape it excuses
+// ---------------------------------------------------------------------------
+
+std::vector<std::string> features_of(const rulemonkey::RuleMonkeySimulator& sim,
+                                     rulemonkey::Severity want) {
+  std::vector<std::string> out;
+  for (const auto& u : sim.unsupported_features())
+    if (u.severity == want)
+      out.push_back(u.feature);
+  return out;
+}
+
+void test_double_count_warning(const std::string& nucleation_xml, const std::string& coverage_xml,
+                               const std::string& total_rate_xml) {
+  // One rule, one warning.
+  {
+    rulemonkey::RuleMonkeySimulator const sim(nucleation_xml);
+    auto const warns = features_of(sim, rulemonkey::Severity::Warn);
+    check(warns.size() == 1, "the nucleation rule warns exactly once");
+    if (warns.size() == 1) {
+      check(warns[0].find("reactant_N()") != std::string::npos, "the warning names the construct");
+      check(warns[0].find("TotalRate") != std::string::npos, "the warning names the way out");
+    }
+    check(features_of(sim, rulemonkey::Severity::Error).empty(),
+          "the nucleation model is not refused");
+  }
+
+  // Four rules, two of which use the construct: only those two warn.  The
+  // control arms state the same laws through ordinary observables, so a
+  // warning on one of those would be the gate firing on rate functions in
+  // general rather than on this construct.
+  {
+    rulemonkey::RuleMonkeySimulator const sim(coverage_xml);
+    auto const warns = features_of(sim, rulemonkey::Severity::Warn);
+    std::fprintf(stderr, "coverage model: %d warning(s) over 4 rules\n",
+                 static_cast<int>(warns.size()));
+    check(warns.size() == 2, "only the two placeholder arms warn");
+  }
+
+  // TotalRate: the rate function states the whole propensity, so the count
+  // is applied once and there is nothing to warn about.
+  {
+    rulemonkey::RuleMonkeySimulator const sim(total_rate_xml);
+    check(features_of(sim, rulemonkey::Severity::Warn).empty(), "a TotalRate rule does not warn");
+    check(features_of(sim, rulemonkey::Severity::Error).empty(), "a TotalRate rule is not refused");
+  }
+}
+
+// …and the TotalRate rule still has to resolve the count.  Reading the
+// placeholder as zero there would freeze the arm at its seed value, which is
+// the same silent no-op in a different branch of compute_propensity.
+void test_total_rate_arm(const std::string& xml) {
+  constexpr int kReps = 40;
+  constexpr double kT = 10000.0;
+  constexpr double kA = 100.0;
+  double const expect = kA * std::exp(-1.0); // dN/dt = -k*N with k = 1e-4
+  double const se = std::sqrt(kA * (expect / kA) * (1.0 - (expect / kA)) / kReps);
+
+  double sum = 0;
+  for (int rep = 0; rep < kReps; ++rep) {
+    rulemonkey::RuleMonkeySimulator sim(xml);
+    auto r = sim.run({0.0, kT, 2},
+                     /*seed=*/std::uint64_t{5950} + static_cast<std::uint64_t>(rep));
+    sum += final_observable(r, "Aoff");
+  }
+  double const mean = sum / kReps;
+  std::fprintf(stderr, "TotalRate arm: Aoff(%.0f)=%.2f (expected %.2f, %.2f SE)\n", kT, mean,
+               expect, std::fabs(mean - expect) / se);
+  check(std::fabs(mean - expect) < 4.0 * se, "the TotalRate arm applies the count exactly once");
+}
+
+// ---------------------------------------------------------------------------
 // The two shapes RM refuses rather than resolving to zero
 // ---------------------------------------------------------------------------
 
@@ -227,15 +304,17 @@ void test_refusal(const std::string& xml, const std::string& must_contain, const
 } // namespace
 
 int main(int argc, char* argv[]) {
-  if (argc < 5) {
+  if (argc < 6) {
     std::fprintf(stderr, "Usage: reactant_count_rate_test <nucleation.xml> <coverage.xml> "
-                         "<arity.xml> <local_fcn.xml>\n");
+                         "<arity.xml> <local_fcn.xml> <total_rate.xml>\n");
     return 2;
   }
   try {
     test_nucleation_rate_value(argv[1]);
     test_nucleation_propensity(argv[1]);
     test_coverage_arms(argv[2]);
+    test_double_count_warning(argv[1], argv[2], argv[5]);
+    test_total_rate_arm(argv[5]);
     test_refusal(argv[3], "reactant_2()", "a count of a reactant the rule does not have");
     test_refusal(argv[4], "local (per-instance) function",
                  "a count read from a local-function rate law");

@@ -169,6 +169,7 @@ add_test(
         ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_reactant_count_rate.xml
         ${_rulemonkey_test_dir}/cpp/reactant_count_arity_model.xml
         ${_rulemonkey_test_dir}/cpp/reactant_count_local_fcn_model.xml
+        ${_rulemonkey_test_dir}/cpp/reactant_count_total_rate_model.xml
 )
 
 # Cost of that rescan (issue #40): #38 made a local rate reading ANY global
