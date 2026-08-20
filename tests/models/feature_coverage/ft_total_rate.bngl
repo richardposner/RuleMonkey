@@ -1,38 +1,88 @@
-# Feature: TotalRate modifier on reaction rules
-# Tests: TotalRate makes rate independent of number of matching sites
-# Tier: base
-# Expected: binding rate is exactly k*[A]*[B], NOT 2*k*[A]*[B]
-#   (A has 2 identical sites but TotalRate suppresses the factor of 2)
+# Feature: the TotalRate keyword on a reaction rule.
+# Tests:   TotalRate says the rate law IS the propensity, rather than the
+#          rate per set of reactants.  So the rule fires at a fixed rate no
+#          matter how many reactants are present, and its reactant decays in
+#          a straight line instead of an exponential.  That is the whole
+#          content of the keyword, and it is what every arm here measures.
+#
+#          RM refuses TotalRate models at load, because BioNetGen does not
+#          implement the keyword for network simulations and NFsim's reading
+#          of it differs from RM's on rules whose reactant pattern has
+#          interchangeable components (see COVERAGE.md).  The harness runs
+#          this model with --ignore-unsupported so the propensity path stays
+#          covered.  Every arm below deliberately avoids interchangeable
+#          components, which is exactly the region where RM and NFsim have
+#          one answer between them.
+#
+# Oracle:  NFsim, plus a closed form per arm.
+#            RA  constant rate kd, so Aoff falls in a straight line and
+#                reaches zero at t = 60/0.5 = 120, then stays there
+#            RB  constant rate kf on a two-reactant rule: Bfree falls in a
+#                straight line at kf, unaffected by either reactant's count
+#            RH  the rate law is a function of an observable, so the
+#                propensity tracks it: dH/dt = -kh*H, an exponential
+#          The three shapes together separate TotalRate from mass action in
+#          both directions: RA/RB are linear where mass action is curved, and
+#          RH is exponential where mass action would be hyperbolic.
+#
+# Tier:    network-free.
+# Expected (t_end = 200):
+#            Aoff   60 -> 0 by t = 120 (straight line, slope -0.5)
+#            Bfree  200 -> 100         (straight line, slope -0.5)
+#            Hoff   200 -> 200*exp(-kh*200) = 27.1
+#          Under mass action instead of TotalRate every arm is orders of
+#          magnitude faster: RB alone would run at kf*200*200 = 20000.
+# Regression: the model this replaces fired 4 events over its whole run and
+#          could not tell TotalRate from anything else.  Its header also
+#          stated the semantics wrongly ("binding rate is exactly k*[A]*[B]")
+#          — TotalRate removes the counts entirely, it does not merely
+#          suppress the site multiplicity.
+# invariant: conserved Atot = 60
+# invariant: nonneg
 
 begin model
 begin parameters
-    A_tot   50
-    B_tot   50
-    kf      0.01   # /s, forward binding rate (total)
-    kr      0.1    # /s, reverse unbinding rate
+    kd   0.5
+    kf   0.5
+    kh   1.0e-2
 end parameters
 
 begin molecule types
-    A(s,s)
-    B(t)
+    A(s~0~1)
+    B(b)
+    Cc(b)
+    H(s~0~1)
 end molecule types
 
 begin seed species
-    A(s,s)  A_tot
-    B(t)    B_tot
+    A(s~0)   60
+    B(b)     200
+    Cc(b)    200
+    H(s~0)   200
 end seed species
 
 begin observables
-    Molecules  A_free     A(s,s)
-    Molecules  B_free     B(t)
-    Molecules  AB_total   B(t!+)
+    Molecules  Aoff   A(s~0)
+    Molecules  Atot   A()
+    Molecules  Bfree  B(b)
+    Molecules  Hoff   H(s~0)
 end observables
 
+begin functions
+    hf() = kh*Hoff
+end functions
+
 begin reaction rules
-    A(s) + B(t) <-> A(s!1).B(t!1)  kf, kr  TotalRate
+    # Constant rate, and the reactant runs out: the propensity has to stop
+    # when it does.
+    RA: A(s~0) -> A(s~1)                kd TotalRate
+    # Two reactants, neither count entering the rate.
+    RB: B(b) + Cc(b) -> B(b!1).Cc(b!1)  kf TotalRate
+    # The rate law moves during the run, and is still the whole propensity.
+    RH: H(s~0) -> H(s~1)                hf() TotalRate
 end reaction rules
 end model
 
 begin actions
-simulate({method=>"nf",t_end=>100,n_steps=>100})
+simulate({method=>"nf",t_end=>200,n_steps=>100})
 end actions

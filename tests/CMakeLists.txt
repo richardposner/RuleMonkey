@@ -454,6 +454,31 @@ if(TARGET rm_driver)
     # With --print-functions: all three global functions appear in the header.
     set_tests_properties(rm_driver_functions_print_flag PROPERTIES
         PASS_REGULAR_EXPRESSION "frac_P.*modulator.*phos_rate")
+
+    # TotalRate is refused at load.  BioNetGen does not implement the keyword
+    # for network simulations, so no BNG2 result exists to check such a model
+    # against, and NFsim multiplies the total rate by the number of symmetry
+    # permutations it expands the rule into.  RM names that rather than
+    # silently picking one of the readings.
+    add_test(
+        NAME rm_driver_refuses_total_rate
+        COMMAND rm_driver
+            ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_total_rate.xml
+            200 10 7
+    )
+    set_tests_properties(rm_driver_refuses_total_rate PROPERTIES WILL_FAIL TRUE)
+
+    # …and --ignore-unsupported runs it, on the reading BioNetGen documents:
+    # the rate law is the whole propensity.  Aoff starts at its seed 60 and
+    # the run reaches t=200, so the rule fired and the trajectory is real.
+    add_test(
+        NAME rm_driver_total_rate_ignore_unsupported
+        COMMAND rm_driver
+            ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_total_rate.xml
+            200 10 7 --ignore-unsupported
+    )
+    set_tests_properties(rm_driver_total_rate_ignore_unsupported PROPERTIES
+        PASS_REGULAR_EXPRESSION "Aoff.*Bfree.*Hoff")
 endif()
 
 # Cooperative-cancellation regression: pins down the CancelCallback

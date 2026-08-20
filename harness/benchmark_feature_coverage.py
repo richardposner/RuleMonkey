@@ -208,10 +208,14 @@ RM_ONLY: set[str] = set()
 # actually refuses by default is covered by the per-feature test
 # fixtures under dev/test_*.xml, not this script.
 #
-# Currently empty: no corpus or feature-coverage model trips a Tier-0
-# trigger (cBNGL: no compartments declared anywhere; eBNGL: only
-# Arrhenius rate laws trigger, and nothing in either suite uses them).
-TIER0_IGNORE_UNSUPPORTED = set()
+# ft_total_rate declares TotalRate, which RM refuses at load: BioNetGen
+# does not implement the keyword for network simulations, so there is no
+# BNG2 result to check such a model against, and NFsim's reading of it
+# differs from RM's on rules whose reactant pattern has interchangeable
+# components.  The model deliberately avoids those, so RM and NFsim have
+# one answer between them on every arm and the comparison is meaningful;
+# --ignore-unsupported is what keeps the propensity path covered.
+TIER0_IGNORE_UNSUPPORTED = {"ft_total_rate"}
 
 
 def parse_invariants(bngl_path):

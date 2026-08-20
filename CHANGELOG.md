@@ -253,6 +253,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CLI targets, which also means the test harnesses' own code is sanitized
   for the first time. All 37 tests pass with it on.
 
+### Changed
+
+- **The `TotalRate` keyword is now refused at load (Tier-0 Error).** Not
+  because RM cannot evaluate it, but because the construct has no agreed
+  meaning to evaluate. BioNetGen does not implement TotalRate for network
+  simulations — `RxnRule.pm` carries the TODO saying it is "currently
+  implemented only for XML network-free output" — and `generate_network`
+  duly writes the rate law into the `.net` as an ordinary rate constant, so
+  the ODE integrates plain mass action and the observable crashes to zero
+  where NFsim holds it flat. There is no BNG2 result to check a TotalRate
+  model against.
+
+  That leaves NFsim as the only implementation, and it disagrees with RM.
+  NFsim expands a rule whose reactant pattern has interchangeable components
+  into one independent reaction class per permutation (`_R1_sym1`,
+  `_R1_sym2`, ...). For an ordinary rate law that is correct, since the
+  matches partition across the classes and sum back; under TotalRate every
+  class returns the *whole* total rate, so the rule runs at
+  `rate x #{permutations whose reactant lists are all non-empty}`. Measured
+  on `C(s) + D(t)`: **1.00x** with one free site, **2.02x** with two,
+  **2.98x** with three, and 1.00x again when every C has the same slot
+  pre-bound, since only one permutation is populated then. That factor counts
+  NFsim's internal reaction classes rather than anything in the model — it is
+  capped by the permutation count however many molecules exist, and steps down
+  as classes empty. BNG2's network expansion writes the statistical factor per
+  species and live (`3*_rateLaw1`, `2*_rateLaw1`, `_rateLaw1`), implying a
+  third number again.
+
+  All three disagree, so RM names the problem instead of silently picking a
+  reading. `--ignore-unsupported` runs the reading BioNetGen documents in
+  `RateLaw.pm` ("If true, this ratelaw specifies the Total reaction rate"):
+  the propensity is the rate law's value. That agrees with NFsim on every
+  rule whose reactant patterns have no interchangeable components, which is
+  every shape measured — unimolecular, heterodimer, homodimer carrying
+  `symmetry_factor="0.5"`, zero-order synthesis, and a rate law that is a
+  function of an observable.
+
+  `ft_total_rate` was rewritten along with this. The model it replaces fired
+  four events over its whole run and could not tell TotalRate from anything
+  else, and its header stated the semantics wrongly ("binding rate is exactly
+  `k*[A]*[B]`" — TotalRate removes the counts entirely rather than merely
+  suppressing site multiplicity). The new one fires 313 events across three
+  arms whose closed forms separate TotalRate from mass action in both
+  directions: two linear-decay arms where mass action is curved, and an
+  observable-driven arm that is exponential where mass action would be
+  hyperbolic. It runs under `--ignore-unsupported` via the harness's
+  `TIER0_IGNORE_UNSUPPORTED` set, so the propensity path stays covered
+  against a 20-replicate NFsim ensemble (tz = 2.36).
+
 ### Fixed
 
 - **A rate law built on `reactant_N()` had a propensity of zero, so the rule

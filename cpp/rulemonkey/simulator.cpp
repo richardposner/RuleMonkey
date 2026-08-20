@@ -2361,6 +2361,64 @@ Model load_model(const std::string& xml_path,
                "to zero, so it will not fire."});
     }
 
+    // ERROR-level: the `TotalRate` keyword.  Refused because the construct
+    // has no agreed meaning, not because RM cannot evaluate it.
+    //
+    // BNG2.pl does not implement TotalRate for network simulations at all.
+    // Its own source says so (RxnRule.pm): "TODO: implement TotalRate feature
+    // for Network simulations (currently implemented only for XML
+    // network-free output)".  Confirmed: generate_network writes the rate law
+    // into the .net as an ordinary rate constant and the ODE then integrates
+    // plain mass action, so a TotalRate model cannot be simulated
+    // deterministically and cannot be cross-checked against the reference RM
+    // is written against.  There is no oracle.
+    //
+    // That leaves NFsim as the only implementation, and it disagrees with
+    // RM on a whole class of rules.  NFsim expands a rule whose reactant
+    // pattern has interchangeable components into one independent reaction
+    // class per permutation (`_R1_sym1`, `_R1_sym2`, ...; see
+    // NFinput.cpp::generateRxnPermutations).  For an ordinary rate law that
+    // is correct — the matches partition across the classes and sum back —
+    // but under TotalRate every class returns the WHOLE total rate, so the
+    // rule runs at
+    //
+    //     rate x #{permutations whose reactant lists are all non-empty}
+    //
+    // Measured against `C(s) + D(t)` at kf: one free site 1.00x, two 2.02x,
+    // three 2.98x, and 1.00x again when every C has the same slot pre-bound
+    // (only one permutation populated).  That factor counts NFsim's internal
+    // reaction classes rather than anything in the model — it is capped by
+    // the permutation count no matter how many molecules exist, and it steps
+    // down discretely as classes empty.  BNG2's network expansion, which
+    // writes the statistical factor per SPECIES and live (`3*_rateLaw1`,
+    // `2*_rateLaw1`, `_rateLaw1`), implies a third number again.
+    //
+    // So RM refuses rather than pick one silently.  `--ignore-unsupported`
+    // runs the reading BNG2 documents ("this ratelaw specifies the Total
+    // reaction rate", RateLaw.pm) — the propensity IS the rate law's value —
+    // which agrees with NFsim on every rule whose reactant patterns have no
+    // interchangeable components, i.e. everywhere the two engines have a
+    // single answer between them.
+    for (const auto& rule : model.rules) {
+      if (!rule.rate_law.is_total_rate)
+        continue;
+      unsupported_out->push_back(
+          {Severity::Error, "RateLaw@totalrate",
+           "Rule '" + rule.id + "' (" + rule.name +
+               ") uses the TotalRate keyword. BioNetGen does not implement TotalRate "
+               "for network simulations, only for the network-free XML it writes, so "
+               "there is no BNG2 result to check a TotalRate model against. NFsim, the "
+               "only engine that implements it, multiplies the total rate by the number "
+               "of symmetry permutations it internally expands the rule into, so it "
+               "disagrees with RM on any rule whose reactant pattern has "
+               "interchangeable components. Rewrite the rule without TotalRate, folding "
+               "the reactant counts into the rate law if you need them. Pass "
+               "--ignore-unsupported to run anyway: RM reads the rate law as the whole "
+               "propensity, which is what BioNetGen documents the keyword to mean and "
+               "what NFsim also does when the reactant patterns have no interchangeable "
+               "components."});
+    }
+
     // `reactant_N()` in a rate law (issue #59): two shapes RM cannot resolve,
     // and one it resolves in a way that is easy to write by accident.
     for (const auto& rule : model.rules) {

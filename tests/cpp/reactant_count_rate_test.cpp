@@ -250,15 +250,26 @@ void test_double_count_warning(const std::string& nucleation_xml, const std::str
   }
 
   // TotalRate: the rate function states the whole propensity, so the count
-  // is applied once and there is nothing to warn about.
+  // is applied once and there is nothing to warn about.  The rule IS refused,
+  // but for the keyword itself and not for the reactant count — RM refuses
+  // every TotalRate rule, since BioNetGen does not implement the keyword for
+  // network simulations and NFsim's reading of it is its own.  What matters
+  // here is that no double-count warning rides along with that refusal.
   {
     rulemonkey::RuleMonkeySimulator const sim(total_rate_xml);
     check(features_of(sim, rulemonkey::Severity::Warn).empty(), "a TotalRate rule does not warn");
-    check(features_of(sim, rulemonkey::Severity::Error).empty(), "a TotalRate rule is not refused");
+    auto const errs = features_of(sim, rulemonkey::Severity::Error);
+    check(errs.size() == 1, "a TotalRate rule is refused exactly once");
+    if (errs.size() == 1)
+      check(errs[0].find("TotalRate keyword") != std::string::npos,
+            "and refused for the keyword, not for the reactant count");
   }
 }
 
-// …and the TotalRate rule still has to resolve the count.  Reading the
+// …and the TotalRate rule still has to resolve the count.  RM refuses
+// TotalRate models at load, but a refusal is a diagnostic the driver acts on,
+// not something the library enforces, so the propensity path still has to be
+// right for everyone who passes --ignore-unsupported.  Reading the
 // placeholder as zero there would freeze the arm at its seed value, which is
 // the same silent no-op in a different branch of compute_propensity.
 void test_total_rate_arm(const std::string& xml) {
