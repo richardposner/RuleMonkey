@@ -6376,27 +6376,39 @@ struct Engine::Impl {
       }
     }
 
-    // Seed per-mol contribs for every tracked obs.  Both paths use
-    // count_multi_molecule_embeddings, which dispatches to the fast
-    // single-mol path when pat.molecules.size() == 1.
+    // Seed per-mol contribs for every tracked obs, through the same
+    // `tracked_obs_contrib` the per-event delta path uses — so seeding
+    // gets the trivial-pattern and 2-mol-1-bond shortcuts too, and the
+    // two can never answer differently.
+    //
+    // The walk is over the distinct seed types of the observable's
+    // patterns rather than per pattern: `tracked_obs_contrib` already
+    // sums a molecule's contribution across every pattern it can seed,
+    // so visiting a molecule once is both necessary and sufficient.
+    std::vector<int> seed_types;
     for (int const oi : incr_tracked_obs_indices) {
       obs_mol_contrib[oi].assign(n_mols, 0.0);
       auto& obs = model.observables[oi];
+      seed_types.clear();
       for (auto& pat : obs.patterns) {
-        auto& pm = pat.molecules[0];
-        for (int const mid : pool.molecules_of_type(pm.type_index)) {
+        int const t = pat.molecules[0].type_index;
+        if (std::find(seed_types.begin(), seed_types.end(), t) == seed_types.end())
+          seed_types.push_back(t);
+      }
+      for (int const t : seed_types) {
+        for (int const mid : pool.molecules_of_type(t)) {
           if (!pool.molecule(mid).active)
             continue;
-          obs_mol_contrib[oi][mid] +=
-              static_cast<double>(count_multi_molecule_embeddings(pool, mid, pat, model));
+          obs_mol_contrib[oi][mid] = tracked_obs_contrib(oi, mid);
         }
       }
     }
 
-    // For Species-tracked obs, seed per-cx totals and pass flags by
-    // full-walk.  obs_values is seeded separately by Engine::initialize
-    // via compute_observables(); we just need the per-cx bookkeeping to
-    // be consistent with that initial obs_values.
+    // For Species-tracked obs, seed per-cx totals and pass flags from
+    // the per-mol contribs above.  These pass flags are also what
+    // seed_tracked_obs_values() counts to settle the observable's
+    // initial value, so the two are consistent by construction rather
+    // than by two independent walks agreeing.
     if (species_incr_any_tracked) {
       for (int const oi : incr_tracked_obs_indices) {
         if (!incr_obs_is_species[oi])
@@ -6407,15 +6419,25 @@ struct Engine::Impl {
         for (auto& pat : obs.patterns) {
           auto& pm = pat.molecules[0];
           // Walk each live complex that contains a type-matching mol.
-          std::unordered_set<int> counted_cx;
+          // Visited complexes are marked by stamping their member
+          // molecules, the same allocation-free dedupe the Species full
+          // walk in evaluate_observable uses (issue #62) — a fresh
+          // unordered_set of complex ids here cost one hash node per
+          // complex at every session build.
+          ++obs_walk_cx_gen;
+          if (obs_walk_cx_stamp.size() < static_cast<size_t>(pool.molecule_count()))
+            obs_walk_cx_stamp.resize(pool.molecule_count(), 0);
           for (int const mid : pool.molecules_of_type(pm.type_index)) {
             if (!pool.molecule(mid).active)
               continue;
-            int const cx = pool.complex_of(mid);
-            if (!counted_cx.insert(cx).second)
+            if (obs_walk_cx_stamp[mid] == obs_walk_cx_gen)
               continue;
+            int const cx = pool.complex_of(mid);
+            obs_walk_cx_stamp[mid] = obs_walk_cx_gen;
             int total = 0;
             for (int const m : pool.molecules_in_complex(cx)) {
+              if (m >= 0 && m < static_cast<int>(obs_walk_cx_stamp.size()))
+                obs_walk_cx_stamp[m] = obs_walk_cx_gen;
               if (!pool.molecule(m).active)
                 continue;
               if (pool.molecule(m).type_index != pm.type_index)
@@ -6449,6 +6471,118 @@ struct Engine::Impl {
         species_mid_prev_cx[mid] = pool.complex_of(mid);
       }
     }
+
+    seed_tracked_obs_values();
+  }
+
+  // Settle obs_values for the tracked observables out of the tables
+  // init_incremental_observables has just built, so Engine::initialize
+  // does not have to full-walk them a second time.  The tables already
+  // hold the walk's own terms: obs_mol_contrib is its per-molecule
+  // embedding count, and obs_cx_passed is its per-complex verdict.  On a
+  // million-molecule pool the duplicate walk was about half of session
+  // build (issue #65).
+  //
+  // The equality this rests on is checked rather than asserted:
+  // `kLocalObsTrackInvariant` (Debug and ASan builds) re-derives every
+  // tracked observable from scratch here and aborts on a mismatch.
+  void seed_tracked_obs_values() {
+    if (incr_tracked_obs_indices.empty())
+      return;
+    ++eval_vars_gen;
+    obs_values.resize(model.observables.size(), 0.0);
+    for (int const oi : incr_tracked_obs_indices) {
+      double value = 0.0;
+      if (incr_obs_is_species[oi] != 0) {
+        // Species: one per complex whose match count passed the
+        // pattern's quantity predicate.
+        for (const auto& kv : obs_cx_passed[oi])
+          if (kv.second != 0)
+            value += 1.0;
+      } else {
+        // Molecules: the straight sum over per-molecule contribs, which
+        // is what the full walk accumulates, pattern by pattern.
+        for (double const contrib : obs_mol_contrib[oi])
+          value += contrib;
+      }
+      obs_values[oi] = value;
+
+      if constexpr (kLocalObsTrackInvariant) {
+        double const from_scratch = evaluate_observable(model.observables[oi]);
+        if (value != from_scratch) {
+          fprintf(stderr,
+                  "[local_obs_selfcheck] seeded obs_values disagrees with the "
+                  "full walk at init: oi=%d name=%s type=%s seeded=%.17g "
+                  "full_walk=%.17g\n",
+                  oi, model.observables[oi].name.c_str(), model.observables[oi].type.c_str(), value,
+                  from_scratch);
+          std::abort();
+        }
+      }
+    }
+  }
+
+  // One molecule's contribution to a tracked observable: the number of
+  // embeddings of the observable's patterns seeded at `mid`, summed over
+  // patterns.
+  //
+  // Both the init seeding walk and the per-event delta path want exactly
+  // this number, so they share the routine rather than each writing out
+  // the dispatch.  The dispatch is the part worth not duplicating: a
+  // structurally unconstrained pattern (`T()`) contributes one per
+  // molecule of its type with no matching at all, a 2-molecule/1-bond
+  // pattern goes through the `count_2mol_1bond_fc` specialization, and
+  // only what is left falls to the generic BFS.  Seeding used to call
+  // the generic BFS unconditionally while the per-event path took the
+  // shortcuts — half of what session build had left after the duplicate
+  // observable walk went away (issue #65).
+  double tracked_obs_contrib(int oi, int mid) {
+    auto& mol = pool.molecule(mid);
+    auto& obs = model.observables[oi];
+
+    if (incr_obs_trivial[oi] != 0) {
+      int const trivial_type = obs.patterns[0].molecules[0].type_index;
+      return (mol.active && mol.type_index == trivial_type) ? 1.0 : 0.0;
+    }
+    if (!mol.active)
+      return 0.0;
+
+    double total = 0.0;
+    int const n_pat = static_cast<int>(obs.patterns.size());
+    for (int pi = 0; pi < n_pat; ++pi) {
+      auto& pat = obs.patterns[pi];
+      auto& pm = pat.molecules[0];
+      if (mol.type_index != pm.type_index)
+        continue;
+      if constexpr (kObsIncrProfile) {
+        obs_incr_profile_.obs[oi].per_mid_calls++;
+      }
+      const FastMatchSlot* fm = nullptr;
+      if constexpr (kObsFastMatch) {
+        if (oi < static_cast<int>(obs_pat_fm.size()) &&
+            pi < static_cast<int>(obs_pat_fm[oi].size()) && obs_pat_fm[oi][pi].enabled) {
+          fm = &obs_pat_fm[oi][pi];
+        }
+      }
+      int c;
+      if (fm != nullptr) {
+        c = count_2mol_1bond_fc(pool, mid, *fm, &cmm_fc_profile_);
+        if constexpr (kObsFastMatchInvariant) {
+          int const ref = count_multi_molecule_embeddings(pool, mid, pat, model);
+          if (c != ref) {
+            std::fprintf(stderr,
+                         "[obs_fastmatch mismatch] oi=%d pi=%d mid=%d "
+                         "seed_type=%d partner_type=%d specialized=%d generic=%d\n",
+                         oi, pi, mid, fm->seed_type, fm->partner_type, c, ref);
+            std::abort();
+          }
+        }
+      } else {
+        c = count_multi_molecule_embeddings(pool, mid, pat, model);
+      }
+      total += static_cast<double>(c);
+    }
+    return total;
   }
 
   // Incrementally update tracked-observable values after affected
@@ -6527,13 +6661,10 @@ struct Engine::Impl {
     const auto& eff_affected = *affected_ptr;
 
     for (int const oi : incr_tracked_obs_indices) {
-      auto& obs = model.observables[oi];
       if (static_cast<int>(obs_mol_contrib[oi].size()) < n_mols)
         obs_mol_contrib[oi].resize(n_mols, 0.0);
 
       bool const is_species = incr_obs_is_species[oi];
-      bool const trivial = incr_obs_trivial[oi];
-      int const trivial_type = trivial ? obs.patterns[0].molecules[0].type_index : -1;
 
       oip_clock::time_point oip_t_obs_start;
       if constexpr (kObsIncrProfile) {
@@ -6551,45 +6682,7 @@ struct Engine::Impl {
           continue;
         auto& mol = pool.molecule(mid);
         double const old_c = obs_mol_contrib[oi][mid];
-        double new_c = 0.0;
-        if (trivial) {
-          new_c = (mol.active && mol.type_index == trivial_type) ? 1.0 : 0.0;
-        } else if (mol.active) {
-          int const n_pat = static_cast<int>(obs.patterns.size());
-          for (int pi = 0; pi < n_pat; ++pi) {
-            auto& pat = obs.patterns[pi];
-            auto& pm = pat.molecules[0];
-            if (mol.type_index != pm.type_index)
-              continue;
-            if constexpr (kObsIncrProfile) {
-              obs_incr_profile_.obs[oi].per_mid_calls++;
-            }
-            int c;
-            const FastMatchSlot* fm = nullptr;
-            if constexpr (kObsFastMatch) {
-              if (oi < static_cast<int>(obs_pat_fm.size()) &&
-                  pi < static_cast<int>(obs_pat_fm[oi].size()) && obs_pat_fm[oi][pi].enabled) {
-                fm = &obs_pat_fm[oi][pi];
-              }
-            }
-            if (fm) {
-              c = count_2mol_1bond_fc(pool, mid, *fm, &cmm_fc_profile_);
-              if constexpr (kObsFastMatchInvariant) {
-                int const ref = count_multi_molecule_embeddings(pool, mid, pat, model);
-                if (c != ref) {
-                  std::fprintf(stderr,
-                               "[obs_fastmatch mismatch] oi=%d pi=%d mid=%d "
-                               "seed_type=%d partner_type=%d specialized=%d generic=%d\n",
-                               oi, pi, mid, fm->seed_type, fm->partner_type, c, ref);
-                  std::abort();
-                }
-              }
-            } else {
-              c = count_multi_molecule_embeddings(pool, mid, pat, model);
-            }
-            new_c += static_cast<double>(c);
-          }
-        }
+        double const new_c = tracked_obs_contrib(oi, mid);
         if (new_c != old_c) {
           obs_mol_contrib[oi][mid] = new_c;
           if (!is_species)
@@ -10336,9 +10429,19 @@ canonical::ComplexGraph pattern_to_complex_graph(const Pattern& pat) {
 
 void Engine::initialize() {
   impl_->init_species();
-  impl_->compute_observables(); // must come before init_rule_states for Function rate laws
-  impl_->init_rule_states();
+  // Tracker first.  Building its tables costs exactly the per-molecule
+  // embedding counts an observable full-walk costs, so seeding
+  // obs_values out of them (seed_tracked_obs_values) lets the walk below
+  // skip every tracked observable rather than repeat the work — half of
+  // session build on a million-molecule pool (issue #65).  The tracker
+  // reads only the model and the pool, so it does not care that the
+  // other two steps have not run yet.
   impl_->init_incremental_observables();
+  // Still before init_rule_states, which reads obs_values for Function
+  // rate laws — but now only for the observables the tracker does not
+  // keep.
+  impl_->compute_observables(/*skip_tracked=*/impl_->use_incremental_obs);
+  impl_->init_rule_states();
   impl_->initialized = true;
 }
 

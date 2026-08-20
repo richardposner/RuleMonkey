@@ -317,6 +317,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Session build counted every tracked observable twice, and seeded it the
+  slow way both times (issue #65).** With the per-event costs from #62
+  gone, `Engine::initialize()` was what a run spent most of its wall
+  clock on: 14.0 s of a 22.0 s replicate of `error.bngl` at 4.7e6
+  molecules, against 8.1 s for the SSA loop it was setting up. It is now
+  2.7 s, and the replicate is 9.9 s.
+
+  **The observable walk and the tracker's tables were computed
+  independently.** `initialize()` ran `compute_observables()` — a
+  from-scratch walk of every observable — and then
+  `init_incremental_observables()`, which recomputed the same
+  per-molecule embedding counts to seed `obs_mol_contrib`. On
+  `Species Initiator_I2_SSA I(N!1).I(N!1)` over 3.1e6 `I` molecules that
+  is 3.1e6 multi-molecule embedding counts, done twice. The second
+  computation subsumes the first: the contribs are the walk's
+  per-molecule terms and the per-complex pass flags are its per-complex
+  verdicts. The tracker now runs first and settles `obs_values` out of
+  its own tables (`seed_tracked_obs_values`), and the walk that follows
+  skips every observable the tracker keeps.
+
+  **Seeding took the generic matcher where the per-event path takes
+  shortcuts.** `incremental_update_observables` computes a molecule's
+  contribution through a dispatch — a structurally unconstrained pattern
+  (`T()`) contributes one per molecule of its type with no matching at
+  all, a 2-molecule/1-bond pattern goes through the
+  `count_2mol_1bond_fc` specialization, and only what is left falls to
+  the generic BFS. The seeding loop called the generic BFS
+  unconditionally, including for patterns whose `FastMatchSlot` had been
+  built a few lines above it in the same function. The generic path
+  allocates per call — `bond_infos`, a vector-of-vectors adjacency, a
+  `std::function` closure per seed embedding, and inside
+  `count_embeddings_single` a `std::vector<bool>` and a vector-of-vectors
+  of candidates — and the init profile was about half allocator traffic
+  as a result. Both callers now share one `tracked_obs_contrib`, so
+  seeding gets the shortcuts and the two can no longer answer
+  differently.
+
+  The Species per-complex seeding also deduped complexes with a fresh
+  `std::unordered_set<int>` — the same thing #62 replaced in
+  `evaluate_observable`, in the other copy of that walk. It now uses the
+  same generation stamp.
+
+  Measured on `error.bngl` at `scale=100`, `t_end=2400, n_steps=240`, for
+  a byte-identical `.gdat`:
+
+  | | session build | SSA loop | process wall |
+  |---|---:|---:|---:|
+  | before | 14.0 s | 8.1 s | 22.0 s |
+  | after  |  2.7 s | 7.2 s |  9.9 s |
+
+  Session build against system size, `initialize()` alone:
+
+  | population (`I20`) | before | after |
+  |-------------------:|-------:|------:|
+  |             1.55e4 | 0.083 s | 0.024 s |
+  |             1.55e5 | 0.862 s | 0.212 s |
+  |             4.66e5 | 2.753 s | 0.676 s |
+  |             9.32e5 | 7.221 s | 1.299 s |
+  |             1.55e6 | 14.186 s | 2.369 s |
+
+  Still linear in population, which it has to be — the tracker's tables
+  are per-molecule — so this is the constant, not the exponent. The SSA
+  loop comes out about 11% faster too, reproducibly across runs; the
+  likely reason is that build no longer leaves the allocator holding
+  hundreds of millions of freed small blocks, but that was not chased
+  further.
+
+  What the seeded values are now rests on an equality rather than on a
+  second measurement, so it is checked both ways.
+  `kLocalObsTrackInvariant` (Debug and ASan builds, the gate that already
+  covers the contrib table's other fast-path read) re-derives every
+  tracked observable from scratch at init and aborts on a mismatch;
+  `init_obs_seed_test` pins the seeded values in Release, against
+  hand-computed counts over the model's seed species and against a
+  from-scratch walk of the identical initial pool.
+
 - **A three-rule model could not finish one replicate in eleven hours,
   because per-event cost grew with the molecule population (issue #62).**
   `error.bngl` is three rules over 4.7e6 molecules, every rate law a

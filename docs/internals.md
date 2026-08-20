@@ -9,6 +9,40 @@ grep for the function name to confirm.
 For BNGL semantics and what is supported / refused, see `model_semantics.md`.
 For the dev-time profiler, see the preamble in `cpp/rulemonkey/engine_profile.hpp`.
 
+## Session build
+
+`Engine::initialize` (near the bottom of `engine.cpp`) runs four steps,
+and their order is load-bearing:
+
+1. `init_species` — build the pool from the seed species.
+2. `init_incremental_observables` — classify each observable, build the
+   tracker's per-molecule contrib table and per-complex pass flags, and
+   settle `obs_values` for every tracked observable out of those tables
+   (`seed_tracked_obs_values`).
+3. `compute_observables(skip_tracked)` — the from-scratch walk, now only
+   for the observables the tracker does not keep.
+4. `init_rule_states` — needs `obs_values` settled, because a Function
+   rate law reads it.
+
+Step 2 comes before step 3 on purpose. Building the tracker's tables
+costs exactly the per-molecule embedding counts a full observable walk
+costs, so running the walk first and the tracker second counted every
+tracked observable twice — half of session build on a large pool
+(issue #65). It reads only the model and the pool, so it does not mind
+running before the other two.
+
+Both step 2's seeding and the per-event delta path go through
+`tracked_obs_contrib`, which owns the dispatch: a structurally
+unconstrained pattern (`T()`) contributes one per molecule of its type
+with no matching at all, a 2-molecule/1-bond pattern takes the
+`count_2mol_1bond_fc` specialization, and the rest fall to the generic
+BFS. Keep them on the shared routine — seeding used to write its own
+call and silently missed both shortcuts.
+
+`kLocalObsTrackInvariant` (Debug and ASan) proves the seeded values
+against a from-scratch walk at init, in addition to its original job on
+`evaluate_observable_on`.
+
 ## SSA event loop
 
 Public entry: `Engine::run` (lines 7099–7103) → `Impl::run_ssa`
