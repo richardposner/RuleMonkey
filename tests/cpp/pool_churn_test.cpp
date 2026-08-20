@@ -15,10 +15,13 @@
 //     the complex lookup for unbonded molecules.  A missed stamp counts
 //     one complex once per member.
 //
-// Every assertion here is exact.  `pool_churn_model.bngl` conserves
-// Xn + Yn and Zmol by construction, and its only molecule-count-changing
-// rule is a zero-order synthesis, so the population a limit stops at is
-// a fixed integer rather than a trajectory statistic.
+// Every assertion here is exact but one.  `pool_churn_model.bngl`
+// conserves Xn + Yn and Zmol by construction, and its only
+// molecule-count-changing rule is a zero-order synthesis, so the
+// population a limit stops at is a fixed integer rather than a
+// trajectory statistic.  The exception is the ±6 sd band on that
+// synthesis rule's yield, which is there to price the rule rather than
+// merely observe that it fired; it is called out at its use site.
 
 #include "rulemonkey/simulator.hpp"
 
@@ -148,11 +151,24 @@ void test_molecule_limit_stops_at_the_cap(const std::string& xml) {
 
   // Without the limit the same horizon runs far past that population —
   // otherwise the check above would pass on a limit that never engaged.
+  //
+  // This arm also prices the synthesis rule rather than merely observing
+  // that it fired — the one statistical assertion in this file.
+  // `0 -> W()` at ksyn = 10/s over 100 s makes Wn Poisson with mean 1000
+  // and sd about 32, so the band below is ±6 sd.  A rule with no
+  // reactant pattern molecule to seed on carries no per-molecule state,
+  // and the engine now gives it no `mol_data` table at all, so its
+  // propensity has nothing to come from but its rate.  This is the
+  // assertion that would notice if that stopped being true.
   rulemonkey::RuleMonkeySimulator unbounded(xml);
   unbounded.initialize(5);
   auto ur = unbounded.simulate(0.0, 100.0, 20);
-  check(series(ur, "Wn").back() > 51.0, "the unlimited run should synthesize well past 51 W (got " +
-                                            std::to_string(series(ur, "Wn").back()) + ")");
+  double const w_end = series(ur, "Wn").back();
+  check(w_end > 51.0,
+        "the unlimited run should synthesize well past 51 W (got " + std::to_string(w_end) + ")");
+  check(w_end > 800.0 && w_end < 1200.0,
+        "zero-order synthesis at 10/s over 100 s should land near 1000 W (got " +
+            std::to_string(w_end) + ")");
   unbounded.destroy_session();
 }
 

@@ -5582,8 +5582,6 @@ struct Engine::Impl {
       return;
     }
 
-    int const pool_size = pool.molecule_count();
-    rs.mol_data.assign(pool_size, PerMolRuleData{});
     rs.a_total = 0;
     rs.b_total = 0;
     rs.a_only_total = 0;
@@ -5598,6 +5596,17 @@ struct Engine::Impl {
         (rule.reactant_pattern_starts.size() > 1) ? rule.reactant_pattern_starts[1] : -1;
 
     if (seed_a >= static_cast<int>(rule.reactant_pattern.molecules.size())) {
+      // No reactant pattern molecule to seed on, so this rule has no
+      // per-molecule state at all — leave mol_data empty rather than
+      // sizing and zeroing one 80-byte entry per molecule in the pool
+      // for a table nothing will read (373 MB on a 4.7e6-molecule pool,
+      // per rule of this shape, at every session build).  The n-ary
+      // early-out above already returns without building mol_data on
+      // the same reasoning.  Every indexed read of mol_data elsewhere
+      // either bounds-checks against its size or resizes first, so an
+      // empty table is the same "no entry for this molecule" answer a
+      // zeroed one gives.
+      rs.mol_data.clear();
       // Synthesis rule (molecularity=0): propensity is just the rate
       if (rule.molecularity == 0) {
         double const rate = evaluate_rate(rule);
@@ -5607,6 +5616,8 @@ struct Engine::Impl {
       }
       return;
     }
+
+    rs.mol_data.assign(pool.molecule_count(), PerMolRuleData{});
 
     auto& pm_a = rule.reactant_pattern.molecules[seed_a];
 
