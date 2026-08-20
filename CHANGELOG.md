@@ -255,6 +255,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A rate law built on `reactant_N()` had a propensity of zero, so the rule
+  never fired and the run finished with no events at all (issue #59).** A
+  BNGL model that wants the match count of a rule's Nth reactant pattern
+  inside that rule's own rate law declares an empty function by that name
+  and writes it into the rate expression:
+
+  ```
+  begin functions
+     reactant_1()
+     reactant_2()
+     NucF()=if(Dimer<1,kNuc,0)
+  end functions
+  A(b) + A(b) -> A(b!1).A(b!1)   reactant_1()*reactant_2()*NucF()
+  ```
+
+  BNG2 emits both placeholders as ordinary functions with an empty
+  `<Expression>`, so nothing in the XML says what they mean — the name is
+  the whole convention, and NFsim reads it the same way. RM read them as
+  what they literally are, a function with no body, i.e. the constant zero,
+  so every rate law built on one evaluated to zero. The rule's propensity
+  was zero, no reaction ever fired, and nothing was reported: the run
+  finished instantly with the initial condition unchanged and an exit code
+  of zero. The rate law is not a total rate, so the count the placeholder
+  supplies is multiplied in on top of the ordinary mass-action count, which
+  is what NFsim does and what RM now does.
+
+  The engine resolves the placeholder against the rule being priced, using
+  the same per-pattern match count that already multiplies the rate, and
+  the load-time walk records per rule which counts its rate function reads
+  so models that never mention the construct pay nothing.  A placeholder is
+  not reported as a function: it has no value outside the rule that reads
+  it, and NFsim drops an empty-bodied declaration rather than creating a
+  function for one, so `function_names()`, `get_function_values()`,
+  `Result::function_names` and `rm_driver --print-functions` carry no column
+  named after one.  Rate laws that read a placeholder, `_rateLaw1` and the
+  like, report the value the engine actually uses. Two shapes are
+  refused at load rather than resolved to zero: a count of a reactant the
+  rule does not have (`reactant_2()` on a one-reactant rule), and a count
+  read from a rate law that is also a local, per-instance function.
+
+  A third shape warns. A rate law that is not a total rate states the rate
+  *per set of reactants*, so the propensity is that value times the reactant
+  match counts, and `reactant_N()` supplies those same counts a second time
+  inside the rate. A bimolecular rule written `reactant_1()*reactant_2()*k`
+  is therefore priced at `(N1*N2)^2 * k`, not `N1*N2*k`, which is not what
+  the BNGL source reads like. NFsim does the same thing, so RM is not
+  diverging and does not refuse; the warning exists so that reading is named
+  at load instead of found by wondering why a rate constant is off by orders
+  of magnitude. `TotalRate` is the one shape where the construct means what
+  it looks like — there the rate function states the whole propensity, so
+  `reactant_1()*k` is exactly mass action at `k` — and the warning is silent
+  there. Verified against NFsim on a `TotalRate` model: RM 35.8, NFsim 37.7
+  over 20 seeds each, against the `100*exp(-1) = 36.8` the law predicts.
+
+  Reported on `actin_branch_forFitToData.bngl`, whose only initially
+  possible reaction is a nucleation rule of exactly this shape, so the whole
+  model was inert. It now nucleates and grows a filament, and over twelve
+  seeds its subunit count at `t = 10` averages 78.3 against NFsim's 73.9,
+  agreeing inside the seed-to-seed spread. The regression test measures the
+  propensity itself rather than just checking that something fires: running
+  400 replicates of the reported reproducer to exactly the mean waiting time
+  of the expected propensity, 62.3% of them have fired against the 63.2% the
+  rate predicts.
+
 - **A pure-context reactant pattern carrying a per-molecule local function
   tag was priced at the lowest-id matching molecule, so two identical
   complexes charged different rates (issue #52).** #33 gives a reactant

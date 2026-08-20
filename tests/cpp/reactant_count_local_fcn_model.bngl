@@ -1,0 +1,28 @@
+# A reactant count read from a rate law that is also a local (per-instance)
+# function.  RM resolves reactant counts for whole-rule rate functions only,
+# so it refuses this model at load rather than evaluating the placeholder as
+# zero on every instance.
+begin model
+begin parameters
+  k 1e-3
+end parameters
+begin molecule types
+  A(s~0~1,m~0~1)
+end molecule types
+begin species
+  A(s~0,m~1) 100
+end species
+begin observables
+  Molecules Aon A(m~1)
+end observables
+begin functions
+  reactant_1()
+  lf(x)=k*Aon(x)
+end functions
+begin reaction rules
+  A(s~0,m~1)%x -> A(s~1,m~1)  lf(x)*reactant_1()
+end reaction rules
+end model
+begin actions
+writeXML()
+end actions

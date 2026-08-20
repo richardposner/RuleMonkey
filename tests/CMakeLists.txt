@@ -151,6 +151,27 @@ add_test(
         ${_rulemonkey_test_dir}/cpp/local_fcn_mixed_ref_model.xml
 )
 
+# `reactant_N()` in a rate law (issue #59): the empty-bodied placeholder a
+# BNGL model declares when it wants the match count of a rule's Nth reactant
+# pattern inside that rule's own rate law.  RM read it as the constant zero,
+# so any rate law built on one evaluated to zero and the rule never fired —
+# no exception, no warning, just a run with no events.  Pins the reported
+# rate value, the propensity behind it (measured as the firing fraction at
+# the mean waiting time), the coverage model's placeholder arms against
+# their observable-only controls, and the two shapes RM refuses at load.
+add_executable(reactant_count_rate_test cpp/reactant_count_rate_test.cpp)
+target_link_libraries(reactant_count_rate_test PRIVATE rulemonkey)
+
+add_test(
+    NAME reactant_count_rate_test
+    COMMAND reactant_count_rate_test
+        ${_rulemonkey_test_dir}/cpp/reactant_count_nucleation_model.xml
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_reactant_count_rate.xml
+        ${_rulemonkey_test_dir}/cpp/reactant_count_arity_model.xml
+        ${_rulemonkey_test_dir}/cpp/reactant_count_local_fcn_model.xml
+        ${_rulemonkey_test_dir}/cpp/reactant_count_total_rate_model.xml
+)
+
 # Cost of that rescan (issue #40): #38 made a local rate reading ANY global
 # rescan every instance after every event, when what gates an O(N) rescan is
 # whether the global actually moved — and a bare observable is usually a

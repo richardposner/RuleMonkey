@@ -1,0 +1,28 @@
+# A rate law that asks for a reactant the rule does not have: reactant_2()
+# on a rule with one reactant pattern.  There is no second reactant to
+# count, so the placeholder would read zero and the rule would never fire.
+# RM refuses the model at load instead.
+begin model
+begin parameters
+  k 1e-3
+end parameters
+begin molecule types
+  A(s~0~1)
+end molecule types
+begin species
+  A(s~0) 100
+end species
+begin observables
+  Molecules Aoff A(s~0)
+end observables
+begin functions
+  reactant_2()
+  kf()=k
+end functions
+begin reaction rules
+  A(s~0) -> A(s~1)  reactant_2()*kf()
+end reaction rules
+end model
+begin actions
+writeXML()
+end actions
