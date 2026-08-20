@@ -1,0 +1,57 @@
+# Regression model for issue #65.  Session build settles the tracked
+# observables out of the incremental tracker's own tables instead of
+# full-walking them a second time, so this model exists to put every
+# shape that seeding dispatches on into one pool, with pre-formed
+# complexes in the seed species so the values at t=0 are non-trivial:
+#
+#   trivial pattern (`A()`)      -> contributes one per molecule, no matching
+#   single-molecule constrained  -> count_embeddings_single
+#   two-molecule, one bond       -> the count_2mol_1bond_fc specialization
+#   multi-pattern, two seed types-> one molecule visited once, summed over patterns
+#   Species, tracked             -> per-complex pass flags
+#   Species, trivial / quantity  -> NOT tracked: the sample-time full walk
+begin model
+begin parameters
+  kon  0.01
+  koff 0.5
+  kf   0.2
+end parameters
+begin molecule types
+  A(b,s~0~1)
+  B(a)
+  C()
+end molecule types
+begin seed species
+  A(b,s~0)                50
+  A(b!1,s~1).B(a!1)       30
+  A(b!1,s~0).A(b!1,s~0)    7
+  B(a)                    20
+  C()                     10
+end seed species
+begin observables
+  Molecules Atot   A()
+  Molecules Abound A(b!+)
+  Molecules AB     A(b!1).B(a!1)
+  Molecules AorB   A() B()
+  Species   ABsp   A(b!1).B(a!1)
+  Species   Csp    C()
+  Species   Apair  A()==2
+end observables
+begin functions
+  # A rate law reading a TRACKED observable, so init_rule_states settles
+  # a rule against a value seeding produced rather than one a full walk
+  # produced.  (It does not discriminate on ORDER: a dynamic rate law is
+  # re-evaluated on the next event either way, so a rule mispriced at
+  # init self-corrects.  The order is proven by the values themselves —
+  # see the test.)
+  gateC() = if(ABsp>10, 5.0, 0)
+end functions
+begin reaction rules
+  A(b,s~0) + B(a) <-> A(b!1,s~0).B(a!1)  kon, koff
+  A(b,s~0) -> A(b,s~1)  kf
+  C() -> 0  gateC()
+end reaction rules
+end model
+begin actions
+writeXML()
+end actions

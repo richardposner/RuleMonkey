@@ -182,6 +182,12 @@ inline constexpr bool kCanonicalCacheSelfCheck = false;
 // RULEMONKEY_LOCAL_OBS_SELFCHECK compile definition is set by CMakeLists.txt
 // for Debug and ASan and left unset for Release, so ctest and the guard
 // tier exercise the invariant while Release takes the bare table read.
+//
+// The same gate covers the other place a tracked observable is read out of
+// those tables instead of walked for: seed_tracked_obs_values, which settles
+// obs_values at init from the contribs and per-complex pass flags rather
+// than full-walking every tracked observable a second time (issue #65).
+// Same claim, same failure mode, so the same switch turns both proofs on.
 #ifdef RULEMONKEY_LOCAL_OBS_SELFCHECK
 inline constexpr bool kLocalObsTrackInvariant = true;
 #else

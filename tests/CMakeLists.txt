@@ -70,6 +70,20 @@ add_test(
     COMMAND pool_churn_test ${_rulemonkey_test_dir}/cpp/pool_churn_model.xml
 )
 
+# Observable values at session build (issue #65): the tracked observables are
+# settled out of the incremental tracker's tables instead of being full-walked
+# a second time, so what a run starts from is now derived rather than measured.
+# The model's seed species make every t=0 count hand-computable, and the second
+# check compares the seeded reading against a from-scratch walk of the same
+# initial pool across two sessions.
+add_executable(init_obs_seed_test cpp/init_obs_seed_test.cpp)
+target_link_libraries(init_obs_seed_test PRIVATE rulemonkey)
+
+add_test(
+    NAME init_obs_seed_test
+    COMMAND init_obs_seed_test ${_rulemonkey_test_dir}/cpp/init_obs_seed_model.xml
+)
+
 # Homodimer rate parity: small-N steady state of A+A<->AA must match the
 # chemical-master-equation analytic mean.  Pins down the same_components
 # branch in compute_propensity (deflated `(ab²−ab_sq)/2`) plus the
