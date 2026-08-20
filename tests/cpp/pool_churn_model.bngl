@@ -1,0 +1,53 @@
+# Regression model for issue #62.  Three shapes in one pool, chosen so
+# every assertion the test makes is exact rather than statistical:
+#
+#   X() <-> Y()   a type change, i.e. a delete + an add on every fire.
+#                 Xn + Yn is conserved, so a molecule lost from (or
+#                 stranded in) a type index shows up immediately.
+#   Z(s) + Z(s)   builds two-molecule complexes alongside free monomers,
+#                 so a Species walk over `Z()` sees both the singleton
+#                 and the bonded shape.
+#   0 -> W()      pure synthesis: the only rule that changes the total
+#                 molecule count, which makes the population a molecule
+#                 limit stops at exactly predictable.
+begin model
+begin parameters
+  kf   1.0
+  kr   1.0
+  kon  0.002
+  koff 1.0
+  ksyn 10.0
+  X0   200
+  Z0   100
+end parameters
+begin molecule types
+  X()
+  Y()
+  Z(s)
+  W()
+end molecule types
+begin seed species
+  X()  X0
+  Y()  0
+  Z(s) Z0
+  W()  0
+end seed species
+begin observables
+  Molecules Xn    X()
+  Molecules Yn    Y()
+  Molecules Zmol  Z()
+  Species   Zsp   Z()
+  Species   Zdim  Z(s!1).Z(s!1)
+  Species   Zpair Z()==2
+  Molecules Wn    W()
+end observables
+begin reaction rules
+  X() -> Y() kf
+  Y() -> X() kr
+  Z(s) + Z(s) <-> Z(s!1).Z(s!1) kon, koff
+  0 -> W() ksyn
+end reaction rules
+end model
+begin actions
+writeXML()
+end actions

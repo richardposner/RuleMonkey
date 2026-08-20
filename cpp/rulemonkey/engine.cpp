@@ -181,7 +181,11 @@ public:
     mark_cx_dirty(cx); // a freshly born complex has no cached canonical label
     cx_moves_.push_back(mol_id);
 
+    if (mol_id >= static_cast<int>(type_mol_pos_.size()))
+      type_mol_pos_.resize(molecules_.size(), -1);
+    type_mol_pos_[mol_id] = static_cast<int>(type_mol_index_[type_index].size());
     type_mol_index_[type_index].push_back(mol_id);
+    ++active_mol_count_;
     return mol_id;
   }
 
@@ -211,9 +215,33 @@ public:
       }
     }
 
-    // Remove from type index
+    // Remove from type index.  Swap-with-back, not an order-preserving
+    // erase: a linear `std::remove` here is O(population of the type),
+    // paid on every deletion, and that alone made per-event cost grow
+    // with system size (issue #62).  Nothing downstream depends on the
+    // list's order — `molecules_of_type` consumers either scan it whole
+    // or sample from it by weight, and the Fenwick samplers are keyed by
+    // molecule id, not by position — so the cheap removal is free of
+    // semantic consequence.  `type_mol_pos_` keeps each live molecule's
+    // slot so the swap is O(1); `kPoolIndexSelfCheck` (Debug and ASan
+    // builds) proves that slot against the list itself on every removal.
     auto& tlist = type_mol_index_[mol.type_index];
-    tlist.erase(std::remove(tlist.begin(), tlist.end(), mol_id), tlist.end());
+    int const pos = type_mol_pos_[mol_id];
+    if constexpr (kPoolIndexSelfCheck) {
+      if (pos < 0 || pos >= static_cast<int>(tlist.size()) || tlist[pos] != mol_id) {
+        fprintf(stderr,
+                "[pool_index_selfcheck] type_mol_pos_ out of step: mol=%d type=%d "
+                "pos=%d list_size=%d list_at_pos=%d\n",
+                mol_id, mol.type_index, pos, static_cast<int>(tlist.size()),
+                (pos >= 0 && pos < static_cast<int>(tlist.size())) ? tlist[pos] : -1);
+        std::abort();
+      }
+    }
+    int const moved = tlist.back();
+    tlist[pos] = moved;
+    type_mol_pos_[moved] = pos;
+    tlist.pop_back();
+    type_mol_pos_[mol_id] = -1;
 
     // Free component slots
     for (int const cid : mol.comp_ids) {
@@ -226,6 +254,17 @@ public:
     mol.comp_ids.clear();
     free_mol_ids_.push_back(mol_id);
     cx_moves_.push_back(mol_id);
+    --active_mol_count_;
+    if constexpr (kPoolIndexSelfCheck) {
+      // Independent reading: every inactive slot is on the free list and
+      // nothing else is, so the arena minus the free list is the live count.
+      auto const independent = static_cast<int>(molecules_.size() - free_mol_ids_.size());
+      if (active_mol_count_ != independent) {
+        fprintf(stderr, "[pool_index_selfcheck] active_mol_count_ drift: tally=%d arena-free=%d\n",
+                active_mol_count_, independent);
+        std::abort();
+      }
+    }
   }
 
   void set_state(int comp_id, int new_state) {
@@ -330,13 +369,12 @@ public:
     return (it != cycle_bond_count_.end()) ? it->second : 0;
   }
 
-  int active_molecule_count() const {
-    int n = 0;
-    for (auto& m : molecules_)
-      if (m.active)
-        ++n;
-    return n;
-  }
+  // O(1).  The SSA loop consults this every event when a molecule limit
+  // is set, so a scan of the pool here turned `-gml` into a per-event
+  // O(population) tax even when the cap could never bind (issue #62).
+  // Maintained by add_molecule / delete_molecule and recomputed on
+  // load_state.
+  int active_molecule_count() const { return active_mol_count_; }
 
   int molecule_count() const { return static_cast<int>(molecules_.size()); }
 
@@ -452,12 +490,19 @@ public:
     for (int i = 0; i < n; ++i)
       is >> free_comp_ids_[i];
 
-    // Rebuild type_mol_index from loaded molecules
+    // Rebuild type_mol_index (and its position side table, plus the live
+    // molecule tally) from loaded molecules
     type_mol_index_.clear();
     type_mol_index_.resize(model_.molecule_types.size());
+    type_mol_pos_.assign(molecules_.size(), -1);
+    active_mol_count_ = 0;
     for (int i = 0; i < static_cast<int>(molecules_.size()); ++i) {
-      if (molecules_[i].active)
-        type_mol_index_[molecules_[i].type_index].push_back(i);
+      if (molecules_[i].active) {
+        auto& tlist = type_mol_index_[molecules_[i].type_index];
+        type_mol_pos_[i] = static_cast<int>(tlist.size());
+        tlist.push_back(i);
+        ++active_mol_count_;
+      }
     }
 
     // P7: recompute cycle-bond counts per complex from the restored graph,
@@ -697,6 +742,11 @@ private:
   std::unordered_map<int, std::vector<int>> complex_members_;
   int next_complex_id_ = 0;
   std::vector<std::vector<int>> type_mol_index_;
+  // mol_id -> its slot in type_mol_index_[type], or -1 when the molecule
+  // is not live.  Sized by the molecule arena's high-water mark, so a
+  // reused mol_id slot is already addressable.
+  std::vector<int> type_mol_pos_;
+  int active_mol_count_ = 0;
   std::vector<int> free_mol_ids_;
   std::vector<int> free_comp_ids_;
 
@@ -3351,6 +3401,17 @@ struct Engine::Impl {
   // for every mid of a type referenced by a tracked Species obs.
   std::vector<int> species_mid_prev_cx;
   bool species_incr_any_tracked = false;
+
+  // Scratch for the Species full-walk in evaluate_observable: a
+  // generation stamp per molecule id marking "the complex this molecule
+  // belongs to has already been counted for the pattern in flight".
+  // Molecule ids are dense, so this replaces a per-call
+  // unordered_set<int> of complex ids — see the comment at the use site.
+  std::vector<uint64_t> obs_walk_cx_stamp;
+  uint64_t obs_walk_cx_gen = 0;
+  // One-element stand-in for the member list of a singleton complex, so
+  // the walk's inner loop stays a single code path.
+  std::vector<int> obs_walk_singleton_scratch{-1};
 
   // Max pattern diameter across all tracked obs.  Determines the BFS
   // depth required for incremental contrib updates: a bond/state
@@ -6723,20 +6784,31 @@ struct Engine::Impl {
           if (rap_po)
             rap_po->species_branch_calls++;
         }
-        // Species: count complexes containing a match
-        std::unordered_set<int> counted_cx;
+        // Species: count complexes containing a match.
+        //
+        // Dedupe by stamping the molecules of each complex already
+        // visited, not by inserting its complex id into a set.  The set
+        // was rebuilt from empty on every call and grew one node per
+        // complex, so a sample of a million-complex pool spent more time
+        // hashing than counting matches — and every untracked Species
+        // observable pays this walk at every sample time (issue #62).
+        // Molecule ids are dense, so a generation-stamped side table is
+        // an allocation-free equivalent.
+        ++obs_walk_cx_gen;
+        if (obs_walk_cx_stamp.size() < static_cast<size_t>(pool.molecule_count()))
+          obs_walk_cx_stamp.resize(pool.molecule_count(), 0);
         for (int const mid : pool.molecules_of_type(pm.type_index)) {
           if (!pool.molecule(mid).active)
             continue;
-          int const cx = pool.complex_of(mid);
-          if (counted_cx.count(cx)) {
+          if (obs_walk_cx_stamp[mid] == obs_walk_cx_gen) {
             if constexpr (kRecordAtProfile) {
               if (rap_po)
                 rap_po->n_counted_cx_hits++;
             }
             continue;
           }
-          counted_cx.insert(cx);
+          int const cx = pool.complex_of(mid);
+          obs_walk_cx_stamp[mid] = obs_walk_cx_gen;
           if constexpr (kRecordAtProfile) {
             if (rap_po)
               rap_po->n_cx_visited++;
@@ -6745,13 +6817,29 @@ struct Engine::Impl {
           // Count total pattern matches across the entire complex.
           // For quantity constraints like "species with exactly N matches",
           // we need the complex-wide total, not just one molecule's count.
+          // A molecule with no bonded component is alone in its complex,
+          // so resolving `cx` through the complex map would only hand
+          // back {mid}.  Free monomers are the bulk of most pools, and
+          // that map lookup was the last per-molecule hash in this walk.
+          bool cx_is_singleton = true;
+          for (int const cid : pool.molecule(mid).comp_ids) {
+            if (pool.component(cid).bond_partner >= 0) {
+              cx_is_singleton = false;
+              break;
+            }
+          }
+          obs_walk_singleton_scratch[0] = mid;
+          const std::vector<int>& cx_members =
+              cx_is_singleton ? obs_walk_singleton_scratch : pool.molecules_in_complex(cx);
+
           int match_count = 0;
-          auto cx_members = pool.molecules_in_complex(cx);
           for (int const m : cx_members) {
             if constexpr (kRecordAtProfile) {
               if (rap_po)
                 rap_po->n_cx_members_walked++;
             }
+            if (m >= 0 && m < static_cast<int>(obs_walk_cx_stamp.size()))
+              obs_walk_cx_stamp[m] = obs_walk_cx_gen;
             if (!pool.molecule(m).active)
               continue;
             if (pool.molecule(m).type_index != pm.type_index)
@@ -9998,12 +10086,6 @@ struct Engine::Impl {
       ++rule_fire_counts[selected];
       auto t2 = std::chrono::steady_clock::now();
 
-      // Molecule limit check
-      if (molecule_limit > 0 && pool.active_molecule_count() > molecule_limit) {
-        // Exceeded limit — stop simulation
-        break;
-      }
-
       // Update rate-dependent observables BEFORE recomputing propensities,
       // so dynamic rate laws see the post-event observable values.
       // Tracked obs (Molecules per-mid delta + Species dirty-cx) are
@@ -10017,6 +10099,21 @@ struct Engine::Impl {
       if (!rate_dep_obs_indices.empty())
         compute_rate_dependent_observables();
       auto t3 = std::chrono::steady_clock::now();
+
+      // Molecule limit check.  After the observable refresh, not before:
+      // the event that breached the limit is not rolled back, so leaving
+      // it out of obs_values left the trailing sample rows one event
+      // behind the pool they describe — and only for the incrementally
+      // tracked observables, since the untracked ones full-walk the live
+      // pool at sample time.  Recomputing propensities we are about to
+      // throw away is the one event of wasted work this costs.
+      if (molecule_limit > 0 && pool.active_molecule_count() > molecule_limit) {
+        timing_sample += std::chrono::duration<double>(t1 - t0).count();
+        timing_fire += std::chrono::duration<double>(t2 - t1).count();
+        timing_obs += std::chrono::duration<double>(t3 - t2).count();
+        ++event_count;
+        break;
+      }
 
       // Incremental update (recomputes propensities using fresh observables)
       incremental_update(affected);

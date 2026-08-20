@@ -55,6 +55,21 @@ add_test(
         ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_clamped_species.xml
 )
 
+# Pool bookkeeping under churn (issue #62): the type index, the live-molecule
+# tally, and the Species complex walk each trade an O(population) scan for an
+# O(1) side table, so each can now be silently wrong rather than merely slow.
+# The model conserves Xn+Yn and Zmol by construction and changes its total
+# molecule count only through a zero-order synthesis, which makes every
+# assertion — including the population a molecule limit stops at — an exact
+# integer.
+add_executable(pool_churn_test cpp/pool_churn_test.cpp)
+target_link_libraries(pool_churn_test PRIVATE rulemonkey)
+
+add_test(
+    NAME pool_churn_test
+    COMMAND pool_churn_test ${_rulemonkey_test_dir}/cpp/pool_churn_model.xml
+)
+
 # Homodimer rate parity: small-N steady state of A+A<->AA must match the
 # chemical-master-equation analytic mean.  Pins down the same_components
 # branch in compute_propensity (deflated `(ab²−ab_sq)/2`) plus the
