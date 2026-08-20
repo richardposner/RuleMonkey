@@ -381,6 +381,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     — but nothing else in `write_manifest` could fail, so it was the
     whole failure.
 
+  Windows checkouts could never have passed the gate at all, and this is
+  the first change that would have noticed: Git for Windows converts text
+  files to CRLF on checkout, so every `.tsv` and `.xml` under a reference
+  root hashes differently there — CI's Windows leg reported 306 of 306
+  `feature_coverage` files as drifted, against a tree that is pristine
+  (the live hash it printed is exactly the CRLF rewrite of the committed
+  bytes). A new `.gitattributes` marks the hashed trees `-text`, so their
+  bytes survive a checkout unchanged everywhere. `-text` rather than
+  `text eol=lf`: normalising on the way in as well would mean a reference
+  regenerated on Windows — Python text mode writes CRLF — is committed as
+  something other than what its author hashed, and the manifest would
+  fault on the next fresh checkout.
+
   `ctest` gains `ref_manifest_test` (`tests/harness/test_ref_manifest.py`,
   stdlib-only, no `rm_driver`), which pins the coverage rule on a
   synthetic tree and verifies every committed `MANIFEST.tsv` against the

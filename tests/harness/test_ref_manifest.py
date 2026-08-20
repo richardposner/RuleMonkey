@@ -24,6 +24,7 @@ import contextlib
 import io
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 
@@ -31,6 +32,32 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file_
 sys.path.insert(0, os.path.join(REPO_ROOT, "harness"))
 
 import _ref_manifest as rm  # noqa: E402
+
+
+def manifest_roots() -> list[str]:
+    """Every directory under `tests/` that carries a MANIFEST.tsv."""
+    roots = []
+    for dirpath, dirnames, filenames in os.walk(os.path.join(REPO_ROOT, "tests")):
+        dirnames[:] = [d for d in dirnames if d not in rm.EXCLUDED_DIRS]
+        if rm.MANIFEST_FILENAME in filenames:
+            roots.append(dirpath)
+    return sorted(roots)
+
+
+def git(*args: str, stdin: str = "") -> str | None:
+    """`git ...` inside the repo; None when git or the checkout is missing."""
+    try:
+        proc = subprocess.run(
+            ["git", *args],
+            cwd=REPO_ROOT,
+            input=stdin,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return proc.stdout if proc.returncode == 0 else None
 
 
 def write(path: str, text: str) -> None:
@@ -217,14 +244,10 @@ def test_committed_reference_trees_verify() -> None:
     that gates on gitignored files fails here before anyone waits on a
     parity run to tell them.
     """
-    roots = []
-    for dirpath, dirnames, filenames in os.walk(os.path.join(REPO_ROOT, "tests")):
-        dirnames[:] = [d for d in dirnames if d not in rm.EXCLUDED_DIRS]
-        if rm.MANIFEST_FILENAME in filenames:
-            roots.append(dirpath)
+    roots = manifest_roots()
     assert roots, "no MANIFEST.tsv found under tests/"
 
-    for root in sorted(roots):
+    for root in roots:
         rel = os.path.relpath(root, REPO_ROOT)
         ok, problems = rm.verify_manifest(root)
         assert ok, f"{rel}: {len(problems)} problem(s); first: {problems[0]}"
@@ -234,6 +257,35 @@ def test_committed_reference_trees_verify() -> None:
         with open(os.path.join(root, rm.MANIFEST_FILENAME)) as f:
             roots_named = [ln for ln in f.read().splitlines() if ln.startswith("# root ")]
         assert roots_named == [f"# root {rm._header_root(root)}"], f"{rel}: {roots_named}"
+
+
+def test_hashed_trees_check_out_byte_for_byte() -> None:
+    """`.gitattributes` has to keep eol conversion off under every manifest.
+
+    The gate hashes bytes, and Git for Windows checks text files out as
+    CRLF by default — which rewrites every `.tsv` and `.xml` in a
+    reference tree and faults the whole tree as drifted. Only `git` can
+    answer what a checkout would do, so this is skipped where there is no
+    checkout to ask about (an unpacked source tarball).
+    """
+    if git("rev-parse", "--git-dir") is None:
+        print("      (skipped: no git checkout to ask)", flush=True)
+        return
+
+    paths = []
+    for root in manifest_roots():
+        entries = rm.read_manifest(os.path.join(root, rm.MANIFEST_FILENAME))
+        assert entries, f"{root}: empty manifest"
+        rel = os.path.relpath(root, REPO_ROOT).replace(os.sep, "/")
+        paths.extend(f"{rel}/{name}" for name in sorted(entries))
+
+    # One --stdin call for all ~700 paths; a process per file costs a minute.
+    out = git("check-attr", "text", "--stdin", stdin="\n".join(paths) + "\n")
+    assert out is not None, "git check-attr failed"
+    lines = out.splitlines()
+    assert len(lines) == len(paths), f"{len(lines)} answers for {len(paths)} paths"
+    for i, path in enumerate(paths):
+        assert lines[i] == f"{path}: text: unset", lines[i]
 
 
 TESTS = [
@@ -246,6 +298,7 @@ TESTS = [
     test_enforce_exits_2_with_the_callers_own_regen_flags,
     test_problem_list_is_capped,
     test_committed_reference_trees_verify,
+    test_hashed_trees_check_out_byte_for_byte,
 ]
 
 
