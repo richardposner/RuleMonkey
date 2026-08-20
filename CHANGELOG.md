@@ -317,6 +317,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A rule with no reactant pattern to seed on still got a per-molecule
+  table, one 80-byte entry per molecule in the pool, that nothing ever
+  read (issue #67).** `rescan_all_molecules_for_rule` sized and zeroed
+  `rs.mol_data` before deciding whether the rule had a seed molecule at
+  all, so a zero-order synthesis (`0 -> X()`) took the allocation and the
+  373 MB of zeroing on a 4.7e6-molecule pool, then returned from the
+  early-out below it without ever indexing the table. The n-ary early-out
+  a few lines above already returned without building `mol_data`, on the
+  same reasoning; this extends that to the seedless case, and clears the
+  table rather than leaving it sized.
+
+  Every indexed read of `mol_data` elsewhere either bounds-checks against
+  its size or resizes first, so an empty table gives the same "no entry
+  for this molecule" answer a zeroed one gave.
+
+  The cost is per rule of that shape and per session build, so it shows
+  up mainly as resident memory. On `error.bngl` at 4.7e6 molecules, whose
+  one such rule is `0 -> tim()`:
+
+  | | peak RSS | session build |
+  |---|---:|---:|
+  | before | 2.21 GB | 2.26–2.39 s |
+  | after  | 1.88 GB | 2.16–2.26 s |
+
+  and on the same model with four more zero-order rules added:
+
+  | | peak RSS | session build |
+  |---|---:|---:|
+  | before | 3.46 GB | 2.67–2.72 s |
+  | after  | 1.91 GB | 2.14–2.20 s |
+
+  — i.e. the added rules now cost essentially nothing, where each one
+  used to cost 373 MB and about 0.09 s.
+
+  `pool_churn_test`'s synthesis arm is the regression guard: its
+  `0 -> W()` rule is exactly this shape, and the test pins the population
+  a molecule limit stops it at to an exact integer. That arm now also
+  prices the rule — a ±6 sd band on its Poisson yield — rather than only
+  observing that it fired, since a seedless rule's propensity has nothing
+  to come from but its rate.
+
 - **Session build counted every tracked observable twice, and seeded it the
   slow way both times (issue #65).** With the per-event costs from #62
   gone, `Engine::initialize()` was what a run spent most of its wall
