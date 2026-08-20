@@ -44,20 +44,23 @@ def manifest_roots() -> list[str]:
     return sorted(roots)
 
 
-def git(*args: str, stdin: str = "") -> str | None:
-    """`git ...` inside the repo; None when git or the checkout is missing."""
+def git(*args: str, stdin: bytes = b"") -> str | None:
+    """`git ...` inside the repo; None when git or the checkout is missing.
+
+    Binary pipes on purpose. A text-mode pipe translates newlines on the
+    way out, so the `\n` separators a `--stdin` invocation feeds git
+    arrive as `\r\n` on Windows and the `\r` becomes part of the
+    filename git answers about.
+    """
     try:
         proc = subprocess.run(
-            ["git", *args],
-            cwd=REPO_ROOT,
-            input=stdin,
-            capture_output=True,
-            text=True,
-            timeout=60,
+            ["git", *args], cwd=REPO_ROOT, input=stdin, capture_output=True, timeout=60
         )
     except (OSError, subprocess.SubprocessError):
         return None
-    return proc.stdout if proc.returncode == 0 else None
+    if proc.returncode != 0:
+        return None
+    return proc.stdout.decode("utf-8", "replace")
 
 
 def write(path: str, text: str) -> None:
@@ -279,13 +282,28 @@ def test_hashed_trees_check_out_byte_for_byte() -> None:
         rel = os.path.relpath(root, REPO_ROOT).replace(os.sep, "/")
         paths.extend(f"{rel}/{name}" for name in sorted(entries))
 
+    # Positive control, asked in the same call: a file outside every hashed
+    # tree must NOT come back `unset`. Without it this test would still pass
+    # if the attribute stopped discriminating — a repo-wide `-text` rule, or
+    # a git that answered `unset` for everything.
+    control = "README.md"
+    paths.append(control)
+
     # One --stdin call for all ~700 paths; a process per file costs a minute.
-    out = git("check-attr", "text", "--stdin", stdin="\n".join(paths) + "\n")
+    # -z on both ends: NUL-separated in, NUL-separated `path attr value`
+    # triples out, so no newline translation and no path quoting to undo.
+    out = git("check-attr", "-z", "text", "--stdin", stdin=("\0".join(paths) + "\0").encode())
     assert out is not None, "git check-attr failed"
-    lines = out.splitlines()
-    assert len(lines) == len(paths), f"{len(lines)} answers for {len(paths)} paths"
-    for i, path in enumerate(paths):
-        assert lines[i] == f"{path}: text: unset", lines[i]
+    fields = out.split("\0")
+    assert fields.pop() == "", f"-z output did not end on NUL: {out[-40:]!r}"
+    assert len(fields) == 3 * len(paths), f"{len(fields)} fields for {len(paths)} paths"
+    for i, path in enumerate(paths[:-1]):
+        triple = tuple(fields[3 * i : 3 * i + 3])
+        assert triple == (path, "text", "unset"), triple
+
+    got = tuple(fields[-3:])
+    assert got[:2] == (control, "text"), got
+    assert got[2] != "unset", f"{control} reads as {got[2]}; the check cannot discriminate"
 
 
 TESTS = [
