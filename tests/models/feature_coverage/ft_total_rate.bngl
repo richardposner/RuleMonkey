@@ -5,14 +5,14 @@
 #          a straight line instead of an exponential.  That is the whole
 #          content of the keyword, and it is what every arm here measures.
 #
-#          RM refuses TotalRate models at load, because BioNetGen does not
-#          implement the keyword for network simulations and NFsim's reading
-#          of it differs from RM's on rules whose reactant pattern has
-#          interchangeable components (see COVERAGE.md).  The harness runs
-#          this model with --ignore-unsupported so the propensity path stays
-#          covered.  Every arm below deliberately avoids interchangeable
-#          components, which is exactly the region where RM and NFsim have
-#          one answer between them.
+#          RM warns on every TotalRate rule, because BioNetGen never
+#          implemented the keyword for network simulations and so nothing can
+#          check such a model against BioNetGen's own result (see
+#          COVERAGE.md).  It REFUSES only the rules where RM and NFsim
+#          actually disagree: those whose reactant pattern can match one
+#          molecule more than once.  Every arm below names its components
+#          distinctly and so avoids that, which is exactly the region where
+#          RM and NFsim have one answer between them.
 #
 # Oracle:  NFsim, plus a closed form per arm.
 #            RA  constant rate kd, so Aoff falls in a straight line and

@@ -1,0 +1,34 @@
+# A TotalRate rule whose reactant pattern can match one molecule in more
+# than one way: C declares two components named s, and the pattern names
+# one of them, so it lands on either.
+#
+# This is the shape where RM and NFsim disagree.  NFsim expands the rule
+# into one reaction class per symmetry permutation and gives each the whole
+# total rate, so it runs at 2x this rate law; RM takes the rate law as the
+# whole propensity.  BioNetGen cannot settle it, having never implemented
+# TotalRate for network simulations.  RM refuses the model.
+#
+# Measured NFsim event rates against kf on this pattern shape: 1.00x with
+# one free site, 2.02x with two, 2.98x with three.
+begin model
+begin parameters
+  kf 0.5
+end parameters
+begin molecule types
+  C(s,s)
+  D(t)
+end molecule types
+begin species
+  C(s,s) 200
+  D(t)   400
+end species
+begin observables
+  Molecules Dfree D(t)
+end observables
+begin reaction rules
+  C(s) + D(t) -> C(s!1).D(t!1)  kf TotalRate
+end reaction rules
+end model
+begin actions
+writeXML()
+end actions

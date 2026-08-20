@@ -53,13 +53,14 @@ For these features, RM is tested against BNG2 ODE (via `generate_network`) as th
 The models are designed with strong constraint effects so RM-vs-NFsim diverges dramatically (confirming NFsim ignores the feature)
 while RM-vs-ODE matches (confirming RM correctly implements the feature).
 
-## Refused at load (Tier-0)
+## TotalRate: warned everywhere, refused where the engines disagree
 
-| Feature | XML Element | Model | Notes |
-|---------|-------------|-------|-------|
-| TotalRate modifier | RateLaw/@totalrate="1" | ft_total_rate | Refused because the construct has no agreed meaning — see below. `--ignore-unsupported` runs RM's reading, which is what the model in this suite exercises. |
+| Feature | XML Element | Model | Status |
+|---------|-------------|-------|--------|
+| TotalRate modifier | RateLaw/@totalrate="1" | ft_total_rate | PASS, with a load-time Warn |
+| TotalRate on a pattern that can match a molecule more than once | RateLaw/@totalrate="1" | (tests/cpp/total_rate_symmetric_model) | Refused at load (Tier-0 Error) |
 
-### Why TotalRate is refused
+### Why
 
 BioNetGen does not implement TotalRate for network simulations. Its own source
 says so, in `RxnRule.pm`:
@@ -91,12 +92,26 @@ empty. BNG2's network expansion writes the statistical factor per species and
 live (`3*_rateLaw1`, `2*_rateLaw1`, `_rateLaw1`), which implies a third number
 again.
 
-So all three disagree, and RM refuses rather than pick one silently.
-`--ignore-unsupported` runs the reading BioNetGen documents in `RateLaw.pm`
-("If true, this ratelaw specifies the Total reaction rate") — the propensity is
-the rate law's value. That agrees with NFsim on every rule whose reactant
-patterns have no interchangeable components, which is what `ft_total_rate`
-covers.
+So all three disagree, and RM refuses those rules rather than pick one
+silently. The test is structural and deliberately conservative: a TotalRate
+rule is refused when any reactant pattern touches a component whose molecule
+type declares two or more of that name, which is what lets a pattern component
+land on more than one slot. `--ignore-unsupported` still runs it, on RM's
+reading.
+
+Every **other** TotalRate rule warns rather than being refused. RM reads the
+keyword the way BioNetGen documents it in `RateLaw.pm` ("If true, this ratelaw
+specifies the Total reaction rate") — the propensity is the rate law's value —
+and NFsim computes the same thing, so the model runs and the two engines agree.
+The warning is there because nothing can check such a model against BioNetGen's
+own result.
+
+Refusing every TotalRate rule was considered and rejected: it would take out six
+models from NFsim's own validation suite (`v21`–`v26`, in
+`tests/models/nfsim_basicmodels/`), `oscSystem` in `tests/models/corpus/`, and
+around eleven curated RuleHub biology examples — all of which RM currently runs
+in agreement with NFsim. Verified directly over 12 seeds each: `oscSystem` worst
+z = 1.04, `r21` z = 1.40.
 
 TotalRate cannot combine with local functions or with MM: BNG2 refuses both
 ("TotalRate keyword is not compatible with local functions" / "with MM type

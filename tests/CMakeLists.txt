@@ -455,29 +455,40 @@ if(TARGET rm_driver)
     set_tests_properties(rm_driver_functions_print_flag PROPERTIES
         PASS_REGULAR_EXPRESSION "frac_P.*modulator.*phos_rate")
 
-    # TotalRate is refused at load.  BioNetGen does not implement the keyword
-    # for network simulations, so no BNG2 result exists to check such a model
-    # against, and NFsim multiplies the total rate by the number of symmetry
-    # permutations it expands the rule into.  RM names that rather than
-    # silently picking one of the readings.
+    # A TotalRate rule whose reactant pattern can match one molecule more than
+    # once is refused: NFsim expands it into one reaction class per symmetry
+    # permutation and gives each the whole total rate (2x this rate law on
+    # this model), RM takes the rate law as the whole propensity, and
+    # BioNetGen — which never implemented TotalRate for network simulations —
+    # cannot settle it.
     add_test(
-        NAME rm_driver_refuses_total_rate
+        NAME rm_driver_refuses_symmetric_total_rate
+        COMMAND rm_driver
+            ${_rulemonkey_test_dir}/cpp/total_rate_symmetric_model.xml
+            10 4 7
+    )
+    set_tests_properties(rm_driver_refuses_symmetric_total_rate PROPERTIES WILL_FAIL TRUE)
+
+    # …and --ignore-unsupported runs it, on RM's reading.
+    add_test(
+        NAME rm_driver_symmetric_total_rate_ignore_unsupported
+        COMMAND rm_driver
+            ${_rulemonkey_test_dir}/cpp/total_rate_symmetric_model.xml
+            10 4 7 --ignore-unsupported
+    )
+    set_tests_properties(rm_driver_symmetric_total_rate_ignore_unsupported PROPERTIES
+        PASS_REGULAR_EXPRESSION "Dfree")
+
+    # An ordinary TotalRate rule is NOT refused — RM and NFsim agree on it, and
+    # refusing would take out NFsim's own validation models (v21-v26) and
+    # oscSystem, which are exactly this shape.  It warns and runs.
+    add_test(
+        NAME rm_driver_runs_plain_total_rate
         COMMAND rm_driver
             ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_total_rate.xml
             200 10 7
     )
-    set_tests_properties(rm_driver_refuses_total_rate PROPERTIES WILL_FAIL TRUE)
-
-    # …and --ignore-unsupported runs it, on the reading BioNetGen documents:
-    # the rate law is the whole propensity.  Aoff starts at its seed 60 and
-    # the run reaches t=200, so the rule fired and the trajectory is real.
-    add_test(
-        NAME rm_driver_total_rate_ignore_unsupported
-        COMMAND rm_driver
-            ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_total_rate.xml
-            200 10 7 --ignore-unsupported
-    )
-    set_tests_properties(rm_driver_total_rate_ignore_unsupported PROPERTIES
+    set_tests_properties(rm_driver_runs_plain_total_rate PROPERTIES
         PASS_REGULAR_EXPRESSION "Aoff.*Bfree.*Hoff")
 endif()
 

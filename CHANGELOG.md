@@ -255,9 +255,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **The `TotalRate` keyword is now refused at load (Tier-0 Error).** Not
-  because RM cannot evaluate it, but because the construct has no agreed
-  meaning to evaluate. BioNetGen does not implement TotalRate for network
+- **The `TotalRate` keyword now warns at load, and is refused where RM and
+  NFsim genuinely disagree.** BioNetGen does not implement TotalRate for network
   simulations — `RxnRule.pm` carries the TODO saying it is "currently
   implemented only for XML network-free output" — and `generate_network`
   duly writes the rate law into the `.net` as an ordinary rate constant, so
@@ -281,14 +280,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   species and live (`3*_rateLaw1`, `2*_rateLaw1`, `_rateLaw1`), implying a
   third number again.
 
-  All three disagree, so RM names the problem instead of silently picking a
-  reading. `--ignore-unsupported` runs the reading BioNetGen documents in
-  `RateLaw.pm` ("If true, this ratelaw specifies the Total reaction rate"):
-  the propensity is the rate law's value. That agrees with NFsim on every
-  rule whose reactant patterns have no interchangeable components, which is
-  every shape measured — unimolecular, heterodimer, homodimer carrying
-  `symmetry_factor="0.5"`, zero-order synthesis, and a rate law that is a
-  function of an observable.
+  All three disagree, so RM refuses **those** rules instead of silently
+  picking a reading. The test is structural and deliberately conservative: a
+  TotalRate rule is refused when any reactant pattern touches a component
+  whose molecule type declares two or more of that name, which is what lets a
+  pattern component land on more than one slot.
+
+  Every other TotalRate rule warns and runs. RM reads the keyword the way
+  BioNetGen documents it in `RateLaw.pm` ("If true, this ratelaw specifies the
+  Total reaction rate") — the propensity is the rate law's value — and NFsim
+  computes the same thing there, so the two agree. Measured on unimolecular,
+  heterodimer, homodimer carrying `symmetry_factor="0.5"`, zero-order
+  synthesis, and a rate law that is a function of an observable. The warning
+  exists because nothing can check such a model against BioNetGen's own result.
+
+  Refusing every TotalRate rule was considered and rejected once the blast
+  radius was measured: it would take out six models from **NFsim's own
+  validation suite** (`v21`–`v26`), `oscSystem` in RM's corpus suite, and
+  around eleven curated RuleHub biology examples, every one of which RM runs
+  in agreement with NFsim today (verified over 12 seeds each: `oscSystem`
+  worst z = 1.04, `r21` z = 1.40). Neither the basicmodels suite nor
+  `oscSystem` is reachable from `ctest` or the guard tier, so that breakage
+  would not have surfaced in CI.
 
   `ft_total_rate` was rewritten along with this. The model it replaces fired
   four events over its whole run and could not tell TotalRate from anything
@@ -298,9 +311,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   arms whose closed forms separate TotalRate from mass action in both
   directions: two linear-decay arms where mass action is curved, and an
   observable-driven arm that is exponential where mass action would be
-  hyperbolic. It runs under `--ignore-unsupported` via the harness's
-  `TIER0_IGNORE_UNSUPPORTED` set, so the propensity path stays covered
-  against a 20-replicate NFsim ensemble (tz = 2.36).
+  hyperbolic. Every arm names its components distinctly, so it is the warned
+  shape rather than the refused one, and it scores tz = 2.36 against a
+  20-replicate NFsim ensemble.
 
 ### Fixed
 
