@@ -1,0 +1,16 @@
+# Reference trees carrying a MANIFEST.tsv are content-hashed by
+# harness/_ref_manifest.py, so the bytes on disk have to be the bytes that
+# were hashed — on every platform.  Git for Windows checks text files out
+# as CRLF by default, which rewrites every .tsv and .xml under these roots
+# and makes the integrity gate report a hash mismatch for all 306 files of
+# a tree that is in fact pristine.  That is issue #63's failure mode by a
+# different route: the harness refusing to run over something that is not
+# reference drift.
+#
+# `-text` rather than `text eol=lf` on purpose.  eol=lf would normalise on
+# the way in as well, so a reference regenerated on Windows (Python text
+# mode writes CRLF) would be committed as something other than what its
+# author hashed, and the manifest would fault on the next fresh checkout.
+# `-text` keeps whatever bytes were generated, identical for everyone.
+tests/reference/**                          -text
+tests/models/feature_coverage/reference/**  -text

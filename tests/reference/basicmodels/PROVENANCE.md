@@ -35,6 +35,16 @@ times and flags are in `sim_params.tsv`.
      point. Per-rep `.gdat` files land in `replicates/r{NN}/`
      (gitignored).
 
+`MANIFEST.tsv` records a SHA-256 for each of those vendored files and
+`harness/basicmodels.py` verifies the tree against it before running
+anything.  The per-rep `.gdat` files are deliberately outside that
+coverage: they are disposable scratch, a clean clone has none of them,
+and the verdict path reads only the aggregates.  After an intentional
+reference change, rewrite the manifest by re-running the harness with
+`--no-verify-manifest --write-manifest`; the rewrite happens at end of
+run, so one model is enough to trigger it
+(`python3 harness/basicmodels.py r01 --no-verify-manifest --write-manifest`).
+
 **NFsim binary:** a local NFsim build patched with the UTL+1 fix
 (NFsim's auto-computed unbinding-trace-length is one less than the
 correct `max_pattern_size + 1`; without the patch, large-pattern

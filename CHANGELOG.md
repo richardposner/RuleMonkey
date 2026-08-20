@@ -317,6 +317,90 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The `basicmodels` parity suite could not run from a clean clone: its
+  reference manifest gated on gitignored files (issue #63).**
+  `MANIFEST.tsv` is bootstrapped by walking the live reference tree, and
+  the machine that bootstrapped `tests/reference/basicmodels/` still held
+  the `replicates/` scratch its ensembles had been aggregated from — so
+  2900 of that manifest's 3018 rows named per-rep `.gdat` files that
+  `.gitignore` (`tests/reference/*/replicates/`) keeps out of the
+  repository. Verification hard-fails on a missing file, so
+  `harness/basicmodels.py` refused to start anywhere those had not been
+  generated locally, over files no verdict reads: the comparison opens the
+  aggregated `ensemble/*.{mean,std,tint}.tsv`, which are vendored, and
+  `PROVENANCE.md` describes `replicates/` as scratch in the same breath as
+  writing it. Regenerating was not a way out either — that path re-runs
+  NFsim 100 times per model against a locally patched NFsim build that is
+  not vendored. The suite is the manual gate for 29 curated models and
+  (like `oscSystem`) is not reachable from `ctest`, so an engine change
+  that moves every trajectory had nothing to check itself against.
+
+  The manifest now covers the vendored artifacts and only those, which is
+  what the corpus manifest next to it already did: the tree walk prunes
+  `replicates/` and OS noise (`.DS_Store`, `Thumbs.db`) on both write and
+  verify, so one manifest serves a clean clone and a machine holding a
+  freshly regenerated ensemble alike. The second case used to fail the
+  other way — as `untracked file in reference tree` — which is why the
+  fix has to be symmetric rather than a one-off row deletion. The
+  basicmodels manifest is rewritten accordingly, dropping 2900 rows and
+  keeping 118. Every hash it keeps is byte-identical to the one it
+  carried, bar `PROVENANCE.md`'s — edited here to state the coverage rule
+  next to the `replicates/` line that already called them gitignored — so
+  no reference data changed. `harness/basicmodels.py` then runs all 29
+  models green from a tree with no `replicates/` in it.
+
+  Four smaller defects in the same helper — three on the path anyone
+  hitting a manifest problem walks, the fourth caught by the new test on
+  CI's Windows leg:
+
+  - Rows reaching outside that coverage are now one diagnostic naming the
+    count and the first path, rather than one `missing reference file`
+    line per file. The failure in #63 printed 2900 of them and pushed the
+    line saying what to do about it off the screen; the list is capped at
+    20 with an `… and N more` tail for the same reason.
+  - The abort's regeneration hint named `--generate-refs` /
+    `--force-refs` regardless of who called it. `benchmark_full.py` (and so
+    `basicmodels.py`) accepts neither — it takes `--no-verify-manifest
+    --write-manifest` — so the one line telling you how to fix the tree
+    named flags that would have errored. Each caller now supplies its own.
+  - Manifest paths are written `/`-separated on every platform.
+    `os.path.relpath` yields backslashes on Windows, and while the
+    existence check tolerates either, the untracked-file check compares
+    the two spellings directly: a manifest written on Windows would have
+    reported every file in the tree as untracked. Latent until now
+    because nothing in the build verified a manifest.
+  - The `# root` header line was `os.path.relpath(ref_root)` — relative
+    to the working directory rather than to the repository, which the
+    format comment claimed and which is what the committed manifests
+    actually hold. So the line moved with wherever the harness was
+    invoked from, and on Windows, writing a manifest for a tree on
+    another drive than the CWD raised `ValueError: path is on mount 'C:',
+    start on mount 'D:'` and took the writer down with it. Now
+    repo-relative, falling back to an absolute path for a tree outside
+    the repository. The line is cosmetic — `read_manifest` skips comments
+    — but nothing else in `write_manifest` could fail, so it was the
+    whole failure.
+
+  Windows checkouts could never have passed the gate at all, and this is
+  the first change that would have noticed: Git for Windows converts text
+  files to CRLF on checkout, so every `.tsv` and `.xml` under a reference
+  root hashes differently there — CI's Windows leg reported 306 of 306
+  `feature_coverage` files as drifted, against a tree that is pristine
+  (the live hash it printed is exactly the CRLF rewrite of the committed
+  bytes). A new `.gitattributes` marks the hashed trees `-text`, so their
+  bytes survive a checkout unchanged everywhere. `-text` rather than
+  `text eol=lf`: normalising on the way in as well would mean a reference
+  regenerated on Windows — Python text mode writes CRLF — is committed as
+  something other than what its author hashed, and the manifest would
+  fault on the next fresh checkout.
+
+  `ctest` gains `ref_manifest_test` (`tests/harness/test_ref_manifest.py`,
+  stdlib-only, no `rm_driver`), which pins the coverage rule on a
+  synthetic tree and verifies every committed `MANIFEST.tsv` against the
+  tree beside it. On CI that checkout is a clean clone, so a manifest that
+  reaches outside its coverage now fails the build on all three OS legs
+  instead of surfacing when someone reaches for a parity suite.
+
 - **A rule with no reactant pattern to seed on still got a per-molecule
   table, one 80-byte entry per molecule in the pool, that nothing ever
   read (issue #67).** `rescan_all_molecules_for_rule` sized and zeroed
