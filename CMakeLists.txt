@@ -244,6 +244,20 @@ if(RULEMONKEY_ENABLE_ASAN OR CMAKE_BUILD_TYPE STREQUAL "Debug")
 endif()
 
 # ---------------------------------------------------------------------------
+# AgentPool index self-check (issue #62).  delete_molecule removes a molecule
+# from its type index by swapping the back element into the slot recorded in
+# `type_mol_pos_`, and the live-molecule tally `active_mol_count_` is
+# maintained rather than scanned for.  Both replaced an O(population) walk
+# that could not be wrong, so both are checked against an independent reading
+# — the type list's own contents, and the free-id list.  O(1) each, compiled
+# IN for Debug and ASan and OUT of Release, matching the two self-checks
+# above.
+# ---------------------------------------------------------------------------
+if(RULEMONKEY_ENABLE_ASAN OR CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_definitions(rulemonkey PRIVATE RULEMONKEY_POOL_INDEX_SELFCHECK)
+endif()
+
+# ---------------------------------------------------------------------------
 # Examples (off by default — host projects opt in)
 # ---------------------------------------------------------------------------
 option(RULEMONKEY_BUILD_EXAMPLES "Build the C++ embedding examples" OFF)

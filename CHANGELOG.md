@@ -317,6 +317,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A three-rule model could not finish one replicate in eleven hours,
+  because per-event cost grew with the molecule population (issue #62).**
+  `error.bngl` is three rules over 4.7e6 molecules, every rate law a
+  constant, and NFsim's per-event cost on it is flat at 5–7 µs from
+  1.5e4 molecules to 9.3e5. RuleMonkey's was 53 µs/event at the small
+  end and 2798 µs/event at 100x the population — the two engines
+  executing essentially the same number of events, so the growth was
+  pure per-event cost. None of it was in the matching or propensity code
+  the model's shape would point at (the issue's own triage note flags
+  `percx_resum_rates`, which this model never reaches: its rate laws are
+  all constants, so the local-rate path never engages). Three pool walks
+  were responsible; each is now an O(1) side table.
+
+  **Removing a molecule from its type index was O(population of that
+  type).** `AgentPool::delete_molecule` erased the id from
+  `type_mol_index_[type]` with an order-preserving `std::remove` — a
+  linear scan over every live molecule of that type, plus the shift,
+  charged on every deletion. It was 59% of a sampled profile of the SSA
+  loop at 2.8e6 molecules, and it is not a niche path: any rule that degrades,
+  dissociates into nothing, or changes a molecule's type deletes. The
+  list's order carries no meaning — `molecules_of_type` consumers scan it
+  whole or sample from it by weight, and the Fenwick samplers key on
+  molecule id rather than on position — so removal is now a
+  swap-with-back through a `type_mol_pos_` side table. On the reproducer
+  at `t_end=60` this alone took the SSA loop from 32.6 s to 2.6 s.
+
+  **The `-gml` molecule limit re-counted the whole pool on every event.**
+  The limit check called `active_molecule_count()`, which scanned
+  `molecules_` for `.active`. A cap that cannot possibly bind therefore
+  cost exactly what a binding one would, per event, forever.
+  `error.bngl` declares `gml=>2.147e9` — an eyeballed `INT_MAX`, i.e.
+  "no limit" — over 4.7e6 molecules: measured, that cap cost 104.6 s
+  against 32.3 s for the identical run with no cap at all, and it now
+  costs nothing measurable (1.05 s against 1.23 s, inside run-to-run
+  spread). The three models in a 210-model NFsim-parity sweep that could
+  not produce a RuleMonkey replicate are exactly the three declaring
+  `gml >= 1e9`. The count is now a tally maintained by `add_molecule` /
+  `delete_molecule`.
+
+  **A Species observable outside the incremental tracker rebuilt a hash
+  set of every complex, at every sample.** The full walk deduped
+  complexes by inserting each complex id into a fresh
+  `std::unordered_set<int>` — one node allocated per complex, per
+  observable, per sample time — and then copied each complex's member
+  vector by value to walk it (`auto` where the accessor returns a
+  reference). Species observables whose pattern is a bare `T()` are
+  deliberately excluded from per-event tracking, because a model like
+  `rm_tlbr_rings` declares 300 of them and tracking all 300 costs more
+  than the walk; that trade assumed the walk was cheap, which it was not
+  at 1.5e6 complexes. Dedupe is now a generation stamp on the member
+  molecules — molecule ids are dense, so no hashing is needed — the
+  member list is taken by reference, and a molecule with no bonded
+  component skips the complex lookup entirely, since it is alone in its
+  complex by definition. Sample-time cost on the reproducer fell 6.4x.
+
+  Measured end to end on `error.bngl` at its own `scale=100`, on one
+  machine, at the model's own `t_end=2400, n_steps=240` horizon: the SSA
+  loop goes from 1223 s to 9.9 s, and the whole `rm_driver` invocation
+  from 1239 s to 25.4 s, for a byte-identical `.gdat`. (The reporter saw
+  more than eleven hours where this machine takes twenty minutes; at
+  `t_end=60` the two agree to within a percent, so the difference is in
+  the horizon or the host, not in the effect.) Per-event cost across
+  system size, SSA-loop wall over `events=`, at `t_end=60` (the population
+  column is the model's own `I20`, as in the issue's table; the pool
+  holds three molecules per unit of it):
+
+  | population (`I20`) | before (µs/event) | after (µs/event) |
+  |-------------------:|------------------:|-----------------:|
+  |             1.55e4 |                53 |             10.6 |
+  |             1.55e5 |               243 |             17.2 |
+  |             4.66e5 |               839 |             38.4 |
+  |             9.32e5 |              1664 |             65.3 |
+  |             1.55e6 |              2798 |             86.8 |
+
+  The remaining growth at this horizon is the fixed per-run cost — first
+  touch of the pool's pages, and seven whole-pool sample points — spread
+  over few events; at the real horizon the same configuration runs at
+  22.8 µs/event.
+
+  Two O(1) checks guard the new tables on every deletion under
+  `kPoolIndexSelfCheck` (compiled in for Debug and ASan, out of Release,
+  like the canonical-cache and local-observable self-checks): the
+  recorded type-index position against the type list's own contents, and
+  the live tally against `molecules_` minus the free-id list.
+
+- **A run stopped by a molecule limit reported its last sample rows one
+  event behind the pool they described (issue #62).** The limit check sat
+  before the observable refresh, and the breaching event is not rolled
+  back, so the trailing sample rows — written after the SSA loop exits —
+  carried pre-event values for every incrementally tracked observable
+  while the untracked ones, which full-walk the live pool at sample time,
+  carried post-event values. The same row disagreed with itself, and with
+  `get_molecule_count()` on the session left behind. The check now runs
+  after the refresh; the cost is one event's worth of propensity update
+  that is then discarded.
+
 - **A rate law built on `reactant_N()` had a propensity of zero, so the rule
   never fired and the run finished with no events at all (issue #59).** A
   BNGL model that wants the match count of a rule's Nth reactant pattern

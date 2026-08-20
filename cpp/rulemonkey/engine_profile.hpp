@@ -188,6 +188,23 @@ inline constexpr bool kLocalObsTrackInvariant = true;
 inline constexpr bool kLocalObsTrackInvariant = false;
 #endif
 
+// AgentPool index self-check (issue #62).  Two O(population) walks in the
+// pool became O(1) side tables: `type_mol_pos_` records where each live
+// molecule sits in its type index so removal is a swap-with-back, and
+// `active_mol_count_` is a maintained tally rather than a scan for
+// `.active`.  Both are now capable of being silently wrong instead of
+// merely slow, so delete_molecule checks each against an independent
+// reading — the type list's own contents, and the free-id list — and
+// std::abort()s on mismatch.  Both checks are O(1), so leaving them on
+// costs the Debug and ASan runs nothing measurable.  Build-type driven
+// like the two gates above: RULEMONKEY_POOL_INDEX_SELFCHECK is set by
+// CMakeLists.txt for Debug and ASan and left unset for Release.
+#ifdef RULEMONKEY_POOL_INDEX_SELFCHECK
+inline constexpr bool kPoolIndexSelfCheck = true;
+#else
+inline constexpr bool kPoolIndexSelfCheck = false;
+#endif
+
 // ===========================================================================
 // Profile struct definitions
 // ---------------------------------------------------------------------------

@@ -86,6 +86,31 @@ classify same-complex bond candidates without re-walking the graph.
   the cycle count using `edges − vertices + 1` per piece (lines 586–630).
   The BFS visited-set is reused for the partition; no second walk.
 
+### Pool side tables
+
+Three `AgentPool` reads sit on the per-event path, so all three are O(1)
+side tables rather than walks, and all three have an ordering or
+bookkeeping contract a future edit can break silently:
+
+- `type_mol_index_[type]` — the live molecules of one type. Removal is a
+  swap-with-back using `type_mol_pos_[mol_id]`, **not** an order-preserving
+  erase: the erase is O(population of the type) and every deletion pays it,
+  which is enough on its own to make per-event cost grow with system size
+  (issue #62). The list is therefore in no particular order. Nothing may
+  depend on its order — `molecules_of_type` consumers scan it whole or
+  sample from it by weight, and the Fenwick samplers key on molecule id,
+  not on position.
+- `active_mol_count_` — the live molecule count, maintained by
+  `add_molecule` / `delete_molecule`. `active_molecule_count()` is read
+  every event when a molecule limit is set, so it must never go back to
+  scanning for `.active`.
+- `cycle_bond_count_` — see above.
+
+`kPoolIndexSelfCheck` (Debug and ASan builds, gated from CMakeLists.txt)
+proves the first two on every deletion: the recorded position against the
+type list's own contents, and the tally against `molecules_ − free_mol_ids_`.
+Both checks are O(1).
+
 ## Propensity
 
 `compute_propensity` (lines 2268–2347) implements three rate-law shapes:
@@ -170,3 +195,11 @@ on `Simulator::save_state` in `include/rulemonkey/simulator.hpp`.
 - Crash under ASan → almost always `AgentPool` index reuse after
   `DeleteMolecule`. Check that the affected-molecules set was not
   populated with the deleted mid before compaction.
+- Per-event cost that grows with population → look for a walk over the
+  whole pool on the event path, not for an algorithmic change in
+  matching. Run the model at two scales, divide wall time by
+  `events=` from `RM_PRINT_TIMING=1`, and compare: a per-event cost
+  that tracks system size is a scan somewhere. The phase timers name
+  which of `fire_rule` / `incr_update` / `record_at` it lives in.
+  Sampling the process (`sample`, `perf`) then names the function
+  directly — this is how the pool side tables above were found.
