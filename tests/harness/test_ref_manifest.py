@@ -79,6 +79,30 @@ def test_manifest_paths_are_slash_separated() -> None:
         assert not any("\\" in ln.split("\t")[0] for ln in body), body
 
 
+def test_root_header_follows_the_repo_not_the_cwd() -> None:
+    """The `# root` line is repo-relative, and writing one works from any cwd."""
+    inside = os.path.join(REPO_ROOT, "tests", "reference", "basicmodels")
+    assert rm._header_root(inside) == "tests/reference/basicmodels", rm._header_root(inside)
+
+    with tempfile.TemporaryDirectory() as tmp:
+        make_tree(tmp, with_scratch=False)
+        # No relative path exists from the repo to a tree outside it — and
+        # on Windows a tempdir is usually on another drive, where relpath
+        # raises rather than returning one.
+        header = rm._header_root(tmp)
+        assert header == os.path.abspath(tmp).replace(os.sep, "/"), header
+
+        cwd = os.getcwd()
+        os.chdir(os.path.dirname(os.path.abspath(__file__)))
+        try:
+            manifest = rm.write_manifest(tmp)
+        finally:
+            os.chdir(cwd)
+        with open(manifest) as f:
+            roots = [ln for ln in f.read().splitlines() if ln.startswith("# root ")]
+        assert roots == [f"# root {header}"], roots
+
+
 def test_verify_passes_with_and_without_scratch() -> None:
     """The same manifest verifies on a clean clone and after a regen run."""
     with tempfile.TemporaryDirectory() as tmp:
@@ -201,14 +225,21 @@ def test_committed_reference_trees_verify() -> None:
     assert roots, "no MANIFEST.tsv found under tests/"
 
     for root in sorted(roots):
-        ok, problems = rm.verify_manifest(root)
         rel = os.path.relpath(root, REPO_ROOT)
+        ok, problems = rm.verify_manifest(root)
         assert ok, f"{rel}: {len(problems)} problem(s); first: {problems[0]}"
+
+        # Rewriting the manifest from any working directory has to
+        # reproduce this line, or every regeneration shows a spurious diff.
+        with open(os.path.join(root, rm.MANIFEST_FILENAME)) as f:
+            roots_named = [ln for ln in f.read().splitlines() if ln.startswith("# root ")]
+        assert roots_named == [f"# root {rm._header_root(root)}"], f"{rel}: {roots_named}"
 
 
 TESTS = [
     test_manifest_lists_vendored_files_only,
     test_manifest_paths_are_slash_separated,
+    test_root_header_follows_the_repo_not_the_cwd,
     test_verify_passes_with_and_without_scratch,
     test_verify_catches_drift_in_vendored_files,
     test_manifest_carrying_scratch_rows_is_one_diagnostic,

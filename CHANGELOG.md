@@ -349,8 +349,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no reference data changed. `harness/basicmodels.py` then runs all 29
   models green from a tree with no `replicates/` in it.
 
-  Three smaller defects in the same gate, each on the path anyone
-  hitting a manifest problem walks:
+  Four smaller defects in the same helper — three on the path anyone
+  hitting a manifest problem walks, the fourth caught by the new test on
+  CI's Windows leg:
 
   - Rows reaching outside that coverage are now one diagnostic naming the
     count and the first path, rather than one `missing reference file`
@@ -368,6 +369,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     the two spellings directly: a manifest written on Windows would have
     reported every file in the tree as untracked. Latent until now
     because nothing in the build verified a manifest.
+  - The `# root` header line was `os.path.relpath(ref_root)` — relative
+    to the working directory rather than to the repository, which the
+    format comment claimed and which is what the committed manifests
+    actually hold. So the line moved with wherever the harness was
+    invoked from, and on Windows, writing a manifest for a tree on
+    another drive than the CWD raised `ValueError: path is on mount 'C:',
+    start on mount 'D:'` and took the writer down with it. Now
+    repo-relative, falling back to an absolute path for a tree outside
+    the repository. The line is cosmetic — `read_manifest` skips comments
+    — but nothing else in `write_manifest` could fail, so it was the
+    whole failure.
 
   `ctest` gains `ref_manifest_test` (`tests/harness/test_ref_manifest.py`,
   stdlib-only, no `rm_driver`), which pins the coverage rule on a

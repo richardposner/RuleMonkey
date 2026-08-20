@@ -10,7 +10,7 @@ Format (tab-separated, sorted by relative path):
 
     # rulemonkey reference manifest
     # generated <UTC ISO 8601>
-    # root <relative path of reference root from REPO_ROOT>
+    # root <path of the reference root, relative to the repo root>
     <relative path>\t<sha256 hex>
 
 Relative paths are `/`-separated on every platform, so a manifest
@@ -44,6 +44,8 @@ import sys
 
 MANIFEST_FILENAME = "MANIFEST.tsv"
 
+REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 # Mirrors `.gitignore` (`tests/reference/*/replicates/`, plus the OS-noise
 # entries) — see "What the manifest covers" above for why these are skipped
 # rather than hashed.
@@ -59,6 +61,26 @@ MAX_REPORTED_PROBLEMS = 20
 def _rel(path: str, root: str) -> str:
     """Manifest-relative path for `path`, `/`-separated on every platform."""
     return os.path.relpath(path, root).replace(os.sep, "/")
+
+
+def _header_root(ref_root: str) -> str:
+    """Value for the `# root` header line: repo-relative where it can be.
+
+    Cosmetic — `read_manifest` skips comment lines — but it used to be
+    `os.path.relpath(ref_root)`, relative to the *working directory*,
+    which made the line depend on where the harness was invoked from and
+    made it a hard error on Windows for any tree on another drive than
+    the CWD (`ValueError: path is on mount 'C:', start on mount 'D:'`).
+    A reference root outside the repository gets its absolute path.
+    """
+    ref_root = os.path.abspath(ref_root)
+    try:
+        rel = os.path.relpath(ref_root, REPO_ROOT)
+    except ValueError:  # different Windows drive; no relative path exists
+        rel = os.pardir
+    if rel.split(os.sep)[0] == os.pardir:
+        return ref_root.replace(os.sep, "/")
+    return rel.replace(os.sep, "/")
 
 
 def _is_excluded(rel: str) -> bool:
@@ -97,7 +119,7 @@ def write_manifest(ref_root: str) -> str:
     with open(manifest_path, "w") as f:
         f.write("# rulemonkey reference manifest\n")
         f.write(f"# generated {now}\n")
-        f.write(f"# root {os.path.relpath(ref_root)}\n")
+        f.write(f"# root {_header_root(ref_root)}\n")
         for path in files:
             f.write(f"{_rel(path, ref_root)}\t{_hash_file(path)}\n")
     return manifest_path
