@@ -1232,7 +1232,10 @@ def main():
     will_regen = args.generate_refs or args.force_refs
     if not args.no_verify_manifest:
         ref_manifest.enforce_or_warn(
-            REF_DIR, strict=not will_regen, label="benchmark_feature_coverage"
+            REF_DIR,
+            strict=not will_regen,
+            label="benchmark_feature_coverage",
+            regen_hint="re-run with --generate-refs (or --force-refs)",
         )
 
     # Discover models

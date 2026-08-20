@@ -1,7 +1,8 @@
 """Reference-data manifest helpers shared by feature-coverage and basicmodels harnesses.
 
-A MANIFEST.tsv records SHA-256 hashes of every reference file under a
-given root directory.  The validate path verifies the live tree against
+A MANIFEST.tsv records SHA-256 hashes of the vendored reference files
+under a given root directory (see "What the manifest covers" below for
+what that excludes).  The validate path verifies the live tree against
 the manifest before running RM; mismatches abort with a clear diagnostic
 so a stale or hand-edited reference can't silently change the verdict.
 
@@ -12,11 +13,26 @@ Format (tab-separated, sorted by relative path):
     # root <relative path of reference root from REPO_ROOT>
     <relative path>\t<sha256 hex>
 
-Comment lines (`#`) are ignored on read.
+Relative paths are `/`-separated on every platform, so a manifest
+written on one OS verifies on another.  Comment lines (`#`) are ignored
+on read.
 
-Generation is opt-in (only fired by --generate-refs / --force-refs);
-verification is the default at script start so a working tree where
-references drifted gets caught.
+## What the manifest covers
+
+The vendored reference artifacts, and only those.  Paths `.gitignore`
+keeps out of the repository — the per-replicate ensembles under
+`replicates/`, OS noise like `.DS_Store` — are skipped on both write and
+verify.  A clean clone has none of those files and a machine that just
+regenerated an ensemble has thousands of them, so hashing them makes the
+gate fail one way in the first case ("missing reference file:
+replicates/r01/rep_001.gdat", issue #63) and the other way in the second
+("untracked file in reference tree").  Neither is reference drift: the
+verdict path reads the aggregated `ensemble/*.{mean,std,tint}.tsv`, and
+`replicates/` is the disposable scratch those were aggregated from.
+
+Generation is opt-in (only fired by --generate-refs / --force-refs /
+--write-manifest); verification is the default at script start so a
+working tree where references drifted gets caught.
 """
 
 from __future__ import annotations
@@ -28,12 +44,35 @@ import sys
 
 MANIFEST_FILENAME = "MANIFEST.tsv"
 
+# Mirrors `.gitignore` (`tests/reference/*/replicates/`, plus the OS-noise
+# entries) — see "What the manifest covers" above for why these are skipped
+# rather than hashed.
+EXCLUDED_DIRS = frozenset({"replicates"})
+EXCLUDED_FILES = frozenset({MANIFEST_FILENAME, ".DS_Store", "Thumbs.db"})
+
+# Cap on the diagnostic list.  A ref tree missing one whole directory has
+# one problem per file, and a few thousand of those scroll the closing
+# line — the one saying what to do about it — off the screen.
+MAX_REPORTED_PROBLEMS = 20
+
+
+def _rel(path: str, root: str) -> str:
+    """Manifest-relative path for `path`, `/`-separated on every platform."""
+    return os.path.relpath(path, root).replace(os.sep, "/")
+
+
+def _is_excluded(rel: str) -> bool:
+    """True for a manifest-relative path the manifest deliberately skips."""
+    parts = rel.split("/")
+    return parts[-1] in EXCLUDED_FILES or any(p in EXCLUDED_DIRS for p in parts[:-1])
+
 
 def _walk_files(root: str) -> list[str]:
     out = []
-    for dirpath, _, filenames in os.walk(root):
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if d not in EXCLUDED_DIRS]
         for fn in filenames:
-            if fn == MANIFEST_FILENAME:
+            if fn in EXCLUDED_FILES:
                 continue
             out.append(os.path.join(dirpath, fn))
     out.sort()
@@ -60,8 +99,7 @@ def write_manifest(ref_root: str) -> str:
         f.write(f"# generated {now}\n")
         f.write(f"# root {os.path.relpath(ref_root)}\n")
         for path in files:
-            rel = os.path.relpath(path, ref_root)
-            f.write(f"{rel}\t{_hash_file(path)}\n")
+            f.write(f"{_rel(path, ref_root)}\t{_hash_file(path)}\n")
     return manifest_path
 
 
@@ -91,14 +129,29 @@ def verify_manifest(ref_root: str, *, strict: bool = True) -> tuple[bool, list[s
     manifest_path = os.path.join(ref_root, MANIFEST_FILENAME)
     if not os.path.exists(manifest_path):
         return False, [
-            f"no MANIFEST.tsv at {ref_root}; reference integrity is unverified — "
-            f"regenerate refs with --generate-refs/--force-refs to bootstrap the manifest"
+            f"no MANIFEST.tsv at {ref_root}; reference integrity is unverified until "
+            f"the manifest is bootstrapped"
         ]
     expected = read_manifest(manifest_path)
-    live_paths = {os.path.relpath(p, ref_root): p for p in _walk_files(ref_root)}
+    live_paths = {_rel(p, ref_root): p for p in _walk_files(ref_root)}
 
     problems = []
+
+    # Rows the manifest should never have carried in the first place.
+    # Reported once, not once per file: a manifest bootstrapped on a
+    # machine that still had its `replicates/` scratch picks up thousands
+    # of these, and each one is the same single fact about the manifest.
+    uncovered = sorted(rel for rel in expected if _is_excluded(rel))
+    if uncovered:
+        problems.append(
+            f"manifest lists {len(uncovered)} path(s) outside what it covers "
+            f"(first: {uncovered[0]}); those are regenerated locally and gitignored — "
+            f"rewrite the manifest so it lists the vendored files only"
+        )
+
     for rel, want_hash in expected.items():
+        if _is_excluded(rel):
+            continue
         abs_path = os.path.join(ref_root, rel)
         if not os.path.exists(abs_path):
             problems.append(f"missing reference file: {rel}")
@@ -113,24 +166,29 @@ def verify_manifest(ref_root: str, *, strict: bool = True) -> tuple[bool, list[s
     return (not problems), problems
 
 
-def enforce_or_warn(ref_root: str, *, strict: bool, label: str) -> None:
+def enforce_or_warn(ref_root: str, *, strict: bool, label: str, regen_hint: str = "") -> None:
     """Verify the manifest at `ref_root` and act on the result.
 
     `strict=True` aborts the process on mismatch; `False` warns to stderr
     and returns.  Suitable as a startup gate for harness scripts.
+    `regen_hint` names the flags *this caller* accepts for rewriting the
+    manifest, since they differ per script.
     """
     ok, problems = verify_manifest(ref_root, strict=strict)
     if ok:
         return
     header = f"{label}: reference manifest verification reported {len(problems)} issue(s):"
     print(header, file=sys.stderr)
-    for p in problems:
+    for p in problems[:MAX_REPORTED_PROBLEMS]:
         print(f"  - {p}", file=sys.stderr)
+    if len(problems) > MAX_REPORTED_PROBLEMS:
+        print(f"  - … and {len(problems) - MAX_REPORTED_PROBLEMS} more", file=sys.stderr)
     if strict:
+        hint = regen_hint or "re-run the harness's reference-regeneration path"
         print(
             f"{label}: refusing to run validate path against an unverified reference tree.\n"
-            f"To regenerate the manifest after intentional changes, re-run with "
-            f"--generate-refs (or --force-refs) so the new state is committed.",
+            f"To regenerate the manifest after intentional changes, {hint} "
+            f"so the new state is committed.",
             file=sys.stderr,
         )
         sys.exit(2)

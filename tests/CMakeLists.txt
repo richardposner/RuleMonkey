@@ -652,3 +652,21 @@ if(TARGET rm_driver)
         set_tests_properties(bng_oracle PROPERTIES TIMEOUT 600)
     endif()
 endif()
+
+# Reference-manifest gate (tests/harness): the MANIFEST.tsv at each
+# reference root must cover exactly the vendored files, so the parity
+# harnesses (feature_coverage, corpus, basicmodels) start from a clean
+# clone.  A manifest that also hashed the gitignored `replicates/`
+# scratch made the basicmodels suite unrunnable for anyone who had not
+# generated the references themselves (issue #63), and nothing in the
+# build noticed.  Pure stdlib Python and no rm_driver, so it runs on
+# every ctest leg including the Windows build-clean gate — which is
+# also where a backslash-separated manifest path would show up.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND)
+    add_test(
+        NAME ref_manifest_test
+        COMMAND ${Python3_EXECUTABLE} ${_rulemonkey_test_dir}/harness/test_ref_manifest.py
+    )
+    set_tests_properties(ref_manifest_test PROPERTIES TIMEOUT 300)
+endif()

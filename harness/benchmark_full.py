@@ -870,15 +870,23 @@ def main():
         args.remove("--write-manifest")
 
     # Reference-tree integrity gate.  REF_DIR is a frozen vendored
-    # corpus (mean/std/replicates/sim_params); a hand-edited TSV could
+    # corpus (mean/std/tint/sim_params); a hand-edited TSV could
     # silently shift the parity verdict, and the harness has no other
     # mechanism to detect that.  --no-verify-manifest exists for
     # bootstrapping a new ref tree (paired with --write-manifest).
+    # The gate covers the vendored files only — the `replicates/`
+    # scratch those aggregates came from is gitignored and skipped, so
+    # this passes on a clean clone (issue #63).
     if not no_verify_manifest:
         sys.path.insert(0, SCRIPT_DIR)
         import _ref_manifest as ref_manifest
 
-        ref_manifest.enforce_or_warn(REF_DIR, strict=True, label="benchmark_full")
+        ref_manifest.enforce_or_warn(
+            REF_DIR,
+            strict=True,
+            label="benchmark_full",
+            regen_hint="re-run with --no-verify-manifest --write-manifest",
+        )
 
     sim_params = load_sim_params()
     nfsim_times = load_nfsim_wall_times()
