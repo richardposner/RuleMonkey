@@ -53,11 +53,69 @@ For these features, RM is tested against BNG2 ODE (via `generate_network`) as th
 The models are designed with strong constraint effects so RM-vs-NFsim diverges dramatically (confirming NFsim ignores the feature)
 while RM-vs-ODE matches (confirming RM correctly implements the feature).
 
-## RM-Supported but FAILING
+## TotalRate: warned everywhere, refused where the engines disagree
 
-| Feature | XML Element | Model | Status | Notes |
-|---------|-------------|-------|--------|-------|
-| TotalRate modifier | RateLaw/@totalrate="1" | ft_total_rate | **FAIL** | RM parses it but behavior differs from NFsim |
+| Feature | XML Element | Model | Status |
+|---------|-------------|-------|--------|
+| TotalRate modifier | RateLaw/@totalrate="1" | ft_total_rate | PASS, with a load-time Warn |
+| TotalRate on a pattern that can match a molecule more than once | RateLaw/@totalrate="1" | (tests/cpp/total_rate_symmetric_model) | Refused at load (Tier-0 Error) |
+
+### Why
+
+BioNetGen does not implement TotalRate for network simulations. Its own source
+says so, in `RxnRule.pm`:
+
+    # TODO: implement TotalRate feature for Network simulations
+    # (currently implemented only for XML network-free output)
+    #   --Justin  2dec2010
+
+Confirmed: `generate_network` writes the rate law into the `.net` as an ordinary
+rate constant, so the ODE integrates plain mass action and the observable
+crashes to zero where NFsim holds it flat. There is no BNG2 result to check a
+TotalRate model against, which also means no ODE oracle for this suite.
+
+That leaves NFsim as the only implementation, and it disagrees with RM. NFsim
+expands a rule whose reactant pattern has interchangeable components into one
+independent reaction class per permutation (`_R1_sym1`, `_R1_sym2`, ...). For an
+ordinary rate law that is correct, since the matches partition across the classes
+and sum back. Under TotalRate each class returns the whole total rate, so the
+rule runs at
+
+    rate x #{permutations whose reactant lists are all non-empty}
+
+Measured on `C(s) + D(t)` at rate `kf`: 1.00x with one free site, 2.02x with two,
+2.98x with three, and 1.00x again when every C has the same slot pre-bound, since
+only one permutation is populated then. That factor counts NFsim's internal
+reaction classes rather than anything in the model: it is capped by the
+permutation count however many molecules exist, and it steps down as classes
+empty. BNG2's network expansion writes the statistical factor per species and
+live (`3*_rateLaw1`, `2*_rateLaw1`, `_rateLaw1`), which implies a third number
+again.
+
+So all three disagree, and RM refuses those rules rather than pick one
+silently. The test is structural and deliberately conservative: a TotalRate
+rule is refused when any reactant pattern touches a component whose molecule
+type declares two or more of that name, which is what lets a pattern component
+land on more than one slot. `--ignore-unsupported` still runs it, on RM's
+reading.
+
+Every **other** TotalRate rule warns rather than being refused. RM reads the
+keyword the way BioNetGen documents it in `RateLaw.pm` ("If true, this ratelaw
+specifies the Total reaction rate") — the propensity is the rate law's value —
+and NFsim computes the same thing, so the model runs and the two engines agree.
+The warning is there because nothing can check such a model against BioNetGen's
+own result.
+
+Refusing every TotalRate rule was considered and rejected: it would take out six
+models from NFsim's own validation suite (`v21`–`v26`, in
+`tests/models/nfsim_basicmodels/`), `oscSystem` in `tests/models/corpus/`, and
+around eleven curated RuleHub biology examples — all of which RM currently runs
+in agreement with NFsim. Verified directly over 12 seeds each: `oscSystem` worst
+z = 1.04, `r21` z = 1.40.
+
+TotalRate cannot combine with local functions or with MM: BNG2 refuses both
+("TotalRate keyword is not compatible with local functions" / "with MM type
+RateLaw"), so those shapes never reach RM.
 
 ## RM Does NOT Support (silently ignored)
 
@@ -86,6 +144,3 @@ Tests that appear to pass for these features are FALSE POSITIVES.**
 1. **Emit warnings for unsupported XML elements**: RM should warn on stderr when it
    encounters ListOfCompartments, or other elements it doesn't handle.
    Silent incorrect results are worse than loud failures.
-
-2. **Investigate TotalRate**: RM parses totalrate="1" but the behavior diverges from
-   NFsim. The propensity calculation may need correction.

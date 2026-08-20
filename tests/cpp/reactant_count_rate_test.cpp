@@ -249,12 +249,25 @@ void test_double_count_warning(const std::string& nucleation_xml, const std::str
     check(warns.size() == 2, "only the two placeholder arms warn");
   }
 
-  // TotalRate: the rate function states the whole propensity, so the count
-  // is applied once and there is nothing to warn about.
+  // TotalRate: the rate function states the whole propensity, so the count is
+  // applied once and there is no double-count warning.  The rule does carry a
+  // TotalRate warning of its own — BioNetGen never implemented the keyword for
+  // network simulations, so nothing can check the model against it — and the
+  // two diagnostics must not be confused for each other.  It is not refused:
+  // its reactant pattern names one component of a type that declares one, so
+  // RM and NFsim agree on it.
   {
     rulemonkey::RuleMonkeySimulator const sim(total_rate_xml);
-    check(features_of(sim, rulemonkey::Severity::Warn).empty(), "a TotalRate rule does not warn");
-    check(features_of(sim, rulemonkey::Severity::Error).empty(), "a TotalRate rule is not refused");
+    auto const warns = features_of(sim, rulemonkey::Severity::Warn);
+    check(warns.size() == 1, "a TotalRate rule carries exactly one warning");
+    if (warns.size() == 1) {
+      check(warns[0].find("TotalRate keyword") != std::string::npos,
+            "and it is the TotalRate warning");
+      check(warns[0].find("applied a second time") == std::string::npos,
+            "not the reactant-count double-count warning");
+    }
+    check(features_of(sim, rulemonkey::Severity::Error).empty(),
+          "an ordinary TotalRate rule is not refused");
   }
 }
 

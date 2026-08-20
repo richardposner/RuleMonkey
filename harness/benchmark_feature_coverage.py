@@ -208,9 +208,13 @@ RM_ONLY: set[str] = set()
 # actually refuses by default is covered by the per-feature test
 # fixtures under dev/test_*.xml, not this script.
 #
-# Currently empty: no corpus or feature-coverage model trips a Tier-0
-# trigger (cBNGL: no compartments declared anywhere; eBNGL: only
-# Arrhenius rate laws trigger, and nothing in either suite uses them).
+# Currently empty.  ft_total_rate declares TotalRate, which RM warns about
+# (BioNetGen never implemented the keyword for network simulations, so
+# nothing can check such a model against BioNetGen's own result), but a
+# warning is not a Tier-0 refusal and the model runs without the flag.  RM
+# only refuses a TotalRate rule whose reactant pattern can match one
+# molecule more than once, which is where it and NFsim disagree; no model
+# in either suite has that shape.
 TIER0_IGNORE_UNSUPPORTED = set()
 
 

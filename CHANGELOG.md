@@ -253,6 +253,68 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CLI targets, which also means the test harnesses' own code is sanitized
   for the first time. All 37 tests pass with it on.
 
+### Changed
+
+- **The `TotalRate` keyword now warns at load, and is refused where RM and
+  NFsim genuinely disagree.** BioNetGen does not implement TotalRate for network
+  simulations — `RxnRule.pm` carries the TODO saying it is "currently
+  implemented only for XML network-free output" — and `generate_network`
+  duly writes the rate law into the `.net` as an ordinary rate constant, so
+  the ODE integrates plain mass action and the observable crashes to zero
+  where NFsim holds it flat. There is no BNG2 result to check a TotalRate
+  model against.
+
+  That leaves NFsim as the only implementation, and it disagrees with RM.
+  NFsim expands a rule whose reactant pattern has interchangeable components
+  into one independent reaction class per permutation (`_R1_sym1`,
+  `_R1_sym2`, ...). For an ordinary rate law that is correct, since the
+  matches partition across the classes and sum back; under TotalRate every
+  class returns the *whole* total rate, so the rule runs at
+  `rate x #{permutations whose reactant lists are all non-empty}`. Measured
+  on `C(s) + D(t)`: **1.00x** with one free site, **2.02x** with two,
+  **2.98x** with three, and 1.00x again when every C has the same slot
+  pre-bound, since only one permutation is populated then. That factor counts
+  NFsim's internal reaction classes rather than anything in the model — it is
+  capped by the permutation count however many molecules exist, and steps down
+  as classes empty. BNG2's network expansion writes the statistical factor per
+  species and live (`3*_rateLaw1`, `2*_rateLaw1`, `_rateLaw1`), implying a
+  third number again.
+
+  All three disagree, so RM refuses **those** rules instead of silently
+  picking a reading. The test is structural and deliberately conservative: a
+  TotalRate rule is refused when any reactant pattern touches a component
+  whose molecule type declares two or more of that name, which is what lets a
+  pattern component land on more than one slot.
+
+  Every other TotalRate rule warns and runs. RM reads the keyword the way
+  BioNetGen documents it in `RateLaw.pm` ("If true, this ratelaw specifies the
+  Total reaction rate") — the propensity is the rate law's value — and NFsim
+  computes the same thing there, so the two agree. Measured on unimolecular,
+  heterodimer, homodimer carrying `symmetry_factor="0.5"`, zero-order
+  synthesis, and a rate law that is a function of an observable. The warning
+  exists because nothing can check such a model against BioNetGen's own result.
+
+  Refusing every TotalRate rule was considered and rejected once the blast
+  radius was measured: it would take out six models from **NFsim's own
+  validation suite** (`v21`–`v26`), `oscSystem` in RM's corpus suite, and
+  around eleven curated RuleHub biology examples, every one of which RM runs
+  in agreement with NFsim today (verified over 12 seeds each: `oscSystem`
+  worst z = 1.04, `r21` z = 1.40). Neither the basicmodels suite nor
+  `oscSystem` is reachable from `ctest` or the guard tier, so that breakage
+  would not have surfaced in CI.
+
+  `ft_total_rate` was rewritten along with this. The model it replaces fired
+  four events over its whole run and could not tell TotalRate from anything
+  else, and its header stated the semantics wrongly ("binding rate is exactly
+  `k*[A]*[B]`" — TotalRate removes the counts entirely rather than merely
+  suppressing site multiplicity). The new one fires 313 events across three
+  arms whose closed forms separate TotalRate from mass action in both
+  directions: two linear-decay arms where mass action is curved, and an
+  observable-driven arm that is exponential where mass action would be
+  hyperbolic. Every arm names its components distinctly, so it is the warned
+  shape rather than the refused one, and it scores tz = 2.36 against a
+  20-replicate NFsim ensemble.
+
 ### Fixed
 
 - **A rate law built on `reactant_N()` had a propensity of zero, so the rule
