@@ -139,6 +139,47 @@ public:
     type_mol_index_.resize(model.molecule_types.size());
   }
 
+  // Capacity hint for a bulk build: `n_molecules` molecules carrying
+  // `n_components` components between them, `per_type[t]` of them of
+  // molecule type `t`.  Every arena below otherwise grows by doubling
+  // through the whole walk, so the pool is reallocated and copied a
+  // logarithmic number of times — and `molecules_` copies a vector per
+  // element, so that is the most expensive of them (issue #67).
+  //
+  // Pure capacity: nothing here changes what the pool holds, and a count
+  // that is short only costs the growth it failed to pre-empt.  The
+  // totals are `long long` because they are products of a seed count and
+  // a per-species molecule count, either of which can be large; the pool
+  // addresses molecules and components with `int`, so a total that does
+  // not fit one is not a reservation to honour — skip it and let the
+  // walk fail where it always would.
+  void reserve_for_seed(long long n_molecules, long long n_components, long long n_complexes,
+                        const std::vector<long long>& per_type) {
+    constexpr long long kMax = std::numeric_limits<int>::max();
+    if (n_molecules <= 0 || n_molecules > kMax || n_components < 0 || n_components > kMax)
+      return;
+    auto const mols = static_cast<size_t>(n_molecules);
+    auto const comps = static_cast<size_t>(n_components);
+
+    molecules_.reserve(molecules_.size() + mols);
+    type_mol_pos_.reserve(molecules_.size() + mols);
+    cx_moves_.reserve(cx_moves_.size() + mols);
+    // Sized by the complexes the seed LEAVES, not the one-per-molecule the
+    // walk creates before its bonds merge them: a hash map never gives a
+    // bucket array back, so reserving the transient peak would hold it for
+    // the rest of the run.  A seed bond that closes a cycle rather than
+    // merging makes this an under-estimate by one, which costs a rehash
+    // near the end and nothing else.
+    if (n_complexes > 0 && n_complexes <= kMax)
+      complex_members_.reserve(complex_members_.size() + static_cast<size_t>(n_complexes));
+    components_.reserve(components_.size() + comps);
+    comp_to_mol_.reserve(comp_to_mol_.size() + comps);
+    for (size_t t = 0; t < per_type.size() && t < type_mol_index_.size(); ++t) {
+      if (per_type[t] > 0 && per_type[t] <= kMax)
+        type_mol_index_[t].reserve(type_mol_index_[t].size() + static_cast<size_t>(per_type[t]));
+    }
+  }
+
   // Create a new molecule of the given type. Returns molecule ID.
   int add_molecule(int type_index) {
     auto& mtype = model_.molecule_types[type_index];
@@ -157,6 +198,7 @@ public:
     mol.active = true;
 
     // Allocate components
+    mol.comp_ids.reserve(mtype.components.size());
     for (const auto& component : mtype.components) {
       int comp_id;
       if (!free_comp_ids_.empty()) {
@@ -178,7 +220,18 @@ public:
     int const cx = next_complex_id_++;
     mol.complex_id = cx;
     complex_members_[cx] = {mol_id};
-    mark_cx_dirty(cx); // a freshly born complex has no cached canonical label
+    // Deliberately not `mark_cx_dirty(cx)`.  `cx` was just minted from a
+    // counter that never recycles, so no entry for it can exist in any
+    // label cache, and `cached_label_of` already treats an absent id as
+    // dirty (see `cxs_dirty_`).  The set insert would be information-free
+    // — and at seed time it is one per molecule, which is what left the
+    // dirty set holding every complex in the model (issue #67).
+    //
+    // The edit log is a different question: its reader has to SEE the
+    // birth rather than ask whether an edit is outstanding, so it still
+    // gets the id.
+    if (track_cx_edits_)
+      cx_edits_.push_back(cx);
     cx_moves_.push_back(mol_id);
 
     if (mol_id >= static_cast<int>(type_mol_pos_.size()))
@@ -3891,7 +3944,102 @@ struct Engine::Impl {
     return mapping;
   }
 
+  // One seed species with every per-copy decision already made: which
+  // molecule types to create, which component slots to set to which
+  // state index, and which component slots to bond.  Everything here is
+  // a function of the SpeciesInit and the model alone, so it is the same
+  // for all `count` copies — resolving it per copy is what made
+  // `build_comp_mapping` (an unordered_map keyed by component name,
+  // built and thrown away per molecule) about a sixth of session build
+  // on a million-molecule pool (issue #67).
+  struct SeedTemplate {
+    struct Mol {
+      int type_index = -1;
+      // (component index in the molecule type, state index) — only the
+      // slots the species actually pins.  A component the species leaves
+      // unstated keeps the default add_molecule gives it.
+      std::vector<std::pair<int, int>> states;
+    };
+    struct Bond {
+      int mol_a = -1;
+      int local_a = -1; // component index within mol_a's molecule type
+      int mol_b = -1;
+      int local_b = -1;
+    };
+    std::vector<Mol> molecules;
+    std::vector<Bond> bonds;
+    int count = 0; // copies to instantiate
+  };
+
+  // Resolve one seed species against the model.  The guards match the
+  // per-copy code this replaced one for one: an unmapped component, a
+  // state name the type does not declare, a bond endpoint outside the
+  // species, and a component index outside the molecule type are all
+  // dropped rather than diagnosed, exactly as before.
+  SeedTemplate resolve_seed_template(const SpeciesInit& si, int count) const {
+    SeedTemplate tmpl;
+    tmpl.count = count;
+    tmpl.molecules.reserve(si.molecules.size());
+    // Species-XML component index -> molecule-type component index, per
+    // molecule.  Kept only until the bonds below are resolved.
+    std::vector<std::vector<int>> comp_mappings;
+    comp_mappings.reserve(si.molecules.size());
+
+    for (const auto& sim : si.molecules) {
+      const auto& mtype = model.molecule_types[sim.type_index];
+      auto const n_type_comps = static_cast<int>(mtype.components.size());
+      auto cmap = build_comp_mapping(sim, mtype);
+
+      SeedTemplate::Mol m;
+      m.type_index = sim.type_index;
+      for (int ci = 0; ci < static_cast<int>(sim.comp_states.size()); ++ci) {
+        const auto& [cname, cstate] = sim.comp_states[ci];
+        if (cstate.empty())
+          continue;
+        int const actual_ci = cmap[ci];
+        if (actual_ci < 0)
+          continue;
+        int const state_idx = mtype.state_index(actual_ci, cstate);
+        if (state_idx >= 0 && actual_ci < n_type_comps)
+          m.states.emplace_back(actual_ci, state_idx);
+      }
+      tmpl.molecules.push_back(std::move(m));
+      comp_mappings.push_back(std::move(cmap));
+    }
+
+    auto const n_mols = static_cast<int>(si.molecules.size());
+    for (const auto& bond : si.bonds) {
+      if (bond.mol_a >= n_mols || bond.mol_b >= n_mols || bond.comp_a < 0 || bond.comp_b < 0)
+        continue;
+      // A bond endpoint beyond the mapping is taken as already being a
+      // molecule-type component index.
+      int const local_a = (bond.comp_a < static_cast<int>(comp_mappings[bond.mol_a].size()))
+                              ? comp_mappings[bond.mol_a][bond.comp_a]
+                              : bond.comp_a;
+      int const local_b = (bond.comp_b < static_cast<int>(comp_mappings[bond.mol_b].size()))
+                              ? comp_mappings[bond.mol_b][bond.comp_b]
+                              : bond.comp_b;
+      auto const n_a = static_cast<int>(
+          model.molecule_types[si.molecules[bond.mol_a].type_index].components.size());
+      auto const n_b = static_cast<int>(
+          model.molecule_types[si.molecules[bond.mol_b].type_index].components.size());
+      if (local_a < 0 || local_b < 0 || local_a >= n_a || local_b >= n_b)
+        continue;
+      tmpl.bonds.push_back({bond.mol_a, local_a, bond.mol_b, local_b});
+    }
+    return tmpl;
+  }
+
   void init_species() {
+    std::vector<SeedTemplate> templates;
+    templates.reserve(model.initial_species.size());
+    // Seed totals, for the pool's capacity hint.  `long long` because
+    // each is a count times a per-species molecule count.
+    long long n_molecules = 0;
+    long long n_components = 0;
+    long long n_complexes = 0;
+    std::vector<long long> per_type(model.molecule_types.size(), 0);
+
     for (auto& si : model.initial_species) {
       // Truncate-toward-zero (NFsim parity).  NFsim's NFinput.cpp:774
       // explicitly does `(int) convertToDouble(specCount)` with a
@@ -3905,61 +4053,47 @@ struct Engine::Impl {
       // mismatch).  Keep the cast explicit and the truncation intent
       // documented rather than masking the FP edge case with rounding.
       int const count = static_cast<int>(si.concentration); // truncate toward zero (NFsim parity)
-      for (int n = 0; n < count; ++n) {
-        // Create molecules for this species instance
-        std::vector<int> mol_ids;
-        // Per-molecule component mappings (species XML index → MoleculeType index)
-        std::vector<std::vector<int>> comp_mappings;
+      if (count <= 0)
+        continue;
+      templates.push_back(resolve_seed_template(si, count));
+      {
+        // Complexes a copy leaves behind: one per molecule, less one for
+        // each bond that merges two of them.
+        const auto& t = templates.back();
+        auto const per_copy =
+            static_cast<long long>(t.molecules.size()) - static_cast<long long>(t.bonds.size());
+        n_complexes += count * (per_copy > 1 ? per_copy : 1);
+      }
+      for (const auto& m : templates.back().molecules) {
+        if (m.type_index < 0 || m.type_index >= static_cast<int>(per_type.size()))
+          continue; // capacity accounting only — the walk itself is unchanged
+        n_molecules += count;
+        n_components +=
+            count * static_cast<long long>(model.molecule_types[m.type_index].components.size());
+        per_type[m.type_index] += count;
+      }
+    }
 
-        for (auto& sim : si.molecules) {
-          int const mid = pool.add_molecule(sim.type_index);
-          auto& mtype = model.molecule_types[sim.type_index];
-          auto& mol = pool.molecule(mid);
+    pool.reserve_for_seed(n_molecules, n_components, n_complexes, per_type);
 
-          auto cmap = build_comp_mapping(sim, mtype);
-
-          // Set component states using the mapping
-          for (int ci = 0; ci < static_cast<int>(sim.comp_states.size()); ++ci) {
-            auto& [cname, cstate] = sim.comp_states[ci];
-            if (cstate.empty())
-              continue;
-            int const actual_ci = cmap[ci];
-            if (actual_ci < 0)
-              continue;
-            int const state_idx = mtype.state_index(actual_ci, cstate);
-            if (state_idx >= 0 && actual_ci < static_cast<int>(mol.comp_ids.size()))
-              pool.set_state(mol.comp_ids[actual_ci], state_idx);
-          }
-
+    std::vector<int> mol_ids; // one instance's molecules; reused across copies
+    for (const auto& tmpl : templates) {
+      mol_ids.reserve(tmpl.molecules.size());
+      for (int n = 0; n < tmpl.count; ++n) {
+        mol_ids.clear();
+        for (const auto& m : tmpl.molecules) {
+          int const mid = pool.add_molecule(m.type_index);
+          // Reference into the molecule arena: nothing below adds a
+          // molecule before it is done with, so it cannot dangle.
+          const auto& mol = pool.molecule(mid);
+          for (const auto& [local_ci, state_idx] : m.states)
+            pool.set_state(mol.comp_ids[local_ci], state_idx);
           mol_ids.push_back(mid);
-          comp_mappings.push_back(std::move(cmap));
         }
-
-        // Create bonds using the per-molecule component mappings
-        for (auto& bond : si.bonds) {
-          if (bond.mol_a < static_cast<int>(mol_ids.size()) &&
-              bond.mol_b < static_cast<int>(mol_ids.size()) && bond.comp_a >= 0 &&
-              bond.comp_b >= 0) {
-            int const mid_a = mol_ids[bond.mol_a];
-            int const mid_b = mol_ids[bond.mol_b];
-            auto& ma = pool.molecule(mid_a);
-            auto& mb = pool.molecule(mid_b);
-
-            int const actual_ci_a =
-                (bond.comp_a < static_cast<int>(comp_mappings[bond.mol_a].size()))
-                    ? comp_mappings[bond.mol_a][bond.comp_a]
-                    : bond.comp_a;
-            int const actual_ci_b =
-                (bond.comp_b < static_cast<int>(comp_mappings[bond.mol_b].size()))
-                    ? comp_mappings[bond.mol_b][bond.comp_b]
-                    : bond.comp_b;
-
-            if (actual_ci_a >= 0 && actual_ci_b >= 0 &&
-                actual_ci_a < static_cast<int>(ma.comp_ids.size()) &&
-                actual_ci_b < static_cast<int>(mb.comp_ids.size())) {
-              pool.add_bond(ma.comp_ids[actual_ci_a], mb.comp_ids[actual_ci_b]);
-            }
-          }
+        for (const auto& b : tmpl.bonds) {
+          int const cid_a = pool.molecule(mol_ids[b.mol_a]).comp_ids[b.local_a];
+          int const cid_b = pool.molecule(mol_ids[b.mol_b]).comp_ids[b.local_b];
+          pool.add_bond(cid_a, cid_b);
         }
       }
     }
