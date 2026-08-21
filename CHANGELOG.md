@@ -385,6 +385,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   could be swept in by dropping the hook id from that step; that is left as
   a separate decision rather than taken here.
 
+  It earned itself on the first run, with a finding no amount of local
+  macOS linting could have produced: `bugprone-misplaced-widening-cast` on
+  `static_cast<unsigned long long>(rej_sum + q.fc_total_matches)` in
+  `engine_profile.hpp`. `uint64_t` is `unsigned long` on Linux, so the cast
+  is a no-op applied after the addition and the check fires; on macOS the
+  two types coincide and it does not. No defect either way — both operands
+  are already 64-bit, so nothing can overflow ahead of the cast — but the
+  widening now sits on an operand rather than the sum, which is what the
+  check asks for and is honest about the `%llu` it feeds.
+
 - **A rule's per-molecule table was sized by the whole molecule arena
   *and* by every field any rule shape could want, so a rule that reads two
   of eleven fields was charged for all of them (issue #71).** After #70,
