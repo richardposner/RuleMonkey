@@ -70,6 +70,23 @@ add_test(
     COMMAND pool_churn_test ${_rulemonkey_test_dir}/cpp/pool_churn_model.xml
 )
 
+# Seed-species build (issue #67): `init_species` resolves each seed species
+# once and stamps out its copies, instead of redoing the component mapping,
+# the state lookups and the bond endpoints per copy.  The model's seed species
+# list their components out of the molecule type's declaration order — which
+# BNG2's writeXML never emits, hence the hand-edited XML — so the mapping the
+# walk resolves is not the identity, and every count the test makes is a
+# hand-derived integer.  The last arm runs past the seed, where the Debug/ASan
+# canonical-label self-check covers a newborn complex no longer marking itself
+# dirty.
+add_executable(seed_build_test cpp/seed_build_test.cpp)
+target_link_libraries(seed_build_test PRIVATE rulemonkey)
+
+add_test(
+    NAME seed_build_test
+    COMMAND seed_build_test ${_rulemonkey_test_dir}/cpp/seed_build_model.xml
+)
+
 # Observable values at session build (issue #65): the tracked observables are
 # settled out of the incremental tracker's tables instead of being full-walked
 # a second time, so what a run starts from is now derived rather than measured.

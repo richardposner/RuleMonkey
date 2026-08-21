@@ -1,0 +1,71 @@
+# Regression model for issue #67.  `init_species` used to resolve every
+# seed species from scratch once per COPY — the species-XML component
+# index -> molecule-type component index mapping, the state lookups and
+# the bond endpoints — and now resolves each once per species and
+# stamps out the copies.  The model is shaped so that every part of that
+# resolution has a consequence a `Species` count can see:
+#
+#   P(s~0~1,s~0~1,t~a~b)  two components share a name, so the mapping
+#                         has to match the N-th `s` in the species to
+#                         the N-th `s` in the type.  Collapsing them
+#                         moves a P between the Pss01 and Pss1 columns.
+#   P(t~a!1,s~1,s~1)      the seed lists `t` FIRST, out of the type's
+#                         declaration order, so the bond endpoint's
+#                         species index (0) and its type index (2)
+#                         differ.  A bond resolved without the mapping
+#                         lands on an `s` instead of on `t`.
+#                         NOTE: BNG2's writeXML normalizes that order
+#                         away, so seed_build_model.xml is this file's
+#                         output with the <ListOfSpecies> component
+#                         order restored by hand.  Do not regenerate the
+#                         XML over it — see the header comment there.
+#   nP = 3, nD = 4        more than one copy of each, so a template
+#                         applied to the first copy only is visible.
+#   nQ = 0                a seed species with no copies at all.
+#
+# The rules exist so a session can be run past the seed: they split a
+# complex, edit a component state in place, and synthesize a molecule
+# from nothing — the three pool mutations whose canonical-label cache
+# invalidation the Debug/ASan self-check proves.
+begin model
+begin parameters
+  nP    3
+  nD    4
+  nQ    0
+  koff  0.5
+  kflip 0.3
+  ksyn  2.0
+end parameters
+begin molecule types
+  P(s~0~1,s~0~1,t~a~b)
+  Q(u~x~y)
+  R()
+end molecule types
+begin seed species
+  P(s~0,s~1,t~b)             nP
+  P(t~a!1,s~1,s~1).Q(u~y!1)  nD
+  Q(u~x)                     nQ
+  R()                        0
+end seed species
+begin observables
+  Species   Pss01     P(s~0,s~1)
+  Species   Pss1      P(s~1,s~1)
+  Species   Ptb       P(t~b)
+  Species   PtaFree   P(t~a)
+  Species   PtaBound  P(t~a!+)
+  Species   Bound     P(t~a!1).Q(u~y!1)
+  Species   Qx        Q(u~x)
+  Species   QyBound   Q(u~y!+)
+  Molecules Pn        P()
+  Molecules Qn        Q()
+  Molecules Rn        R()
+end observables
+begin reaction rules
+  P(t~a!1).Q(u~y!1) -> P(t~a) + Q(u~y)  koff
+  P(s~0) -> P(s~1)                      kflip
+  0 -> R()                              ksyn
+end reaction rules
+end model
+begin actions
+writeXML()
+end actions

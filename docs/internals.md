@@ -43,6 +43,28 @@ call and silently missed both shortcuts.
 against a from-scratch walk at init, in addition to its original job on
 `evaluate_observable_on`.
 
+### Step 1 — the seed walk
+
+`init_species` runs in two passes. The first resolves each seed species
+into a `SeedTemplate`: the molecule types to create, the (component
+slot, state index) pairs to pin, and the bond endpoints, all of them
+already mapped through `build_comp_mapping` from the species XML's
+component order into the molecule type's declaration order. The second
+stamps out the copies. Nothing in a template depends on which copy is
+being made, so resolving one per copy — which is what this used to do —
+rebuilt a name-keyed `unordered_map` per molecule per copy, and was
+about a sixth of session build on a million-molecule pool (issue #67).
+A change here that leaves copy 1 right and copies 2..N wrong is the
+failure mode; `seed_build_test` is the gate.
+
+The first pass also totals the seed: molecules, components, and
+molecules per type. `AgentPool::reserve_for_seed` takes those and
+reserves every arena the walk grows, which otherwise doubles its way
+through the build — `molecules_` most expensively, since each element
+carries a vector. It is a capacity hint and nothing more: a total that
+is short, or that does not fit the `int` the pool addresses molecules
+with, costs only the growth it failed to pre-empt.
+
 ## SSA event loop
 
 Public entry: `Engine::run` (lines 7099–7103) → `Impl::run_ssa`
@@ -144,6 +166,24 @@ bookkeeping contract a future edit can break silently:
 proves the first two on every deletion: the recorded position against the
 type list's own contents, and the tally against `molecules_ − free_mol_ids_`.
 Both checks are O(1).
+
+### Who marks a complex dirty
+
+`cxs_dirty_` is the canonical-label cache's invalidation set, and
+`cached_label_of` treats an id that is *absent* from the label cache as
+dirty too. Complex ids come from `next_complex_id_++` and are never
+recycled, so a complex that was just born cannot have a cache entry —
+which makes marking it dirty information-free. `add_molecule` therefore
+does not mark, and at seed time that is one hash insert saved per
+molecule (issue #67). Every mutator that edits an *existing* complex —
+`set_state`, `add_bond`, `remove_bond`, `merge_complexes`,
+`split_complex_if_needed` — still must, and missing one there is the bug
+`kCanonicalCacheSelfCheck` exists to catch.
+
+`cx_edits_` is not the same question and does not follow the same rule.
+Its reader has to see each edit rather than ask whether one is
+outstanding, so a birth is appended to it even though it is not marked
+dirty.
 
 ## Propensity
 

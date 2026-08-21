@@ -317,6 +317,81 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **`init_species` re-resolved every seed species once per copy, and grew
+  the pool by doubling while it did (issue #67).** After #65, session
+  build was two thirds of an `error.bngl` replicate's setup and two
+  thirds of *that* was `init_species` — populating the pool from the seed
+  species, at a flat ~330 ns per molecule, before any matching,
+  propensity or observable work happens. It is now ~110 ns per molecule:
+  at `scale=100` (4.66e6 molecules) `init_species` takes 0.52 s where it
+  took 1.55 s, session build 1.12 s against 2.05 s, a full `t_end=2400`
+  replicate 8.6 s against 10.3 s, and peak RSS 1.93 GB against 2.23 GB —
+  for a byte-identical `.gdat`.
+
+  Three things, none of which changes what the pool ends up holding.
+
+  **The per-copy work did not depend on the copy.** For each of the
+  `count` copies of a seed species, the walk rebuilt the species-XML
+  component index → molecule-type component index mapping — a
+  `std::unordered_map<std::string, int>` keyed by component name, built
+  and thrown away once per molecule — re-ran the state-name lookups
+  through it, re-resolved the bond endpoints against it, and allocated
+  two scratch vectors. All of that is a function of the `SpeciesInit` and
+  the model alone. Each seed species is now resolved once into a
+  `SeedTemplate` and the copies are stamped out from it; on
+  `I(N!1).I(N!1)` at 1.55e6 copies, the old shape meant 3.1e6 name-keyed
+  hash maps built and destroyed.
+
+  **Nothing was reserved.** `molecules_`, `components_`, `comp_to_mol_`,
+  the per-type indices, the complex map and the move side-channel all
+  grew by doubling through the whole walk, from totals the first pass now
+  knows before the second starts. `molecules_` is the expensive one —
+  each element carries a `comp_ids` vector, so every reallocation moves
+  4.7e6 of them. `AgentPool::reserve_for_seed` is a capacity hint and
+  nothing more: a total that is short, or that does not fit the `int` the
+  pool addresses molecules with, costs only the growth it failed to
+  pre-empt. The complex map is sized by the complexes the seed *leaves*
+  rather than the one-per-molecule the walk creates before its bonds
+  merge them, since a hash map never gives a bucket array back.
+
+  **A newborn complex marked itself dirty.** `add_molecule` inserted the
+  complex it had just created into `cxs_dirty_`, the canonical-label
+  cache's invalidation set — one hash insert per molecule, which left the
+  set holding every complex in the model. It was information-free the
+  whole time, by the set's own documented contract: complex ids come from
+  a counter that never recycles, so a just-born complex cannot have a
+  cache entry, and `cached_label_of` already treats an absent id as
+  dirty. Every mutator that edits an *existing* complex still marks.
+  `cx_edits_` is a different question — its reader has to see the birth
+  rather than ask whether an edit is outstanding — so that one still gets
+  the id.
+
+  Verified byte-identical against a build of the parent commit: every
+  `.gdat` over the 187 model XMLs in `tests/reference/nfsim`,
+  `tests/models/feature_coverage` and `tests/cpp`, and every
+  `--species` census over the 160 of them that produce one.
+
+  `seed_build_test` pins the seed walk itself. Its model's seed species
+  list their components out of the molecule type's declaration order —
+  which BNG2's `writeXML` normalizes away, so the XML is hand-edited on
+  top of BNG2's output and the test refuses to run if that ordering is
+  ever regenerated out of it. Every count it makes is a hand-derived
+  integer, and each of the three ways the hoist could go wrong (a bond
+  endpoint resolved without the mapping, duplicate component names
+  collapsed onto one slot, the states applied to the first copy only) was
+  introduced on purpose and confirmed to fail it. Its last arm runs past
+  the seed, where `kCanonicalCacheSelfCheck` (Debug and ASan) covers the
+  dropped dirty mark; deleting a mark that *is* needed was likewise
+  confirmed to abort there.
+
+  What remains of the issue is its last direction: `complex_members_` is
+  a hash map to a heap-allocated vector per complex, the overwhelming
+  majority of them singletons, and it is now most of what `init_species`
+  still spends. That one changes `AgentPool`'s representation rather than
+  one loop — the pool is read from the matching layer, the propensity
+  layer, the observable tracker, save/load and species enumeration — so
+  it stays open.
+
 - **The `basicmodels` parity suite could not run from a clean clone: its
   reference manifest gated on gitignored files (issue #63).**
   `MANIFEST.tsv` is bootstrapped by walking the live reference tree, and
