@@ -2390,6 +2390,26 @@ struct FenwickTree {
       tree[i] += delta;
   }
 
+  // Bulk construction, for the from-scratch fills.  `add_leaf` deposits a
+  // weight at its own node and nowhere else; `build` then propagates the
+  // whole array in one linear pass.  Together that is one add per node,
+  // against the O(log N) ancestor walk `update` costs per weight — on the
+  // 4.7e6-slot tree of a `scale=100` `error.bngl` run, carrying 3.1e6
+  // weights, 4.7e6 sequential adds against 68e6 scattered ones.
+  //
+  // Only valid as a pair, on a tree fresh from `init`: the internal nodes
+  // are wrong until `build` runs, so nothing may read a prefix sum in
+  // between, and `build` must not run twice over the same leaves.
+  void add_leaf(int i, double w) { tree[i + 1] += w; }
+
+  void build() {
+    for (int i = 1; i <= n; ++i) {
+      int const parent = i + (i & (-i));
+      if (parent <= n)
+        tree[parent] += tree[i];
+    }
+  }
+
   // Sum of all weights (full prefix sum at index n).
   double sum() const {
     double s = 0;
@@ -5852,8 +5872,9 @@ struct Engine::Impl {
         if (!pool.molecule(mid).active)
           continue;
         if (mid < static_cast<int>(rs.mol_data.size()) && rs.mol_data[mid].count_a > 0)
-          rs.fenwick_a.update(mid, rs.mol_data[mid].count_a);
+          rs.fenwick_a.add_leaf(mid, rs.mol_data[mid].count_a);
       }
+      rs.fenwick_a.build();
     }
     if (rule.molecularity >= 2 && seed_b >= 0 &&
         seed_b < static_cast<int>(rule.reactant_pattern.molecules.size())) {
@@ -5866,8 +5887,9 @@ struct Engine::Impl {
           if (!pool.molecule(mid).active)
             continue;
           if (mid < static_cast<int>(rs.mol_data.size()) && rs.mol_data[mid].count_b > 0)
-            rs.fenwick_b.update(mid, rs.mol_data[mid].count_b);
+            rs.fenwick_b.add_leaf(mid, rs.mol_data[mid].count_b);
         }
+        rs.fenwick_b.build();
       }
     }
 
@@ -7913,8 +7935,9 @@ struct Engine::Impl {
               if (m < 0 || m >= pool.molecule_count() || !pool.molecule(m).active)
                 continue;
               if (m < static_cast<int>(rs.mol_data.size()) && rs.mol_data[m].count_a > 0)
-                rs.fenwick_a.update(m, rs.mol_data[m].count_a);
+                rs.fenwick_a.add_leaf(m, rs.mol_data[m].count_a);
             }
+            rs.fenwick_a.build();
           }
           rs.fenwick_a.update(mid, nd.count_a - old.count_a);
         }
@@ -7930,9 +7953,10 @@ struct Engine::Impl {
                 if (m < 0 || m >= pool.molecule_count() || !pool.molecule(m).active)
                   continue;
                 if (m < static_cast<int>(rs.mol_data.size()) && rs.mol_data[m].count_b > 0)
-                  rs.fenwick_b.update(m, rs.mol_data[m].count_b);
+                  rs.fenwick_b.add_leaf(m, rs.mol_data[m].count_b);
               }
             }
+            rs.fenwick_b.build();
           }
           rs.fenwick_b.update(mid, nd.count_b - old.count_b);
         }

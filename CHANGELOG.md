@@ -68,6 +68,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The Fenwick samplers are built in one linear pass instead of an
+  O(log N) ancestor walk per weight, cutting the larger of `error.bngl`'s
+  two trees 28% at `scale=100` (issue #71, fourth item — partially).** A
+  from-scratch fill used to call `update` once per weight, and `update`
+  walks the tree's ancestor chain. `add_leaf` deposits a weight at its own
+  node and nowhere else, and one linear `build` pass then propagates the
+  whole array: one add per node against `O(W log N)` scattered ones. On
+  the 4.7e6-slot tree carrying 3.1e6 weights that is 4.7e6 sequential adds
+  against 68e6 scattered ones. The two rebuild-on-growth sites in
+  `incremental_update` take the same construction.
+
+  Same tree, same contents, same `find`. `add_leaf` and `build` are only
+  valid as a pair on a tree fresh from `init` — the internal nodes are
+  wrong until `build` runs, so nothing may read a prefix sum in between —
+  which is stated at the declaration.
+
+  It is worth being plain about the size of this. Best of five to seven
+  paired runs (the two binaries alternated so both saw the same machine),
+  macOS arm64, release preset, `t_end` short enough that the SSA loop is
+  empty:
+
+  | tree | weights / slots | before | after | |
+  |---|---|---:|---:|---:|
+  | `error.bngl` @100, `I(N!1).I(N!1)->0` | 3.11e6 / 4.66e6 | 0.049 s | 0.036 s | 28% |
+  | `error.bngl` @100, `delta()->0` | 1.55e6 / 4.66e6 | 0.030 s | 0.030 s | — |
+  | `A(b)+B(a)`, 2e6 each (two trees) | 2.0e6 / 4.0e6 | 0.065 s | 0.058 s | 10% |
+
+  Which comes to about 6% of `init_rule_states` on `error.bngl` (0.386 →
+  0.361 s) and nothing distinguishable from noise at session-build level
+  or in the event loop. The reason it is not larger: the tree's own `init`
+  — a 37 MB `assign` sized by the molecule arena — is untouched and is
+  roughly half the sub-phase, and the linear `build` is itself a
+  read-modify-write pass over that same 37 MB. This trades a scattered
+  `O(W log N)` walk for a sequential `O(N)` one rather than removing work
+  outright, so it only pays where `W log N` is large next to `N`.
+
+  The `init` is the bigger half, and sizing it by what the rule can see
+  rather than by the arena is #71's fourth item proper. It is untouched
+  here for the reason the issue gives: it needs a stable dense per-type
+  slot in the pool, which is a design question.
+
+  `save_load_test` is the regression gate — deleting the `build` calls
+  fails it. ctest 45/45 release and ASan; feature_coverage 89/89 and
+  basicmodels 29/29 against the vendored NFsim ensembles.
+
 - **1-WL color refinement runs as a worklist over the cells that can still
   split, cutting the representative election 2.6x on a 80-subunit catalyst
   and the `.species` sweep 1.7x (issue #56).** #53 left the election's cost
