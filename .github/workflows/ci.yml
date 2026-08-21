@@ -125,6 +125,49 @@ jobs:
         # findings, which historically lacked symbolized traces.
         run: UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 ASAN_OPTIONS=detect_leaks=0 ctest --preset asan
 
+  clang_tidy:
+    # The clang-tidy gate, run somewhere it cannot be skipped.
+    #
+    # It is a pre-commit hook first (.pre-commit-config.yaml), but a hook
+    # only runs in a clone where someone ran `pre-commit install`, and when
+    # that has not happened there is nothing to notice: the hook is simply
+    # absent.  That is how the gate came to be off on a working machine for
+    # an unknown stretch.  This job is what stops it recurring, and it is
+    # the "CI is the place to turn this into a hard gate" the .clang-tidy
+    # header has always pointed at.
+    #
+    # Runs the hook itself rather than its own clang-tidy invocation, so the
+    # version pin, the check list and the wrapper script are the same ones a
+    # developer gets locally.  A second spelling here would be a second
+    # source of truth, and the two would drift.
+    #
+    # Configure only, no build: nothing in this tree is generated, so
+    # `cmake --preset release` is enough to produce the
+    # compile_commands.json clang-tidy reads.  Independent of `build` on
+    # purpose — a broken build leg should not withhold lint feedback.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+
+      - name: Configure (compile_commands.json only)
+        run: cmake --preset release
+
+      - name: Install pre-commit
+        run: python3 -m pip install --disable-pip-version-check 'pre-commit>=4.0'
+
+      # Only the clang-tidy hook.  The others (clang-format, ruff, the
+      # whitespace fixers) are in the same "runs only if installed"
+      # position and could be swept in by dropping the hook id, which is
+      # a deliberate separate decision rather than an oversight.
+      - name: Run clang-tidy over every C++ translation unit
+        run: pre-commit run clang-tidy --all-files
+
   feature_coverage:
     # Runs the full feature_coverage benchmark on every push / PR.  ctest
     # alone would not catch regressions in simulation correctness — the

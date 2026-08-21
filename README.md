@@ -67,6 +67,10 @@ To check the whole tree rather than the staged set:
 .venv/bin/pre-commit run --all-files
 ```
 
+CI runs the clang-tidy hook over every translation unit on each push and
+pull request, so that one is enforced whether or not the hooks are
+installed locally. The rest are local-only.
+
 ## Usage
 
 `rm_driver` runs a single trajectory:

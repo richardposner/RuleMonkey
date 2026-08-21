@@ -369,10 +369,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   empty — it has not been empty since the ratchet was flipped — and gains
   the front-end version floor.
 
-  Not addressed here: CI still does not run clang-tidy, so this remains a
-  local gate that goes dark again on any machine that skips the install
-  step. That is the durable fix and it is a separate decision, since a
-  full-tree run is about two minutes.
+  And a `clang_tidy` CI job now runs the gate somewhere it cannot be
+  skipped, which is the durable half of this: a hook only runs in a clone
+  where someone ran `pre-commit install`, and nothing notices when that has
+  not happened. The job runs the *hook*, not its own clang-tidy invocation,
+  so the version pin, the check list and the wrapper script are the same
+  ones a developer gets locally rather than a second spelling that drifts.
+  It configures without building — nothing in this tree is generated, so
+  `cmake --preset release` alone produces the `compile_commands.json`
+  clang-tidy reads — and is independent of the `build` job, since a broken
+  build leg should not withhold lint feedback.
+
+  The job runs only the clang-tidy hook. clang-format, ruff and the
+  whitespace hooks sit in the same "runs only if installed" position and
+  could be swept in by dropping the hook id from that step; that is left as
+  a separate decision rather than taken here.
 
 - **A rule's per-molecule table was sized by the whole molecule arena
   *and* by every field any rule shape could want, so a rule that reads two
