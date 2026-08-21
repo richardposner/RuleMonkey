@@ -1,0 +1,101 @@
+# Regression model for issue #71.  A rule's per-molecule table is now two
+# tables — a narrow one every rule carries and a wide one only the shapes
+# that read it allocate — so a rule can now be given the wrong half, or a
+# half that has not grown with the other, instead of merely being charged
+# for fields it never touches.
+#
+# Four rule shapes share one pool, one per group of wide-half fields:
+#
+#   A(a) + A(a) <-> A(a!1).A(a!1)   the shared-component split, and the
+#                                   `ab_both_sq` deflation the homodimer
+#                                   propensity subtracts.  Its equilibrium
+#                                   is an analytic CME steady state.
+#   L(t~u) -> L(t~d)  fdec(t)       a local rate law: a per-molecule rate
+#                                   and propensity, plus the sampler that
+#                                   draws proportional to them.
+#   E() + S(x~u) -> E() + S(x~p)    a pure-context slot: the complex the
+#                                   tally credits each E to.  E arrives as
+#                                   a BONDED PAIR, so the context slot
+#                                   prices ONE complex where a per-molecule
+#                                   reading would price two — the arm runs
+#                                   at half the rate that mistake gives.
+#   D() -> 0                        the shape with no wide half at all,
+#                                   which is the shape #71 is about.
+#
+# Every reacting molecule is made by a maker rule (`Mk*(s~u) -> Mk*(s~d) +
+# ...`) rather than seeded, so each is born with a molecule id past the end
+# of the tables the session build sized, and every arm above is exercised on
+# rows that came from the on-demand growth path.  The makers are also the
+# no-wide-half shape themselves, and each fires exactly once per maker
+# molecule: `Mk*(s~d)` is an exact count of how many products exist.
+#
+# kmk is 1e4 against decay constants of 1, so every product exists by
+# t = 1e-3 and the decay arms' analytic means are the plain exponentials
+# measured from t = 0, to within 1e-4 relative.
+begin model
+begin parameters
+  kmk   1.0e4  # maker rules: every product exists long before the first sample
+  kp    0.5    # A + A -> AA
+  km    0.5    # AA -> A + A   (K_eq = 1)
+  kdec  1.0    # local-rate scale for L
+  kcat  1.0    # per-E-complex catalytic constant for S
+  kdel  1.0    # plain decay constant for D
+  nA    8
+  nL    20
+  nD    30
+  nS    40
+end parameters
+begin molecule types
+  MkA(s~u~d)
+  MkL(s~u~d)
+  MkE(s~u~d)
+  MkD(s~u~d)
+  A(a)
+  L(t~u~d)
+  E(e)
+  D()
+  S(x~u~p)
+end molecule types
+begin seed species
+  MkA(s~u) nA
+  MkL(s~u) nL
+  MkE(s~u) 1
+  MkD(s~u) nD
+  S(x~u)   nS
+end seed species
+begin observables
+  Molecules Amon  A(a)
+  Molecules Adim  A(a!+)
+  Molecules Atot  A()
+  Molecules Lall  L()
+  Molecules Lu    L(t~u)
+  Molecules Emol  E()
+  Species   Ecx   E()
+  Molecules Dn    D()
+  Molecules Su    S(x~u)
+  Molecules MkAd  MkA(s~d)
+  Molecules MkLd  MkL(s~d)
+  Molecules MkEd  MkE(s~d)
+  Molecules MkDd  MkD(s~d)
+end observables
+begin functions
+  # Lall is read at the tagged molecule, so it is that molecule's own
+  # complex count — 1 for every L in this model, which keeps the arm's
+  # analytic mean a plain exponential while still routing the rate
+  # through the per-molecule local-rate fields.
+  fdec(t) = kdec*Lall(t)
+end functions
+begin reaction rules
+  MkA(s~u) -> MkA(s~d) + A(a)          kmk
+  MkL(s~u) -> MkL(s~d) + L(t~u)        kmk
+  MkE(s~u) -> MkE(s~d) + E(e!1).E(e!1) kmk
+  MkD(s~u) -> MkD(s~d) + D()           kmk
+  A(a) + A(a) <-> A(a!1).A(a!1)        kp, km
+  Lrule: L(t~u)%t -> L(t~d)%t          fdec(t)
+  E() + S(x~u) -> E() + S(x~p)         kcat
+  D() -> 0                             kdel
+end reaction rules
+end model
+begin actions
+writeXML()
+end actions

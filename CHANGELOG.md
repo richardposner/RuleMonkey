@@ -317,6 +317,112 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A rule's per-molecule table was sized by the whole molecule arena
+  *and* by every field any rule shape could want, so a rule that reads two
+  of eleven fields was charged for all of them (issue #71).** After #70,
+  `init_rule_states` was a third of an `error.bngl` session build at
+  `scale=100`, and five sixths of that third was allocating, zeroing and
+  re-walking side tables — not matching. The tables cost resident memory on
+  the same terms: 785 MB of a 1.69 GB peak on a model with two rules that
+  build one.
+
+  `PerMolRuleData` was 80 bytes: two embedding counts, a cache flag, a
+  three-field shared-component split, four doubles of local-rate state, and
+  two pure-context complex ids. It is now 12 bytes — the counts and the
+  flag, which every rule reads — with the other nine fields moved to a
+  `PerMolRuleAux` row in a second table a rule allocates only if its shape
+  reads one. The predicate (`rule_needs_mol_aux`) is the union of what
+  writes each group: two reactant slots for the shared-component split, a
+  local rate law (including the FunctionProduct B side) for the four rate
+  fields, a pure-context slot for the complex ids. A unimolecular,
+  non-local rule with no pure-context slot — the shape this is about —
+  allocates no second table at all, so its row goes 80 bytes to 12; a rule
+  that does need one pays 76 across the two, and neither its build nor its
+  event loop measurably moves.
+
+  Both tables are indexed by mol_id and either the aux table is empty or it
+  is *exactly* as long as the other, which is what `grow_mol_tables` is
+  for: an aux table shorter than `mol_data` is an out-of-bounds read on the
+  next event, not a wrong number. All 63 `mol_data` sites were audited onto
+  one side or the other.
+
+  The `cache_init` flag goes the same way — #71's cheapest item. It is now
+  part of the value the rescan fills the table with, instead of a second
+  full pass over the table writing one byte per 80-byte row afterwards. A
+  full rescan is what validates every row, including the zero-valued
+  defaults for molecules of types the rule cannot seed on, so the fill can
+  carry the flag. The default in `PerMolRuleData` itself stays false, and
+  the on-demand growth path still takes it: those rows are for molecules
+  born since the rescan, which genuinely have not been computed.
+
+  Measured on macOS arm64, release preset, `error.bngl` at `scale=100`
+  (4 661 136 molecules, three rules, two of which build a table), `t_end=1`
+  so the SSA loop is empty. Best of seven paired runs — the two binaries
+  alternated so both saw the same machine, which had other work on it:
+
+  | | before | after | |
+  |---|---:|---:|---:|
+  | `init_rule_states` | 0.385 s | 0.144 s | **2.7x** |
+  | session build | 1.147 s | 0.886 s | 1.3x |
+  | peak RSS | 1.74 GB | 1.10 GB | |
+
+  Per rule, inside the phase, same seven paired runs:
+
+  | | `delta()->0` | `I(N!1).I(N!1)->0` |
+  |---|---:|---:|
+  | seed-type population | 1.55e6 | 3.11e6 |
+  | `mol_data` fill | 0.087 → 0.009 s | 0.081 → 0.009 s |
+  | the embedding scan | 0.017 → 0.008 s | 0.051 → 0.032 s |
+  | Fenwick init + fill | 0.031 → 0.031 s | 0.052 → 0.051 s |
+  | `cache_init` tail pass | 0.032 s → gone | 0.021 s → gone |
+  | total | 0.174 → 0.048 s | 0.213 → 0.099 s |
+
+  The fill goes down by more than the 6.7x the row width alone predicts,
+  and the embedding scan gets faster without being touched at all: writing
+  one count into a 12-byte row touches a fraction of the cache lines an
+  80-byte row does. The Fenwick column is flat, which is both expected —
+  that code is untouched here — and a check on the harness. What is left of
+  the phase is now mostly that Fenwick `init`, a 37 MB zeroing sized by the
+  arena for a tree only ever updated at ids of one type. That is #71's
+  fourth item, and it is left alone with the third for the reason the issue
+  gives: both need a stable dense per-type slot in the pool, which is a
+  design question and should be measured before it is attempted.
+
+  Where it bites hardest is the shape #71 sharpened it to — the same model
+  plus four molecule types seeded with one molecule each and one
+  unimolecular rule apiece. Rules that between them can see four molecules:
+
+  | | before | after | |
+  |---|---:|---:|---:|
+  | `init_rule_states` | 0.908 s | 0.206 s | **4.4x** |
+  | session build | 1.682 s | 0.986 s | 1.7x |
+  | peak RSS | 3.12 GB | 1.33 GB | |
+
+  Nothing regresses for the shapes that do carry an aux row. On
+  `A(b) + B(a) <-> A(b!1).B(a!1)` with 2e6 of each, peak RSS goes 1.40 GB
+  to 1.06 GB — the forward rule saves 4 bytes a row, and the unbinding
+  rule, which is unimolecular, saves 68 — and session build is 3.92 s
+  against 3.99 s, best of three. If that 2% is real rather than noise it is
+  the second `assign` on a row that only got 4 bytes narrower, which is
+  what an aux-carrying rule trades for the arithmetic above. Three
+  feature-coverage stress models run to a 20 000-unit horizon are unchanged
+  within 1% (13.47/8.36/10.37 s against 13.02/8.44/10.41 s), which is the
+  event-loop check: the aux row costs one predicate test and one more
+  indexed table per updated molecule.
+
+  `rule_table_shape_test` is the new gate: one rule of each aux group plus
+  one of the no-aux shape in a single pool, every reacting molecule made by
+  a maker rule so each arm is priced on rows created after the session
+  build sized the tables. Structural assertions are exact; the four arm
+  means are 4-sigma bands against analytic references (the CME steady state
+  for the homodimer, plain exponential survivor counts for the rest), so
+  each arm is priced rather than merely observed. Deleting the aux-table
+  growth segfaults it. `docs/internals.md` gains a "Step 4 — the per-rule
+  tables" section covering the two-table invariant.
+
+  ctest 46/46 release and ASan; feature_coverage 89/89 and basicmodels
+  29/29 against the vendored NFsim ensembles.
+
 - **`init_species` re-resolved every seed species once per copy, and grew
   the pool by doubling while it did (issue #67).** After #65, session
   build was two thirds of an `error.bngl` replicate's setup and two

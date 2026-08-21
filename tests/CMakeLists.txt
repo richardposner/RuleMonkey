@@ -87,6 +87,22 @@ add_test(
     COMMAND seed_build_test ${_rulemonkey_test_dir}/cpp/seed_build_model.xml
 )
 
+# Per-molecule rule tables split by rule shape (issue #71): a rule now carries
+# a narrow row every shape reads and, only where its shape reads one, a second
+# wide row that must stay exactly as long as the first.  The model runs one
+# rule of each wide-row group plus one of the no-wide-row shape over molecules
+# made by maker rules, so every arm is priced on table rows created after the
+# session build sized them.  Structural assertions are exact; the four arm
+# means are 4-sigma bands against analytic references, and price each arm
+# rather than merely observing that it fired.
+add_executable(rule_table_shape_test cpp/rule_table_shape_test.cpp)
+target_link_libraries(rule_table_shape_test PRIVATE rulemonkey)
+
+add_test(
+    NAME rule_table_shape_test
+    COMMAND rule_table_shape_test ${_rulemonkey_test_dir}/cpp/rule_table_shape_model.xml
+)
+
 # Observable values at session build (issue #65): the tracked observables are
 # settled out of the incremental tracker's tables instead of being full-walked
 # a second time, so what a run starts from is now derived rather than measured.
