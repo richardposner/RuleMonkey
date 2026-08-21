@@ -9,6 +9,107 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **What a rule's per-molecule tables actually hold, measured across the
+  three corpora (issue #71).** #72 narrowed the per-molecule row from 80
+  bytes to 12 and left #71's other two directions — sizing the tables, and
+  the Fenwick samplers, by what the rule can see rather than by the molecule
+  arena — alone, for the reason the issue gives: both need a stable dense
+  per-type slot in the pool, which is a design question with a known failure
+  shape (#62 made type-index removal a swap-with-back, and #64 had to fix
+  what that broke), and the case for paying for it is residency on real
+  models rather than on a synthetic scale-up. That case was asserted, not
+  measured. It is measured now, and it is a good deal stronger than the
+  issue supposed.
+
+  `rule_table_bytes` is the accounting: what each rule holds across
+  `mol_data`, `mol_aux`, an n-ary rule's per-slot count tables and every
+  Fenwick tree. The `[RM tables]` stderr block prints it per rule and per
+  model at the end of a run, under its own `RM_PRINT_TABLES=1` gate rather
+  than `RM_PRINT_TIMING`'s — the block walks each rule's seed-type
+  populations, and `RM_PRINT_TIMING` is what the wall-clock harnesses set on
+  every replicate, so a memory question would otherwise put its cost on a
+  timing measurement. Rows *written*, not rows allocated: counting
+  `capacity()` put several corpus models over 100% of their own peak RSS,
+  the untouched tail of a geometrically grown vector being address space and
+  not residency. So every number below is a floor.
+
+  `harness/rule_table_footprint.py` sweeps all 189 models of
+  `feature_coverage`, `corpus` and `nfsim_basicmodels` with it — one
+  replicate each at the suite's canonical `(t_end, n_steps)` — pairing each
+  model's footprint against the peak RSS of its own `rm_driver` process,
+  taken from `os.wait4` so it is that run's number.
+
+  Across all 189 the median share is 1.79%, which is the wrong number to
+  read: 67 of them have arenas under 200 molecules, where the whole peak is
+  a 3.2 MB process floor. Conditioned on size it inverts. Of the 26 models
+  whose arena reaches 10 000 molecules the **median share is 48.6%**, and
+  six are over 90%:
+
+  | model | rules | arena | tables | peak RSS | share |
+  |---|---:|---:|---:|---:|---:|
+  | `tcr_gen27ind33` | 158 | 155 471 | 887.2 MB | 955.5 MB | **92.9%** |
+  | `example4_fit` | 158 | 158 456 | 904.3 MB | 980.8 MB | 92.2% |
+  | `tcr` | 158 | 67 042 | 387.2 MB | 425.7 MB | 91.0% |
+  | `ensemble` | 232 | 101 231 | 780.8 MB | 948.9 MB | 82.3% |
+  | `egfr_nf_iter5p12h10` | 26 | 302 009 | 294.9 MB | 387.6 MB | 76.1% |
+  | `CaMKII_holo` | 77 | 10 893 | 28.1 MB | 54.7 MB | 51.5% |
+
+  50 of the 189 are at or above 10% of peak and 15 at or above 50%. Per
+  suite the medians are 14.9% (`corpus`), 2.3% (`nfsim_basicmodels`) and
+  0.4% (`feature_coverage`), which tracks median arena size (4 500, 1 271,
+  100). The unit cost is 44 bytes per (rule holding a table x arena row) at
+  the median and 92 at the worst — 12 for the narrow row, 76 where the shape
+  reads the wide half, plus 8 per row per Fenwick-sampled slot; samplers are
+  24% of all the table bytes in the sweep. So the issue's "a dozen rules
+  over a few million molecules spends gigabytes on tables that are mostly
+  zeroes" is not the hypothetical it was labelled as: `ensemble` is 232
+  rules over 101 231 molecules and spends 780 MB, and it is in the reference
+  corpus.
+
+  The block also reports `reach` — one past the highest live molecule id a
+  rule can index, over its seed types — and `reach_bytes`, what the same
+  tables would hold cut to it. That is the shortcut #71 names and warns does
+  not generalize. Summed over the sweep it says the tables could be 59.2% of
+  their size: half on the `tcr` family, 8.5% on `CaMKII_holo`, and 99.9% on
+  `egfr_nf_iter5p12h10`, whose seed types span the arena.
+
+  It is a bound on what a table needs, and **not** on what sizing it that
+  way delivers, which was measured before this was written up. Building the
+  tables at `reach` in the rescan is safe — every read bounds-checks or
+  grows first, the audit #68 relied on — but it does not hold: the sweep
+  re-run against it keeps 83.7% of the bytes, not 59.2%, and no peak RSS at
+  all. `CaMKII_holo` keeps 100% of a table its rules can reach 8.5% of, in a
+  0.3 s run. The reason is in `incremental_update`, which hands every rule
+  every molecule an event touched and grows that rule's table to cover it
+  **whatever its type**, so each table converges on the arena no matter what
+  it was sized to. A molecule of a type neither slot seeds on scores zero on
+  both counts forever; the row exists only because the loop made one.
+
+  Sizing by reach *and* declining to materialize those rows does hold, tried
+  as an experiment against the same sweep: `tcr` 387.2 -> 194.0 MB,
+  `ensemble` 780.8 -> 491.5 MB, `CaMKII_holo` 28.1 -> 8.4 MB, `lat` 122.3 ->
+  92.3 MB, and `egfr_nf_iter5p12h10` unmoved at 294.7 MB, which is what
+  `reach` predicts for it. That is a change to the hot per-molecule loop
+  with a hazard the naive form has — an id the pool has handed to a molecule
+  of another type still owes its predecessor's count back to `a_total`, the
+  failure shape #62 introduced and #64 fixed — so it is not in this PR.
+  #71's directions 3 and 4 stay open with both numbers attached: what the
+  tables cost, and what the cheap sizing does and does not buy.
+
+  `rule_table_footprint_test` is the gate on the accounting, over three
+  fixtures already in the tree: `pool_churn_model` for the narrow row, the
+  wide row and a seedless rule that must hold no table at all (#68),
+  `trimolecular_model` for an n-ary rule's per-slot count tables and the
+  three Fenwick samplers its 400-molecule seed type earns, and
+  `rule_table_shape_model` for one rule per wide-half group. Each rule's row
+  width is pinned exactly, so a field added to either per-molecule struct
+  fails it and says what it costs; the summary is checked against the
+  per-rule detail it claims to sum. `docs/internals.md` gains the
+  corresponding subsection under "Step 4 — the per-rule tables".
+
+  Nothing outside the gated block changes: `feature_coverage` is 89/89
+  against the vendored NFsim ensembles, and ctest is 47/47 release and ASan.
+
 - **Load-time diagnostics for the two `MM(kcat,Km)` constructs where RM
   cannot reproduce BNG2 (issue #45).** BNG2.pl is the reference RM is written
   against, so both of these are divergences from it and both now say so at
