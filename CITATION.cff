@@ -11,8 +11,8 @@ abstract: >-
   C++17 rewrite, designed to be embedded as an in-process simulation
   kernel.
 type: software
-version: 3.9.0
-date-released: '2026-08-07'
+version: 3.10.0
+date-released: '2026-08-21'
 license: MIT
 repository-code: 'https://github.com/richardposner/RuleMonkey'
 authors:

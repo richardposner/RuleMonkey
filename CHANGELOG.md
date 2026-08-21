@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.10.0] — 2026-08-21
+
 ### Added
 
 - **What a rule's per-molecule tables actually hold, measured across the
@@ -166,6 +168,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pins both diagnostics on a fixture where each rule trips exactly one, with
   `mm_symmetry_model` (four MM rules, including #37's enzyme-slot arm whose
   factor *is* attributable) as the negative control.
+
+- `tests/models/feature_coverage/ft_local_fcn_bimol.bngl` and
+  `ft_local_fcn_bimol_sym.bngl`, plus the `local_fcn_bimol_test` ctest
+  case, covering the two DOR1 shapes fixed below — a bimolecular rule
+  with a local-function rate, and the same rule carrying BNG2's
+  `symmetry_factor`. No existing corpus model used a local function on
+  a bimolecular rule, which is why the gap survived three minor
+  releases.
 
 ### Changed
 
@@ -353,8 +363,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   boundary further out. The flags are now applied directory-wide below the
   CLI targets, which also means the test harnesses' own code is sanitized
   for the first time. All 37 tests pass with it on.
-
-### Changed
 
 - **The `TotalRate` keyword now warns at load, and is refused where RM and
   NFsim genuinely disagree.** BioNetGen does not implement TotalRate for network
@@ -1418,14 +1426,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   untouched: its `/2` in `compute_propensity` already is the 0.5, and
   `homodimer_rate_test` still pins it against the chemical master
   equation.
-
-### Added
-
-- `tests/models/feature_coverage/ft_local_fcn_bimol.bngl` and
-  `ft_local_fcn_bimol_sym.bngl`, plus the `local_fcn_bimol_test` ctest
-  case, covering the DOR1 shapes above. No existing corpus model used a
-  local function on a bimolecular rule, which is why the gap survived
-  three minor releases.
 
 ## [3.9.0] — 2026-08-07
 
@@ -2668,7 +2668,8 @@ The legacy implementation, RuleMonkey 2.0.25, was introduced in:
 > RG. *RuleMonkey: software for stochastic simulation of rule-based
 > models.* BMC Bioinformatics 11:404 (2010). PMID: 20673321.
 
-[Unreleased]: https://github.com/richardposner/RuleMonkey/compare/v3.9.0...HEAD
+[Unreleased]: https://github.com/richardposner/RuleMonkey/compare/v3.10.0...HEAD
+[3.10.0]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.10.0
 [3.9.0]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.9.0
 [3.8.1]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.8.1
 [3.8.0]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.8.0
