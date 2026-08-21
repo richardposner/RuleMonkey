@@ -317,6 +317,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The clang-tidy gate had been off, and said nothing about it.** Three
+  independent faults, only one of which was visible:
+
+  1. `.git/hooks/` was empty in a working clone — `pre-commit install` had
+     never been run, so *no* hook fired on commit: not clang-tidy, not
+     clang-format, not ruff, not the whitespace fixers. Nothing in the
+     README said to install them.
+  2. The hook was `language: system`, so it ran only for whoever happened
+     to have an LLVM on `PATH`, and `scripts/clang-tidy-staged.sh` exited
+     **0** when it found none. pre-commit prints nothing for a passing
+     hook, so a machine with no clang-tidy reported a clean lint.
+  3. Installing one by hand does not necessarily help: macOS SDK 26's
+     libc++ headers use `__builtin_clzg` / `__builtin_ctzg`, which
+     front-ends older than clang 19 lack, so clang-tidy 18 emits thousands
+     of `clang-diagnostic-error`s out of `<algorithm>` and `<charconv>`
+     and never reaches any RuleMonkey code.
+
+  The hook now takes its binary from pre-commit — `language: python` with
+  `additional_dependencies: ['clang-tidy==21.1.6']`, the same wheel family
+  the clang-format hook already pins — so it cannot be missing or the
+  wrong version, and no system LLVM is required. "Not found" is now a real
+  fault and exits non-zero, and the script carries a front-end version
+  floor that names the SDK mismatch instead of drowning in it. Both
+  failure paths print `NOT LINTED` rather than a hint that scrolls past.
+  The one remaining soft path is a missing
+  `build/release/compile_commands.json`, which a fresh clone genuinely has
+  until the first `cmake --preset release`; it too now says plainly that
+  nothing was checked.
+
+  With the gate actually running, clang-tidy 21.1.6 over all 44 C++
+  translation units reports **seven** findings, all `misc-const-correctness`
+  and none in code this repo has touched recently: six variables that can
+  be declared `const` (three in `canonical_test`, one each in
+  `seed_build_test` and `species_enumeration_test`, plus a `char*` pair in
+  `simulator.cpp`) — fixed. The seventh is a false positive: the check
+  wants `const char*` for `strtol`'s endptr, whose parameter is `char**`,
+  so the suggested form does not compile; that site takes a targeted
+  `NOLINT` with the reason, next to the `NOLINTBEGIN` it already carried
+  for a different checker's false positive on the same lines.
+
+  `pre-commit run --all-files` is now green on every hook. Verified
+  end-to-end rather than by inspection: a planted `int* p = 0;` in
+  `smoke_test.cpp` fails the hook on `modernize-use-nullptr`, and a
+  clang-tidy 18 on `PATH` is refused by name instead of reporting the
+  standard library as broken.
+
+  The README gains a "Contributing setup" section, since the gate is only
+  as real as the `pre-commit install` nobody was told to run. `.clang-tidy`
+  loses a stale comment claiming `WarningsAsErrors` was intentionally
+  empty — it has not been empty since the ratchet was flipped — and gains
+  the front-end version floor.
+
+  And a `clang_tidy` CI job now runs the gate somewhere it cannot be
+  skipped, which is the durable half of this: a hook only runs in a clone
+  where someone ran `pre-commit install`, and nothing notices when that has
+  not happened. The job runs the *hook*, not its own clang-tidy invocation,
+  so the version pin, the check list and the wrapper script are the same
+  ones a developer gets locally rather than a second spelling that drifts.
+  It configures without building — nothing in this tree is generated, so
+  `cmake --preset release` alone produces the `compile_commands.json`
+  clang-tidy reads — and is independent of the `build` job, since a broken
+  build leg should not withhold lint feedback.
+
+  The job runs only the clang-tidy hook. clang-format, ruff and the
+  whitespace hooks sit in the same "runs only if installed" position and
+  could be swept in by dropping the hook id from that step; that is left as
+  a separate decision rather than taken here.
+
+  It earned itself on the first run, with a finding no amount of local
+  macOS linting could have produced: `bugprone-misplaced-widening-cast` on
+  `static_cast<unsigned long long>(rej_sum + q.fc_total_matches)` in
+  `engine_profile.hpp`. `uint64_t` is `unsigned long` on Linux, so the cast
+  is a no-op applied after the addition and the check fires; on macOS the
+  two types coincide and it does not. No defect either way — both operands
+  are already 64-bit, so nothing can overflow ahead of the cast — but the
+  widening now sits on an operand rather than the sum, which is what the
+  check asks for and is honest about the `%llu` it feeds.
+
 - **A rule's per-molecule table was sized by the whole molecule arena
   *and* by every field any rule shape could want, so a rule that reads two
   of eleven fields was charged for all of them (issue #71).** After #70,

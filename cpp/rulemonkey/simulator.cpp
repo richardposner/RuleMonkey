@@ -1070,8 +1070,12 @@ Model load_model(const std::string& xml_path,
                         // `a.c_str()` / `b.c_str()` here as
                         // use-after-move via std::sort's swap path,
                         // but the comparator only reads the operands.
-                        char* ea = nullptr;
-                        char* eb = nullptr;
+                        // `strtol`'s endptr parameter is `char**`, so these
+                        // cannot be `const char*` however read-only they are
+                        // here — misc-const-correctness does not model the
+                        // out-param's type requirement.
+                        char* ea = nullptr; // NOLINT(misc-const-correctness)
+                        char* eb = nullptr; // NOLINT(misc-const-correctness)
                         // NOLINTBEGIN(clang-analyzer-cplusplus.Move)
                         long const va = std::strtol(a.c_str(), &ea, 10);
                         long const vb = std::strtol(b.c_str(), &eb, 10);

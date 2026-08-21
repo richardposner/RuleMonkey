@@ -5,9 +5,16 @@
 # (identifier naming, magic numbers, cognitive complexity, etc.) are off so
 # the hook stays useful as a defect detector rather than a style nag.
 #
-# WarningsAsErrors is intentionally empty: the pre-commit hook reports
-# findings but does not fail the commit.  Once findings are addressed, flip
-# specific check categories into WarningsAsErrors to ratchet quality.
+# WarningsAsErrors carries every enabled category: the tree is at zero
+# findings, so the hook fails the commit rather than printing a warning
+# nobody reads.  This comment used to say the field was intentionally
+# empty, which stopped being true when the ratchet was flipped.
+#
+# Front-end floor: clang-tidy >= 19.  macOS SDK 26's libc++ headers use
+# __builtin_clzg / __builtin_ctzg, and an older front-end reports the
+# standard library as broken rather than linting anything.  The version is
+# pinned in .pre-commit-config.yaml, which installs it; the hook script
+# checks the floor and says so rather than drowning.
 #
 # HeaderFilterRegex limits header diagnostics to RM's own headers — the
 # project includes <random>, <vector>, etc., and we don't want findings

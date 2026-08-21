@@ -144,7 +144,7 @@ void test_species_file_roundtrip(const std::string& aa_xml) {
 // enumerate_species / write_species_file / species_count /
 // total_complex_count all require a live session.
 void test_no_session_throws(const std::string& aa_xml) {
-  RuleMonkeySimulator sim(aa_xml);
+  RuleMonkeySimulator const sim(aa_xml);
   bool threw = false;
   try {
     (void)sim.enumerate_species();

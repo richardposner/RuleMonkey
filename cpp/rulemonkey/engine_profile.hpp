@@ -1108,7 +1108,14 @@ inline void report_cmm_fc(const CmmFcProfile& q, const CountMultiProfile& cm) {
   std::fprintf(stderr,
                "  cross-check: rej_sum+matches=%llu  iters=%llu  (must be equal)"
                "  fm_hits=%llu (from count_multi)\n",
-               static_cast<unsigned long long>(rej_sum + q.fc_total_matches),
+               // Widen an operand, not the sum: both are already uint64_t, so
+               // the addition cannot overflow anything the cast would rescue,
+               // and on a platform where uint64_t IS unsigned long (Linux) a
+               // cast of the whole expression is a no-op that
+               // bugprone-misplaced-widening-cast flags.  On macOS the two
+               // types coincide and nothing fires, which is why this only
+               // ever showed up on the Linux CI leg.
+               static_cast<unsigned long long>(rej_sum) + q.fc_total_matches,
                static_cast<unsigned long long>(q.fc_candidate_iters),
                static_cast<unsigned long long>(cm.fm_hits));
   double const fc = q.fc_calls > 0 ? static_cast<double>(q.fc_calls) : 1.0;

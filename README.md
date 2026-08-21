@@ -44,6 +44,33 @@ When RuleMonkey is vendored with `add_subdirectory`, tests and the
 command-line tools default off, while the `RuleMonkey::rulemonkey`
 target remains available for `target_link_libraries`.
 
+### Contributing setup
+
+The lint gates run as git hooks through
+[pre-commit](https://pre-commit.com), and they only run once you install
+them — a clone with an empty `.git/hooks/` silently enforces nothing:
+
+```bash
+python3 -m venv .venv && .venv/bin/pip install pre-commit ruff
+.venv/bin/pre-commit install --install-hooks
+```
+
+That covers clang-format, clang-tidy, ruff and the whitespace checks;
+pre-commit installs its own pinned clang-format and clang-tidy, so no
+system LLVM is needed. Run `cmake --preset release` at least once first —
+clang-tidy reads `build/release/compile_commands.json`, and skips (saying
+so) until that exists.
+
+To check the whole tree rather than the staged set:
+
+```bash
+.venv/bin/pre-commit run --all-files
+```
+
+CI runs the clang-tidy hook over every translation unit on each push and
+pull request, so that one is enforced whether or not the hooks are
+installed locally. The rest are local-only.
+
 ## Usage
 
 `rm_driver` runs a single trajectory:
