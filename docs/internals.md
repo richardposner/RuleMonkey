@@ -116,6 +116,65 @@ does.
 molecules made after the session build sized the tables, each arm priced
 against an analytic reference.
 
+#### What the tables hold
+
+The row width is settled; the **sizing** is not. Both tables are
+`assign(pool.molecule_count(), ...)` — the whole molecule arena, per rule
+— and so is the Fenwick sampler a slot gets once its type population
+passes `FENWICK_THRESHOLD`, and so are an n-ary rule's per-slot `counts`
+(plus `raw` / `cx_of` on its context slots). None of that is a function
+of the population the rule can actually see: a rule whose seed type holds
+one molecule out of four million is charged for four million rows.
+
+`RuleTableBytes` / `rule_table_bytes` account for what that comes to, and
+the `[RM tables]` block prints it per rule and per model at the end of a
+run, alongside the existing `[RM timing]` and `[RM per-rule]` blocks but
+under its own `RM_PRINT_TABLES=1` gate — `reach` below walks each rule's
+seed-type populations, and `RM_PRINT_TIMING` is what the wall-clock
+harnesses set on every replicate:
+
+```
+[RM tables] arena=8030 rules=26 tabled=26 bytes=14582704 (13.9 MB) mol=12783760 sampler=1798944 reach_bytes=12994704
+  RR1 (_R1): rows=8030 reach=7530 mol=610280 sampler=128496
+  ...
+```
+
+Three things about the numbers.
+
+They count rows *written* (`size()`), not rows allocated (`capacity()`).
+Everything in `[0, size)` has been written by the `assign` that sized the
+table or the `resize` that grew it, so it is resident; the tail up to
+`capacity()` is address space the geometric growth of `resize(mid + 1)`
+reserved and nothing has touched. Counting capacity put several corpus
+models over 100% of their own peak RSS, which is the tell. So this is a
+floor on what the tables cost, which is the right side to err on for an
+argument that they are too big.
+
+`reach_bytes` is the same total with every table cut to the highest live
+molecule id its rule can index — one past the top of its seed types'
+populations. That is what sizing the tables by the seed types' high-water
+mark would cost, and it needs nothing new in the pool, since every read
+of every one of these tables bounds-checks or grows first. Issue #71
+names that shortcut and warns it does not generalize; `reach_bytes` is
+what makes the warning a number instead of an argument.
+
+The per-complex tallies (`PerCxTally`) are deliberately not counted: they
+are sized by matching complexes rather than by the arena, so they are not
+part of the product this measures.
+
+`harness/rule_table_footprint.py` sweeps the three corpora with it,
+pairing each model's table footprint against the peak RSS of its own
+`rm_driver` process. What that sweep found, over all 189 models: on the
+26 whose arena reaches 10 000 molecules the median share of peak RSS
+held in these tables is 48.6%, and six are over 90% — `tcr_gen27ind33`
+is 158 rules over 155 471 molecules and holds 887 MB of a 956 MB peak.
+The unit cost is 44 bytes per (rule holding a table x arena row) at the
+median, and a quarter of the total is Fenwick samplers. `rule_table_footprint_test` is the gate on the
+accounting itself, and pins each rule shape's row width exactly: a field
+added to either per-molecule struct is a byte per molecule per rule of
+resident memory for the whole run, which is the change issue #71 says has
+to be made deliberately.
+
 ## SSA event loop
 
 Public entry: `Engine::run` (lines 7099–7103) → `Impl::run_ssa`

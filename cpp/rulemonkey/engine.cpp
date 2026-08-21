@@ -2911,6 +2911,129 @@ struct RuleState {
   bool b_mask_complete = false;
 };
 
+// ---------------------------------------------------------------------------
+// Per-rule side-table residency (issue #71).
+//
+// Every per-molecule table a rule owns is sized by the molecule ARENA and
+// not by the population the rule can actually see, so what a model holds in
+// them is a (rule count x arena) product rather than a function of what the
+// rules match.  Four kinds, all of them indexed by mol_id:
+//
+//   * `mol_data`, carried by every rule with a reactant seed molecule;
+//   * `mol_aux`, carried by the shapes that read one (see PerMolRuleAux);
+//   * an n-ary rule's per-slot `counts`, plus `raw` / `cx_of` on its
+//     context slots;
+//   * a Fenwick tree per slot whose type population is over threshold,
+//     `init(pool.molecule_count())` on a sampler only ever updated at the
+//     ids of one type.
+//
+// #72 narrowed the row (80 bytes to 12, with the wide half allocated only
+// where it is read); the SIZING is what is left of #71, and the case for
+// changing it is residency on real models rather than on a synthetic
+// scale-up.  This is the accounting that measures it -- reported per rule
+// and per model by the `[RM tables]` block at the end of a run (gated on
+// RM_PRINT_TABLES), which is what `harness/rule_table_footprint.py` sweeps
+// the corpora with.
+//
+// `size()`, not `capacity()`.  Every row in [0, size) has been written by
+// the `assign` that sized the table or the `resize` that grew it, so it is
+// resident; the tail up to `capacity()` is address space the geometric
+// growth of `resize(mid + 1)` reserved and nothing has touched, which is
+// not.  Counting capacity put several corpus models over 100% of their own
+// peak RSS, which is the tell.  The consequence is that this UNDERSTATES
+// what the allocator holds -- a table that grew has slack, and a `clear()`
+// on a Fenwick whose type fell back below FENWICK_THRESHOLD returns
+// nothing -- so it is a floor on the residency, which is the right side to
+// err on for an argument that the tables are too big.
+//
+// The per-complex tallies (`PerCxTally`) are deliberately not counted: they
+// are sized by matching complexes, so they are not part of the arena
+// product this exists to measure, and their hash-map storage has no
+// equivalent of `size() * sizeof(row)` to report.
+// ---------------------------------------------------------------------------
+struct RuleTableBytes {
+  std::size_t mol = 0;     // per-molecule rows (mol_data, mol_aux, n-ary slots)
+  std::size_t sampler = 0; // Fenwick trees
+  std::size_t rows = 0;    // longest per-molecule table, in entries
+  std::size_t total() const { return mol + sampler; }
+};
+
+// `cap_rows`, when non-zero, caps every table at that many rows instead of
+// counting the rows it has: what the same rule would hold if its tables
+// were sized by something other than the arena.  A table that does not
+// exist stays at zero either way -- the cap shortens tables, it does not
+// conjure them.
+RuleTableBytes rule_table_bytes(const RuleState& rs, std::size_t cap_rows = 0) {
+  RuleTableBytes b;
+  auto capped = [cap_rows](std::size_t n) { return (cap_rows != 0) ? std::min(n, cap_rows) : n; };
+  auto add_rows = [&b, &capped](std::size_t n, std::size_t width) {
+    b.mol += capped(n) * width;
+    b.rows = std::max(b.rows, capped(n));
+  };
+  auto add_tree = [&b, &capped](std::size_t n) {
+    // A Fenwick over k rows is k + 1 doubles; it is 1-indexed.
+    b.sampler += (n == 0) ? 0 : std::min(n, capped(n - 1) + 1) * sizeof(double);
+  };
+  add_rows(rs.mol_data.size(), sizeof(PerMolRuleData));
+  add_rows(rs.mol_aux.size(), sizeof(PerMolRuleAux));
+  for (const auto& c : rs.nary.counts)
+    add_rows(c.size(), sizeof(int));
+  for (const auto& c : rs.nary.raw)
+    add_rows(c.size(), sizeof(int));
+  for (const auto& c : rs.nary.cx_of)
+    add_rows(c.size(), sizeof(int));
+  add_tree(rs.fenwick_a.tree.size());
+  add_tree(rs.fenwick_b.tree.size());
+  for (const auto& f : rs.nary.fenwick)
+    add_tree(f.tree.size());
+  return b;
+}
+
+// One past the highest live molecule id this rule's tables can be indexed
+// at.  The arena is what they are SIZED by; this is what they could be
+// sized by instead without any new pool-side machinery, since every read of
+// every one of them either bounds-checks against the table's length or
+// grows it first -- which is the audit #68 relied on to leave a seedless
+// rule's table empty outright.
+//
+// It is also the shortcut #71 names and warns about, and reporting it
+// beside the row count is how that warning gets a number: a rule whose seed
+// type happens to sit at the top of the arena reaches all of it and saves
+// nothing, and after #62 made type-index removal a swap-with-back, a
+// long-running model's ids of any one type have no reason to stay low.
+// Whether real models leave a rule short of the arena is a measurement.
+//
+// Derived here rather than recorded during the rescan, so that it is a
+// snapshot of the same instant as the row counts it prints next to.
+int rule_table_reach(const AgentPool& pool, const Rule& rule, const RuleState& rs) {
+  auto type_reach = [&pool](int type_index) {
+    int r = 0;
+    if (type_index < 0)
+      return r;
+    for (int const mid : pool.molecules_of_type(type_index))
+      if (pool.molecule(mid).active && mid + 1 > r)
+        r = mid + 1;
+    return r;
+  };
+  if (rs.nary.enabled) {
+    int r = 0;
+    for (int const t : rs.nary.slot_type_index)
+      r = std::max(r, type_reach(t));
+    return r;
+  }
+  const auto& mols = rule.reactant_pattern.molecules;
+  int const seed_a = rule.reactant_pattern_starts.empty() ? 0 : rule.reactant_pattern_starts[0];
+  if (seed_a >= static_cast<int>(mols.size()))
+    return 0; // no seed molecule, so no table at all (#68)
+  int r = type_reach(mols[seed_a].type_index);
+  if (rule.molecularity >= 2 && rule.reactant_pattern_starts.size() > 1) {
+    int const seed_b = rule.reactant_pattern_starts[1];
+    if (seed_b >= 0 && seed_b < static_cast<int>(mols.size()))
+      r = std::max(r, type_reach(mols[seed_b].type_index));
+  }
+  return r;
+}
+
 // Distinct-tuple sum D over the n reactant slots (issue #24).  See the
 // NaryState comment for the partition-lattice expansion this evaluates.
 double nary_distinct_sum(const NaryState& ns) {
@@ -10478,7 +10601,9 @@ struct Engine::Impl {
     // off by default — embedders and CLI users want a quiet stderr.  Set
     // RM_PRINT_TIMING=1 in the environment to re-enable; the harness
     // scripts that parse `events=N` / `total=Xs` from rm_driver's stderr
-    // do this themselves.
+    // do this themselves.  RM_PRINT_TABLES is the second, separate gate,
+    // below: it costs wall time and this one is read by the wall-time
+    // harnesses.
     // getenv is read once via a function-local static; no concurrent
     // access surface even under multi-threaded callers.
     static const bool kPrintTiming = []() {
@@ -10523,6 +10648,72 @@ struct Engine::Impl {
         fprintf(stderr, "  %s (%s): fires=%llu  propensity=%.6g  a_total=%.6g\n", rule.id.c_str(),
                 rule.name.c_str(), static_cast<unsigned long long>(rule_fire_counts[ri]),
                 rs.propensity, rs.a_total);
+      }
+    }
+
+    // Per-rule side-table residency (issue #71).  Its own gate, not
+    // RM_PRINT_TIMING's: `rule_table_reach` walks each rule's seed-type
+    // populations, which is a sizeable fraction of a second on a model with
+    // a couple of hundred rules over a large arena, and RM_PRINT_TIMING is
+    // what the timing harnesses set on every replicate.  A memory question
+    // should not put its cost on a wall-clock measurement.
+    static const bool kPrintTables = []() {
+      const char* v = std::getenv("RM_PRINT_TABLES"); // NOLINT(concurrency-mt-unsafe)
+      return v != nullptr && v[0] != '\0' && v[0] != '0';
+    }();
+
+    if (kPrintTables) {
+      // See RuleTableBytes for what is counted and why it is `size()`.  One
+      // line per rule that holds a table -- a rule with no reactant seed
+      // molecule holds none at all (#68) and would otherwise be a line of
+      // zeroes -- and a model total, which is the number the sizing question
+      // turns on.
+      //
+      // `reach_bytes` is the same total with every table cut to the highest
+      // live id its rule can index, which is what sizing by the seed types'
+      // high-water mark would cost.  The gap between it and `bytes` is what
+      // that shortcut would buy on this model; see rule_table_reach for why
+      // it is not obviously anything.
+      //
+      // Bytes are exact so a sweep can do arithmetic on them; the MB
+      // rendering on the summary is for reading.
+      int const n_rules = static_cast<int>(model.rules.size());
+      struct Row {
+        int rule_index;
+        int reach;
+        RuleTableBytes held;
+      };
+      std::vector<Row> rows;
+      RuleTableBytes model_tables;
+      RuleTableBytes model_reach;
+      for (int ri = 0; ri < n_rules; ++ri) {
+        RuleTableBytes const tb = rule_table_bytes(rule_states[ri]);
+        if (tb.total() == 0)
+          continue;
+        int const reach = rule_table_reach(pool, model.rules[ri], rule_states[ri]);
+        RuleTableBytes const rb =
+            rule_table_bytes(rule_states[ri], static_cast<std::size_t>(reach));
+        model_tables.mol += tb.mol;
+        model_tables.sampler += tb.sampler;
+        model_reach.mol += rb.mol;
+        model_reach.sampler += rb.sampler;
+        rows.push_back(Row{ri, reach, tb});
+      }
+      fprintf(stderr,
+              "[RM tables] arena=%d rules=%d tabled=%d bytes=%llu (%.1f MB) mol=%llu "
+              "sampler=%llu reach_bytes=%llu\n",
+              pool.molecule_count(), n_rules, static_cast<int>(rows.size()),
+              static_cast<unsigned long long>(model_tables.total()),
+              static_cast<double>(model_tables.total()) / (1024.0 * 1024.0),
+              static_cast<unsigned long long>(model_tables.mol),
+              static_cast<unsigned long long>(model_tables.sampler),
+              static_cast<unsigned long long>(model_reach.total()));
+      for (const auto& row : rows) {
+        fprintf(stderr, "  %s (%s): rows=%llu reach=%d mol=%llu sampler=%llu\n",
+                model.rules[row.rule_index].id.c_str(), model.rules[row.rule_index].name.c_str(),
+                static_cast<unsigned long long>(row.held.rows), row.reach,
+                static_cast<unsigned long long>(row.held.mol),
+                static_cast<unsigned long long>(row.held.sampler));
       }
     }
 

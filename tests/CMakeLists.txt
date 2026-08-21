@@ -103,6 +103,29 @@ add_test(
     COMMAND rule_table_shape_test ${_rulemonkey_test_dir}/cpp/rule_table_shape_model.xml
 )
 
+# The per-rule side-table accounting the `[RM tables]` stderr block reports
+# (issue #71), which is what `harness/rule_table_footprint.py` sweeps the
+# corpora with to price the arena-sized sizing of those tables.  Three
+# fixtures already in the tree, between them covering every bucket: the
+# narrow and wide per-molecule rows and a seedless rule that holds no table
+# (pool_churn), an n-ary rule's per-slot count tables and its Fenwick
+# samplers over a seed type above threshold (trimolecular), and one rule per
+# wide-half group (rule_table_shape).  The row widths are pinned exactly: a
+# byte added to either per-molecule struct is a byte per molecule per rule of
+# resident memory for the whole run, which is the change #71 says has to be
+# made deliberately.
+add_executable(rule_table_footprint_test cpp/rule_table_footprint_test.cpp)
+target_link_libraries(rule_table_footprint_test PRIVATE rulemonkey)
+
+add_test(
+    NAME rule_table_footprint_test
+    COMMAND rule_table_footprint_test
+        ${_rulemonkey_test_dir}/cpp/pool_churn_model.xml
+        ${_rulemonkey_test_dir}/cpp/trimolecular_model.xml
+        ${_rulemonkey_test_dir}/cpp/rule_table_shape_model.xml
+        ${CMAKE_CURRENT_BINARY_DIR}/rule_table_footprint_stderr.txt
+)
+
 # Observable values at session build (issue #65): the tracked observables are
 # settled out of the incremental tracker's tables instead of being full-walked
 # a second time, so what a run starts from is now derived rather than measured.
