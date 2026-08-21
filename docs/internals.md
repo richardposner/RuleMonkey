@@ -152,11 +152,20 @@ argument that they are too big.
 
 `reach_bytes` is the same total with every table cut to the highest live
 molecule id its rule can index — one past the top of its seed types'
-populations. That is what sizing the tables by the seed types' high-water
-mark would cost, and it needs nothing new in the pool, since every read
-of every one of these tables bounds-checks or grows first. Issue #71
-names that shortcut and warns it does not generalize; `reach_bytes` is
-what makes the warning a number instead of an argument.
+populations. Issue #71 names sizing the tables that way as the obvious
+shortcut and warns it does not generalize; `reach_bytes` is what makes
+that warning a number.
+
+Read it as a bound on what a table *needs*, not on what sizing it that
+way *delivers*. Building the tables at `reach` is safe — every read
+bounds-checks or grows first — but it does not hold, because
+`incremental_update` hands every rule every molecule an event touched and
+grows that rule's table to cover it whatever its type, so each table
+converges on the arena regardless. A molecule of a type neither slot
+seeds on scores zero on both counts forever; its row exists only because
+the loop made one. Measured: sizing by reach alone keeps 83.7% of the
+bytes over the sweep against the 59.2% `reach_bytes` implies, and
+`CaMKII_holo` keeps all of a table its rules reach 8.5% of.
 
 The per-complex tallies (`PerCxTally`) are deliberately not counted: they
 are sized by matching complexes rather than by the arena, so they are not

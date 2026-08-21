@@ -69,16 +69,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The block also reports `reach` — one past the highest live molecule id a
   rule can index, over its seed types — and `reach_bytes`, what the same
   tables would hold cut to it. That is the shortcut #71 names and warns does
-  not generalize, and this is what the warning is worth: summed over the
-  sweep, sizing by reach would hold 59.2% of the bytes. It halves the five
-  worst models (reach is 50% of held on the `tcr` family) and buys 0.1% on
-  `egfr_nf_iter5p12h10`, which is 295 MB of the same problem; the median
-  over the 26 large models is 86.4%. It needs nothing new in the pool —
-  every read of every one of these tables bounds-checks or grows first,
-  which is the audit #68 relied on to leave a seedless rule's table empty
-  outright — so it is available as a stopgap, but it is half a fix on half
-  the models. #71's directions 3 and 4 stay open, now with the residency
-  they would buy attached rather than assumed.
+  not generalize. Summed over the sweep it says the tables could be 59.2% of
+  their size: half on the `tcr` family, 8.5% on `CaMKII_holo`, and 99.9% on
+  `egfr_nf_iter5p12h10`, whose seed types span the arena.
+
+  It is a bound on what a table needs, and **not** on what sizing it that
+  way delivers, which was measured before this was written up. Building the
+  tables at `reach` in the rescan is safe — every read bounds-checks or
+  grows first, the audit #68 relied on — but it does not hold: the sweep
+  re-run against it keeps 83.7% of the bytes, not 59.2%, and no peak RSS at
+  all. `CaMKII_holo` keeps 100% of a table its rules can reach 8.5% of, in a
+  0.3 s run. The reason is in `incremental_update`, which hands every rule
+  every molecule an event touched and grows that rule's table to cover it
+  **whatever its type**, so each table converges on the arena no matter what
+  it was sized to. A molecule of a type neither slot seeds on scores zero on
+  both counts forever; the row exists only because the loop made one.
+
+  Sizing by reach *and* declining to materialize those rows does hold, tried
+  as an experiment against the same sweep: `tcr` 387.2 -> 194.0 MB,
+  `ensemble` 780.8 -> 491.5 MB, `CaMKII_holo` 28.1 -> 8.4 MB, `lat` 122.3 ->
+  92.3 MB, and `egfr_nf_iter5p12h10` unmoved at 294.7 MB, which is what
+  `reach` predicts for it. That is a change to the hot per-molecule loop
+  with a hazard the naive form has — an id the pool has handed to a molecule
+  of another type still owes its predecessor's count back to `a_total`, the
+  failure shape #62 introduced and #64 fixed — so it is not in this PR.
+  #71's directions 3 and 4 stay open with both numbers attached: what the
+  tables cost, and what the cheap sizing does and does not buy.
 
   `rule_table_footprint_test` is the gate on the accounting, over three
   fixtures already in the tree: `pool_churn_model` for the narrow row, the

@@ -276,9 +276,9 @@ int main(int argc, char* argv[]) {
                 std::to_string(expect_sampler) + " bytes), got " + std::to_string(r.sampler));
       // The 400 A are seeded first, so they hold ids 0..399 and every P the
       // rule makes lands above them: the rule reaches 400 of an arena that
-      // its own products push past that.  This is the shape the shortcut in
-      // rule_table_reach works on, and the model is small enough to say so
-      // exactly.
+      // its own products push past that.  The model is small enough to pin
+      // that exactly, which is what makes `reach` a checked number rather
+      // than a reported one.
       check(r.reach == 400,
             "trimolecular: expected reach 400 (the seeded A), got " + std::to_string(r.reach));
     }
