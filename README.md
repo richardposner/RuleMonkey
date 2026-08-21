@@ -106,7 +106,7 @@ NFsim runs that disabled this check.
 
 ## Behavior differences vs NFsim
 
-Two intentional differences are worth knowing about when comparing RM
+Three intentional differences are worth knowing about when comparing RM
 and NFsim runs of the same BNGL model:
 
 1. **Strict BNGL semantics on by default.** `block_same_complex_binding`
@@ -134,6 +134,19 @@ and NFsim runs of the same BNGL model:
    § "Rate laws / Function" for the engine-side rule and
    [`docs/troubleshooting.md`](docs/troubleshooting.md) § "Function
    rate law goes negative" for porting guidance.
+3. **`TotalRate` on a symmetry-permutable reactant pattern is refused.**
+   Where a rule's reactant pattern touches a component that its molecule
+   type declares more than once, NFsim expands the rule into one reaction
+   class per symmetry permutation and gives *each* class the whole total
+   rate, so the rule runs at `rate × #{populated permutations}` — measured
+   at 2.02x and 2.98x on a two- and three-site pattern. RM reads the rate
+   law as the whole propensity. BNG2 cannot arbitrate, implementing
+   `TotalRate` only for the network-free XML it writes and not for network
+   simulations, so RM refuses the rule rather than silently picking one of
+   three readings. Every other `TotalRate` rule runs, warns, and agrees
+   with NFsim; `--ignore-unsupported` runs a refused model on RM's
+   reading. See [`docs/model_semantics.md`](docs/model_semantics.md)
+   § "Tier-0 refusals".
 
 ## Layout
 
