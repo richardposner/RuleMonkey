@@ -104,7 +104,7 @@ long census_total(const std::vector<rulemonkey::SpeciesRow>& rows) {
 // make the mapping the identity, and quietly cost this file most of what
 // it checks — so fail loudly instead.
 void test_model_still_lists_components_out_of_order(const std::string& xml) {
-  rulemonkey::RuleMonkeySimulator sim(xml);
+  rulemonkey::RuleMonkeySimulator const sim(xml);
   auto rows = sim.initial_species();
   check(rows.size() == 4,
         "the model should declare 4 seed species (got " + std::to_string(rows.size()) + ")");

@@ -830,7 +830,7 @@ void test_property_based() {
       continue;
     ++generated;
 
-    ComplexGraph g = build(gc);
+    ComplexGraph const g = build(gc);
     auto cf = canonicalize(g);
     if (cf.fast_path)
       ++fast;
@@ -859,7 +859,7 @@ void test_property_based() {
     // that individualization-refinement resolves all symmetry (step 3).
     std::vector<int> pi;
     const GenComplex perm = permute(rng, gc, &pi);
-    ComplexGraph gp = build(perm);
+    ComplexGraph const gp = build(perm);
     auto cfp = canonicalize(gp);
     check_eq(cfp.label, cf.label, "canonical label is isomorphism-invariant");
     check(cfp.fast_path == cf.fast_path, "fast_path verdict is itself isomorphism-invariant");
@@ -915,7 +915,7 @@ void test_property_based() {
       std::string& s = tweaked.states[m][c];
       s = (s.empty() ? "p" : (s == "p" ? "q" : ""));
     }
-    ComplexGraph gt = build(tweaked);
+    ComplexGraph const gt = build(tweaked);
     check(canonical_label(gt) != cf.label, "a flipped component state yields a distinct label");
   }
 
