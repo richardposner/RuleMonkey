@@ -65,6 +65,57 @@ carries a vector. It is a capacity hint and nothing more: a total that
 is short, or that does not fit the `int` the pool addresses molecules
 with, costs only the growth it failed to pre-empt.
 
+### Step 4 — the per-rule tables
+
+`init_rule_states` settles each rule's shape (which reactant slots it
+has, whether its rate law is local, whether either slot is pure context)
+and then hands it to `rescan_all_molecules_for_rule`, which sizes that
+rule's per-molecule tables by the molecule arena and fills them.
+
+Those tables are **two** vectors, both indexed by molecule id and kept
+exactly the same length:
+
+- `mol_data` (`PerMolRuleData`, 12 bytes) — the two slots' embedding
+  counts and the P1 cache flag. Every rule with a reactant pattern
+  molecule to seed on carries one.
+- `mol_aux` (`PerMolRuleAux`, 64 bytes) — the shared-component split,
+  the four local-rate fields, and the pure-context complex ids. Only
+  allocated where `RuleState::needs_mol_aux` says the rule's shape reads
+  one; left empty otherwise.
+
+The row width is what a rule's table costs, once per molecule in the
+pool, in zeroing at every session build and in residency for the whole
+run. Before the split every rule paid the full 80-byte row, so a
+unimolecular non-local rule with no pure-context slot — which reads two
+of the eleven fields — cost 373 MB and about 0.1 s per session build on
+a 4.7e6-molecule pool for a table it wrote a handful of entries of
+(issue #71). Two things follow for anyone editing this:
+
+- Every site that grows one table must grow the other, which is what
+  `grow_mol_tables` is for. A `mol_aux` shorter than `mol_data` is an
+  out-of-bounds read on the next event, not a wrong number.
+- `rule_needs_mol_aux` is the single definition of which shapes get the
+  wide row. Reading a `mol_aux` field from a path a shape outside that
+  predicate can reach is the other way to break this.
+
+The rescan fills `mol_data` with the P1 cache flag already set, because
+a full rescan is what validates every row — including the zero-valued
+defaults for molecules of types the rule cannot seed on. The default in
+`PerMolRuleData` itself stays false, and the on-demand growth path takes
+that default: those rows are for molecules born since the rescan, which
+genuinely have not been computed.
+
+Two rules never get either table: an n-ary rule (three or more reactant
+patterns), whose counts live on `NaryState`, and a rule with no reactant
+pattern molecule to seed on (issue #68). Every indexed read of
+`mol_data` bounds-checks against its size or grows it first, so an empty
+table gives the same "no entry for this molecule" answer a zeroed one
+does.
+
+`rule_table_shape_test` is the gate: one rule of each shape over
+molecules made after the session build sized the tables, each arm priced
+against an analytic reference.
+
 ## SSA event loop
 
 Public entry: `Engine::run` (lines 7099–7103) → `Impl::run_ssa`
