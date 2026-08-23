@@ -5,11 +5,11 @@
     "name": "BNGsim",
     "repo_remote": "git@github.com:lanl/bngsim.git",
     "repo_subdir": ".",
-    "branch_or_ref": "eb80814",
+    "branch_or_ref": "HEAD",
     "current_branch": "main",
-    "commit": "eb8081424a8a3793207f34bb8392541c2f54c570"
+    "commit": "c8369f68bd92d0f5395af52033adbdb95ee99db9"
   },
-  "imported_at_utc": "2026-08-14T15:21:18+00:00",
+  "imported_at_utc": "2026-08-23T07:44:56+00:00",
   "files": {
     "exprtk_header": {
       "path": "third_party/exprtk/exprtk.hpp",
@@ -35,8 +35,8 @@
     "expression_source": {
       "path": "third_party/bngsim_expr/src/expression.cpp",
       "source_path": "src/expression.cpp",
-      "sha256": "c155b91b4c4ed68f2044b5e8e6f2158f870e6065aa4e46bc352ee4ead5f37e8d",
-      "bytes": 41679,
+      "sha256": "d84029ff11aedc46c85ca9f6764f72b69a2122a67699e8274a7a5bb70f491ccb",
+      "bytes": 55584,
       "description": "BNGsim ExprTkEvaluator implementation"
     }
   },
