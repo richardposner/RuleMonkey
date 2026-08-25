@@ -3608,6 +3608,12 @@ struct Engine::Impl {
   // for every mid of a type referenced by a tracked Species obs.
   std::vector<int> species_mid_prev_cx;
   bool species_incr_any_tracked = false;
+  // True when at least one Species-tracked obs is read by a rate law
+  // (issue #79).  Such an obs has to be flushed after every event, not
+  // only at sample time, because a dynamic rate law reads obs_values on
+  // the very next propensity recompute.  Off for the common case, where
+  // the flush stays once per sample.
+  bool species_incr_rate_dep = false;
 
   // Scratch for the Species full-walk in evaluate_observable: a
   // generation stamp per molecule id marking "the complex this molecule
@@ -6604,6 +6610,7 @@ struct Engine::Impl {
     obs_dirty_cx.resize(n_obs);
     species_mid_prev_cx.clear();
     species_incr_any_tracked = false;
+    species_incr_rate_dep = false;
     use_incremental_obs = false;
     obs_max_pattern_depth = 0;
     obs_pat_fm.clear();
@@ -6629,31 +6636,37 @@ struct Engine::Impl {
         incr_obs_is_species[oi] = 0;
         incr_obs_is_tracked[oi] = 1;
         incr_tracked_obs_indices.push_back(oi);
-      } else if (obs.type == "Species" && kSpeciesIncrObs && !obs.rate_dependent &&
-                 obs.patterns.size() == 1) {
-        // Rate-dependent Species obs fall through to the full-walk
-        // post-event path (compute_rate_dependent_observables); the
-        // dirty-cx flush only fires at sample time and so can't
-        // keep obs_values fresh enough for rate-law evaluation on
-        // every event.
-        //
+      } else if (obs.type == "Species" && kSpeciesIncrObs && obs.patterns.size() == 1) {
         // Trivial Species obs (pattern is a bare `T()` with no
-        // components or bonds) are also skipped: rm_tlbr_rings
-        // declares 300 `Size_N R()=N` histogram observables with
-        // identical structure, and per-event tracking across all 300
-        // costs more than the per-sample full-walk (< 0.3 s for 100
-        // samples at Step 1's baseline).  Full-walk is the cheaper
-        // path for this class of obs.
+        // components or bonds) are skipped: rm_tlbr_rings declares 300
+        // `Size_N R()=N` histogram observables with identical
+        // structure, and per-event tracking across all 300 costs more
+        // than the per-sample full-walk (< 0.3 s for 100 samples at
+        // Step 1's baseline).  Full-walk is the cheaper path for this
+        // class of obs.
+        //
+        // Not when a rate law reads it (issue #79).  For a rate-dependent
+        // obs the fallback is not the per-sample full-walk — it is
+        // compute_rate_dependent_observables, which full-walks after
+        // EVERY event, so `Species Rtot rho()` over a pool of N cost
+        // O(N) per event and the run went quadratic.  Tracking is
+        // strictly cheaper the moment the walk is per-event, trivial
+        // pattern or not.
         auto& p0 = obs.patterns[0];
         bool const trivial_pat =
             p0.molecules.size() == 1 && p0.molecules[0].components.empty() && p0.bonds.empty();
-        if (trivial_pat) {
+        if (trivial_pat && !obs.rate_dependent) {
           continue; // fall back to sample-time full-walk
         }
         incr_obs_is_species[oi] = 1;
         incr_obs_is_tracked[oi] = 1;
         incr_tracked_obs_indices.push_back(oi);
         species_incr_any_tracked = true;
+        // A tracked Species obs only settles when its dirty complexes are
+        // flushed; being read by a rate law is what forces that flush to
+        // run after every event rather than once per sample.
+        if (obs.rate_dependent)
+          species_incr_rate_dep = true;
       } else if (obs.rate_dependent) {
         // Rate-dependent obs that doesn't fit either path — keep the
         // existing rate_dep full-walk fallback.
@@ -7105,12 +7118,21 @@ struct Engine::Impl {
     }
   }
 
-  // Flush dirty complexes for every Species-tracked obs and sync
-  // obs_values.  Called from record_at before record_time_point so the
-  // sample output sees up-to-date values.
-  void flush_species_incr_observables() {
+  // Flush dirty complexes for Species-tracked obs and sync obs_values.
+  // Called from record_at before record_time_point so the sample output
+  // sees up-to-date values, and — with `rate_dep_only` — after every
+  // event, so a dynamic rate law reads a settled value (issue #79).
+  //
+  // The per-event call settles only the obs a rate law actually reads.
+  // Every other Species obs keeps its once-per-sample cadence: its value
+  // is not consulted between samples, and flushing it on every event
+  // would re-introduce, per unrelated obs, exactly the per-event charge
+  // this issue is about.  Dead-complex bookkeeping is NOT selective —
+  // see below.
+  void flush_species_incr_observables(bool rate_dep_only = false) {
     if (!species_incr_any_tracked)
       return;
+    ++eval_vars_gen; // obs_values about to change → invalidate eval_vars_flat
 
     using oip_clock = std::chrono::steady_clock;
     bool oip_flush_sampled = false;
@@ -7136,19 +7158,33 @@ struct Engine::Impl {
     if constexpr (kObsIncrProfile) {
       obs_incr_profile_.flush_dead_cx_sum += dead_cxs.size();
     }
+    // Fold the dead complexes into EVERY Species obs's dirty set before
+    // any obs is skipped.  consume_dead_cxs drains the pool's side
+    // channel, so a per-event call that only looked at the rate-dep obs
+    // would swallow the notification the once-per-sample obs still need
+    // — their stored pass flag for that cx would never be retired.  The
+    // dirty set is what carries it forward to their own next flush.
+    for (int const oi : incr_tracked_obs_indices) {
+      if (!incr_obs_is_species[oi])
+        continue;
+      auto& mc_map = obs_cx_match_count[oi];
+      for (int const cx : dead_cxs) {
+        if (mc_map.count(cx))
+          obs_dirty_cx[oi].insert(cx);
+      }
+    }
+
     for (int const oi : incr_tracked_obs_indices) {
       if (!incr_obs_is_species[oi])
         continue;
       auto& obs = model.observables[oi];
+      if (rate_dep_only && !obs.rate_dependent)
+        continue;
       auto& pat = obs.patterns[0];
       int const pm_type = pat.molecules[0].type_index;
       auto& mc_map = obs_cx_match_count[oi];
       auto& pass_map = obs_cx_passed[oi];
       auto& contribs = obs_mol_contrib[oi];
-      for (int const cx : dead_cxs) {
-        if (mc_map.count(cx))
-          obs_dirty_cx[oi].insert(cx);
-      }
       if constexpr (kObsIncrProfile) {
         obs_incr_profile_.flush_dirty_cx_sum += obs_dirty_cx[oi].size();
       }
@@ -10554,10 +10590,16 @@ struct Engine::Impl {
       // maintained by incremental_update_observables; Molecules
       // obs_values is kept fresh; Species obs_values stays stale
       // between events but its contribs drive any later flush.
-      // Fallback rate-dep obs (multi-mol or Species rate-dep) are
-      // full-walked here every event.
+      // Fallback rate-dep obs (multi-pattern Species) are full-walked
+      // here every event.
       if (use_incremental_obs)
         incremental_update_observables(affected);
+      // Settle the Species-tracked obs a rate law reads (issue #79).
+      // The flush is O(complexes this event dirtied), against the O(pool)
+      // full walk compute_rate_dependent_observables would otherwise do
+      // here on every single event.
+      if (species_incr_rate_dep)
+        flush_species_incr_observables(/*rate_dep_only=*/true);
       if (!rate_dep_obs_indices.empty())
         compute_rate_dependent_observables();
       auto t3 = std::chrono::steady_clock::now();

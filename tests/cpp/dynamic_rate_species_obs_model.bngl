@@ -1,0 +1,44 @@
+# A rate law over a Species observable must not full-walk the pool
+# every event (issue #79).
+#
+# `Rtot` is a Species observable that a rate law reads, and the rule
+# consumes the molecules it counts, so it moves on every firing.  Every
+# R is a free monomer, so its Species count equals its Molecules count
+# at every instant of the run — which makes
+# dynamic_rate_molecules_obs_model.bngl, identical but for the one word
+# `Species`, both the cost floor and an exact trajectory oracle.
+#
+# Paired with: tests/cpp/dynamic_rate_species_obs_test.cpp
+
+begin model
+begin parameters
+    R_tot   30000
+    kt      1e-6
+end parameters
+
+begin molecule types
+    R()
+    P()
+end molecule types
+
+begin seed species
+    R()   R_tot
+    P()   0
+end seed species
+
+begin observables
+    Species  Rtot  R()
+end observables
+
+begin functions
+    conv_rate() = kt*Rtot
+end functions
+
+begin reaction rules
+    R() -> P()   conv_rate()
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>10,n_steps=>10,print_functions=>1})
+end actions

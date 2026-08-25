@@ -276,6 +276,28 @@ add_test(
         ${_rulemonkey_test_dir}/cpp/local_fcn_const_global_folded_model.xml
 )
 
+# The non-local counterpart (issue #79): a rate law reading a *Species*
+# observable was excluded from the incremental tracker and full-walked the
+# pool after every event, so a one-rule model went quadratic in its seed
+# population (511 us/event at 100k R against a flat ~3 us).  Arm 1 runs the
+# defect shape against a twin that differs only in the observable's type —
+# Molecules, already maintained per-event — and requires the two to agree on
+# the trajectory (the rate law reads a settled value) AND on the wall time
+# (the settling is O(dirty complexes), not O(pool)).  Arm 2 declares one
+# Species pattern twice, read and unread, over a polymerising pool: only the
+# read one takes the per-event flush, and the dead-complex side channel they
+# share is drained rather than copied, so the two must still agree.
+add_executable(dynamic_rate_species_obs_test cpp/dynamic_rate_species_obs_test.cpp)
+target_link_libraries(dynamic_rate_species_obs_test PRIVATE rulemonkey)
+
+add_test(
+    NAME dynamic_rate_species_obs_test
+    COMMAND dynamic_rate_species_obs_test
+        ${_rulemonkey_test_dir}/cpp/dynamic_rate_species_obs_model.xml
+        ${_rulemonkey_test_dir}/cpp/dynamic_rate_molecules_obs_model.xml
+        ${_rulemonkey_test_dir}/cpp/dynamic_rate_species_cx_model.xml
+)
+
 # save_state / load_state regression: round-trip a mid-run snapshot
 # back into a fresh simulator and verify (a) the continuation matches
 # an uninterrupted run, (b) loading state from a structurally

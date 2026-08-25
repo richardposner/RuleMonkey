@@ -1,0 +1,63 @@
+# A rate-dependent Species observable over complexes that merge and
+# split (issue #79).
+#
+# Where dynamic_rate_species_obs_model pins the cost of the defect, this
+# one pins the bookkeeping the fix leans on.  `Chains` is read by a rate
+# law, so it is settled after every event; `ChainsCtl` is the same
+# pattern left unread, so it keeps the ordinary once-per-sample cadence.
+# The two share the per-molecule contribution tables and the pool's
+# dead-complex side channel, and only one of them is flushed on the
+# per-event path — so a flush that consumed a notification the other
+# still needed shows up as the two disagreeing.
+#
+# A(s,t) polymerises into chains rather than capping at dimers, so a
+# bond op moves molecules that are not themselves bond endpoints between
+# complexes — the case per-complex tallies are most exposed to.
+#
+# The rate law drives P -> Q, a pool the polymerisation chemistry never
+# touches, so the observable moves for reasons entirely outside the rule
+# whose propensity reads it.
+#
+# Paired with: tests/cpp/dynamic_rate_species_obs_test.cpp
+
+begin model
+begin parameters
+    A_tot   200
+    P_tot   400
+    kf      0.01
+    kr      0.05
+    kt      0.002
+end parameters
+
+begin molecule types
+    A(s,t)
+    P()
+    Q()
+end molecule types
+
+begin seed species
+    A(s,t)  A_tot
+    P()     P_tot
+    Q()     0
+end seed species
+
+begin observables
+    Molecules  A_bound    A(s!+)
+    Species    Chains     A(s!1).A(t!1)
+    Species    ChainsCtl  A(s!1).A(t!1)
+    Molecules  Q_tot      Q()
+end observables
+
+begin functions
+    chain_rate() = kt*Chains
+end functions
+
+begin reaction rules
+    A(s) + A(t) <-> A(s!1).A(t!1)  kf, kr
+    P() -> Q()                     chain_rate()
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>60,n_steps=>12,print_functions=>1})
+end actions
