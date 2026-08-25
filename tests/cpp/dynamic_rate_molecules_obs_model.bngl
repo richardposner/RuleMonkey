@@ -1,0 +1,43 @@
+# Molecules-observable twin of dynamic_rate_species_obs_model (issue #79).
+#
+# Identical in every respect but the one word `Species` -> `Molecules` on
+# the observable the rate law reads.  Every R is a free monomer, so the
+# two observables hold the same number at every instant: same arithmetic
+# on the same RNG stream, and only one of them took the per-event
+# full-walk.  That makes this model the defect's cost floor and its
+# trajectory oracle at once.
+#
+# Paired with: tests/cpp/dynamic_rate_species_obs_test.cpp
+
+begin model
+begin parameters
+    R_tot   30000
+    kt      1e-6
+end parameters
+
+begin molecule types
+    R()
+    P()
+end molecule types
+
+begin seed species
+    R()   R_tot
+    P()   0
+end seed species
+
+begin observables
+    Molecules  Rtot  R()
+end observables
+
+begin functions
+    conv_rate() = kt*Rtot
+end functions
+
+begin reaction rules
+    R() -> P()   conv_rate()
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>10,n_steps=>10,print_functions=>1})
+end actions

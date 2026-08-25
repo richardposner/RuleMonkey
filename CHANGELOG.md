@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A rate law reading a `Species` observable full-walked the pool after
+  every event (issue #79).** A `Species` observable is tracked
+  incrementally, but the tracked value only settles when its dirty
+  complexes are flushed, and that flush fired at sample time — far too
+  late for a rate law that reads the value on the very next propensity
+  recompute. So `init_incremental_observables` excluded any
+  rate-dependent `Species` observable from the tracker outright and left
+  it to `compute_rate_dependent_observables`, which walks every complex
+  holding a molecule of the pattern's seed type, from scratch, after
+  every SSA event.
+
+  That made a one-rule model quadratic in its own seed population:
+
+  ```bngl
+  begin observables
+    Species Rtot rho()
+  end observables
+  begin functions
+    rate() = kt*Rtot
+  end functions
+  begin reaction rules
+    rho() -> pi()  rate()
+  end reaction rules
+  ```
+
+  | seed `rho` | before | after |
+  |---:|---:|---:|
+  | 10 000 | 88.9 us/event | 5.3 us/event |
+  | 30 000 | 174.8 us/event | 3.3 us/event |
+  | 100 000 | 559.0 us/event | 3.3 us/event |
+  | 300 000 | did not finish | 3.6 us/event |
+
+  The charge does not need the observable to move. A rate over a
+  `Species` observable of an inert pool that no rule touches paid a flat
+  ~650 us/event for a value that could not have changed — the per-event
+  cost is the walk itself, sized by the observable's own pattern, which
+  is why it tracked neither the arena nor the rule's instance count.
+
+  Such an observable is now tracked like any other, with the dirty-cx
+  flush also run after each event — and only for the observables a rate
+  law actually reads, so an unrelated `Species` observable keeps its
+  once-per-sample cadence rather than picking up the same per-event
+  charge. Dead-complex bookkeeping stays global: the pool's side channel
+  is drained, not copied, so every tracked `Species` observable takes the
+  notification into its own dirty set before any of them is skipped.
+
+  Per-event cost is now flat in population and level with NFsim, and the
+  trajectory is unchanged — all 164 corpus, feature-coverage and
+  BNG2-oracle models produce byte-identical output, since none of them
+  happened to contain this shape. `dynamic_rate_species_obs_test` is the
+  coverage that was missing: one arm runs the defect against a
+  `Molecules`-observable twin that is exact on both trajectory and cost,
+  the other pins the tracker's bookkeeping over a polymerising pool
+  against a from-scratch walk.
+
 ## [3.10.0] — 2026-08-21
 
 ### Added
