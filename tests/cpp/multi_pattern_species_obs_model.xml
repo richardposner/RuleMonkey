@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Emitted by BNG2 2.9.3 writeXML() from the paired .bngl, which is
+     the readable source.  Fixture for issue #81. -->
+<sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
+  <model id="multi_pattern_species_obs_model">
+    <ListOfParameters>
+      <Parameter id="R_tot" type="Constant" value="30000" expr="30000"/>
+      <Parameter id="S_tot" type="Constant" value="10000" expr="10000"/>
+      <Parameter id="kp" type="Constant" value="0.05" expr="0.05"/>
+      <Parameter id="kt" type="Constant" value="1e-6" expr="1e-6"/>
+    </ListOfParameters>
+    <ListOfMoleculeTypes>
+      <MoleculeType id="P"/>
+      <MoleculeType id="R">
+        <ListOfComponentTypes>
+          <ComponentType id="x">
+            <ListOfAllowedStates>
+              <AllowedState id="U"/>
+              <AllowedState id="P"/>
+            </ListOfAllowedStates>
+          </ComponentType>
+        </ListOfComponentTypes>
+      </MoleculeType>
+      <MoleculeType id="S"/>
+    </ListOfMoleculeTypes>
+    <ListOfCompartments>
+    </ListOfCompartments>
+    <ListOfSpecies>
+      <Species id="S1"  concentration="R_tot" name="R(x~U)">
+        <ListOfMolecules>
+          <Molecule id="S1_M1" name="R">
+            <ListOfComponents>
+              <Component id="S1_M1_C1" name="x" state="U" numberOfBonds="0"/>
+            </ListOfComponents>
+          </Molecule>
+        </ListOfMolecules>
+      </Species>
+      <Species id="S2"  concentration="S_tot" name="S()">
+        <ListOfMolecules>
+          <Molecule id="S2_M1" name="S"/>
+        </ListOfMolecules>
+      </Species>
+      <Species id="S3"  concentration="0" name="P()">
+        <ListOfMolecules>
+          <Molecule id="S3_M1" name="P"/>
+        </ListOfMolecules>
+      </Species>
+    </ListOfSpecies>
+    <ListOfReactionRules>
+      <ReactionRule id="RR1" name="_R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR1_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP1_M1" name="R">
+                <ListOfComponents>
+                  <Component id="RR1_RP1_M1_C1" name="x" state="U" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR1_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP1_M1" name="R">
+                <ListOfComponents>
+                  <Component id="RR1_PP1_M1_C1" name="x" state="P" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR1_RateLaw" type="Ele" totalrate="0">
+          <ListOfRateConstants>
+            <RateConstant value="kp"/>
+          </ListOfRateConstants>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR1_RP1_M1" targetID="RR1_PP1_M1"/>
+          <MapItem sourceID="RR1_RP1_M1_C1" targetID="RR1_PP1_M1_C1"/>
+        </Map>
+        <ListOfOperations>
+          <StateChange site="RR1_RP1_M1_C1" finalState="P"/>
+        </ListOfOperations>
+      </ReactionRule>
+      <ReactionRule id="RR2" name="_R2" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR2_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_RP1_M1" name="R"/>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR2_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR2_PP1_M1" name="P"/>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR2_RateLaw" type="Function" name="conv_rate" totalrate="0">
+          <ListOfArguments>
+          </ListOfArguments>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR2_RP1_M1"/>
+        </Map>
+        <ListOfOperations>
+          <Add id="RR2_PP1_M1"/>
+          <Delete id="RR2_RP1" DeleteMolecules="0"/>
+        </ListOfOperations>
+      </ReactionRule>
+    </ListOfReactionRules>
+    <ListOfObservables>
+      <Observable id="O1" name="Rtot" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O1_P1" matchOnce="1">
+            <ListOfMolecules>
+              <Molecule id="O1_P1_M1" name="R">
+                <ListOfComponents>
+                  <Component id="O1_P1_M1_C1" name="x" state="U" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O1_P2" matchOnce="1">
+            <ListOfMolecules>
+              <Molecule id="O1_P2_M1" name="R">
+                <ListOfComponents>
+                  <Component id="O1_P2_M1_C1" name="x" state="P" numberOfBonds="0"/>
+                </ListOfComponents>
+              </Molecule>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O1_P3" matchOnce="1">
+            <ListOfMolecules>
+              <Molecule id="O1_P3_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O1_P4" matchOnce="1">
+            <ListOfMolecules>
+              <Molecule id="O1_P4_M1" name="S"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+    </ListOfObservables>
+    <ListOfFunctions>
+      <Function id="conv_rate">
+        <ListOfReferences>
+          <Reference name="kt" type="Constant"/>
+          <Reference name="Rtot" type="Observable"/>
+        </ListOfReferences>
+        <Expression> kt*Rtot </Expression>
+      </Function>
+    </ListOfFunctions>
+  </model>
+</sbml>

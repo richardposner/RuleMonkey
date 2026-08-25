@@ -1,0 +1,101 @@
+# A multi-pattern Species observable over complexes that merge and split
+# (issue #81).
+#
+# Where multi_pattern_species_obs_model pins the cost of the defect, this
+# one pins the semantics and the bookkeeping the fix rests on.
+#
+# `Mixed` and `Chains` each carry two patterns that can match the SAME
+# complex, and the full walk counts such a complex once per pattern:
+#
+#   Mixed   A()>=3, B()==1   different quantity relations, different
+#                            seed types — a chain of three or more A's
+#                            carrying exactly one B satisfies both.
+#   Chains  A(s!+), A(s!+,t!+)
+#                            same seed type, one pattern a strict subset
+#                            of the other — a chain with an interior A
+#                            satisfies both.
+#
+# So the per-complex tally cannot be shared across an observable's
+# patterns: each pattern needs its own count and its own verdict.  The
+# seeded `A(s!1,t,b!3).A(s!2,t!1,b).A(s,t!2,b).B(a!3)` trimer makes that
+# checkable by hand at t=0, before any event — every copy contributes 2
+# to `Mixed` and 2 to `Chains`, where one merged tally per complex would
+# contribute 1.
+#
+# The rate law reads `Mixed` and `Chains`, so both take the per-event
+# flush.  Each has a twin declaring the same patterns and read by
+# nothing, and the two twins are unread in different ways:
+#
+#   MixedWalk   patterns are structurally unconstrained (`A()`, `B()`),
+#               so an unread observable of this shape is not tracked at
+#               all — the engine full-walks it at every sample.  That
+#               makes it a from-scratch oracle for `Mixed` on every
+#               sample row rather than only at t_end.
+#   ChainsCtl   patterns carry bond constraints, so it IS tracked, and
+#               keeps the ordinary once-per-sample flush cadence.  It
+#               shares the per-molecule contribution tables and the
+#               pool's dead-complex side channel with `Chains` — and
+#               that channel is drained, not copied, so a per-event
+#               flush that swallowed a notification the per-sample twin
+#               still needed shows up here as the two disagreeing.
+#
+# A(s,t) polymerises into chains rather than capping at dimers, so a bond
+# op moves molecules that are not themselves bond endpoints between
+# complexes — the case per-complex tallies are most exposed to.  The rate
+# law drives P -> Q, a pool the polymerisation chemistry never touches,
+# so the observables move for reasons entirely outside the rule whose
+# propensity reads them.
+#
+# Paired with: tests/cpp/multi_pattern_species_obs_test.cpp
+
+begin model
+begin parameters
+    A_tot   120
+    B_tot   60
+    T_tot   12
+    P_tot   400
+    kf      0.02
+    kr      0.05
+    kfb     0.03
+    krb     0.08
+    kt      0.001
+end parameters
+
+begin molecule types
+    A(s,t,b)
+    B(a)
+    P()
+    Q()
+end molecule types
+
+begin seed species
+    A(s,t,b)                                     A_tot
+    B(a)                                         B_tot
+    A(s!1,t,b!3).A(s!2,t!1,b).A(s,t!2,b).B(a!3)  T_tot
+    P()                                          P_tot
+    Q()                                          0
+end seed species
+
+begin observables
+    Species    Mixed      A()>=3, B()==1
+    Species    MixedWalk  A()>=3, B()==1
+    Species    Chains     A(s!+), A(s!+,t!+)
+    Species    ChainsCtl  A(s!+), A(s!+,t!+)
+    Molecules  A_bound    A(s!+)
+    Molecules  Q_tot      Q()
+end observables
+
+begin functions
+    mixed_rate() = kt*(Mixed + Chains)
+end functions
+
+begin reaction rules
+    A(s) + A(t) <-> A(s!1).A(t!1)   kf, kr
+    A(b) + B(a) <-> A(b!1).B(a!1)   kfb, krb
+    P() -> Q()                      mixed_rate()
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>60,n_steps=>12,print_functions=>1})
+end actions

@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- An observable pattern with no molecules in it (issue #81).
+     Base emitted by BNG2 2.9.3 writeXML(); the empty <Pattern> blocks
+     below were spliced in by hand, because BNGL has no syntax for a
+     pattern with nothing in it and BNG2 will never write one.  Only a
+     host handing RuleMonkey XML directly can produce this shape, and it
+     used to segfault: `evaluate_observable` skips such a pattern, but
+     the incremental tracker keys every one of its tables off
+     `pat.molecules[0]` and indexed an empty vector.
+
+     `Rmix` and `Rspec` each pair an empty pattern with a real one, so
+     their value must equal the real pattern's alone -- `Rtot`.  `Rnone`
+     is the empty pattern by itself and must stay 0.  `Rmix` is read by
+     the rate law, which is what routes an untrackable observable onto
+     the rate-dependent fallback rather than the sample-time walk. -->
+<sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
+  <model id="empty_pattern_obs_model">
+    <ListOfParameters>
+      <Parameter id="R_tot" type="Constant" value="100" expr="100"/>
+      <Parameter id="kt" type="Constant" value="0.001" expr="0.001"/>
+    </ListOfParameters>
+    <ListOfMoleculeTypes>
+      <MoleculeType id="P"/>
+      <MoleculeType id="R"/>
+    </ListOfMoleculeTypes>
+    <ListOfCompartments>
+    </ListOfCompartments>
+    <ListOfSpecies>
+      <Species id="S1"  concentration="R_tot" name="R()">
+        <ListOfMolecules>
+          <Molecule id="S1_M1" name="R"/>
+        </ListOfMolecules>
+      </Species>
+      <Species id="S2"  concentration="0" name="P()">
+        <ListOfMolecules>
+          <Molecule id="S2_M1" name="P"/>
+        </ListOfMolecules>
+      </Species>
+    </ListOfSpecies>
+    <ListOfReactionRules>
+      <ReactionRule id="RR1" name="_R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+          <ReactantPattern id="RR1_RP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_RP1_M1" name="R"/>
+            </ListOfMolecules>
+          </ReactantPattern>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR1_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP1_M1" name="P"/>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR1_RateLaw" type="Function" name="conv_rate" totalrate="0">
+          <ListOfArguments>
+          </ListOfArguments>
+        </RateLaw>
+        <Map>
+          <MapItem sourceID="RR1_RP1_M1"/>
+        </Map>
+        <ListOfOperations>
+          <Add id="RR1_PP1_M1"/>
+          <Delete id="RR1_RP1" DeleteMolecules="0"/>
+        </ListOfOperations>
+      </ReactionRule>
+    </ListOfReactionRules>
+    <ListOfObservables>
+      <Observable id="O1" name="Rmix" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O1_P0">
+            <ListOfMolecules>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O1_P1">
+            <ListOfMolecules>
+              <Molecule id="O1_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O2" name="Rspec" type="Species">
+        <ListOfPatterns>
+          <Pattern id="O2_P0">
+            <ListOfMolecules>
+            </ListOfMolecules>
+          </Pattern>
+          <Pattern id="O2_P1" matchOnce="1">
+            <ListOfMolecules>
+              <Molecule id="O2_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O3" name="Rnone" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O3_P1">
+            <ListOfMolecules>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+      <Observable id="O4" name="Rtot" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O4_P1">
+            <ListOfMolecules>
+              <Molecule id="O4_P1_M1" name="R"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+    </ListOfObservables>
+    <ListOfFunctions>
+      <Function id="conv_rate">
+        <ListOfReferences>
+          <Reference name="kt" type="Constant"/>
+          <Reference name="Rmix" type="Observable"/>
+        </ListOfReferences>
+        <Expression> kt*Rmix </Expression>
+      </Function>
+    </ListOfFunctions>
+  </model>
+</sbml>
