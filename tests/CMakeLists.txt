@@ -298,6 +298,33 @@ add_test(
         ${_rulemonkey_test_dir}/cpp/dynamic_rate_species_cx_model.xml
 )
 
+# The multi-pattern half of the same defect (issue #81).  #80 admitted a
+# Species observable to the tracker only when it declared exactly one
+# pattern, so a multi-pattern one kept the per-event O(pool) walk.  Lifting
+# the restriction is a semantics change as much as a gate change: the full
+# walk counts a complex once per pattern that passes and applies each
+# pattern's quantity relation to that pattern's own complex-wide count, so
+# the per-complex tally had to go per pattern.  Arm 1 is the cost shape,
+# against a Molecules twin that is exact on trajectory and cost.  Arm 2
+# pins the semantics on a seed whose answer is computable by hand — every
+# seeded trimer satisfies both patterns of two different observables, so a
+# merged tally would report half — and then re-checks every observable
+# against a from-scratch walk after a polymerising run.  Arm 3 covers the
+# one pattern shape that has no `molecules[0]` to key the tracker's tables
+# off — an empty `<ListOfMolecules>`, reachable only from hand-written XML
+# — which segfaulted the seeding walk before the first sample.
+add_executable(multi_pattern_species_obs_test cpp/multi_pattern_species_obs_test.cpp)
+target_link_libraries(multi_pattern_species_obs_test PRIVATE rulemonkey)
+
+add_test(
+    NAME multi_pattern_species_obs_test
+    COMMAND multi_pattern_species_obs_test
+        ${_rulemonkey_test_dir}/cpp/multi_pattern_species_obs_model.xml
+        ${_rulemonkey_test_dir}/cpp/multi_pattern_molecules_obs_model.xml
+        ${_rulemonkey_test_dir}/cpp/multi_pattern_species_cx_model.xml
+        ${_rulemonkey_test_dir}/cpp/empty_pattern_obs_model.xml
+)
+
 # save_state / load_state regression: round-trip a mid-run snapshot
 # back into a fresh simulator and verify (a) the continuation matches
 # an uninterrupted run, (b) loading state from a structurally

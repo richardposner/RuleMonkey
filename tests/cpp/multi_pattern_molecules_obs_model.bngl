@@ -1,0 +1,50 @@
+# Molecules-observable twin of multi_pattern_species_obs_model (issue #81).
+#
+# Identical in every respect but the one word `Species` -> `Molecules` on
+# the observable the rate law reads.  Every R and S is a free monomer, so
+# each pattern's species count equals its molecule count and the two
+# observables hold the same number at every instant — including across
+# the two overlapping patterns, which both forms sum rather than merge.
+# Same arithmetic on the same RNG stream, and only one of them took the
+# per-event full walk: this model is the defect's cost floor and its
+# trajectory oracle at once.
+#
+# Paired with: tests/cpp/multi_pattern_species_obs_test.cpp
+
+begin model
+begin parameters
+    R_tot   30000
+    S_tot   10000
+    kp      0.05
+    kt      1e-6
+end parameters
+
+begin molecule types
+    R(x~U~P)
+    S()
+    P()
+end molecule types
+
+begin seed species
+    R(x~U)   R_tot
+    S()      S_tot
+    P()      0
+end seed species
+
+begin observables
+    Molecules  Rtot  R(x~U), R(x~P), R(), S()
+end observables
+
+begin functions
+    conv_rate() = kt*Rtot
+end functions
+
+begin reaction rules
+    R(x~U) -> R(x~P)   kp
+    R() -> P()         conv_rate()
+end reaction rules
+end model
+
+begin actions
+simulate({method=>"nf",t_end=>10,n_steps=>10,print_functions=>1})
+end actions

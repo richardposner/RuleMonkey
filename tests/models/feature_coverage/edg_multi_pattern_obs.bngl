@@ -1,20 +1,25 @@
 # Edge case: observable with MANY alternative patterns (sum of matches)
 # Tests:  a single Observable can carry multiple Patterns (comma-
-#         separated in BNGL).  The Molecules type sums embedding counts
-#         across all patterns; the Species type sums species counts
-#         (with potential overlap suppressed).  ft_local_functions
-#         already uses 2-pattern observables; this model goes wider
-#         (5 patterns per observable, two observables) and crosses
-#         molecule-type boundaries within one observable.  Hits
-#         Observable::patterns iteration in the incremental update
-#         (engine.cpp:4143).  Bug pattern: a previous regression
-#         double-counted overlapping species patterns when a single
-#         species matched two of the alternatives.
+#         separated in BNGL).  BOTH types sum across the patterns rather
+#         than merging them: Molecules adds each pattern's embedding
+#         count and Species adds each pattern's species count, so a
+#         complex that two patterns match is counted once per pattern.
+#         ft_local_functions already uses 2-pattern observables; this
+#         model goes wider (5 patterns per observable, two observables)
+#         and crosses molecule-type boundaries within one observable.
+#         Hits Observable::patterns iteration in the incremental update
+#         and, since issue #81, the per-pattern per-complex tally the
+#         Species tracker keeps.
 # Edge:   One pattern (`A(s!+,t!+)`) is a strict subset of another
-#         (`A(s!+)`).  An observable summing both will count the
-#         doubly-bonded A twice (correct for Molecules-type, plain
-#         union for Species-type).  This dual semantics is what we
-#         test.
+#         (`A(s!+)`), and all three of `HetSpec`'s patterns match an
+#         A.B or A.C dimer.  Overlap is the point, and the reference
+#         settles which way it resolves: at t=0.5 it reports B bound
+#         11.4, C bound 11.6, A doubly bound 4.6 and HetSpec 34.40 --
+#         which is the sum 11.4 + 11.4 + 11.6, not the merge
+#         11.4 + 11.6 - 4.6 = 18.40, and the two stay that far apart for
+#         the whole run.  An earlier revision of this header called the
+#         Species case a union; it is not, and the double count it
+#         called a regression is the semantics.
 # Tier:   base
 # invariant: conserved A_total = 30
 
