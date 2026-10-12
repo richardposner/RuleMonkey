@@ -26,6 +26,8 @@
 | Bare observable inside a local function that never moves, at scale | Function with Arguments, untagged Observable reference, 22000 instances | ss_local_fcn_const_global | PASS (cost guard: the per-event rescan must be skipped) |
 | FunctionProduct (DOR2) | RateLaw/@type="FunctionProduct" | nf_function_product | PASS |
 | Conditional if() | Expression with if() | ft_conditional_rate | PASS |
+| Rate law that reads the clock | Expression calling time() | edg_time_dependent_rate; zero-start, step, pulse and local shapes in tests/cpp/time_dependent_rate_model, local_time_rate_model | PASS (ODE verdict, integrated on a 100x grid because BNG2 2.9.3 refreshes time() only at output steps; NFsim rejects time()) |
+| Table functions (TFUN) | Function/@type="TFUN" | ft_tfun (observable counter); tests/cpp/tfun_time_rate_model (time counter) | PASS (ODE verdict; NFsim's TFUN rate reads zero. Stock BNG2 2.9.3 cannot parse the lowercase tfun() syntax: ft_tfun's XML was written by the BNG dev branch, and the time-counter fixture is hand-edited) |
 | Energy patterns | compiled to local functions | ft_energy_patterns | PASS |
 | eBNGL Arrhenius (binding) | RateLaw/@type="Arrhenius" + energy patterns | ft_energy_arrhenius | PASS |
 | eBNGL Arrhenius (context) | cooperative energy-pattern context conditions | ft_energy_arrhenius_coop | PASS |
@@ -135,8 +137,6 @@ Tests that appear to pass for these features are FALSE POSITIVES.**
 |---------|-------|
 | Sat(), Hill() rate laws | generate_network only (Arrhenius energy rules are now supported for 2-reactant binding — see the eBNGL Arrhenius rows above) |
 | Pattern quantifiers (==, >=, <) | Not in NFsim XML format |
-| Table functions (tfun/TFUN) | BNG2.pl side; not in standard XML |
-| time() in functions | BNG2.pl can't generate XML with it |
 | continue=>1 | NFsim doesn't support; RM has --save-state/--load-state |
 
 ## Recommended RM Improvements
