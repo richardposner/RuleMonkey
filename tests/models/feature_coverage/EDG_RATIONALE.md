@@ -93,7 +93,7 @@ not bugs):
 |---|---|---|
 | edg_state_increment_chain | 0.55 | 5-state tail, low pop; converges with more reps |
 | edg_synth_bonded_complex | 0.03 | clean |
-| edg_time_dependent_rate | 0.09 | clean (time()-driven decay reference matches) |
+| edg_time_dependent_rate | 0.09 | clean at the time; the reference was 3% high (BNG2 2.9.3 refreshes time() only at output steps) and so was RM, which held the rate between events. Both fixed in issue #86: the ODE is now integrated on a 100x grid, and RM integrates the rate |
 | edg_pattern_local_fcn | — | NFsim ref (100 reps). 500-rep investigation found a REAL RM bug: A+A self-binding under bscb under-binds by ~1.5% vs ODE (NFsim ~0.9% bias in same direction). FIXED 2026-04-28 at engine.cpp:2731-2755. After fix, all 4 simulators (BNG2 ODE, BNG2 SSA, NFsim, RM) agree within stochastic noise on every edg_* model. See `project_self_binding_bias.md` in auto-memory. Same bug also affected existing corpus model `combo_addbond_connected`. |
 | edg_homotrimer_binding | 0.64 | A_act, 20-molecule stochastic — re-check at 100 reps |
 | edg_ring_break_constraint | 0.07 | clean |

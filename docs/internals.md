@@ -193,6 +193,10 @@ Public entry: `Engine::run` (lines 7099–7103) → `Impl::run_ssa`
    Propensity is otherwise maintained by delta-updates from
    `incremental_update` to absorb floating-point drift over long runs.
 2. Sample a Δt via exponential draw on `total_propensity` (line 6605).
+   When a rate law reads `time` (`clock_rules` is non-empty, issue #86),
+   the same Exp(1) draw is spent against the hazard integrated over time
+   instead (`next_clocked_event_time`), since such a propensity moves
+   between events.
 3. Record observables for any sample times the step crosses (line 6609).
 4. Sample a rule index, weighted by per-rule propensity (lines 6625–6661).
 5. `select_reactants` — pick the actual molecules and embeddings to fire

@@ -141,6 +141,25 @@ The runtime severity model is two-level:
     its initial slope matches the true bare-observable value and then the
     whole run proceeds at that t=0 value. `ft_local_fcn_mixed_scope` is
     verdicted against BNG2's ODE for that reason.
+  - **Rates that read the clock.** Between two events the pool is fixed,
+    but a rate that reads `time` still moves. So RM does not hold such a
+    rate at its value from the last event. It places the next event
+    where the hazard integrated over time reaches the Exp(1) draw. The
+    clock-driven part is sampled over error-controlled panels of at most
+    a thousandth of the run, and the rest is integrated exactly. A pulse
+    narrower than about a third of a panel can still fall between two
+    nodes and go unseen, so a model built on such pulses wants a run, or
+    a `simulate` segment, short enough that its panels resolve them. Holding
+    the rate is exact only for a rate that cannot move without an event.
+    A rate that is 0 at the start (`k*time()`) was taken as an absorbing
+    state and never fired, and one that was merely small when held
+    outlasted the run (issue #86). A rule takes this path when its
+    function chain reads `time` or `t`, directly, through another
+    function, or as a TFUN counter. A dependency RM cannot enumerate is
+    counted as reading it. Local rates are included. Each panel node
+    rescans such a rule in full, so a local rate over many instances
+    pays several rescans per event. A global function that reads `time`
+    is reported at each sample's own time.
   - **Global function of a local function is ill-defined.** A global
     (no-argument) function that references a *local* function has no
     molecule context at global scope, so its exposed value (`.gdat`

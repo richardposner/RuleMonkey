@@ -2146,6 +2146,15 @@ Model load_model(const std::string& xml_path,
   // resolved values against the previous rescan's and skips when they
   // agree — which is why the list is collected here, where the walk
   // already visits exactly those tokens.
+  //
+  // The same walk answers a second question for every dynamic rate law,
+  // local or not (issue #86): can the propensity move with the clock
+  // alone?  One that reads `time` can change between two events, so the
+  // engine has to integrate it to place the next one rather than hold it
+  // at the value the last event left.  An unenumerable dependency is
+  // counted as reading the clock, as it is counted as moving above: the
+  // integration costs time, and leaving out a rate that does move costs
+  // the answer.
   {
     // What a function's evaluation consults that a reaction event can
     // move.  `obs` are observable slots read at system scope; `time`
@@ -2253,13 +2262,16 @@ Model load_model(const std::string& xml_path,
     // into the constant 1, so an empty name is exactly "no factor here".
     for (auto& rule : model.rules) {
       auto& rl = rule.rate_law;
-      if (!rl.is_local && rl.type != RateLawType::FunctionProduct)
+      if (!rl.is_dynamic)
         continue;
       GlobalDeps deps;
       if (!rl.function_name.empty())
         deps.merge(global_deps(rl.function_name, global_deps));
       if (!rl.function_name_b.empty())
         deps.merge(global_deps(rl.function_name_b, global_deps));
+      rl.rate_tracks_time = deps.time || deps.opaque;
+      if (!rl.is_local && rl.type != RateLawType::FunctionProduct)
+        continue;
       std::sort(deps.obs.begin(), deps.obs.end());
       deps.obs.erase(std::unique(deps.obs.begin(), deps.obs.end()), deps.obs.end());
 

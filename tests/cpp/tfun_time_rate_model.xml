@@ -1,0 +1,74 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Hand-edited from time_dependent_rate_model.xml (BioNetGen 2.9.3 cannot
+     parse tfun): f() is a linear table over the clock, 0 at t = 0 and 200 at
+     t = 2, so the rule runs at 100*t and Lambda(t) = 50 t^2, the same as the
+     `ramp` shape, through RM's TFUN path with a time counter (issue #86).
+     The shape parameters are left in place and unused. -->
+<sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
+  <model id="tfun_time_rate_model">
+    <ListOfParameters>
+      <Parameter id="a" type="Constant" value="100" expr="100"/>
+      <Parameter id="b" type="Constant" value="0" expr="0"/>
+      <Parameter id="c" type="Constant" value="0" expr="0"/>
+      <Parameter id="d" type="Constant" value="0" expr="0"/>
+      <Parameter id="e" type="Constant" value="0" expr="0"/>
+    </ListOfParameters>
+    <ListOfMoleculeTypes>
+      <MoleculeType id="B"/>
+    </ListOfMoleculeTypes>
+    <ListOfCompartments>
+    </ListOfCompartments>
+    <ListOfSpecies>
+      <Species id="S1"  concentration="0" name="B()">
+        <ListOfMolecules>
+          <Molecule id="S1_M1" name="B"/>
+        </ListOfMolecules>
+      </Species>
+    </ListOfSpecies>
+    <ListOfReactionRules>
+      <ReactionRule id="RR1" name="_R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR1_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP1_M1" name="B"/>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR1_RateLaw" type="Function" name="f" totalrate="0">
+          <ListOfArguments>
+          </ListOfArguments>
+        </RateLaw>
+        <Map>
+        </Map>
+        <ListOfOperations>
+          <Add id="RR1_PP1_M1"/>
+        </ListOfOperations>
+      </ReactionRule>
+    </ListOfReactionRules>
+    <ListOfObservables>
+      <Observable id="O1" name="Btot" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O1_P1">
+            <ListOfMolecules>
+              <Molecule id="O1_P1_M1" name="B"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+    </ListOfObservables>
+    <ListOfFunctions>
+      <Function id="f" type="TFUN" ctrName="time" xData="0,2" yData="0,200" method="linear">
+        <ListOfReferences>
+        </ListOfReferences>
+        <Expression> __TFUN_VAL__ </Expression>
+      </Function>
+      <Function id="clock">
+        <ListOfReferences>
+        </ListOfReferences>
+        <Expression> time() </Expression>
+      </Function>
+    </ListOfFunctions>
+  </model>
+</sbml>

@@ -3407,6 +3407,112 @@ struct ReactionMatch {
 canonical::ComplexGraph extract_complex(const AgentPool& pool, const Model& model,
                                         const std::vector<int>& mol_ids);
 
+// ---- Integrating a propensity that moves with the clock (issue #86) ----
+//
+// Between two events the pool is fixed, but a rate law that reads `time`
+// still moves.  The next event is then at the τ where the integrated hazard
+// ∫_t^τ a(s) ds reaches an Exp(1) draw E — the time-change theorem — and not
+// at t + E/a(t).  Holding a(t) is exact only for a rate that does not move:
+// one that reads 0 at t is held at 0 for good, and one that reads small at
+// t is held small long after it has grown.
+//
+// The engine takes the integral over panels.  A panel samples the
+// clock-driven propensity at the five Gauss-Lobatto nodes below and
+// integrates the quartic through them, which is exact to degree 7.  Its
+// difference from Simpson's rule on nodes 0, ½, 1 is Simpson's error, and a
+// sixteenth of that is the error of Simpson on the halves, which is the
+// level the step is controlled to.  The Lobatto gaps are incommensurate, so
+// a rate periodic in some fraction of the panel cannot read as constant at
+// every node, as it can on equally spaced ones.  This is the scheme bngsim's
+// network SSA uses for the same job (`ssa_simulator.cpp`, "the continuous
+// loop"), less the rate-rule integration and event triggers RM has no use
+// for.
+struct HazardPanel {
+  static constexpr int kNodes = 5;
+
+  // Nodes on [0, 1]: 0, ½ ∓ √(3/7)/2, ½, 1.
+  double node[kNodes] = {};
+  // Inverse Vandermonde matrix: the quartic's monomial coefficients are
+  // vinv · (its values at the nodes).
+  double vinv[kNodes][kNodes] = {};
+
+  static const HazardPanel& get() {
+    static const HazardPanel panel;
+    return panel;
+  }
+
+  // Monomial coefficients of the quartic through `v` at the nodes.
+  void fit(const double* v, double* c) const {
+    for (int k = 0; k < kNodes; ++k) {
+      c[k] = 0.0;
+      for (int j = 0; j < kNodes; ++j)
+        c[k] += vinv[k][j] * v[j];
+    }
+  }
+
+  static double value(const double* c, double th) {
+    double acc = 0.0;
+    for (int k = kNodes - 1; k >= 0; --k)
+      acc = (acc * th) + c[k];
+    return acc;
+  }
+
+  // ∫_0^θ of the quartic, in units of the panel length.
+  static double integral(const double* c, double th) {
+    double acc = 0.0;
+    for (int k = kNodes - 1; k >= 0; --k)
+      acc = (acc * th) + (c[k] / (k + 1));
+    return th * acc;
+  }
+
+  // The 5-point Lobatto rule and Simpson's on nodes 0, ½, 1, over a panel
+  // of length `hh`.
+  static double lobatto(const double* v, double hh) {
+    return hh * (((v[0] + v[4]) / 20.0) + ((v[1] + v[3]) * 49.0 / 180.0) + (v[2] * 16.0 / 45.0));
+  }
+  static double simpson(const double* v, double hh) {
+    return hh / 6.0 * (v[0] + (4.0 * v[2]) + v[4]);
+  }
+
+private:
+  HazardPanel() {
+    double const off = 0.5 * std::sqrt(3.0 / 7.0);
+    node[0] = 0.0;
+    node[1] = 0.5 - off;
+    node[2] = 0.5;
+    node[3] = 0.5 + off;
+    node[4] = 1.0;
+    // Gauss-Jordan on [V | I], partial pivoting; V[i][k] = node_i^k.
+    double m[kNodes][2 * kNodes] = {};
+    for (int i = 0; i < kNodes; ++i) {
+      for (int k = 0; k < kNodes; ++k)
+        m[i][k] = std::pow(node[i], k);
+      m[i][kNodes + i] = 1.0;
+    }
+    for (int c = 0; c < kNodes; ++c) {
+      int p = c;
+      for (int r = c + 1; r < kNodes; ++r)
+        if (std::fabs(m[r][c]) > std::fabs(m[p][c]))
+          p = r;
+      for (int k = 0; k < 2 * kNodes; ++k)
+        std::swap(m[c][k], m[p][k]);
+      double const d = m[c][c];
+      for (int k = 0; k < 2 * kNodes; ++k)
+        m[c][k] /= d;
+      for (int r = 0; r < kNodes; ++r) {
+        if (r == c)
+          continue;
+        double const f = m[r][c];
+        for (int k = 0; k < 2 * kNodes; ++k)
+          m[r][k] -= f * m[c][k];
+      }
+    }
+    for (int i = 0; i < kNodes; ++i)
+      for (int j = 0; j < kNodes; ++j)
+        vinv[i][j] = m[i][kNodes + j];
+  }
+};
+
 } // namespace
 
 struct Engine::Impl {
@@ -3486,6 +3592,15 @@ struct Engine::Impl {
     bool primed = false;        // false until that first rescan has happened
   };
   std::vector<GlobalDepWatch> global_dep_local_rules;
+  // Rules whose propensity can move with the clock alone (issue #86; see
+  // RateLaw::rate_tracks_time).  Empty for every model whose rates do not
+  // read `time`, and then the SSA loop is the plain direct method, bit for
+  // bit.  When it is not, run_ssa places each event by integrating these
+  // rules' propensity over time (next_clocked_event_time).
+  std::vector<int> clock_rules;
+  std::vector<char> is_clock_rule;   // [rule] -> 1 if in clock_rules
+  double clock_hmax = 0.0;           // longest panel: a thousandth of the run
+  double clock_h = 0.0;              // the step the last accepted panel proposed
   std::vector<char> rule_needed_buf; // pre-allocated, reused each update
   int max_pattern_depth = 0;         // max pattern diameter across all rules
 
@@ -4021,6 +4136,190 @@ struct Engine::Impl {
       s += rs.propensity;
     total_propensity = s;
     events_since_propensity_rebaseline = 0;
+  }
+
+  // --- Clock-driven propensities (issue #86) ---
+  //
+  // Invariant: between calls to run_ssa's event loop, every rule in
+  // clock_rules holds its propensity at `current_time`.  init_rule_states
+  // establishes it, incremental_update keeps it after an event, and
+  // next_clocked_event_time leaves the clock and these rules together
+  // wherever it stops.
+
+  // Re-evaluate one clock-driven rule's propensity at the current time.  A
+  // local rate is rescanned in full, as incremental_update does for it after
+  // every event: the clock moves every instance's rate at once.
+  void refresh_clock_rule(int ri) {
+    auto& rule = model.rules[ri];
+    if (rule.rate_law.local_rate_tracks_global) {
+      rescan_all_molecules_for_rule(ri);
+      return;
+    }
+    auto& rs = rule_states[ri];
+    double const rate = evaluate_rate(rule);
+    set_rule_propensity(rs, compute_propensity(rs, rule, rate, percx_a(ri), percx_b(ri)));
+  }
+
+  // Move the clock to `s` and return the clock-driven rules' summed
+  // propensity there.
+  double clock_propensity_at(double s) {
+    current_time = s;
+    ++eval_vars_gen; // time moved → invalidate cached eval_vars_flat
+    double a = 0.0;
+    for (int const ri : clock_rules) {
+      refresh_clock_rule(ri);
+      a += rule_states[ri].propensity;
+    }
+    return a;
+  }
+
+  // Place the next event when some propensity moves with the clock: the
+  // time τ in (current_time, t_lim] at which the hazard integrated from
+  // current_time reaches `E`, or +inf if it does not get there by t_lim.
+  // Leaves the clock at τ (at t_lim for +inf) with every clock-driven rule
+  // evaluated there.  The rest of the propensity is constant between
+  // events, so it is integrated exactly and only the clock-driven part is
+  // sampled.  See HazardPanel for the scheme; the step control, its
+  // tolerances and its two give-ups are bngsim's.
+  double next_clocked_event_time(double E, double t_lim) {
+    constexpr int kN = HazardPanel::kNodes;
+    // Per-panel hazard tolerance.  A firing time is then off by far less
+    // than the spread of the draw that places it.
+    constexpr double kRtol = 1e-6;
+    constexpr double kAtol = 1e-7;
+    // A step at the floor that still fails the error test is a jump in a
+    // rate (`if(time() > 1, k, 0)` at t = 1): no step resolves it, and one
+    // of a few ulps of t crosses it with an error of that order.  Accepted,
+    // a bounded number of times in a row; past that the rate is singular,
+    // not discontinuous, and the run is refused.
+    constexpr int kMaxFloorSteps = 100;
+    // Likewise a run that makes no headway at all, a panel of an ulp or two
+    // after another, is refused rather than left to spin.
+    constexpr long kMaxTinyPanels = 1000000;
+    HazardPanel const& hp = HazardPanel::get();
+
+    double a_static = 0.0;
+    double a0 = 0.0;
+    for (int ri = 0; ri < static_cast<int>(rule_states.size()); ++ri)
+      (is_clock_rule[ri] != 0 ? a0 : a_static) += rule_states[ri].propensity;
+
+    double t = current_time;
+    double hazard = 0.0;
+    double h = std::min(clock_h, clock_hmax);
+    int floor_steps = 0;
+    long tiny_panels = 0;
+    double av[kN];
+    double c[kN];
+    while (t < t_lim) {
+      // A few dozen ulps of t.  No step is shorter: a thousandth of a short
+      // call made late in a run can be under an ulp, and t + h would then
+      // round back to t, crediting hazard to a clock that never moves.
+      double const hmin =
+          64.0 * std::numeric_limits<double>::epsilon() * std::max(1.0, std::fabs(t));
+      h = std::max(h, hmin);
+      // One error-controlled panel [t, s1], hh = s1 - t long.
+      av[0] = a0;
+      double hh;
+      double s1;
+      double h_next;
+      while (true) {
+        bool const to_stop = h >= t_lim - t;
+        s1 = to_stop ? t_lim : t + h;
+        hh = s1 - t;
+        for (int q = 1; q < kN - 1; ++q)
+          av[q] = clock_propensity_at(t + (hp.node[q] * hh));
+        av[kN - 1] = clock_propensity_at(s1);
+        double const lob = HazardPanel::lobatto(av, hh);
+        double err = std::fabs(lob - HazardPanel::simpson(av, hh)) / 16.0 /
+                     (kAtol + (kRtol * std::fabs(lob)));
+        bool const finite = err <= 1e10; // false for NaN too
+        if (!finite)
+          err = 1e10; // shrink
+        double const fac = err > 0.0 ? std::clamp(0.9 * std::pow(err, -0.2), 0.2, 5.0) : 5.0;
+        bool const at_floor = hh <= hmin && finite;
+        if (err <= 1.0 || (at_floor && floor_steps < kMaxFloorSteps)) {
+          floor_steps = err <= 1.0 ? 0 : floor_steps + 1;
+          h_next = std::min(clock_hmax, to_stop ? std::max(h, hh * fac) : hh * fac);
+          break;
+        }
+        if (hh <= hmin) {
+          std::ostringstream msg;
+          msg << std::setprecision(17)
+              << "a rate law that reads time() cannot be integrated past t=" << t << ": ";
+          if (finite)
+            msg << kMaxFloorSteps << " steps of " << std::setprecision(3) << hmin
+                << " in a row failed the error test";
+          else
+            msg << "its propensity is not finite within " << std::setprecision(3) << hmin
+                << " of there";
+          msg << ", so the rate is singular there";
+          throw std::runtime_error(msg.str());
+        }
+        h = std::max(hh * fac, hmin);
+      }
+      if (hh <= 2.0 * hmin && hh < t_lim - t) {
+        if (++tiny_panels > kMaxTinyPanels) {
+          std::ostringstream msg;
+          msg << std::setprecision(17) << "a rate law that reads time() makes no headway at t=" << t
+              << ": " << kMaxTinyPanels << " integration steps in a row shorter than "
+              << std::setprecision(3) << 2.0 * hmin << ", so the rate is singular there";
+          throw std::runtime_error(msg.str());
+        }
+      } else {
+        tiny_panels = 0;
+      }
+
+      hp.fit(av, c);
+      double const span = hh * (a_static + HazardPanel::integral(c, 1.0));
+      if (hazard + span >= E) {
+        // The hazard reaches E inside this panel: solve for θ by Newton,
+        // kept inside a shrinking bracket (bisecting when a step leaves it).
+        double const need = E - hazard;
+        double lo = 0.0;
+        double hi = 1.0;
+        double th = need / span;
+        bool const guess_inside = th > lo && th < hi; // false for NaN too
+        if (!guess_inside)
+          th = 0.5;
+        double th_fire = hi;
+        for (int it = 0; it < 100; ++it) {
+          double const g = (hh * ((a_static * th) + HazardPanel::integral(c, th))) - need;
+          if (std::fabs(g) <= 1e-15 * std::max(1.0, E)) {
+            th_fire = th; // converged on the root itself
+            break;
+          }
+          if (g > 0.0)
+            hi = th;
+          else
+            lo = th;
+          th_fire = hi;
+          if (hi - lo <= 1e-15)
+            break;
+          double const dg = hh * (a_static + HazardPanel::value(c, th));
+          // The next Newton step is below θ's resolution: g's own rounding
+          // floor sits far above 1e-15 when a_static·hh is large.
+          if (dg > 0.0 && std::fabs(g) <= 1e-14 * dg) {
+            th_fire = th;
+            break;
+          }
+          double nt = dg > 0.0 ? th - (g / dg) : 0.5 * (lo + hi);
+          bool const step_inside = nt > lo && nt < hi; // false for NaN too
+          if (!step_inside)
+            nt = 0.5 * (lo + hi);
+          th = nt;
+        }
+        double const tau = th_fire >= 1.0 ? s1 : t + (th_fire * hh);
+        clock_propensity_at(tau);
+        clock_h = h_next;
+        return tau;
+      }
+      hazard += span;
+      t = s1;
+      a0 = av[kN - 1];
+      h = h_next;
+    }
+    clock_h = h;
+    return std::numeric_limits<double>::infinity();
   }
 
   // --- State save / restore ---
@@ -4700,8 +4999,14 @@ struct Engine::Impl {
     dynamic_synthesis_rules.clear();
     dynamic_rate_rules.clear();
     global_dep_local_rules.clear();
+    clock_rules.clear();
+    is_clock_rule.assign(n_rules, 0);
     for (int ri = 0; ri < n_rules; ++ri) {
       auto& rule = model.rules[ri];
+      if (rule.rate_law.rate_tracks_time) {
+        clock_rules.push_back(ri);
+        is_clock_rule[ri] = 1;
+      }
       if (rule.molecularity == 0) {
         if (rule.rate_law.is_dynamic)
           dynamic_synthesis_rules.push_back(ri);
@@ -10199,15 +10504,25 @@ struct Engine::Impl {
         result.observable_data[i].push_back(values[i]);
     };
 
-    // Append the current global-function values as one more column-major
-    // row.  Called from record_at immediately after record_time_point so
-    // it settles functions against the same refreshed obs_values that the
-    // observable row was built from; it deliberately does NOT touch
-    // result.time (record_time_point owns that).
-    auto record_function_point = [&result, this]() {
+    // Append the global-function values at sample time `t` as one more
+    // column-major row.  Called from record_at immediately after
+    // record_time_point so it settles functions against the same refreshed
+    // obs_values that the observable row was built from; it deliberately
+    // does NOT touch result.time (record_time_point owns that).
+    //
+    // The clock reads `t`, not the time of the last event before it (issue
+    // #86): the pool a sample records is the one that event left, but the
+    // sample is taken at `t`, and a function of `time` has to say so.  It
+    // used to report the event's time, so `clock() = time()` read 0 at every
+    // sample of a run that had not fired yet.
+    auto record_function_point = [&result, this](double t) {
       if (output_function_indices.empty())
         return; // no global functions → nothing to record (common case)
+      double const t_event = current_time;
+      current_time = t;
       std::vector<double> const fvals = compute_function_values();
+      current_time = t_event;
+      ++eval_vars_gen; // the clock moved back → invalidate cached eval_vars_flat
       if (result.function_data.empty())
         result.function_data.resize(fvals.size());
       for (std::size_t i = 0; i < fvals.size(); ++i)
@@ -10273,7 +10588,7 @@ struct Engine::Impl {
         refresh_observables_for_sample();
         record_time_point(t, obs_values);
       }
-      record_function_point();
+      record_function_point(t);
       timing_record +=
           std::chrono::duration<double>(std::chrono::steady_clock::now() - rec_t0).count();
     };
@@ -10283,6 +10598,18 @@ struct Engine::Impl {
            sample_times[next_sample] <= current_time + t_eps) {
       record_at(sample_times[next_sample]);
       ++next_sample;
+    }
+
+    // Clock-driven propensities (issue #86): no integration panel longer
+    // than a thousandth of this call's horizon.  A stretch where the rate
+    // reads 0 at every node has no error to measure, and a step left to
+    // grow unchecked would walk over a pulse between two nodes.  The cap
+    // bounds that rather than removing it: a pulse narrower than the widest
+    // node gap, about a third of a panel, can still fall between nodes.
+    // bngsim caps its panels the same way.
+    if (!clock_rules.empty()) {
+      clock_hmax = (ts.t_end - current_time) / 1000.0;
+      clock_h = clock_hmax;
     }
 
     // Main SSA loop
@@ -10305,7 +10632,11 @@ struct Engine::Impl {
       if (++events_since_propensity_rebaseline >= kPropensityRebaselineInterval)
         recompute_total_propensity();
 
-      if (total_propensity <= 0) {
+      // Zero total propensity is absorbing only when nothing can move
+      // without an event.  A rate that reads the clock can (issue #86):
+      // `k*time()` is 0 at t = 0 and positive after, and the clocked search
+      // below walks such a stretch to where its hazard picks up.
+      if (total_propensity <= 0 && clock_rules.empty()) {
         // Defensive re-baseline: a long sequence of +/- updates can drive
         // the running total to zero through FP cancellation while real
         // propensity remains positive.  Re-sum and re-check before
@@ -10330,8 +10661,18 @@ struct Engine::Impl {
       double u1 = uniform();
       while (u1 == 0.0)
         u1 = uniform(); // avoid log(0)
-      double const dt = -std::log(u1) / total_propensity;
-      double const next_time = current_time + dt;
+      double next_time;
+      if (clock_rules.empty()) {
+        next_time = current_time + (-std::log(u1) / total_propensity);
+      } else {
+        // The same Exp(1) draw, spent against the integrated hazard instead
+        // of the one held at this instant.  The search leaves the clock at
+        // next_time, or at t_end when the draw outlasts the run, with the
+        // clock-driven rules evaluated there; the running total took a
+        // delta per evaluation, so re-sum it for the selection below.
+        next_time = next_clocked_event_time(-std::log(u1), ts.t_end);
+        recompute_total_propensity();
+      }
 
       // Record samples before this reaction
       while (next_sample < static_cast<int>(sample_times.size()) &&

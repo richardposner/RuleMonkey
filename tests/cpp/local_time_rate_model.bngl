@@ -1,0 +1,29 @@
+# Fixture for time_dependent_rate_test (issue #86): a local rate that reads
+# the clock.  Each of the 5 A molecules makes L at kl*t, so the rule runs at
+# 5*kl*t = 100*t and Lambda(t) = 50 t^2 -- the same integrated rate as the
+# `ramp` shape of time_dependent_rate_model, through the per-instance path.
+begin model
+begin parameters
+  kl 20
+end parameters
+begin molecule types
+  A()
+  L()
+end molecule types
+begin seed species
+  A() 5
+end seed species
+begin observables
+  Molecules Aobs A()
+  Molecules Ltot L()
+end observables
+begin functions
+  lf(x) = kl*time()*Aobs(x)
+end functions
+begin reaction rules
+  A()%x -> A() + L()  lf(x)
+end reaction rules
+end model
+begin actions
+  writeXML()
+end actions

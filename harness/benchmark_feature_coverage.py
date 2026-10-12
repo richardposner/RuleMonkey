@@ -407,6 +407,20 @@ def generate_xml(model):
 # ---------------------------------------------------------------------------
 
 
+# Models whose ODE reference BNG2 has to integrate on a finer output grid
+# than the model samples, keeping every k-th row.  BNG2 2.9.3's run_network
+# refreshes a function of time() only at output steps, so between two of
+# them the rate is held at its value at the earlier one.  On
+# edg_time_dependent_rate (k0*exp(-k_decay*time()), A degraded at k_death)
+# that put A(50) at 6.2135 on the model's own 100-step grid, against the
+# analytic 80*(exp(-2.5) - exp(-5)) = 6.0278: 3% high, and 17.70 on a
+# 10-step grid.  At 100x the grid it reads 6.0319, within 0.07% (issue #86,
+# where RM stopped carrying an error of the same sign and similar size).
+ODE_OVERSAMPLE = {
+    "edg_time_dependent_rate": 100,
+}
+
+
 def generate_ode_reference(model, t_end, n_steps):
     """Generate ODE reference via BNG2.pl generate_network + simulate_ode."""
     os.makedirs(ODE_DIR, exist_ok=True)
@@ -418,12 +432,14 @@ def generate_ode_reference(model, t_end, n_steps):
     with open(bngl_path) as f:
         text = f.read()
 
+    oversample = ODE_OVERSAMPLE.get(model, 1)
+
     # Replace actions block
     text = re.sub(
         r"begin\s+actions.*?end\s+actions",
         f"begin actions\n"
         f"generate_network({{overwrite=>1}})\n"
-        f'simulate({{method=>"ode",t_end=>{t_end},n_steps=>{n_steps}}})\n'
+        f'simulate({{method=>"ode",t_end=>{t_end},n_steps=>{int(n_steps) * oversample}}})\n'
         f"end actions",
         text,
         flags=re.DOTALL,
@@ -448,7 +464,7 @@ def generate_ode_reference(model, t_end, n_steps):
                 return None
             # Convert to our TSV format (BNG2 gdat uses spaces)
             h, rows = parse_gdat_file(gdat_files[0])
-            write_tsv(out_path, h, rows)
+            write_tsv(out_path, h, rows[::oversample])
         return out_path
     except subprocess.TimeoutExpired:
         return None

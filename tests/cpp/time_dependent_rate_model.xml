@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Created by BioNetGen 2.9.3  -->
+<sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
+  <model id="time_dependent_rate_model">
+    <ListOfParameters>
+      <Parameter id="a" type="Constant" value="100" expr="100"/>
+      <Parameter id="b" type="Constant" value="0" expr="0"/>
+      <Parameter id="c" type="Constant" value="0" expr="0"/>
+      <Parameter id="d" type="Constant" value="0" expr="0"/>
+      <Parameter id="e" type="Constant" value="0" expr="0"/>
+    </ListOfParameters>
+    <ListOfMoleculeTypes>
+      <MoleculeType id="B"/>
+    </ListOfMoleculeTypes>
+    <ListOfCompartments>
+    </ListOfCompartments>
+    <ListOfSpecies>
+      <Species id="S1"  concentration="0" name="B()">
+        <ListOfMolecules>
+          <Molecule id="S1_M1" name="B"/>
+        </ListOfMolecules>
+      </Species>
+    </ListOfSpecies>
+    <ListOfReactionRules>
+      <ReactionRule id="RR1" name="_R1" symmetry_factor="1">
+        <ListOfReactantPatterns>
+        </ListOfReactantPatterns>
+        <ListOfProductPatterns>
+          <ProductPattern id="RR1_PP1">
+            <ListOfMolecules>
+              <Molecule id="RR1_PP1_M1" name="B"/>
+            </ListOfMolecules>
+          </ProductPattern>
+        </ListOfProductPatterns>
+        <RateLaw id="RR1_RateLaw" type="Function" name="f" totalrate="0">
+          <ListOfArguments>
+          </ListOfArguments>
+        </RateLaw>
+        <Map>
+        </Map>
+        <ListOfOperations>
+          <Add id="RR1_PP1_M1"/>
+        </ListOfOperations>
+      </ReactionRule>
+    </ListOfReactionRules>
+    <ListOfObservables>
+      <Observable id="O1" name="Btot" type="Molecules">
+        <ListOfPatterns>
+          <Pattern id="O1_P1">
+            <ListOfMolecules>
+              <Molecule id="O1_P1_M1" name="B"/>
+            </ListOfMolecules>
+          </Pattern>
+        </ListOfPatterns>
+      </Observable>
+    </ListOfObservables>
+    <ListOfFunctions>
+      <Function id="f">
+        <ListOfReferences>
+          <Reference name="a" type="Constant"/>
+          <Reference name="b" type="Constant"/>
+          <Reference name="c" type="Constant"/>
+          <Reference name="d" type="Constant"/>
+          <Reference name="e" type="Constant"/>
+        </ListOfReferences>
+        <Expression> ((((a*time())+b)+(c*((time()-1)^2)))+if((time()&gt;1),d,0))+if((time()&gt;1),if((time()&lt;1.01),e,0),0) </Expression>
+      </Function>
+      <Function id="clock">
+        <ListOfReferences>
+        </ListOfReferences>
+        <Expression> time() </Expression>
+      </Function>
+    </ListOfFunctions>
+  </model>
+</sbml>

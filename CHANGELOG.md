@@ -7,6 +7,104 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A rate law that reads `time()` was held at its value from the last
+  event, so one that is 0 at the start of a run never fired (issue #86).**
+  The SSA drew each waiting time from the propensity at the last event and
+  held it until the next one. That is exact only for a rate that cannot
+  move without an event, and a rate that reads the clock can. At zero total
+  propensity the loop took the state as absorbing and recorded the rest of
+  the run unchanged:
+
+  ```bngl
+  begin functions
+    f() = k*time()
+  end functions
+  begin reaction rules
+    0 -> B() f()
+  end reaction rules
+  ```
+
+  With `k = 100` this returned `B = 0` at t = 2 in every seed, against
+  `k t²/2 = 200`. The zero was only the extreme case. A rate that is merely
+  small when it is held draws a waiting time from that small value and
+  outlasts the run, and a rate that passes through zero mid-run freezes near
+  zero once an event lands there.
+
+  RM now places the next event where the hazard integrated over time
+  reaches the Exp(1) draw (the time-change theorem), using the same draw as
+  before. The rest of the propensity is constant between events and is
+  integrated exactly. The part that moves with the clock is sampled over
+  error-controlled panels: five Gauss–Lobatto nodes, a quartic integral,
+  and a step controlled against Simpson's rule. No panel is longer than a
+  thousandth of the run. A rate that reads 0 at every node has no error to
+  measure, and the cap is what stops a step from growing over a pulse. It
+  bounds the miss rather than removing it. A pulse wider than about a third
+  of a panel always gets a node. A narrower one can still fall between
+  nodes, and then whether it is seen depends on the length of the run.
+  This is the scheme bngsim's network SSA uses for the same job. A rule takes this
+  path when its rate-law function chain reads `time`, directly, through
+  another function, or as a TFUN counter. Local rates are included.
+  Every other model runs the direct method exactly as before.
+
+  Mean count at t = 2 over 100 seeds, one zero-order rule per model, so the
+  count is Poisson with mean Λ(2):
+
+  | rate | Λ(2) | before | after |
+  |---|---:|---:|---:|
+  | `100*time()` | 200 | 0 | 200.6 |
+  | `100*time() + 0.1` | 200.2 | 30.6 | 200.7 |
+  | `300*(time()-1)^2` | 200 | 145.7 | 200.6 |
+  | `if(time()>1, 200, 0)` | 200 | 0 | 200.6 |
+  | 20000 on (1, 1.01) | 200 | 0 | 200.6 |
+  | TFUN over time, 0 → 200 | 200 | 0 | 200.6 |
+  | local `kl*time()*Aobs(x)`, 5 A | 200 | 0 | 198.0 |
+
+  Every shape with Λ(2) = 200 that draws the same random numbers reports
+  the same count in every seed. That is all of them except the local rate,
+  which also draws the instance. The count is then the number of partial
+  sums of the draws below 200, which shows the integration holding in each
+  realization, not just on average.
+
+  Blast radius: only models whose rates read the clock change. Output was
+  compared byte for byte against 3.10.1's engine on all 89
+  feature-coverage models and the 141 corpus, reference and fixture
+  models, two seeds each. The only differences were
+  `edg_time_dependent_rate` and the new fixtures. On
+  a 56 000-event binding model with a `sin(time())` forcing, wall time rose
+  10%. A *local* rate that reads `time()` costs much more, about 10x per
+  event on a 2 000-instance rule, because each node is a full rescan of the
+  rule, as the per-event refresh of such a rule already was. No corpus
+  model has that shape.
+
+  Two adjacent defects are fixed with it:
+
+  - A global function that reads `time()` now reports the sample's time in
+    the `.gdat` / `Result::function_data` row. It used to report the time
+    of the last event before the sample, so `clock() = time()` read 0 at
+    every sample of a run that had not fired yet. Under the new loop it
+    would have reported the *next* event's time, since the clock now
+    reaches that event before the samples it passes are recorded.
+  - Continuing a session in process and continuing it from `save_state` /
+    `load_state` now agree with each other for such a model. In process,
+    the next segment started from the rate the last event had left.
+    `load_state` re-evaluates every rate at the saved time. Neither
+    reproduces an unsplit run when the calls are short against the waiting
+    time, for any model, because the overshoot rollback reuses the same
+    draw. That is issue #89.
+
+  The feature-coverage reference for `edg_time_dependent_rate` was wrong
+  as well, and is regenerated. BNG2 2.9.3's network ODE refreshes a
+  function of `time()` only at output steps. On the model's 100-step grid
+  that read A(50) = 6.2135, against the analytic 6.0278: 3% high, and
+  17.70 on a 10-step grid. The old RM carried an error of the same sign and
+  about the same size, so the two agreed. Against the corrected
+  reference, over 400 seeds, the integral of `A_total` sits at z = +3.13
+  before this change and −0.75 after. The harness now integrates that
+  model's ODE on a grid 100x finer and keeps every 100th row
+  (`ODE_OVERSAMPLE`), which reads 6.0319.
+
 ## [3.10.1] — 2026-08-25
 
 ### Fixed

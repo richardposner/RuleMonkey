@@ -482,6 +482,25 @@ add_test(
         ${CMAKE_CURRENT_BINARY_DIR}/negative_rate_clamp_stderr.txt
 )
 
+# Rate laws that read the clock (issue #86): between events the pool is
+# fixed but such a rate still moves, so holding it at the last event's value
+# lost a rate that starts at 0 (`k*time()` never fired) and any rate that is
+# small when held.  Each fixture is one zero-order rule, so the count is
+# Poisson with a closed-form mean at every sample: a ramp from 0, a small
+# start, a mid-run zero, a step, a TFUN over time (hand-edited XML) and a
+# local rate.  Also pins that a function of time reads the sample's time and
+# that in-process and save/load continuations of such a model agree.
+add_executable(time_dependent_rate_test cpp/time_dependent_rate_test.cpp)
+target_link_libraries(time_dependent_rate_test PRIVATE rulemonkey)
+
+add_test(
+    NAME time_dependent_rate_test
+    COMMAND time_dependent_rate_test
+        ${_rulemonkey_test_dir}/cpp/time_dependent_rate_model.xml
+        ${_rulemonkey_test_dir}/cpp/tfun_time_rate_model.xml
+        ${_rulemonkey_test_dir}/cpp/local_time_rate_model.xml
+)
+
 # N-ary reactant rules (issues #24, #26): a rule such as `A + A + A -> P` used
 # to collapse its 2nd and 3rd patterns into the engine's single slot-B tail,
 # score zero embeddings, and never fire — with mass still conserved and

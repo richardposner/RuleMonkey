@@ -227,6 +227,16 @@ struct RateLaw {
   bool global_dep_time = false;
   bool global_dep_opaque = false;
 
+  // Set when the propensity can move with the clock alone, with no event in
+  // between (issue #86): the rate law's function chain reads `time` —
+  // directly, through another function, or as a TFUN counter — or reads
+  // something the walk could not name.  Resolved for every Function and
+  // FunctionProduct rate law, global or local, unlike the three fields
+  // above.  The engine integrates such a propensity over time to place the
+  // next event, where holding it at its value at the last event would be
+  // exact only for a rate that does not move between events.
+  bool rate_tracks_time = false;
+
   // Largest N for which this rate law's function chain reads the
   // `reactant_N()` placeholder described on GlobalFunction, and 0 when it
   // reads none — which is every rate law that does not use the construct.
