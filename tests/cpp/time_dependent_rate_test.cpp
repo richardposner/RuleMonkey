@@ -128,9 +128,11 @@ void check_clock_output(const std::string& xml) {
 // the same continuation.  In process, the old loop resumed from whatever
 // rate the last event had left, an instant before the save; load_state
 // re-evaluates every rate at the saved time.  For a rate that reads the
-// clock those differ, and so did the two runs.  This pins only that the two
-// agree: neither reproduces an unsplit run when calls are short against the
-// waiting time, because the overshoot rollback reuses the draw (issue #89).
+// clock those differ, and so did the two runs.  This pins that the two
+// agree, not that either reproduces an unsplit run: the draw that outlasts
+// the first call is spent, and both continuations take a fresh one from
+// t = 1 (issue #89).  split_run_test checks that a split run's count has the
+// right distribution, and that the two agree across many boundaries.
 void check_continuation(const std::string& xml) {
   const std::uint64_t seed = 11;
   auto configure = [](rulemonkey::RuleMonkeySimulator& sim) {

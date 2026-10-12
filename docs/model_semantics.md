@@ -407,6 +407,16 @@ The runtime severity model is two-level:
 - `save_state(path)` / `load_state(path)` — full pool, RNG, and
   bookkeeping snapshot. The XML used at `load_state` time must match
   the one used at `save_state` time.
+- A session advanced in several `simulate()` / `step_to()` calls, or
+  carried across `save_state` / `load_state`, continues exactly, but it
+  is not the same realization as one `run()` from the same seed. Each
+  call ends on a waiting-time draw that outlasts it. That draw is spent,
+  and the next call takes a fresh one from its own start, which is exact
+  because the waiting time has no memory. A continuation in process and
+  one from a saved state take the same numbers. Before issue #89 the
+  draw was rolled back and drawn again, which reused a value already
+  known to be long, and a session cut into calls shorter than its
+  waiting times all but stopped firing.
 
 ## Tier-0 refusals (Error severity)
 

@@ -89,10 +89,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Continuing a session in process and continuing it from `save_state` /
     `load_state` now agree with each other for such a model. In process,
     the next segment started from the rate the last event had left.
-    `load_state` re-evaluates every rate at the saved time. Neither
-    reproduces an unsplit run when the calls are short against the waiting
-    time, for any model, because the overshoot rollback reuses the same
-    draw. That is issue #89.
+    `load_state` re-evaluates every rate at the saved time. Neither then
+    reproduced an unsplit run when the calls were short against the
+    waiting time, for any model, because the overshoot rollback reused the
+    same draw. That was issue #89, fixed below.
 
   The feature-coverage reference for `edg_time_dependent_rate` was wrong
   as well, and is regenerated. BNG2 2.9.3's network ODE refreshes a
@@ -104,6 +104,73 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   before this change and −0.75 after. The harness now integrates that
   model's ODE on a grid 100x finer and keeps every 100th row
   (`ODE_OVERSAMPLE`), which reads 6.0319.
+
+- **A session advanced in calls short against its waiting times all but
+  stopped firing (issue #89).** Every `simulate()` / `step_to()` call ends
+  on a waiting-time draw that lands past its `t_end`. RM rolled the RNG
+  back to before that draw, so the next call drew the same Exp(1) value
+  again and spent it from its own start. A value that has outlasted one
+  call is already known to exceed the hazard over it, so spending it again
+  is not a fresh draw. With a constant propensity the result is worse than
+  a bias. Once the draw that straddles a boundary exceeds one call's worth
+  of hazard, nothing fires, the propensity does not move, and the same
+  value comes back at every later call, so the session stays frozen to the
+  end.
+
+  The draw is now spent, and the next call takes a fresh one. That is
+  exact: the pool and the clock at `t_end` are the whole state, and the
+  waiting time has no memory. It holds for a rate that reads `time()` as
+  well, since the next search integrates the hazard from `t_end`.
+  Continuing in process and continuing from `save_state` / `load_state`
+  still agree bit for bit. The RNG is left past the spent draw, which is
+  the state the file records, so both take the same next number.
+
+  Mean count over 100 seeds, one zero-order rule per model, so the count
+  is Poisson with a known mean however the run is cut:
+
+  | rate, how the session is advanced | expected | before | after |
+  |---|---:|---:|---:|
+  | 1, one call to t = 100 | 100 | 101.5 | 101.5 |
+  | 1, 100 `simulate()` calls of 1.0 | 100 | 1.82 | 101.1 |
+  | 1, 1000 `simulate()` calls of 0.1 | 100 | 0.16 | 100.7 |
+  | 1, 1000 `step_to()` calls of 0.1 | 100 | 0.16 | 100.7 |
+  | `100*time()`, one call to t = 2 | 200 | 200.6 | 200.6 |
+  | `100*time()`, 20 `simulate()` calls of 0.1 | 200 | 181.6 | 202.9 |
+  | `100*time()`, 40 `step_to()` calls of 0.05 | 200 | 151.8 | 201.4 |
+  | `100*time()`, 200 `simulate()` calls of 0.01 | 200 | 6.4 | 200.0 |
+
+  For rate 1 in calls of 1.0, the fraction of calls that fire nothing
+  should be e⁻¹ = 0.368. It was 0.988, and is now 0.364.
+
+  Blast radius: every split run's trajectory changes from its first
+  boundary on. That covers segmented `simulate()`, `step_to()`, a
+  continuation through `save_state` / `load_state`, and `parameter_scan`
+  with `reset_conc => 0` and `bifurcate`, which thread a chain through a
+  state file. A one-shot run is byte-identical. On all 232
+  feature-coverage, reference, oracle and fixture models, two seeds each,
+  the output of `rm_driver --print-functions` matches `main` (093c4ec)
+  byte for byte; 226 of them run, and the other 6 are refusal fixtures
+  that refuse the same way. A `parameter_scan` with `reset_conc => 1` (the
+  default) is byte-identical too. Where the calls are long against the
+  waiting times only the random stream changes. `ft_continue` split at t =
+  50, as its BNGL describes, reads AB(100) = 49.95 ± 0.26 before and 50.41
+  ± 0.28 after, against 49.99 ± 0.27 in one call (200 seeds), and its
+  first 50 time units and the join row are unchanged. `A_plus_A` chained
+  over 20 points of 0.5 ends at AA = 249.6 before and 249.9 after, against
+  250.0 in one call. A chain of short points was wrong before: over 100
+  points of 0.01 it ended at AA = 56.6, against 206.7 after and 205.1 in
+  one call.
+
+  `save_load_test` asserted that a split run's final value equals an
+  uninterrupted run's. That held only because the rollback kept the two
+  aligned on the same draws, and it now compares the save/load
+  continuation with the in-process one, sample for sample.
+
+  The comment on `Result::event_count` said it counts the events "during
+  this run". It counts the whole session, so a session advanced in several
+  calls reports a running total and the events in one call are the
+  difference of consecutive results. The comment now says so, and the new
+  test pins it.
 
 ## [3.10.1] — 2026-08-25
 

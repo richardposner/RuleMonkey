@@ -1,14 +1,25 @@
 // Regression test: save_state / load_state round-trip + schema-mismatch refusal.
 //
-// Two contracts:
-//   1. round-trip: save mid-run, load into a fresh simulator, the
-//      continuation trajectory matches what an uninterrupted single
-//      run produces from the same seed (deterministic by construction).
+// Three contracts:
+//   1. round-trip: a session saved mid-run and loaded into a fresh
+//      simulator continues exactly as the same session continued in
+//      process: the same samples and the same event count, from the same
+//      seed.  It does not reproduce an uninterrupted run.  A call ends on
+//      a waiting-time draw that lands past its t_end; that draw is spent,
+//      and the next call takes a fresh one (issue #89), whereas a run
+//      with no boundary there fires where the draw lands.  Both are
+//      exact, and they part ways from the boundary on.  This used to
+//      compare against the uninterrupted run, which held only because the
+//      RNG was rolled back to before the spent draw so that the next call
+//      redrew it, and that reuse undercounted.  What save/load must keep
+//      is agreement with the in-process continuation: save_state writes
+//      the RNG past the spent draw, so both take the same next number.
 //   2. fingerprint guard: a state file saved against XML A must NOT
 //      load into a simulator constructed from a structurally different
 //      XML B.  Pre-fix the load was silently accepted and the loaded
 //      pool's component indices referred to A's schema, producing
 //      corrupt observables on the next run.
+//   3. the pre-V2 state-file marker is refused outright.
 
 #include "rulemonkey/simulator.hpp"
 
@@ -38,23 +49,19 @@ double final_obs(const rulemonkey::Result& r, const std::string& name) {
   throw std::runtime_error("observable not found: " + name);
 }
 
-// Round-trip: a save-at-t/load continuation reproduces an uninterrupted run.
-//
-// The deterministic equality follows from save_state capturing the
-// RNG state immediately before the next dt draw and load_state
-// re-seeding from that snapshot — so the second leg redraws bit-
-// identical numbers.
+// Round-trip: a save-at-t/load continuation reproduces the in-process one.
+// Compared over the whole tail, not only its last sample.
 void test_round_trip(const std::string& xml) {
   const std::uint64_t seed = 7;
   const double t_mid = 5.0;
   const double t_end = 10.0;
-  const int n_pts = 11;
 
-  // Reference: one uninterrupted run from 0..t_end.
-  rulemonkey::RuleMonkeySimulator ref(xml);
-  ref.set_block_same_complex_binding(true);
-  rulemonkey::Result const ref_full = ref.run({0.0, t_end, n_pts}, seed);
-  double const ref_aa_end = final_obs(ref_full, "AA_1");
+  // In process: 0..t_mid, then t_mid..t_end on the same session.
+  rulemonkey::RuleMonkeySimulator in_process(xml);
+  in_process.set_block_same_complex_binding(true);
+  in_process.initialize(seed);
+  in_process.simulate(0.0, t_mid, 6);
+  rulemonkey::Result const tail_a = in_process.simulate(t_mid, t_end, 6);
 
   // Split run: 0..t_mid → save → fresh sim → load → t_mid..t_end.
   auto tmp = std::filesystem::temp_directory_path() / "rm_save_load_test.bin";
@@ -70,14 +77,20 @@ void test_round_trip(const std::string& xml) {
   rulemonkey::RuleMonkeySimulator s2(xml);
   s2.set_block_same_complex_binding(true);
   s2.load_state(tmp.string());
-  rulemonkey::Result const tail = s2.simulate(t_mid, t_end, 6);
+  rulemonkey::Result const tail_b = s2.simulate(t_mid, t_end, 6);
   std::filesystem::remove(tmp);
 
-  double const split_aa_end = final_obs(tail, "AA_1");
-  check(ref_aa_end == split_aa_end,
-        "save/load round-trip: continuation final AA_1 should match uninterrupted run "
-        "(ref=" +
-            std::to_string(ref_aa_end) + " vs split=" + std::to_string(split_aa_end) + ")");
+  check(tail_a.time == tail_b.time, "save/load round-trip: tail sample times differ");
+  check(tail_a.observable_data == tail_b.observable_data,
+        "save/load round-trip: tail should match the in-process continuation at every sample "
+        "(final AA_1 in process=" +
+            std::to_string(final_obs(tail_a, "AA_1")) +
+            " vs loaded=" + std::to_string(final_obs(tail_b, "AA_1")) + ")");
+  // Result::event_count counts the whole session, and the state file
+  // carries it, so both tails report the count at t_end.
+  check(tail_a.event_count == tail_b.event_count,
+        "save/load round-trip: in-process session ended on " + std::to_string(tail_a.event_count) +
+            " events, the loaded one on " + std::to_string(tail_b.event_count));
 }
 
 // Fingerprint guard: a state saved against XML A must refuse to load
@@ -172,7 +185,7 @@ int main(int argc, char* argv[]) {
     std::fprintf(stderr, "\n%d assertion(s) failed\n", g_failures);
     return 1;
   }
-  std::fprintf(stderr, "OK: save/load round-trip preserves trajectory; XML mismatch refused; "
+  std::fprintf(stderr, "OK: save/load continuation matches in-process; XML mismatch refused; "
                        "V1 format rejected\n");
   return 0;
 }

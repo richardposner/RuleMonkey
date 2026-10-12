@@ -327,9 +327,11 @@ add_test(
 
 # save_state / load_state regression: round-trip a mid-run snapshot
 # back into a fresh simulator and verify (a) the continuation matches
-# an uninterrupted run, (b) loading state from a structurally
-# different XML is refused via the schema fingerprint, and (c) the
-# pre-V2 marker is refused outright.
+# the same session continued in process, sample for sample (not an
+# uninterrupted run: the draw that overshoots the save point is spent,
+# issue #89), (b) loading state from a structurally different XML is
+# refused via the schema fingerprint, and (c) the pre-V2 marker is
+# refused outright.
 add_executable(save_load_test cpp/save_load_test.cpp)
 target_link_libraries(save_load_test PRIVATE rulemonkey)
 
@@ -499,6 +501,24 @@ add_test(
         ${_rulemonkey_test_dir}/cpp/time_dependent_rate_model.xml
         ${_rulemonkey_test_dir}/cpp/tfun_time_rate_model.xml
         ${_rulemonkey_test_dir}/cpp/local_time_rate_model.xml
+)
+
+# A session advanced in calls short against its waiting times (issue #89):
+# the draw that overshoots a call's end was rolled back and spent again by
+# the next call, so such a session all but stopped firing.  One zero-order
+# rule per fixture, at a constant rate and at 100*time(), so the count is
+# Poisson with a known mean however the run is cut: checks the mean through
+# simulate() and step_to() calls of several lengths, the fraction of calls
+# that fire nothing, that Result::event_count counts the whole session, and
+# that an in-process continuation and a save/load chain stay in agreement.
+add_executable(split_run_test cpp/split_run_test.cpp)
+target_link_libraries(split_run_test PRIVATE rulemonkey)
+
+add_test(
+    NAME split_run_test
+    COMMAND split_run_test
+        ${_rulemonkey_test_dir}/cpp/zero_order_birth_model.xml
+        ${_rulemonkey_test_dir}/cpp/time_dependent_rate_model.xml
 )
 
 # N-ary reactant rules (issues #24, #26): a rule such as `A + A + A -> P` used

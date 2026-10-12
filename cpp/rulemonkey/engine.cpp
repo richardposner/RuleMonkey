@@ -10652,12 +10652,8 @@ struct Engine::Impl {
         }
       }
 
-      // Save RNG state before drawing dt so that state save/restore
-      // at t_end produces bit-exact continuation (the overshoot draw
-      // is rolled back, and the restored engine re-draws the same dt).
-      auto rng_before_dt = rng;
-
-      // Sample time to next reaction
+      // Sample time to next reaction.  A draw that lands past t_end is
+      // spent, not rolled back; see the overshoot branch below.
       double u1 = uniform();
       while (u1 == 0.0)
         u1 = uniform(); // avoid log(0)
@@ -10682,7 +10678,17 @@ struct Engine::Impl {
       }
 
       if (next_time > ts.t_end) {
-        rng = rng_before_dt; // rollback unused dt draw
+        // The draw outlasts the call, and it is spent: the next call takes a
+        // fresh one from t_end.  That is exact because the pool and the
+        // clock at t_end are the whole state and the waiting time has no
+        // memory, for a rate that reads time() as much as for a constant
+        // one, since the next search integrates the hazard from t_end.
+        // Rolling the RNG back to redraw this value instead reused a draw
+        // already known to outlast the hazard up to t_end, so a session
+        // advanced in calls shorter than its waiting times all but stopped
+        // firing (issue #89).  The RNG is left past the draw, which is the
+        // state save_state writes, so a continuation in process and one
+        // from a saved state still take the same next number.
         current_time = ts.t_end;
         break;
       }

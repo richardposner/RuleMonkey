@@ -1,0 +1,24 @@
+# Fixture for split_run_test (issue #89): one zero-order rule at a constant
+# rate and nothing else, so B(t) is Poisson with mean k*t however the run is
+# cut into calls, and the count in each call is Poisson with mean k times the
+# call's length, independent of every other call.
+begin model
+begin parameters
+  k 1
+end parameters
+begin molecule types
+  B()
+end molecule types
+begin seed species
+  B() 0
+end seed species
+begin observables
+  Molecules Btot B()
+end observables
+begin reaction rules
+  0 -> B() k
+end reaction rules
+end model
+begin actions
+  writeXML()
+end actions
