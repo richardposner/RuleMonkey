@@ -601,6 +601,32 @@ add_test(
     COMMAND clock_origin_test ${_rulemonkey_test_dir}/cpp/time_dependent_rate_model.xml
 )
 
+# A late t_start (issue #110): every waiting time used to be added to the
+# model's clock in doubles, which from t_start = 1e12 rounded it away or up
+# to a whole spacing, and a sample at t_start + 2 from 1e13 recorded the seed
+# state.  Events now go on the time elapsed since the call started.  Covers
+# that a run, a session and a parameter_scan from a late start are the run
+# from 0 seed for seed, on the plain path and on the clocked one with a flat
+# rate; that a ramp, a step and a pulse reading time() - T0 from 1e13 match
+# their closed forms; that each call of a session starts its elapsed clock
+# again, and a TFUN time counter still reads the model's clock; that a
+# session's clock reaches t_end once nothing can fire, in a carry-over scan
+# too; that a late session saved and loaded continues as in process; and
+# that a non-finite t_end, or a simulate(TimeSpec) t_end before the
+# session's time, is refused.
+# The timeout is for a clock regression, under which the late ramp spins.
+add_executable(late_start_test cpp/late_start_test.cpp)
+target_link_libraries(late_start_test PRIVATE rulemonkey)
+
+add_test(
+    NAME late_start_test
+    COMMAND late_start_test
+        ${_rulemonkey_test_dir}/cpp/late_start_model.xml
+        ${_rulemonkey_test_dir}/cpp/late_start_clock_model.xml
+        ${_rulemonkey_test_dir}/cpp/tfun_time_rate_model.xml
+)
+set_tests_properties(late_start_test PROPERTIES TIMEOUT 300)
+
 # N-ary reactant rules (issues #24, #26): a rule such as `A + A + A -> P` used
 # to collapse its 2nd and 3rd patterns into the engine's single slot-B tail,
 # score zero embeddings, and never fire — with mass still conserved and

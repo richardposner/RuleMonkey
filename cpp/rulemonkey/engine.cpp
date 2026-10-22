@@ -3959,7 +3959,12 @@ struct Engine::Impl {
   std::vector<BindInfo> bind_infos; // per rule
   std::vector<double> obs_values;
   double total_propensity = 0;
+  // The model's clock: what time(), a TFUN's time counter and the saved
+  // state read.  Within run_ssa it is `clock_origin + clock_elapsed`, and
+  // events are placed on the elapsed clock (issue #110); see set_elapsed.
   double current_time = 0;
+  double clock_origin = 0;
+  double clock_elapsed = 0;
   int64_t event_count = 0;
   int64_t null_event_count = 0;
   bool arrhenius_bound_warned_ = false;
@@ -4715,13 +4720,33 @@ struct Engine::Impl {
     events_since_propensity_rebaseline = 0;
   }
 
+  // --- The clock (issue #110) ---
+  //
+  // run_ssa places events on a clock that starts at 0 where the call starts,
+  // at `clock_origin`, and reads the model's clock off it as
+  // origin + elapsed.  A waiting time is then added to the time since the
+  // call started, not to the model's clock: from a late t_start the doubles
+  // near t are too far apart to hold it, and t + tau rounded it away or up
+  // to a whole spacing (at t = 1e13 they are 2e-3 apart).  The only
+  // rounding left is in the clock a rate law reads, which BNG's network
+  // simulate has too.
+
+  // Move the clock to `e` past clock_origin.
+  void set_elapsed(double e) {
+    clock_elapsed = e;
+    current_time = clock_origin + e;
+    ++eval_vars_gen; // time moved → invalidate cached eval_vars_flat
+  }
+
   // --- Clock-driven propensities (issue #86) ---
   //
   // Invariant: between calls to run_ssa's event loop, every rule in
   // clock_rules holds its propensity at `current_time`.  init_rule_states
   // establishes it, incremental_update keeps it after an event, and
   // next_clocked_event_time leaves the clock and these rules together
-  // wherever it stops.
+  // wherever it stops.  At the end of a call, to within an ulp: the rules
+  // were evaluated at origin + (t_end - origin), and the clock is put at
+  // t_end itself.
 
   // Re-evaluate one clock-driven rule's propensity at the current time.  A
   // local rate is rescanned in full, as incremental_update does for it after
@@ -4737,11 +4762,10 @@ struct Engine::Impl {
     set_rule_propensity(rs, compute_propensity(rs, rule, rate, percx_a(ri), percx_b(ri)));
   }
 
-  // Move the clock to `s` and return the clock-driven rules' summed
-  // propensity there.
+  // Move the clock to `s`, on the elapsed clock, and return the
+  // clock-driven rules' summed propensity there.
   double clock_propensity_at(double s) {
-    current_time = s;
-    ++eval_vars_gen; // time moved → invalidate cached eval_vars_flat
+    set_elapsed(s);
     double a = 0.0;
     for (int const ri : clock_rules) {
       refresh_clock_rule(ri);
@@ -4751,12 +4775,12 @@ struct Engine::Impl {
   }
 
   // Place the next event when some propensity moves with the clock: the
-  // time τ in (current_time, t_lim] at which the hazard integrated from
-  // current_time reaches `E`, or +inf if it does not get there by t_lim.
-  // Leaves the clock at τ (at t_lim for +inf) with every clock-driven rule
-  // evaluated there.  The rest of the propensity is constant between
-  // events, so it is integrated exactly and only the clock-driven part is
-  // sampled.  See HazardPanel for the scheme; the step control, its
+  // time τ in (clock_elapsed, t_lim] at which the hazard integrated from
+  // clock_elapsed reaches `E`, or +inf if it does not get there by t_lim,
+  // both on the elapsed clock.  Leaves the clock at τ (at t_lim for +inf)
+  // with every clock-driven rule evaluated there.  The rest of the
+  // propensity is constant between events, so it is integrated exactly and
+  // only the clock-driven part is sampled.  See HazardPanel for the scheme; the step control, its
   // tolerances and its two give-ups are bngsim's.
   double next_clocked_event_time(double E, double t_lim) {
     constexpr int kN = HazardPanel::kNodes;
@@ -4780,7 +4804,7 @@ struct Engine::Impl {
     for (int ri = 0; ri < static_cast<int>(rule_states.size()); ++ri)
       (is_clock_rule[ri] != 0 ? a0 : a_static) += rule_states[ri].propensity;
 
-    double t = current_time;
+    double t = clock_elapsed;
     double hazard = 0.0;
     double h = std::min(clock_h, clock_hmax);
     int floor_steps = 0;
@@ -4788,9 +4812,9 @@ struct Engine::Impl {
     double av[kN];
     double c[kN];
     while (t < t_lim) {
-      // A few dozen ulps of t.  No step is shorter: a thousandth of a short
-      // call made late in a run can be under an ulp, and t + h would then
-      // round back to t, crediting hazard to a clock that never moves.
+      // A few dozen ulps of t, on the elapsed clock.  No step is shorter, so
+      // t + h always moves t rather than crediting hazard to a clock that
+      // never moves, and a jump in a rate is crossed by a step this long.
       double const hmin =
           64.0 * std::numeric_limits<double>::epsilon() * std::max(1.0, std::fabs(t));
       h = std::max(h, hmin);
@@ -4822,7 +4846,8 @@ struct Engine::Impl {
         if (hh <= hmin) {
           std::ostringstream msg;
           msg << std::setprecision(17)
-              << "a rate law that reads time() cannot be integrated past t=" << t << ": ";
+              << "a rate law that reads time() cannot be integrated past t=" << (clock_origin + t)
+              << ": ";
           if (finite)
             msg << kMaxFloorSteps << " steps of " << std::setprecision(3) << hmin
                 << " in a row failed the error test";
@@ -4837,8 +4862,9 @@ struct Engine::Impl {
       if (hh <= 2.0 * hmin && hh < t_lim - t) {
         if (++tiny_panels > kMaxTinyPanels) {
           std::ostringstream msg;
-          msg << std::setprecision(17) << "a rate law that reads time() makes no headway at t=" << t
-              << ": " << kMaxTinyPanels << " integration steps in a row shorter than "
+          msg << std::setprecision(17)
+              << "a rate law that reads time() makes no headway at t=" << (clock_origin + t) << ": "
+              << kMaxTinyPanels << " integration steps in a row shorter than "
               << std::setprecision(3) << 2.0 * hmin << ", so the rate is singular there";
           throw std::runtime_error(msg.str());
         }
@@ -11766,11 +11792,26 @@ struct Engine::Impl {
         result.function_data[i].push_back(fvals[i]);
     };
 
+    // The call's events go on an elapsed clock from 0 here (issue #110; see
+    // set_elapsed).  The clock stands at t_end once the call is over.
+    clock_origin = current_time;
+    clock_elapsed = 0.0;
+    double const t_end_el = ts.t_end - clock_origin;
+    auto stop_at_t_end = [&]() {
+      clock_elapsed = t_end_el;
+      current_time = ts.t_end; // exact, where origin + t_end_el may be an ulp off
+      ++eval_vars_gen;         // time moved → invalidate cached eval_vars_flat
+    };
+
     // Compute sample times.  An explicit `ts.sample_times` list (issue #16)
     // overrides the uniform grid entirely; the recorder below walks a generic
     // sorted vector either way, so only the construction of `sample_times`
-    // changes here.
+    // changes here.  `sample_times` are the labels, on the model's clock;
+    // `sample_at` places each on the elapsed clock.  A grid point is placed
+    // at i*dt from t_start, so a late t_start samples the same instants as
+    // an early one even where its labels cannot tell them apart.
     std::vector<double> sample_times;
+    std::vector<double> sample_at;
     if (!ts.sample_times.empty()) {
       // Honor the caller's exact output instants (e.g. an experimental
       // dataset's time points).  The recorder advances a single cursor and
@@ -11782,13 +11823,20 @@ struct Engine::Impl {
                                    "ascending order");
       }
       sample_times = ts.sample_times;
+      for (double const t : sample_times)
+        sample_at.push_back(t - clock_origin);
     } else if (ts.n_points > 0) {
       double const dt = (ts.t_end - ts.t_start) / ts.n_points;
-      for (int i = 0; i <= ts.n_points; ++i)
+      double const start_el = ts.t_start - clock_origin;
+      for (int i = 0; i <= ts.n_points; ++i) {
         sample_times.push_back(ts.t_start + (i * dt));
+        sample_at.push_back(start_el + (i * dt));
+      }
     } else {
       sample_times.push_back(ts.t_start);
       sample_times.push_back(ts.t_end);
+      sample_at.push_back(ts.t_start - clock_origin);
+      sample_at.push_back(t_end_el);
     }
 
     int next_sample = 0;
@@ -11798,10 +11846,13 @@ struct Engine::Impl {
     // a t_end of 1e6 has FP grid spacing ≈ 1.16e-10 between adjacent
     // doubles, so 1e-15 is below the resolution of `current_time` and
     // a sample exactly at t_end could miss its bucket.  Use a relative
-    // tolerance (max(1e-15, 1e-12 * |t_end|)) so the check tracks the
-    // representable spacing of the time grid at any scale.  Computed
-    // once outside the SSA loop because t_end doesn't change mid-run.
-    const double t_eps = std::max(1e-15, 1e-12 * std::fabs(ts.t_end));
+    // tolerance (max(1e-15, 1e-12 * span)) so the check tracks the
+    // representable spacing of the time grid at any scale.  The grid is
+    // the elapsed clock's, so the span is the call's, not |t_end|: from
+    // t_start = 1e13, 1e-12 * |t_end| is 10 time units, and a sample at
+    // t_start + 2 recorded the seed state (issue #110).  Computed once
+    // outside the SSA loop because t_end doesn't change mid-run.
+    const double t_eps = std::max(1e-15, 1e-12 * std::fabs(t_end_el));
 
     auto wall_t0 = std::chrono::steady_clock::now();
 
@@ -11832,7 +11883,7 @@ struct Engine::Impl {
 
     // Record samples up to current time
     while (next_sample < static_cast<int>(sample_times.size()) &&
-           sample_times[next_sample] <= current_time + t_eps) {
+           sample_at[next_sample] <= clock_elapsed + t_eps) {
       record_at(sample_times[next_sample]);
       ++next_sample;
     }
@@ -11845,12 +11896,12 @@ struct Engine::Impl {
     // node gap, about a third of a panel, can still fall between nodes.
     // bngsim caps its panels the same way.
     if (!clock_rules.empty()) {
-      clock_hmax = (ts.t_end - current_time) / 1000.0;
+      clock_hmax = t_end_el / 1000.0;
       clock_h = clock_hmax;
     }
 
     // Main SSA loop
-    while (current_time < ts.t_end) {
+    while (clock_elapsed < t_end_el) {
       // Cooperative cancellation: between-event safe point.  Throwing
       // before any state advances this iteration means the session is
       // left at the last completed event's time/pool state — safe to
@@ -11880,11 +11931,16 @@ struct Engine::Impl {
         // declaring the absorbing state.
         recompute_total_propensity();
         if (total_propensity <= 0) {
-          // Absorbing state — record remaining samples at current values
+          // Absorbing state — record remaining samples at current values.
+          // Nothing happens before t_end, so the clock goes there, as it
+          // does when a draw outlasts the call.  It used to stay at the last
+          // event, and a session's next simulate() from t_end was refused
+          // for starting after the session's time.
           while (next_sample < static_cast<int>(sample_times.size())) {
             record_at(sample_times[next_sample]);
             ++next_sample;
           }
+          stop_at_t_end();
           break;
         }
       }
@@ -11896,25 +11952,25 @@ struct Engine::Impl {
         u1 = uniform(); // avoid log(0)
       double next_time;
       if (clock_rules.empty()) {
-        next_time = current_time + (-std::log(u1) / total_propensity);
+        next_time = clock_elapsed + (-std::log(u1) / total_propensity);
       } else {
         // The same Exp(1) draw, spent against the integrated hazard instead
         // of the one held at this instant.  The search leaves the clock at
         // next_time, or at t_end when the draw outlasts the run, with the
         // clock-driven rules evaluated there; the running total took a
         // delta per evaluation, so re-sum it for the selection below.
-        next_time = next_clocked_event_time(-std::log(u1), ts.t_end);
+        next_time = next_clocked_event_time(-std::log(u1), t_end_el);
         recompute_total_propensity();
       }
 
       // Record samples before this reaction
       while (next_sample < static_cast<int>(sample_times.size()) &&
-             sample_times[next_sample] <= next_time) {
+             sample_at[next_sample] <= next_time) {
         record_at(sample_times[next_sample]);
         ++next_sample;
       }
 
-      if (next_time > ts.t_end) {
+      if (next_time > t_end_el) {
         // The draw outlasts the call, and it is spent: the next call takes a
         // fresh one from t_end.  That is exact because the pool and the
         // clock at t_end are the whole state and the waiting time has no
@@ -11926,12 +11982,11 @@ struct Engine::Impl {
         // firing (issue #89).  The RNG is left past the draw, which is the
         // state save_state writes, so a continuation in process and one
         // from a saved state still take the same next number.
-        current_time = ts.t_end;
+        stop_at_t_end();
         break;
       }
 
-      current_time = next_time;
-      ++eval_vars_gen; // time advanced → invalidate cached eval_vars_flat
+      set_elapsed(next_time);
 
       // Select reaction
       double const u2 = uniform() * total_propensity;
@@ -12582,6 +12637,17 @@ void Engine::initialize(double t_start) {
 void Engine::share_clamp_warnings(std::atomic<bool>* latch) { impl_->shared_clamp_latch = latch; }
 
 Result Engine::run(const TimeSpec& ts, const CancelCallback& should_continue) {
+  // Every run, simulate(), step_to(), ensemble replicate and scan point
+  // comes through here.  An infinite t_end has no grid to sample, and once
+  // nothing can fire, no time to leave the clock at (issue #110).  A grid
+  // over [0, inf] was labelled NaN, inf, ..., inf with every row at the end
+  // state, and step_to(inf) would now leave `current_time()` at inf, a state
+  // load_state cannot read back.
+  if (!std::isfinite(ts.t_end)) {
+    std::ostringstream msg;
+    msg << "run: t_end must be finite, got " << ts.t_end;
+    throw std::runtime_error(msg.str());
+  }
   if (!impl_->initialized)
     initialize(ts.t_start);
   return impl_->run_ssa(ts, should_continue);

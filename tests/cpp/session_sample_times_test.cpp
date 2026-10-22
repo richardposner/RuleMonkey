@@ -15,7 +15,8 @@
 //      session with a prior segment, an explicit non-uniform list starting at
 //      the current session time produces exactly one row per requested time,
 //      at exactly those times — i.e. it continues the trajectory rather than
-//      restarting it.
+//      restarting it: it is bit-identical to a uniform second segment at the
+//      instants they share.
 //
 //   3. Start-alignment contract.  A TimeSpec whose segment start disagrees with
 //      the current session time throws std::runtime_error rather than silently
@@ -111,11 +112,17 @@ int main(int argc, char* argv[]) {
     }
 
     // ---- Contract 2: mid-protocol non-uniform instants -------------------
+    // `t_end` bounds the run and has to be set.  Left at its default 0,
+    // before the session's time, the segment ran nothing and labelled the
+    // state at t=5 with every later time, which a check of the labels alone
+    // could not see; that is now refused (issue #110).  The continuation is
+    // checked below against a uniform second segment.
     rulemonkey::RuleMonkeySimulator mp_sim(xml_path);
     mp_sim.initialize(kSeed);
     (void)mp_sim.simulate(0.0, 5.0, 5); // advance the live session to t=5
     const std::vector<double> tail = {5.0, 6.5, 8.0, 10.0};
     rulemonkey::TimeSpec tail_ts;
+    tail_ts.t_end = 10.0;
     tail_ts.sample_times = tail;
     const auto mp = mp_sim.simulate(tail_ts);
     check(mp.n_times() == tail.size(),
@@ -127,6 +134,23 @@ int main(int argc, char* argv[]) {
         if (mp.time[k] != tail[k])
           times_match = false;
       check(times_match, "mid-protocol Result::time must echo the requested sample_times verbatim");
+    }
+
+    // The explicit segment continues the trajectory: it is the uniform
+    // segment over [5, 10] (rows 0.5 apart) at the instants they share.
+    rulemonkey::RuleMonkeySimulator mu_sim(xml_path);
+    mu_sim.initialize(kSeed);
+    (void)mu_sim.simulate(0.0, 5.0, 5);
+    const auto mu = mu_sim.simulate(5.0, 10.0, 10);
+    const std::size_t shared[] = {0, 3, 6, 10}; // 5, 6.5, 8, 10
+    if (mp.n_times() == tail.size() && mp.n_observables() == mu.n_observables()) {
+      bool continued = mp.event_count == mu.event_count;
+      for (std::size_t k = 0; k < tail.size(); ++k)
+        for (std::size_t o = 0; o < mp.n_observables(); ++o)
+          if (mp.observable_data[o][k] != mu.observable_data[o][shared[k]])
+            continued = false;
+      check(continued, "mid-protocol explicit segment must be bit-identical to the uniform "
+                       "second segment at the shared instants");
     }
 
     // ---- Contract 3: start-alignment is validated ------------------------

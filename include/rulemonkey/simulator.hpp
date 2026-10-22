@@ -48,8 +48,10 @@ public:
   // reads time() reads that clock, absolute model time, as BNG's network
   // simulate does with a nonzero t_start (issue #98).  Before #98, a
   // nonzero `t_start` started the clock at 0 and simulated [0, t_start]
-  // before the first row.  Throws std::runtime_error if `ts.t_end` is
-  // earlier than `ts.t_start`.
+  // before the first row.  Events are placed on the time elapsed since
+  // `ts.t_start`, so a late start loses no resolution: only the clock a
+  // rate law reads is rounded (issue #110).  Throws std::runtime_error if
+  // `ts.t_end` is not finite or is earlier than `ts.t_start`.
   //
   // Each call seeds a new RNG from `seed`; repeated calls with the same XML,
   // method, TimeSpec, overrides, molecule limit, and seed are reproducible
@@ -157,7 +159,7 @@ public:
   // `time`) — the in-process engine has no zero-sample fast path —
   // but the caller sees no `Result`.  Suitable for "equilibrate then
   // perturb then sample" flows where the equilibration trajectory
-  // is uninteresting.
+  // is uninteresting.  `time` must be finite (issue #110).
   //
   // `should_continue`, if non-empty, enables cooperative cancellation; a
   // `false` return throws `rulemonkey::Cancelled` mid-advance.  The session's
@@ -167,7 +169,10 @@ public:
   void step_to(double time, const CancelCallback& should_continue = {});
 
   // Samples a segment from the active session starting at the current session
-  // time and ending at `t_end`.
+  // time and ending at `t_end`.  Like step_to, it leaves `current_time()` at
+  // `t_end`, also when nothing is left to fire (issue #110), unless the
+  // molecule limit, a cancellation or an error stops it first.  Throws
+  // std::runtime_error if `t_end` is not finite.
   //
   // `should_continue` has the same cooperative-cancellation semantics as on
   // `run()`; if it returns false mid-segment, `Cancelled` is thrown and the
@@ -183,8 +188,10 @@ public:
   // reset) and routes through the same `run_ssa` path, which already honors
   // `TimeSpec::sample_times` (see issue #16).  The segment must start at the
   // current session time: `ts.sample_times.front()` — or `ts.t_start` when
-  // `sample_times` is empty — must equal `current_time()`.  `should_continue`
-  // has the same cooperative-cancellation semantics as the other session calls.
+  // `sample_times` is empty — must equal `current_time()`, and `ts.t_end`,
+  // which bounds the run, must be finite and not earlier than it.
+  // `should_continue` has the same cooperative-cancellation semantics as the
+  // other session calls.
   Result simulate(const TimeSpec& ts, const CancelCallback& should_continue = {});
 
   // Adds `count` default, unbound molecules of the named imported

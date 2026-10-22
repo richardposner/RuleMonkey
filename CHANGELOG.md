@@ -42,6 +42,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A run from a late `t_start` lost its waiting times to rounding (issue
+  #110).** Since #98 the seed state sits at `t_start` on the model's
+  clock, and every event was placed at `t + tau` in doubles. Once the
+  total propensity times |t| neared 1e15, `tau` was below the spacing of
+  the doubles near `t` and was rounded away or up to a whole spacing. The
+  run fired too slowly or not at all, with no error. `A(s~0) -> A(s~1)` at
+  k = 0.5 from 1e5 copies, mean of 10 seeds at `t_start + 2` against
+  1e5·e⁻¹ = 36788: z = −290 from `t_start = 1e12`. From 1e13 the tolerance
+  for "this sample is at the start", 1e-12·|t_end|, was 10 time units, so
+  the sample at `t_start + 2` recorded the seed state. A run from 1e13 of
+  the same decay at `k + a*(time() - T0)` did not finish in 20 minutes; it
+  takes a fraction of a second now. RM now keeps the clock as an origin,
+  where each `run()`, `simulate()` or `step_to()` call starts, plus the time
+  elapsed since, and places events, samples and the clock-driven hazard's
+  panels on the elapsed part. `time()`, a TFUN's time
+  counter, the sample labels and the saved state read origin + elapsed. For
+  a model whose rates do not read the clock, a run, a session or a
+  `parameter_scan` from `t_start = 1e13` is the one from 0, draw for draw,
+  over a span the doubles there hold exactly;
+  a grid's points sit at `i*dt` past `t_start` even from 1e16, where their
+  labels round together. Only the clock a rate law reads is rounded, as it
+  is for BNG's network `simulate`. A run from `t_start = 0` is unchanged by
+  construction. `rm_driver --print-functions` output from `--t-start` 0 and
+  from 5 is byte-identical to `main` on all 262 XMLs under `tests/`, two
+  seeds each, rates that read the clock included.
+- **A session that reached an absorbing state kept the time of its last
+  event.** For a model whose rates do not read the clock, `simulate()` and
+  `step_to()` stopped without moving the clock to `t_end` once nothing could
+  fire, so the next `simulate()` from `t_end` was refused for starting after
+  the session's time. A session from an empty pool stayed at its start. The clock now goes to `t_end`, as it does
+  when a draw outlasts the call. `rm_driver --save-state` saved the last
+  event's time, so a `--load-state` continuation from `t_end` was refused:
+  split at half its run, 11 of the 262 XMLs under `tests/` failed so on
+  `main`. The other 251 continue byte-identically. In a `parameter_scan`
+  carry-over chain, the point after one that decays out now starts at that
+  point's `t_end`, not at its last event.
+- **An infinite `t_end` was accepted and went wrong.** `run({0, inf, 2})`
+  labelled its rows NaN, inf, inf and recorded every one at the end state.
+  With no grid, its two rows, labelled 0 and inf, both recorded the seed
+  state. A model that never stops firing never returned. With the fix
+  above, `step_to(inf)` on a pool that decays out would leave
+  `current_time()` at inf, a state `load_state` cannot read back. Every
+  run, `simulate()`, `step_to()`, ensemble and scan now refuses a `t_end`
+  that is not finite, as `initialize()` already refuses such a `t_start`.
+  `simulate()` also refuses a NaN segment start. Its tolerance check,
+  `|t_start - session time| > tol`, is false for NaN, so the call ran with
+  its first row labelled NaN.
+- **`simulate(TimeSpec)` ran a `t_end` before the session's time.** With
+  `sample_times` set, it checked only the last sample against the session's
+  time. A `t_end` before it ran nothing and labelled the session's state
+  with the later sample times. That includes `t_end` left at its default
+  0 on a session past 0, which is how `session_sample_times_test` called
+  it: its rows at 6.5, 8 and 10 were the state at 5, and the test checked
+  only their labels. It is now refused, as `simulate(t_start, t_end, n)`
+  refuses a `t_end` before the session's time. A caller that leaves
+  `t_end` unset with `sample_times` has to set it.
 - **Arrhenius rules ran at the wrong rate wherever the load-time expansion
   could not represent an energy pattern's context, or the rule's own
   (issue #109); they now run at BioNetGen's rate.** RM expanded each
