@@ -508,7 +508,7 @@ treat at least one of these as a signal to refuse the model.
 | Trigger | Why refused |
 |---|---|
 | `<ListOfCompartments>` non-empty | RM does not implement compartment volume scaling — bimolecular rate constants would be silently incorrect. |
-| An `RateLaw type="Arrhenius"` rule that is **not** a 2-reactant binding rule | eBNGL energy rules are expanded at load time (see "Energy-based BNGL" below), but only for the 2-reactant binding case — matching NFsim's own coverage. State-change energy rules, intramolecular ring-closure binding, and >2-reactant rules would be silently dropped, so they are refused. (2-reactant binding Arrhenius rules, and a bare `<ListOfEnergyPatterns>` with `Function`-type rate laws, are both fully supported and are **not** triggers.) |
+| An `RateLaw type="Arrhenius"` rule outside the shapes the load-time expansion prices exactly | eBNGL energy rules are expanded at load time (see "Energy-based BNGL" below), and only a single bond made between two reactant patterns or broken within one, between molecules of two types, with nothing else in the reactant pattern, priced by energy patterns that are that bond alone or that bond plus one bond to a molecule of a third type. State-change energy rules, intramolecular ring-closure binding, and >2-reactant rules would be silently dropped; an energy pattern or reactant context outside that set would run at the wrong rate (issue #109). Either way the rule is refused, and the message names the pattern or context that put it outside. (A bare `<ListOfEnergyPatterns>` with `Function`-type rate laws is fully supported and is **not** a trigger.) |
 | A rule with three or more `<ReactantPattern>` children, where a pattern's `.`-joined molecules are not bonded to each other, the rate law is not `Ele`, or there are more than 6 patterns | Rules of 3-6 reactant patterns under an elementary rate law are simulated, each pattern a single molecule or a bonded complex (see "N-ary reactant rules" below). The shapes listed here fall outside that path and would drop onto the two-slot machinery, whose slot B merges patterns 2..n into one bond-free pattern that scores zero embeddings for free reactants — the rule would silently hold zero propensity and never fire, with mass still conserved so the trajectory looks valid (issues #24, #26). Rewrite as a sequence of at most bimolecular steps. |
 | Any rule with `RateLaw type="Sat"` | Deprecated; rewrite as `MM(kcat, Km)`. |
 | An `MM(kcat,Km)` rule whose `Km` resolves to a negative value | Outside the rate law's domain: the discriminant `(S−Km−E)² + 4·Km·S` can go negative, and where it does not the expression still yields a finite but meaningless rate (issue #46). A `Km` that arrives *after* load through `set_param` / `parameter_scan` cannot be caught here and is clamped to zero propensity with one warning per rule instead. |
@@ -741,6 +741,21 @@ parameter they are written in terms of, such as a model's own `RT`,
 **does** re-resolve the baked rates on the next run (same path as
 ordinary `Ele` rate constants).
 
+BNG2 writes the reverse half of a reversible rule X as a rule named
+`_reverse_X`, with X's rate constants and the mirror image of X's
+operation, and the name is the only mark the XML carries. So RM reads a
+rule named `_reverse_X` as a reverse half only when the model also has an
+Arrhenius rule X with the same rate constants whose one operation is the
+opposite bond operation on the same two sites. A rule the modeler labels
+`_reverse_X` without such an X is a rule as written, and BNG2 gives it
+`phi`; until issue #109, RM gave it `1-phi`. One case cannot be told apart:
+two unidirectional rules, X and one labelled `_reverse_X`, that mirror each
+other and name the same parameters for phi and Ea0, write the same XML as
+one reversible rule, in either orientation. RM reads them as one and gives
+the second rule `1-phi`, where BNG2 gives it `phi`. Given numbers instead
+of parameters, BNG2 writes each rule its own `_Aphi_N` and `_AEact0_N`, and
+the two are told apart.
+
 **Deferred** (refused at Tier 0, matching NFsim's binding-only coverage):
 state-change energy rules, intramolecular ring-closure binding, rules with
 more than two reactants, **same-type homodimer binding** (`A + A <-> A.A`;
@@ -752,15 +767,43 @@ rate laws that inline the Boltzmann factors by hand (e.g.
 `isingspin_localfcn`, `ft_energy_patterns`) are a separate, long-supported
 path and need no expansion.
 
-**NFsim-parity quirks** (faithfully reproduced, so RM matches NFsim even
-where NFsim's expansion is incomplete relative to BNG2's network
-generation): an energy pattern that requires *two or more* context bonds is
-included in a variant's ΔG when *any* one of those bonds is present
-(OR-union, not AND); and an energy pattern gated purely by a non-center
-*internal-state* constraint (rather than a bond) contributes no ΔG term.
-Both mirror NFsim exactly. RM's supported test models avoid these shapes;
-if you need BNG2-network-exact behavior on such patterns, use
-`generate_network()` + ODE/SSA.
+**Refused because the expansion would misprice them** (issue #109). The
+expansion turns each energy pattern holding the reaction-center bond into at
+most one condition, "this site of a center molecule is bound to anything",
+and builds every rule from the two bond sites alone. That is exact, and the
+rule expands, only when every energy pattern whose count the bond changes is
+
+- the bond alone, `A(b!1).B(a!1)`,
+- the bond plus a `!+` on a site of one of its two molecules,
+  `A(b!1,c!+).B(a!1)`, or
+- the bond plus one bond from a site of one of its two molecules to a
+  molecule of a third type, `A(b!1,c!2).B(a!1).C(a!2)`, where nothing but
+  C's `a` can ever bind A's `c` (judged from every bond of the seed species
+  and the rules' patterns),
+
+where A declares one `c` and does not name it like the reaction site; with
+no internal state and no site required free anywhere in the pattern, and
+no `!?` that BNG2 counts more than once. BNG2 divides a pattern's matches
+by its automorphisms, so k `!?` components on the m same-named components
+the rest of the pattern leaves count C(m, k) times: `L(r!1,r!?).R(l!1)`
+counts twice on `L(r,r,r)`, and `L(r!1,r!?,r!?).R(l!1)` once. The rule's
+own reactant pattern must name the two bond sites and nothing else, `!?`
+aside, and a rule that breaks the bond must write `+` between its
+products.
+
+Outside that, the rule used to run at the wrong rate with no warning: an
+energy pattern with a state, a site required free, wildcard bonds only
+(`L(r!+,r!+)`), a `!+` or a second bond on a site named like the reaction
+site, a context site with more than one possible partner, context two
+bonds out, two context conditions (which RM applied when either was met),
+or a `!?` BNG2 counts more than once, or a state in the rule's own
+reactant pattern (which RM dropped, so the rule fired on complexes BNG2
+never lets react). Each is now refused, naming the pattern or context. An
+energy pattern that does not hold the bond and does not constrain either
+of its sites, such as `A(s~1)`, cannot change with it, so it does not
+affect the rule. A pattern whose molecules are joined only by `.` is
+refused, since joining or parting any two complexes can change its count.
+To simulate a refused model, use `generate_network()` + ODE/SSA.
 
 ## Embedder integration pattern
 
@@ -850,7 +893,10 @@ ticket.
   rules, intramolecular ring-closure binding, >2-reactant energy rules,
   same-type homodimer binding, binding coupled to another operation, and
   rules carrying exclude/include constraints — the same scope NFsim's own
-  eBNGL implements. See "Energy-based BNGL (eBNGL)" above.
+  eBNGL implements — and Arrhenius rules whose energy patterns or reactant
+  context the load-time expansion cannot price exactly
+  ([#109](https://github.com/richardposner/RuleMonkey/issues/109)). See
+  "Energy-based BNGL (eBNGL)" above.
 - Hybrid particle-population SSA — open work, no scheduled implementation.
 - Multi-molecule Fixed species — would require pattern-based
   re-instantiation; not currently implemented (refused at Tier 0).
