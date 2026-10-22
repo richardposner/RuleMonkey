@@ -4603,7 +4603,9 @@ Result RuleMonkeySimulator::simulate(double t_start, double t_end, int n_points,
   // trajectory.
   const double session_t = impl_->session->current_time();
   const double tol = 1e-9 * std::max(1.0, std::fabs(session_t));
-  if (std::fabs(t_start - session_t) > tol) {
+  // Written so a NaN t_start fails it too; it used to pass and label the
+  // first row NaN.
+  if (!(std::fabs(t_start - session_t) <= tol)) {
     std::ostringstream msg;
     msg << "simulate(t_start=" << t_start << ", t_end=" << t_end
         << "): t_start disagrees with current session time " << session_t
@@ -4637,7 +4639,7 @@ Result RuleMonkeySimulator::simulate(const TimeSpec& ts, const CancelCallback& s
   const double seg_start = ts.sample_times.empty() ? ts.t_start : ts.sample_times.front();
   const double session_t = impl_->session->current_time();
   const double tol = 1e-9 * std::max(1.0, std::fabs(session_t));
-  if (std::fabs(seg_start - session_t) > tol) {
+  if (!(std::fabs(seg_start - session_t) <= tol)) { // NaN fails too
     std::ostringstream msg;
     msg << "simulate(TimeSpec): segment start " << seg_start
         << " disagrees with current session time " << session_t
@@ -4648,6 +4650,13 @@ Result RuleMonkeySimulator::simulate(const TimeSpec& ts, const CancelCallback& s
   const double seg_end = ts.sample_times.empty() ? ts.t_end : ts.sample_times.back();
   if (seg_end < session_t)
     throw std::runtime_error("simulate(TimeSpec): segment end (" + std::to_string(seg_end) +
+                             ") is earlier than current session time (" +
+                             std::to_string(session_t) + ")");
+  // `ts.t_end` bounds the run whatever the samples are.  One before the
+  // session's time ran nothing and labelled the session's state with the
+  // later sample times; run() refuses the same TimeSpec.
+  if (ts.t_end < session_t)
+    throw std::runtime_error("simulate(TimeSpec): t_end (" + std::to_string(ts.t_end) +
                              ") is earlier than current session time (" +
                              std::to_string(session_t) + ")");
 

@@ -911,6 +911,28 @@ Before issue #98, a nonzero `t_start` started the clock at 0 and simulated
 `[0, t_start]` before the first row. A run asked for `[5, 7]` ran 7 time
 units, and its first row was not the seed state.
 
+Events are placed on the time elapsed since the call started, and the
+model's clock is read off it as start + elapsed (issue #110). A waiting time
+is never added to the model's clock itself, so a late `t_start` loses no
+resolution. For a model whose rates do not read the clock, a run over
+`[1e13, 1e13 + 2]` is the run over `[0, 2]`, draw for draw. A grid's points
+sit at `i*dt` past `t_start` even where their labels round together. Only
+the clock a rate law reads is rounded, as it is for BNG's network
+`simulate`: doubles near 1e13 are 2e-3 apart, so from there `time()` moves
+in steps of 2e-3. Each `simulate()` or `step_to()` call starts its elapsed
+clock again at the session's time. Before #110, waiting times were added to
+the model's clock in doubles. From `t_start = 1e12`, where doubles are
+1.2e-4 apart, they were rounded away or up to a whole spacing, and the run
+fired too slowly. From 1e13 the tolerance for "this sample is at the start"
+was 10 time units, so a sample at `t_start + 2` recorded the seed state.
+
+A call leaves `current_time()` at its `t_end`, also when nothing is left to
+fire, unless the molecule limit, a cancellation or an error stops it first.
+Before #110 a session of a model whose rates do not read the clock kept the
+time of its last event once nothing could fire, and the next `simulate()`
+from `t_end` was refused. `t_end` must be finite: an infinite one has no
+grid to sample and no time to leave the clock at.
+
 ### Recording at explicit output times
 
 `TimeSpec` samples a uniform `t_start..t_end / n_points` grid by default.

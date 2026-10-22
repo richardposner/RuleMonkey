@@ -109,8 +109,10 @@ void check_window(const std::string& name, const std::vector<std::vector<double>
 
 // The flat rate over [5, 7] and over [0, 2] spends the same draws on the same
 // two time units, so the two runs end on the same count in every seed.  Under
-// the old pre-history the [5, 7] run spent 7 units.  Allow 1 for a partial
-// sum that rounds to the other side of t_end on the shifted clock.
+// the old pre-history the [5, 7] run spent 7 units.  The count is exact: the
+// events go on the time elapsed since t_start (issue #110), which is the same
+// sum of the same draws from either start.  It used to allow 1 for a partial
+// sum that rounded to the other side of t_end on the shifted clock.
 void check_flat_matches_shifted_run(const std::string& xml,
                                     const std::vector<std::vector<double>>& late) {
   int worst = 0;
@@ -121,7 +123,7 @@ void check_flat_matches_shifted_run(const std::string& xml,
     double const early = r.observable_data[index_of(r.observable_names, "Btot")].back();
     worst = std::max(worst, static_cast<int>(std::fabs(late[rep].back() - early)));
   }
-  check(worst <= 1, "flat over [5, 7] and over [0, 2] differ by up to " + std::to_string(worst) +
+  check(worst == 0, "flat over [5, 7] and over [0, 2] differ by up to " + std::to_string(worst) +
                         " in one seed");
 }
 

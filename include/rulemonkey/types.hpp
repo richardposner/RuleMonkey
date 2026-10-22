@@ -54,7 +54,8 @@ struct TimeSpec {
   //   * Must be sorted ascending — the SSA recorder advances a single cursor
   //     through this vector and never looks back, so an out-of-order list
   //     throws std::runtime_error rather than silently mis-sampling.  Equal
-  //     adjacent times are allowed (they record the same instant twice).
+  //     adjacent times are allowed (they record the same instant twice).  A
+  //     NaN anywhere in the list throws too (issue #110).
   //   * Times are absolute, on the same clock as `t_start` / `t_end`.
   //   * `t_end` still bounds the run: the SSA loop stops at `t_end`, so set
   //     `t_end` to at least the largest sample time you care about.  Times at

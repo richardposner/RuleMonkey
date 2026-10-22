@@ -1,0 +1,38 @@
+# Fixture for late_start_test (issue #110): the same decay, at a rate that
+# reads the clock, so its events are placed by integrating the hazard over
+# panels.  The test sets T0 to t_start.  With a = b = 0 the rate is k
+# exactly and the run is the plain decay's on another path.  The count of
+# A0 at T0 + d is binomial, with mean
+#
+#   ramp   a > 0          N0*exp(-(k*d + a*d^2/2))
+#   step   b > 0          N0*exp(-(k*d + b*max(0, d-1)))
+#   pulse  k = 0, b, w    N0*exp(-b*clamp(d-1, 0, w))
+begin model
+begin parameters
+  k   0.5
+  a   0
+  b   0
+  w   1e9
+  T0  0
+  N0  1e4
+end parameters
+begin molecule types
+  A(s~0~1)
+end molecule types
+begin seed species
+  A(s~0)  N0
+end seed species
+begin observables
+  Molecules A0 A(s~0)
+end observables
+begin functions
+  kt() = k + a*(time() - T0) + if(time() - T0 > 1, if(time() - T0 < 1 + w, b, 0), 0)
+  clock() = time()
+end functions
+begin reaction rules
+  A(s~0) -> A(s~1)  kt()
+end reaction rules
+end model
+begin actions
+  writeXML()
+end actions
