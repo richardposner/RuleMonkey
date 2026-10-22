@@ -19,10 +19,14 @@
 //
 // Scope (Phase 1, matching NFsim's current coverage): binding rules with
 // exactly two reactants.  State-change energy rules and >2-reactant rules
-// are refused upstream in the loader.
+// are refused upstream in the loader, and so is any rule whose energy
+// patterns the expansion cannot price exactly (inexact_reason, issue #109).
 
 #include <cmath>
+#include <map>
+#include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace rulemonkey {
@@ -36,6 +40,7 @@ namespace rulemonkey {
 struct EpComponent {
   std::string name;             // component name, e.g. "x"
   bool is_bound = false;        // pattern requires this component bound
+  bool is_free = false;         // pattern requires this component unbound
   std::string state_constraint; // internal state requirement, or "" if none
 };
 
@@ -46,6 +51,8 @@ struct EpMolecule {
 
 struct EnergyPatternInfo {
   std::string id;
+  std::string text;          // the pattern as BNGL, e.g. "A(b!1).B(a!1)", for
+                             // messages; may be empty
   double energy_value = 0.0; // Gibbs free energy of formation (resolved)
   std::string energy_expr;   // unresolved source of energy_value (a parameter
                              // name or expression) — used to build a symbolic
@@ -95,6 +102,22 @@ inline double arrhenius_rate(double ea0, double phi, double dg, bool reverse_hal
   return std::exp(-(ea0 + (c * dg)));
 }
 
+// ---- What the model's bonds can be ----------------------------------------
+// A site is (molecule type, component name).  The exactness gate reads which
+// sites each site can ever be bonded to, and which site names a molecule type
+// declares more than once.
+
+using SiteKey = std::pair<std::string, std::string>;
+
+struct SiteGraph {
+  // Every site each site can be bonded to, over every bond the model can
+  // hold: those of its seed species and of its rules' patterns.
+  std::map<SiteKey, std::set<SiteKey>> partners;
+  // How many components of a name a molecule type declares, for every name
+  // it declares more than once; a name absent here is declared once.
+  std::map<SiteKey, int> repeated;
+};
+
 // ---- Energy function -------------------------------------------------------
 
 class EnergyFunction {
@@ -112,6 +135,24 @@ public:
                                                     const std::string& site1,
                                                     const std::string& mol_type2,
                                                     const std::string& site2) const;
+
+  // Why expand_binding cannot price this reaction center exactly, or "" if
+  // it can (issue #109).  The expansion turns each energy pattern that holds
+  // the center bond into at most one "bound to anything" condition on a
+  // center molecule, and counts each such pattern once, so it is exact only
+  // when every pattern whose count the bond changes is either
+  //   - the center bond alone, A(b!1).B(a!1),
+  //   - the center bond plus a `!+` on a center molecule's site c,
+  //     A(b!1,c!+).B(a!1), or
+  //   - the center bond plus one bond from a center molecule's site c to a
+  //     molecule of a third type, A(b!1,c!2).B(a!1).C(a!2), where nothing
+  //     but C's a can ever bind A's c,
+  // where A declares one c, not named like the reaction site; with no state,
+  // no site required free, and no `!?` BNG2 counts more than once.  The
+  // message names the first pattern outside that.
+  std::string inexact_reason(const std::string& mol_type1, const std::string& site1,
+                             const std::string& mol_type2, const std::string& site2,
+                             const SiteGraph& sites) const;
 
 private:
   std::vector<EnergyPatternInfo> patterns_;

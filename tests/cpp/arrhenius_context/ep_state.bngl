@@ -1,0 +1,35 @@
+# Issue #109, case 1: a state in an energy pattern.
+# RuleMonkey's load-time Arrhenius expansion drops the pattern A(b!1).B(a!1,s~1),
+# so the rule must be refused rather than run at the wrong rate.
+# BNG2: k = exp(-(Ea0 + phi*dG)), dG = -(G_AB + G_S1) = 3 -> exp(-1.25) = 0.2865
+# If the state pattern is ignored: dG = 2 -> exp(-0.9) = 0.4066
+begin model
+begin parameters
+  Ea0 0.2
+  phi 0.35
+  G_AB -2
+  G_S1 -1
+end parameters
+begin molecule types
+  A(b)
+  B(a,s~0~1)
+end molecule types
+begin seed species
+  A(b!1).B(a!1,s~1) 1000
+  A(b!1).B(a!1,s~0) 1000
+end seed species
+begin energy patterns
+  A(b!1).B(a!1) G_AB
+  A(b!1).B(a!1,s~1) G_S1
+end energy patterns
+begin observables
+  Molecules AB1 A(b!1).B(a!1,s~1)
+  Molecules AB0 A(b!1).B(a!1,s~0)
+end observables
+begin reaction rules
+  Unbind: A(b!1).B(a!1) -> A(b) + B(a) Arrhenius(phi,Ea0)
+end reaction rules
+end model
+begin actions
+  writeXML({overwrite=>1})
+end actions

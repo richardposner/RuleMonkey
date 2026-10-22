@@ -1,0 +1,38 @@
+# Issue #109, case 6: a context site with more than one possible partner.
+# A's c binds C or D.  A(b!1,c!2).B(a!1).C(a!2) applies only where c holds a C;
+# RuleMonkey's load-time expansion checks only that c is bound.  The rule must
+# be refused.
+#   A.B.C: dG = -(G_AB + G_C) = 3 -> exp(-(0.2+0.35*3)) = 0.2865
+#   A.B.D: dG = -G_AB = 2 -> exp(-0.9) = 0.4066
+begin model
+begin parameters
+  Ea0 0.2
+  phi 0.35
+  G_AB -2
+  G_C -1
+end parameters
+begin molecule types
+  A(b,c)
+  B(a)
+  C(a)
+  D(a)
+end molecule types
+begin seed species
+  A(b!1,c!2).B(a!1).C(a!2) 1000
+  A(b!1,c!2).B(a!1).D(a!2) 1000
+end seed species
+begin energy patterns
+  A(b!1).B(a!1) G_AB
+  A(b!1,c!2).B(a!1).C(a!2) G_C
+end energy patterns
+begin observables
+  Species ABC A(b!1,c!2).B(a!1).C(a!2)
+  Species ABD A(b!1,c!2).B(a!1).D(a!2)
+end observables
+begin reaction rules
+  Unbind: A(b!1).B(a!1) -> A(b) + B(a) Arrhenius(phi,Ea0)
+end reaction rules
+end model
+begin actions
+  writeXML({overwrite=>1})
+end actions

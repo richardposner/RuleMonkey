@@ -56,6 +56,20 @@ EpComponent bound_comp(const std::string& name) {
   return c;
 }
 
+EpComponent free_comp(const std::string& name) {
+  EpComponent c;
+  c.name = name;
+  c.is_free = true;
+  return c;
+}
+
+// A component the pattern lists but asks nothing of (`!?`).
+EpComponent any_comp(const std::string& name) {
+  EpComponent c;
+  c.name = name;
+  return c;
+}
+
 // ---- Case 1: v40 test-suite model — single conditional context pattern ----
 void test_v40_conditional_context() {
   // Energy pattern A(b!1,x!2).B(a!1).X(a!2) = g_val (5.0).
@@ -225,6 +239,151 @@ void test_bng2_phi_formula() {
               "its reverse half: 1-phi on the unbinding");
 }
 
+// ---- Case 5: which patterns the expansion prices exactly (issue #109) -----
+// inexact_reason against the reaction center A.b-B.a, one pattern at a time.
+// The issue's nine reproducers are pinned end to end by
+// arrhenius_context_test; these are the branches they do not reach, and the
+// shapes that must pass.
+std::string reason_for(const EnergyPatternInfo& ep, const SiteGraph& sites = {},
+                       const std::string& t1 = "A", const std::string& s1 = "b",
+                       const std::string& t2 = "B", const std::string& s2 = "a") {
+  EnergyFunction efn;
+  efn.add_pattern(ep);
+  return efn.inexact_reason(t1, s1, t2, s2, sites);
+}
+
+EnergyPatternInfo pattern(const std::string& text, std::vector<EpMolecule> mols,
+                          std::vector<EnergyPatternInfo::Bond> bonds) {
+  EnergyPatternInfo ep;
+  ep.id = "EP1";
+  ep.text = text;
+  ep.energy_value = 1.0;
+  ep.molecules = std::move(mols);
+  ep.bonds = std::move(bonds);
+  return ep;
+}
+
+void test_inexact_reason() {
+  auto expect = [](const std::string& got, const std::string& want, const std::string& label) {
+    if (want.empty())
+      check(got.empty(), label + ": must expand, refused: " + got);
+    else
+      check(got.find(want) != std::string::npos,
+            label + ": want \"" + want + "\", got \"" + got + "\"");
+  };
+
+  // Shapes that must pass.
+  expect(reason_for(pattern("A(b!1).B(a!1)", {{"A", {bound_comp("b")}}, {"B", {bound_comp("a")}}},
+                            {{0, 0, 1, 0}})),
+         "", "plain pair");
+  expect(reason_for(pattern("B(a!1).A(b!1)", {{"B", {bound_comp("a")}}, {"A", {bound_comp("b")}}},
+                            {{0, 0, 1, 0}})),
+         "", "plain pair, written B first");
+  expect(reason_for(pattern("A(b!1,c!?).B(a!1)",
+                            {{"A", {bound_comp("b"), any_comp("c")}}, {"B", {bound_comp("a")}}},
+                            {{0, 0, 1, 0}})),
+         "", "a site asked nothing of");
+  EnergyPatternInfo const ctx = pattern("A(b!1,c!2).B(a!1).C(a!2)",
+                                        {{"A", {bound_comp("b"), bound_comp("c")}},
+                                         {"B", {bound_comp("a")}},
+                                         {"C", {bound_comp("a")}}},
+                                        {{0, 0, 1, 0}, {0, 1, 2, 0}});
+  expect(reason_for(ctx), "", "context bond, A.c never bound");
+  SiteGraph only_c;
+  only_c.partners[{"A", "c"}] = {{"C", "a"}};
+  expect(reason_for(ctx, only_c), "", "context bond, A.c binds only C.a");
+  expect(reason_for(pattern("A(b!1).B(a!1,c!2).C(a!2)",
+                            {{"A", {bound_comp("b")}},
+                             {"B", {bound_comp("a"), bound_comp("c")}},
+                             {"C", {bound_comp("a")}}},
+                            {{0, 0, 1, 0}, {1, 1, 2, 0}})),
+         "", "context bond on B");
+  expect(reason_for(pattern("A(b!1).C(a!1)", {{"A", {bound_comp("b")}}, {"C", {bound_comp("a")}}},
+                            {{0, 0, 1, 0}})),
+         "", "A.b bonded to another partner: count unchanged");
+  expect(reason_for(pattern("A(c)", {{"A", {free_comp("c")}}}, {})), "",
+         "a free site off the reaction center: count unchanged");
+
+  // Branches the issue's reproducers do not reach.
+  expect(reason_for(pattern("A(b).B(a)", {{"A", {any_comp("b")}}, {"B", {any_comp("a")}}}, {})),
+         "energy pattern A(b).B(a) is not connected", "disconnected");
+  expect(reason_for(pattern("A(b)", {{"A", {free_comp("b")}}}, {})),
+         "energy pattern A(b) constrains A.b without naming the A.b-B.a bond",
+         "reaction site required free");
+  expect(reason_for(pattern("B(a!+)", {{"B", {bound_comp("a")}}}, {})),
+         "energy pattern B(a!+) constrains B.a without naming the A.b-B.a bond",
+         "reaction site bound to anything");
+  expect(reason_for(pattern("A(b!1).B(a!1,a!2).A(b!2)",
+                            {{"A", {bound_comp("b")}},
+                             {"B", {bound_comp("a"), bound_comp("a")}},
+                             {"A", {bound_comp("b")}}},
+                            {{0, 0, 1, 0}, {1, 1, 2, 0}})),
+         "names the A.b-B.a bond more than once", "center bond twice");
+  expect(reason_for(pattern(
+             "A(b!1,c!2).B(a!1,d!2)",
+             {{"A", {bound_comp("b"), bound_comp("c")}}, {"B", {bound_comp("a"), bound_comp("d")}}},
+             {{0, 0, 1, 0}, {0, 1, 1, 1}})),
+         "closes a ring with the A.b-B.a bond", "ring");
+  expect(reason_for(pattern("A(b!1,c!2).B(a!1).A(x!2)",
+                            {{"A", {bound_comp("b"), bound_comp("c")}},
+                             {"B", {bound_comp("a")}},
+                             {"A", {bound_comp("x")}}},
+                            {{0, 0, 1, 0}, {0, 1, 2, 0}})),
+         "names a second A, a molecule type of the reaction center", "third molecule of type A");
+  SiteGraph repeated;
+  repeated.repeated[{"A", "c"}] = 2;
+  expect(reason_for(ctx, repeated), "requires A.c bound, but A declares more than one c",
+         "repeated context site");
+  SiteGraph never;
+  never.partners[{"A", "c"}] = {{"D", "a"}};
+  expect(reason_for(ctx, never), "requires A.c bound to C.a, but A.c binds D.a",
+         "context pairing that never occurs");
+
+  // A lone `!+` on a center molecule is the expansion's own condition.
+  EnergyPatternInfo const plus = pattern(
+      "A(b!1,c!+).B(a!1)", {{"A", {bound_comp("b"), bound_comp("c")}}, {"B", {bound_comp("a")}}},
+      {{0, 0, 1, 0}});
+  expect(reason_for(plus), "", "lone !+ on a center molecule");
+  expect(reason_for(plus, repeated), "requires A.c bound, but A declares more than one c",
+         "lone !+ on a repeated site");
+  expect(reason_for(pattern(
+             "A(b!1,c!+,d!+).B(a!1)",
+             {{"A", {bound_comp("b"), bound_comp("c"), bound_comp("d")}}, {"B", {bound_comp("a")}}},
+             {{0, 0, 1, 0}})),
+         "requires more than one site besides the A.b-B.a bond bound", "two !+");
+  expect(reason_for(pattern("A(b!1,c!2,d!+).B(a!1).C(a!2)",
+                            {{"A", {bound_comp("b"), bound_comp("c"), bound_comp("d")}},
+                             {"B", {bound_comp("a")}},
+                             {"C", {bound_comp("a")}}},
+                            {{0, 0, 1, 0}, {0, 1, 2, 0}})),
+         "requires more than one site besides the A.b-B.a bond bound", "!+ and a context bond");
+
+  // A `!?` counts once only where it can land one way.
+  EnergyPatternInfo const loose =
+      pattern("A(b!1).B(a!1,x!?)",
+              {{"A", {bound_comp("b")}}, {"B", {bound_comp("a"), any_comp("x")}}}, {{0, 0, 1, 0}});
+  SiteGraph two_x;
+  two_x.repeated[{"B", "x"}] = 2;
+  expect(reason_for(loose, two_x), "can place its B.x (!?) 2 ways", "!? on a repeated site");
+  EnergyPatternInfo const tri =
+      pattern("L(r!1,r!?).R(l!1)",
+              {{"L", {bound_comp("r"), any_comp("r")}}, {"R", {bound_comp("l")}}}, {{0, 0, 1, 0}});
+  SiteGraph two_r;
+  two_r.repeated[{"L", "r"}] = 2;
+  expect(reason_for(tri, two_r, "L", "r", "R", "l"), "", "!? on the one other r of L(r,r)");
+  SiteGraph three_r;
+  three_r.repeated[{"L", "r"}] = 3;
+  expect(reason_for(tri, three_r, "L", "r", "R", "l"), "can place its L.r (!?) 2 ways",
+         "!? on L(r,r,r)");
+  // Two interchangeable `!?` on L(r,r,r)'s two other r: 2!/0! matches over
+  // 2! automorphisms, once.
+  EnergyPatternInfo const tri2 =
+      pattern("L(r!1,r!?,r!?).R(l!1)",
+              {{"L", {bound_comp("r"), any_comp("r"), any_comp("r")}}, {"R", {bound_comp("l")}}},
+              {{0, 0, 1, 0}});
+  expect(reason_for(tri2, three_r, "L", "r", "R", "l"), "", "two !? on L(r,r,r)");
+}
+
 } // namespace
 
 int main() {
@@ -232,6 +391,7 @@ int main() {
   test_cooperative_scaffold();
   test_no_relevant_pattern();
   test_bng2_phi_formula();
+  test_inexact_reason();
 
   if (g_failures != 0) {
     std::fprintf(stderr, "energy_expand_test: %d check(s) failed\n", g_failures);

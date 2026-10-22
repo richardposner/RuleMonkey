@@ -520,10 +520,12 @@ Pattern parse_pattern(const XmlNode& pat_node, const Model& model,
 
 // Convert a parsed RM Pattern (from an <EnergyPattern>) into the lightweight
 // EnergyPatternInfo the expansion analysis consumes.
-EnergyPatternInfo pattern_to_energy_info(const std::string& id, double energy,
-                                         const std::string& energy_expr, const Pattern& pat) {
+EnergyPatternInfo pattern_to_energy_info(const std::string& id, const std::string& text,
+                                         double energy, const std::string& energy_expr,
+                                         const Pattern& pat) {
   EnergyPatternInfo ep;
   ep.id = id;
+  ep.text = text;
   ep.energy_value = energy;
   ep.energy_expr = energy_expr;
   for (const auto& pm : pat.molecules) {
@@ -536,6 +538,7 @@ EnergyPatternInfo pattern_to_energy_info(const std::string& id, double energy,
       // to a specific partner (BoundTo) or to any partner (Bound / `!+`).
       c.is_bound = (pc.bond_constraint == BondConstraint::Bound ||
                     pc.bond_constraint == BondConstraint::BoundTo);
+      c.is_free = (pc.bond_constraint == BondConstraint::Free);
       c.state_constraint = pc.required_state;
       m.components.push_back(std::move(c));
     }
@@ -733,6 +736,122 @@ Rule build_energy_unbinding_rule(const Model& model, const std::string& name,
   return r;
 }
 
+// The sites each site can be bonded to, and the repeated site names, that the
+// Arrhenius exactness gate reads (EnergyFunction::inexact_reason, issue #109).
+// A bond in a run is in a seed species or made by a rule, so the bonds of the
+// seed species and of every rule's patterns (reactant patterns included, which
+// only adds bonds that exist anyway) cover every bond a run can hold.  Read
+// straight off the XML, before the rules are converted, because the gate runs
+// while they are: BNG2 ids each component uniquely across the document, and a
+// <Bond> names its two components by id.
+void collect_sites_and_bonds(const XmlNode& n, const std::string& mol,
+                             std::unordered_map<std::string, SiteKey>& site_of_id,
+                             std::vector<std::pair<std::string, std::string>>& bonds) {
+  std::string const here = n.name == "Molecule" ? opt_attr(n, "name") : mol;
+  if (n.name == "Component" && !here.empty())
+    site_of_id[opt_attr(n, "id")] = {here, opt_attr(n, "name")};
+  else if (n.name == "Bond")
+    bonds.emplace_back(opt_attr(n, "site1"), opt_attr(n, "site2"));
+  for (const auto& c : n.children)
+    collect_sites_and_bonds(c, here, site_of_id, bonds);
+}
+
+SiteGraph collect_site_graph(const XmlNode& model_node, const Model& model) {
+  SiteGraph g;
+  for (const auto& mt : model.molecule_types) {
+    std::map<std::string, int> uses;
+    for (const auto& c : mt.components)
+      ++uses[c.name];
+    for (const auto& [name, n] : uses)
+      if (n > 1)
+        g.repeated[{mt.name, name}] = n;
+  }
+
+  std::unordered_map<std::string, SiteKey> site_of_id;
+  std::vector<std::pair<std::string, std::string>> bonds;
+  for (const char* list : {"ListOfSpecies", "ListOfReactionRules"})
+    if (const XmlNode* l = find_child(model_node, list))
+      collect_sites_and_bonds(*l, "", site_of_id, bonds);
+  for (const auto& [id1, id2] : bonds) {
+    auto it1 = site_of_id.find(id1);
+    auto it2 = site_of_id.find(id2);
+    if (it1 == site_of_id.end() || it2 == site_of_id.end())
+      continue;
+    g.partners[it1->second].insert(it2->second);
+    g.partners[it2->second].insert(it1->second);
+  }
+  return g;
+}
+
+// The Arrhenius rules that are the reverse half of a reversible rule.  BNG2
+// writes the reverse half of rule X as a rule named `_reverse_X`, with X's
+// rate constants and the mirror image of X's operation, and the name is the
+// only mark it carries (issue #109).  So a rule named `_reverse_X` is read as
+// a reverse half only if the model also has an Arrhenius rule X with the same
+// rate constants whose one operation is the opposite bond operation on the
+// same two sites.  A rule the modeler labels `_reverse_X` without such an X
+// is a rule as written.  Two unidirectional rules, X and `_reverse_X`, that
+// mirror each other and name the same parameters for phi and Ea0 write the
+// same XML as one reversible rule, so RM, which reads only the XML, reads
+// them as one.  (Given numbers rather than parameters, BNG2 writes each rule
+// its own `_Aphi_N` and `_AEact0_N`, and the two are told apart.)
+std::unordered_set<std::string> arrhenius_reverse_halves(const XmlNode* rr_list) {
+  std::unordered_set<std::string> halves;
+  if (rr_list == nullptr)
+    return halves;
+  std::unordered_map<std::string, SiteKey> site_of_id;
+  std::vector<std::pair<std::string, std::string>> bonds_unused;
+  collect_sites_and_bonds(*rr_list, "", site_of_id, bonds_unused);
+
+  // Every Arrhenius rule whose whole operation is one bond made or broken.
+  struct BondRule {
+    std::vector<std::string> constants;
+    bool adds = false;
+    std::pair<SiteKey, SiteKey> sites;
+  };
+  std::unordered_map<std::string, BondRule> bond_rules;
+  for (const auto& rrn : rr_list->children) {
+    if (rrn.name != "ReactionRule")
+      continue;
+    const XmlNode* rl = find_child(rrn, "RateLaw");
+    const XmlNode* ops = find_child(rrn, "ListOfOperations");
+    if (rl == nullptr || opt_attr(*rl, "type") != "Arrhenius" || ops == nullptr ||
+        ops->children.size() != 1)
+      continue;
+    const XmlNode& op = ops->children.front();
+    auto it1 = site_of_id.find(opt_attr(op, "site1"));
+    auto it2 = site_of_id.find(opt_attr(op, "site2"));
+    if ((op.name != "AddBond" && op.name != "DeleteBond") || it1 == site_of_id.end() ||
+        it2 == site_of_id.end())
+      continue;
+    BondRule br;
+    if (const XmlNode* rcs = find_child(*rl, "ListOfRateConstants"))
+      for (const auto& rc : rcs->children)
+        if (rc.name == "RateConstant")
+          br.constants.push_back(opt_attr(rc, "value"));
+    br.adds = op.name == "AddBond";
+    br.sites = std::minmax(it1->second, it2->second);
+    std::string const nm = opt_attr(rrn, "name");
+    bond_rules[nm.empty() ? need_attr(rrn, "id") : nm] = std::move(br);
+  }
+  std::string const prefix = "_reverse_";
+  for (const auto& [name, br] : bond_rules) {
+    if (name.rfind(prefix, 0) != 0)
+      continue;
+    auto fwd = bond_rules.find(name.substr(prefix.size()));
+    if (fwd != bond_rules.end() && fwd->second.constants == br.constants &&
+        fwd->second.adds != br.adds && fwd->second.sites == br.sites)
+      halves.insert(name);
+  }
+  return halves;
+}
+
+// An Arrhenius rule load_model refuses to expand, and why.
+struct ArrheniusRefusal {
+  std::string rule;
+  std::string reason;
+};
+
 // Handle a ReactionRule that carries a `RateLaw type="Arrhenius"` (eBNGL).
 // Always returns true: the Arrhenius rule is consumed here so the caller
 // skips normal finalization.
@@ -745,21 +864,28 @@ Rule build_energy_unbinding_rule(const Model& model, const std::string& name,
 // (arrhenius_rate, issue #107): phi on the dG of the reaction the XML rule
 // writes, 1-phi on it for a `_reverse_` rule, and no RT.  The name is the
 // only mark BNG2's XML puts on a reverse half: its rate law repeats the
-// forward rule's phi and Ea0.
+// forward rule's phi and Ea0.  `reverse_halves` holds the rules that name
+// reads as reverse halves (arrhenius_reverse_halves); a rule the modeler
+// labelled `_reverse_X` without the rule X that name implies is a rule as
+// written, and BNG2 gives it phi (issue #109).
 //
-// Shapes beyond Phase 1 (matching NFsim's binding-only coverage) are NOT
-// expanded: their id is appended to `unsupported_ids` so load_model raises a
-// Tier-0 error, and no (broken) rule is emitted.  Refused shapes: any coupled
-// operation (state change, molecule add/delete, or a mixed bond op), an
-// intramolecular / ring-closure bond, a same-type homodimer (the context
-// reactant attribution and molecularity-1 symmetry factor are not handled for
-// automorphic reactants), and rules carrying exclude/include constraints.
+// Shapes the expansion cannot reproduce are NOT expanded: the rule and the
+// reason are appended to `refused` so load_model raises a Tier-0 error, and no
+// (broken) rule is emitted.  Refused shapes: any coupled operation (state
+// change, molecule add/delete, or a mixed bond op), an intramolecular /
+// ring-closure bond, a same-type homodimer (the context reactant attribution
+// and molecularity-1 symmetry factor are not handled for automorphic
+// reactants), rules carrying exclude/include constraints, a reactant pattern
+// carrying anything besides the two bond sites (the expanded rules are built
+// from those alone), an unbinding that does not part its products, and energy
+// patterns the expansion cannot price exactly (inexact_reason, issue #109).
 bool try_expand_arrhenius(const Rule& base, const XmlNode& rl_node, const EnergyFunction& efn,
-                          Model& model, bngsim::ExprTkEvaluator& ev,
-                          std::unordered_map<std::string, int>& ev_ids,
-                          std::vector<std::string>& unsupported_ids) {
-  auto refuse = [&]() {
-    unsupported_ids.push_back(base.name.empty() ? base.id : base.name);
+                          const SiteGraph& sites,
+                          const std::unordered_set<std::string>& reverse_halves, Model& model,
+                          bngsim::ExprTkEvaluator& ev, std::unordered_map<std::string, int>& ev_ids,
+                          std::vector<ArrheniusRefusal>& refused) {
+  auto refuse = [&](const std::string& reason) {
+    refused.push_back({base.name.empty() ? base.id : base.name, reason});
     return true;
   };
 
@@ -781,15 +907,22 @@ bool try_expand_arrhenius(const Rule& base, const XmlNode& rl_node, const Energy
       ++n_other;
     }
   }
-  if (n_other != 0 || n_add + n_delete != 1)
-    return refuse();
+  if (n_add + n_delete == 0)
+    return refuse(n_other != 0 ? "it changes a state or adds or deletes a molecule, and makes or "
+                                 "breaks no bond"
+                               : "it makes or breaks no bond");
+  if (n_other != 0)
+    return refuse("it does more than make or break a bond (a state change, or a molecule "
+                  "added or deleted)");
+  if (n_add + n_delete > 1)
+    return refuse("it makes or breaks more than one bond");
   if (!base.constraints.empty())
-    return refuse();
+    return refuse("it carries include/exclude constraints");
 
   bool const is_forward = (add_bond != nullptr);
   const RuleOp* bond_op = is_forward ? add_bond : delete_bond;
   if (bond_op->comp_flat_a < 0 || bond_op->comp_flat_b < 0)
-    return refuse();
+    return refuse("its bond sites could not be resolved");
 
   // Resolve each bond endpoint to (molecule type, site, reactant-pattern idx).
   auto locate = [&base](int flat, std::string& mtype, std::string& site, int& rp) -> bool {
@@ -817,18 +950,53 @@ bool try_expand_arrhenius(const Rule& base, const XmlNode& rl_node, const Energy
   int rp1 = -1;
   int rp2 = -1;
   if (!locate(bond_op->comp_flat_a, t1, s1, rp1) || !locate(bond_op->comp_flat_b, t2, s2, rp2))
-    return refuse();
+    return refuse("its bond sites could not be resolved");
 
   if (is_forward) {
     // A binding rule joins two distinct reactant complexes.
     if (base.molecularity != 2 || rp1 == rp2)
-      return refuse();
+      return refuse("it does not bind two reactant patterns to each other");
   } else if (base.molecularity != 1) {
     // An unbinding rule breaks a bond inside a single reactant complex.
-    return refuse();
+    return refuse("it breaks a bond but has more than one reactant pattern");
   }
   if (t1 == t2)
-    return refuse(); // same-type homodimer — deferred
+    return refuse("its bond joins two molecules of one type"); // same-type homodimer — deferred
+
+  // The expanded rules are built from the two bond sites alone, so the rule's
+  // own reactant pattern may name nothing else (issue #109): no third
+  // molecule, no state, and no bond requirement but on the two sites, which
+  // must be free to bind and bonded to each other to unbind.  A component
+  // listed with neither (`!?`) asks nothing and is dropped harmlessly.
+  const Pattern& rp = base.reactant_pattern;
+  if (rp.molecules.size() != 2)
+    return refuse("its reactant pattern names a molecule besides the two it " +
+                  std::string(is_forward ? "binds" : "unbinds"));
+  for (int mi = 0; mi < 2; ++mi) {
+    const PatternMolecule& pm = rp.molecules[mi];
+    for (int ci = 0; ci < static_cast<int>(pm.components.size()); ++ci) {
+      const PatternComponent& pc = pm.components[ci];
+      std::string const where = pm.type_name + "." + pc.name;
+      int const flat = rp.flat_index(mi, ci);
+      bool const is_site = flat == bond_op->comp_flat_a || flat == bond_op->comp_flat_b;
+      if (!pc.required_state.empty())
+        return refuse("its reactant pattern requires " + where + " in state " + pc.required_state);
+      BondConstraint const want = !is_site     ? BondConstraint::Wildcard
+                                  : is_forward ? BondConstraint::Free
+                                               : BondConstraint::BoundTo;
+      if (pc.bond_constraint != want)
+        return refuse("its reactant pattern constrains the bond of " + where);
+    }
+  }
+  // The expanded unbinding rule writes `+` between its products, as BNG2
+  // reads `A(b!1).B(a!1) -> A(b) + B(a)`: it fires only where the bond parts
+  // the complex.  A rule written with `.` fires only where it does not.
+  if (!is_forward && base.n_product_patterns != 2)
+    return refuse("it breaks the bond without writing its products apart (`.` between them)");
+
+  std::string const inexact = efn.inexact_reason(t1, s1, t2, s2, sites);
+  if (!inexact.empty())
+    return refuse(inexact);
 
   // Arrhenius(phi, Ea0): capture both the resolved value (for the baked rate)
   // and the raw source string (for a set_param-re-resolvable symbolic rate).
@@ -859,7 +1027,7 @@ bool try_expand_arrhenius(const Rule& base, const XmlNode& rl_node, const Energy
   // written in terms of re-resolves it.  dG is the reaction's this XML rule
   // writes: the binding dG for an AddBond rule, its negative for a DeleteBond
   // rule.
-  bool const reverse_half = base.name.rfind("_reverse_", 0) == 0;
+  bool const reverse_half = reverse_halves.count(base.name) != 0;
   std::string const coeff_expr = reverse_half ? ("(1-(" + phi_expr + "))") : ("(" + phi_expr + ")");
   auto rate_expr = [&](const std::string& dg_bind) -> std::string {
     std::string const dg = is_forward ? ("(" + dg_bind + ")") : ("(-(" + dg_bind + "))");
@@ -1699,7 +1867,7 @@ Model load_model(const std::string& xml_path,
   EnergyFunction energy_fn;
   // Arrhenius energy rules whose shape RM does not expand (see
   // try_expand_arrhenius); surfaced as Tier-0 errors below.
-  std::vector<std::string> unsupported_arrhenius_ids;
+  std::vector<ArrheniusRefusal> refused_arrhenius;
   if (auto* ep_list = find_child(*model_node, "ListOfEnergyPatterns")) {
     for (auto& epn : ep_list->children) {
       if (epn.name != "EnergyPattern")
@@ -1712,12 +1880,16 @@ Model load_model(const std::string& xml_path,
       auto* pat_node = find_child(epn, "Pattern");
       std::unordered_map<std::string, std::pair<int, int>> ep_id_map;
       const Pattern pat = parse_pattern(pat_node != nullptr ? *pat_node : epn, model, &ep_id_map);
-      energy_fn.add_pattern(pattern_to_energy_info(ep_id, energy, ep_expr, pat));
+      energy_fn.add_pattern(
+          pattern_to_energy_info(ep_id, opt_attr(epn, "pattern"), energy, ep_expr, pat));
     }
   }
+  SiteGraph const arrhenius_sites =
+      energy_fn.empty() ? SiteGraph{} : collect_site_graph(*model_node, model);
 
   // ---- 6. ReactionRules ----
   auto* rr_list = find_child(*model_node, "ListOfReactionRules");
+  std::unordered_set<std::string> const arrhenius_reverse = arrhenius_reverse_halves(rr_list);
   if (rr_list) {
     for (auto& rrn : rr_list->children) {
       if (rrn.name != "ReactionRule")
@@ -2037,10 +2209,11 @@ Model load_model(const std::string& xml_path,
         if (rl_type == "Arrhenius") {
           // eBNGL energy rule: expand this direction into conventional rules
           // with pre-computed rates and push them directly, then skip the
-          // normal single-rule finalization.  Unsupported shapes append their
-          // id to unsupported_arrhenius_ids (surfaced as Tier-0 errors).
-          try_expand_arrhenius(rule, *rl_node, energy_fn, model, load_eval, load_eval_ids,
-                               unsupported_arrhenius_ids);
+          // normal single-rule finalization.  Unsupported shapes append the
+          // rule and the reason to refused_arrhenius (surfaced as Tier-0
+          // errors).
+          try_expand_arrhenius(rule, *rl_node, energy_fn, arrhenius_sites, arrhenius_reverse, model,
+                               load_eval, load_eval_ids, refused_arrhenius);
           continue;
         }
 
@@ -2617,17 +2790,17 @@ Model load_model(const std::string& xml_path,
     // Arrhenius energy rules whose shape RM does not expand (recorded by
     // try_expand_arrhenius above): the rule was silently NOT expanded, so
     // refuse the model rather than run it missing that reaction.
-    for (const auto& rid : unsupported_arrhenius_ids)
+    for (const auto& r : refused_arrhenius)
       unsupported_out->push_back(
           {Severity::Error, "RateLaw@type=Arrhenius",
-           "Arrhenius energy rule '" + rid +
-               "' is not a supported 2-reactant binding/unbinding shape — RM "
-               "(like NFsim) only expands energy binding rules. Coupled "
-               "operations (state change / molecule add/delete), intramolecular "
-               "ring-closure binding, same-type homodimer binding, >2-reactant "
-               "rules, and rules with exclude/include constraints are deferred; "
-               "the rule would be silently dropped. Pass --ignore-unsupported to "
-               "run anyway without that rule."});
+           "Arrhenius energy rule '" + r.rule + "' is outside the shapes RM expands: " + r.reason +
+               ". RM expands an Arrhenius rule at load into conventional rules with "
+               "fixed rates, which it does exactly only for one bond made between two "
+               "molecules of different types in different reactant patterns, or broken "
+               "between them, with nothing else in the reactant pattern, and energy "
+               "patterns that are that bond alone or that bond plus one bond to a "
+               "molecule of a third type. The rule would be silently dropped. Pass "
+               "--ignore-unsupported to run anyway without that rule."});
     for (const auto& what : mixed_scope_observables)
       unsupported_out->push_back(
           {Severity::Warn, "Function/Expression",

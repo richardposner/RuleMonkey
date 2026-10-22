@@ -25,6 +25,25 @@
 #   Ctx_bare     cooperative pattern Sa.Sc.Sb worth -2*ln(10): an Sa binds a
 #                scaffold that already holds an Sb (Ctx_pair) with net
 #                dG = -ln(10), and a bare one (Ctx_bare) with dG = ln(10).
+#   Rename_uni   Break_uni's rule, labelled `_reverse_Gone` with no rule
+#                Gone (issue #109): BNG2 writes a reverse half under the name
+#                `_reverse_` plus its forward rule's, but a rule written under
+#                that name is a rule as written, and takes phi: 1e-3, as
+#                Break_uni.  RuleMonkey gave it 1-phi, 3.98e-4.
+#   Rename_other The same, labelled `_reverse_Flip` beside an unrelated rule
+#                Flip: still a rule as written, 1e-3.  A reverse half has its
+#                forward rule's rate constants and mirror-image operation.
+#   Rev_consts   `_reverse_Kc`, the mirror image of an Arrhenius rule Kc but
+#   Rev_samekind with other rate constants; `_reverse_Ko`, a second copy of the
+#   Rev_sites    unbinding rule Ko; and `_reverse_Gx`, an unbinding whose
+#                Arrhenius rule Gx binds other molecules.  None is a reverse
+#                half, so each takes phi: Rev_samekind decays at 2e-3, Rev_sites
+#                at 1e-3, and Rev_consts unbinds at 1e-3 while Kc rebinds.
+#   Plus_bound   `Pc(b!1).Pd(a!1) -> Pc(b) + Pd(a)` under a cooperative
+#   Plus_free    pattern written with `!+`, Pc(b!1,c!+).Pd(a!1) worth -ln(10),
+#                which the load-time expansion reads exactly (issue #109): a
+#                pair whose c is bound breaks at 1e-3 * 10^-0.3, 5.0e-4
+#                (Plus_bound), a bare one at 1e-3 (Plus_free).
 #
 # The references are BioNetGen's network, integrated (ode); every species is
 # 1000 or 500 copies, so the ODE is the mean of the SSA.
@@ -42,6 +61,7 @@ begin parameters
   Gc     2.302585092994046    # ln(10)
   Gcoop -4.605170185988092    # -2*ln(10)
   Ea0c   13.12473503006606    # ln(1e6) - phi*Gc
+  kflip  1e-3
 end parameters
 begin molecule types
   Ra(b)
@@ -55,6 +75,22 @@ begin molecule types
   Sc(a,b)
   Sa(s)
   Sb(s)
+  Wa(b)
+  Wb(a)
+  Wc(b)
+  Wd(a)
+  Za(s~0~1)
+  Pc(b,c)
+  Pd(a)
+  Pe(a)
+  Ka(b)
+  Kb(a)
+  Ma(b)
+  Mb(a)
+  Ga(b)
+  Gb(a)
+  Ha(b)
+  Hb(a)
 end molecule types
 begin seed species
   Ra(b)                     1000
@@ -66,6 +102,16 @@ begin seed species
   Sc(a,b!1).Sb(s!1)          500
   Sc(a,b)                    500
   Sa(s)                     1000
+  Wa(b!1).Wb(a!1)           1000
+  Wc(b!1).Wd(a!1)           1000
+  Za(s~0)                   1000
+  Pc(b!1,c!2).Pd(a!1).Pe(a!2) 500
+  Pc(b!1,c).Pd(a!1)          500
+  Ka(b!1).Kb(a!1)           1000
+  Ma(b!1).Mb(a!1)           1000
+  Ga(b)                     1000
+  Gb(a)                     1000
+  Ha(b!1).Hb(a!1)           1000
 end seed species
 begin observables
   Molecules  Rev_bound   Ra(b!1).Rb(a!1)
@@ -74,6 +120,13 @@ begin observables
   Molecules  Break_uni   Va(b!1).Vb(a!1)
   Molecules  Ctx_pair    Sa(s!1).Sc(a!1,b!2).Sb(s!2)
   Molecules  Ctx_bare    Sa(s!1).Sc(a!1,b)
+  Molecules  Rename_uni  Wa(b!1).Wb(a!1)
+  Molecules  Rename_other Wc(b!1).Wd(a!1)
+  Molecules  Plus_bound  Pc(b!1,c!+).Pd(a!1)
+  Molecules  Plus_free   Pc(b!1,c).Pd(a!1)
+  Molecules  Rev_consts  Ka(b!1).Kb(a!1)
+  Molecules  Rev_samekind Ma(b!1).Mb(a!1)
+  Molecules  Rev_sites   Ha(b!1).Hb(a!1)
 end observables
 begin energy patterns
   Ra(b!1).Rb(a!1)               Gr
@@ -82,6 +135,14 @@ begin energy patterns
   Va(b!1).Vb(a!1)               Gv
   Sc(a!1).Sa(s!1)               Gc
   Sa(s!1).Sc(a!1,b!2).Sb(s!2)   Gcoop
+  Wa(b!1).Wb(a!1)               Gv
+  Wc(b!1).Wd(a!1)               Gv
+  Pc(b!1).Pd(a!1)               Gv
+  Pc(b!1,c!+).Pd(a!1)           Gv
+  Ka(b!1).Kb(a!1)               Gv
+  Ma(b!1).Mb(a!1)               Gv
+  Ga(b!1).Gb(a!1)               Gv
+  Ha(b!1).Hb(a!1)               Gv
 end energy patterns
 begin reaction rules
   Rev:    Ra(b) + Rb(a) <-> Ra(b!1).Rb(a!1)      Arrhenius(phi, Ea0r)
@@ -89,6 +150,16 @@ begin reaction rules
   Bind:   Ua(b) + Ub(a) -> Ua(b!1).Ub(a!1)       Arrhenius(phi, Ea0u)
   Break:  Va(b!1).Vb(a!1) -> Va(b) + Vb(a)       Arrhenius(phi, Ea0v)
   Ctx:    Sc(a) + Sa(s) <-> Sc(a!1).Sa(s!1)      Arrhenius(phi, Ea0c)
+  _reverse_Gone: Wa(b!1).Wb(a!1) -> Wa(b) + Wb(a)  Arrhenius(phi, Ea0v)
+  Flip:   Za(s~0) -> Za(s~1)                     kflip
+  _reverse_Flip: Wc(b!1).Wd(a!1) -> Wc(b) + Wd(a)  Arrhenius(phi, Ea0v)
+  Plus:   Pc(b!1).Pd(a!1) -> Pc(b) + Pd(a)       Arrhenius(phi, Ea0v)
+  Kc:     Ka(b) + Kb(a) -> Ka(b!1).Kb(a!1)       Arrhenius(phi, Ea0u)
+  _reverse_Kc: Ka(b!1).Kb(a!1) -> Ka(b) + Kb(a)  Arrhenius(phi, Ea0v)
+  Ko:     Ma(b!1).Mb(a!1) -> Ma(b) + Mb(a)       Arrhenius(phi, Ea0v)
+  _reverse_Ko: Ma(b!1).Mb(a!1) -> Ma(b) + Mb(a)  Arrhenius(phi, Ea0v)
+  Gx:     Ga(b) + Gb(a) -> Ga(b!1).Gb(a!1)       Arrhenius(phi, Ea0v)
+  _reverse_Gx: Ha(b!1).Hb(a!1) -> Ha(b) + Hb(a)  Arrhenius(phi, Ea0v)
 end reaction rules
 end model
 begin actions

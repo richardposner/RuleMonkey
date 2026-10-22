@@ -1,0 +1,36 @@
+# Issue #109, case 5: explicit bonds, a site named twice on one molecule.
+# L(r!1,r!2).R(l!1).S(l!2) applies only where the other r holds an S;
+# RuleMonkey's load-time expansion drops it.  The rule must be refused.
+#   L.R.S: dG = -(G_LR + G_RS) = 3 -> exp(-(0.2+0.35*3)) = 0.2865
+#   L.R.R: dG = -G_LR = 2 -> exp(-0.9) = 0.4066 per R, 0.813 for the pair
+begin model
+begin parameters
+  Ea0 0.2
+  phi 0.35
+  G_LR -2
+  G_RS -1
+end parameters
+begin molecule types
+  L(r,r)
+  R(l)
+  S(l)
+end molecule types
+begin seed species
+  L(r!1,r!2).R(l!1).S(l!2) 1000
+  L(r!1,r!2).R(l!1).R(l!2) 1000
+end seed species
+begin energy patterns
+  L(r!1).R(l!1) G_LR
+  L(r!1,r!2).R(l!1).S(l!2) G_RS
+end energy patterns
+begin observables
+  Species LRS L(r!1,r!2).R(l!1).S(l!2)
+  Species LRR L(r!1,r!2).R(l!1).R(l!2)
+end observables
+begin reaction rules
+  Unbind: L(r!1).R(l!1) -> L(r) + R(l) Arrhenius(phi,Ea0)
+end reaction rules
+end model
+begin actions
+  writeXML({overwrite=>1})
+end actions

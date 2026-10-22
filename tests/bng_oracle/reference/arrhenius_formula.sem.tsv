@@ -1,4 +1,4 @@
-time	Rev_bound	Revu_bound	Bind_uni	Break_uni	Ctx_pair	Ctx_bare
-0	0	0	0	0	0	0
-250	0	0	0	0	0	0
-500	0	0	0	0	0	0
+time	Rev_bound	Revu_bound	Bind_uni	Break_uni	Ctx_pair	Ctx_bare	Rename_uni	Rename_other	Plus_bound	Plus_free	Rev_consts	Rev_samekind	Rev_sites
+0	0	0	0	0	0	0	0	0	0	0	0	0	0
+250	0	0	0	0	0	0	0	0	0	0	0	0	0
+500	0	0	0	0	0	0	0	0	0	0	0	0	0

@@ -682,6 +682,26 @@ add_test(
         ${_rulemonkey_test_dir}/bng_oracle/xml/products_never_form.xml
 )
 
+# Arrhenius rules outside the shapes the load-time expansion prices exactly
+# (issue #109): the issue's nine reproducers, each refused with an Error that
+# names the rule and why, and the other checks on a rule's own reactant
+# pattern.  The controls are the shapes it prices exactly (the plain pair, and
+# the pair plus one bond to a third molecule type), which must load with no
+# Arrhenius diagnostic.
+add_executable(arrhenius_context_test cpp/arrhenius_context_test.cpp)
+target_link_libraries(arrhenius_context_test PRIVATE rulemonkey)
+
+add_test(
+    NAME arrhenius_context_test
+    COMMAND arrhenius_context_test
+        ${_rulemonkey_test_dir}/cpp/arrhenius_context
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_energy_arrhenius.xml
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_energy_arrhenius_coop.xml
+        ${_rulemonkey_test_dir}/bng_oracle/xml/arrhenius_formula.xml
+        ${_rulemonkey_test_dir}/bng_oracle/xml/arrhenius_rt.xml
+        ${_rulemonkey_test_dir}/bng_oracle/xml/product_split.xml
+)
+
 # Arrhenius rates under a parameter override (issue #107): once a parameter
 # is overridden, each expanded rule's rate is re-resolved from its expression
 # rather than the number computed at load.  The BNG2-oracle suite overrides
