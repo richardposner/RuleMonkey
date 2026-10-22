@@ -10,6 +10,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cassert>
 #include <cctype>
 #include <chrono>
@@ -3274,7 +3275,8 @@ struct RuleState {
   // and been clamped to 0 once, further negative evaluations are silent
   // (otherwise an oscillator with a state-dependent rate would spam the
   // log).  Default-constructed false; never reset, so the warning fires
-  // at most once per rule per simulator lifetime.
+  // at most once per rule per engine (one run() or session), and once per
+  // rule for a whole run_ensemble, whose engines share a latch.
   bool clamp_warned = false;
   bool b_mask_complete = false;
 };
@@ -3931,6 +3933,9 @@ struct Engine::Impl {
   int molecule_limit;
   std::mt19937_64 rng;
   bool initialized = false;
+  // run_ensemble's shared "propensity clamped to 0" latch, one flag per
+  // rule; null outside an ensemble (see Engine::share_clamp_warnings).
+  std::atomic<bool>* shared_clamp_latch = nullptr;
 
   // Cached-incremental canonical-label layer (issue #9 §2 step 5, plan
   // decision #6).  Maps a live complex id to its last-computed canonical
@@ -4637,24 +4642,27 @@ struct Engine::Impl {
       // rule_states[ri] or iterates the vector), so pointer arithmetic to
       // recover the index is well-defined for vector elements.
       auto const ri = static_cast<size_t>(&rs - rule_states.data());
-      auto const& rule = model.rules[ri];
-      const char* fn = rule.rate_law.function_name.c_str();
-      // Name the cause when we know it: an MM rule reporting NaN with a
-      // negative Km is that Km, not an arithmetic accident downstream.
-      bool const mm_domain =
-          std::isnan(new_value) && rule.rate_law.type == RateLawType::MM && rule.rate_law.mm_Km < 0;
-      if (mm_domain) {
-        fprintf(stderr,
-                "WARN: rule '%s' (%s) propensity clamped to 0 — MM Km=%g is outside "
-                "the rate law's domain (Km must be > 0) at t=%g; further clamps on "
-                "this rule are silent\n",
-                rule.id.c_str(), rule.name.c_str(), rule.rate_law.mm_Km, current_time);
-      } else {
-        fprintf(stderr,
-                "WARN: rule '%s' (%s) propensity clamped to 0 — rate%s%s%s "
-                "evaluated to %g at t=%g; further clamps on this rule are silent\n",
-                rule.id.c_str(), rule.name.c_str(), (fn[0] != 0 ? " function '" : ""), fn,
-                (fn[0] != 0 ? "'" : ""), new_value, current_time);
+      // In an ensemble only the first replicate to clamp the rule warns.
+      if (shared_clamp_latch == nullptr || !shared_clamp_latch[ri].exchange(true)) {
+        auto const& rule = model.rules[ri];
+        const char* fn = rule.rate_law.function_name.c_str();
+        // Name the cause when we know it: an MM rule reporting NaN with a
+        // negative Km is that Km, not an arithmetic accident downstream.
+        bool const mm_domain = std::isnan(new_value) && rule.rate_law.type == RateLawType::MM &&
+                               rule.rate_law.mm_Km < 0;
+        if (mm_domain) {
+          fprintf(stderr,
+                  "WARN: rule '%s' (%s) propensity clamped to 0 — MM Km=%g is outside "
+                  "the rate law's domain (Km must be > 0) at t=%g; further clamps on "
+                  "this rule are silent\n",
+                  rule.id.c_str(), rule.name.c_str(), rule.rate_law.mm_Km, current_time);
+        } else {
+          fprintf(stderr,
+                  "WARN: rule '%s' (%s) propensity clamped to 0 — rate%s%s%s "
+                  "evaluated to %g at t=%g; further clamps on this rule are silent\n",
+                  rule.id.c_str(), rule.name.c_str(), (fn[0] != 0 ? " function '" : ""), fn,
+                  (fn[0] != 0 ? "'" : ""), new_value, current_time);
+        }
       }
     }
     if (!(new_value >= 0))
@@ -12406,6 +12414,8 @@ void Engine::initialize(double t_start) {
   impl_->init_rule_states();
   impl_->initialized = true;
 }
+
+void Engine::share_clamp_warnings(std::atomic<bool>* latch) { impl_->shared_clamp_latch = latch; }
 
 Result Engine::run(const TimeSpec& ts, const CancelCallback& should_continue) {
   if (!impl_->initialized)

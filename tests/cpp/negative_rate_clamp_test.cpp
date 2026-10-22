@@ -9,6 +9,8 @@
 //   2. The first clamp per rule emits one stderr WARN line so the
 //      author sees the issue.  Further clamps on the same rule are
 //      silent so an oscillator around the zero crossing doesn't spam.
+//   3. A run_ensemble warns once per rule for the whole ensemble, not
+//      once per replicate (issue #113): its engines share the latch.
 //
 // The fixture model (`negative_rate_clamp_model.bngl/.xml`) drives
 // `Obs_A` from 10 down toward zero via a first-order decay, and a
@@ -46,6 +48,13 @@ std::size_t count_occurrences(const std::string& haystack, const std::string& ne
   return count;
 }
 
+std::string read_file(const std::string& path) {
+  std::ifstream const f(path);
+  std::stringstream ss;
+  ss << f.rdbuf();
+  return ss.str();
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -81,10 +90,7 @@ int main(int argc, char* argv[]) {
   std::fflush(stderr);
 
   // Read back what the engine wrote to stderr.
-  std::ifstream const ef(err_path);
-  std::stringstream ss;
-  ss << ef.rdbuf();
-  const std::string err_blob = ss.str();
+  const std::string err_blob = read_file(err_path);
 
   // Surface the captured stderr to stdout so a failing run is debuggable
   // from the ctest log.
@@ -107,6 +113,31 @@ int main(int argc, char* argv[]) {
 
   // Contract 3: sim.run() didn't throw (covered by reaching here).
   // No assertion needed beyond having gotten this far.
+
+  // Contract 4: every replicate of this fixture clamps the rule, but an
+  // ensemble adds one WARN line, not one per replicate.
+  try {
+    rulemonkey::RuleMonkeySimulator sim(xml_path);
+    rulemonkey::TimeSpec ts;
+    ts.t_start = 0.0;
+    ts.t_end = 20.0;
+    ts.n_points = 100;
+    rulemonkey::EnsembleSpec es;
+    es.n_reps = 6;
+    es.n_threads = 3;
+    auto const ens = sim.run_ensemble(ts, es, /*base_seed=*/1);
+    (void)ens;
+  } catch (const std::exception& e) {
+    std::fflush(stderr);
+    std::fprintf(stdout, "FAIL: sim.run_ensemble threw: %s\n", e.what());
+    return 1;
+  }
+  std::fflush(stderr);
+  const std::string ens_blob = read_file(err_path).substr(err_blob.size());
+  std::fprintf(stdout, "--- captured ensemble stderr ---\n%s--- end ---\n", ens_blob.c_str());
+  std::size_t const n_ens_warn = count_occurrences(ens_blob, "WARN: rule '");
+  check(n_ens_warn == 1,
+        "a 6-replicate ensemble must warn once, got " + std::to_string(n_ens_warn));
 
   if (g_failures == 0) {
     std::fprintf(stdout, "PASS: negative-rate clamp warning fires once and names the function\n");

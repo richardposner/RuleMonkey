@@ -3,6 +3,7 @@
 #include "model.hpp"
 #include "rulemonkey/types.hpp"
 
+#include <atomic>
 #include <cstdint>
 #include <iosfwd>
 #include <memory>
@@ -39,6 +40,13 @@ public:
   // false throws `rulemonkey::Cancelled` out of run() at a safe between-event
   // point (no partial event state is left exposed).
   Result run(const TimeSpec& ts, const CancelCallback& should_continue = {});
+
+  // Shares the warn-once latch of the "propensity clamped to 0" warning
+  // with other engines (run_ensemble): `latch[ri]` is rule ri's flag, and
+  // the warning prints only from the first engine to clamp that rule.
+  // Non-owning; it must hold one flag per model rule and outlive this
+  // engine.  Without it each engine warns once per rule on its own.
+  void share_clamp_warnings(std::atomic<bool>* latch);
 
   double current_time() const;
   std::vector<double> get_observable_values();

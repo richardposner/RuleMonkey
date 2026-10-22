@@ -63,6 +63,48 @@ public:
   Result run(const TimeSpec& ts, std::uint64_t seed = 42,
              const CancelCallback& should_continue = {});
 
+  // Runs `spec.n_reps` independent replicates of run(ts, ...) across
+  // `spec.n_threads` worker threads and returns their per-time-point mean
+  // and sample standard deviation (issue #113).
+  //
+  // Replicate `i` is seeded with `base_seed + i` and is bit-identical to
+  // run(ts, base_seed + i), so any one replicate can be reproduced alone.
+  // Statistics are accumulated in replicate order whatever order the
+  // workers finish in, so the result is bit-identical for every
+  // `n_threads`.  Parameter overrides, initial-amount overrides, the
+  // molecule limit and the bscb setting apply to every replicate, as they
+  // would to run().  Like run(), it may be called while a session is
+  // active and leaves the session untouched.
+  //
+  // This is the supported way to run replicates of one simulator in
+  // parallel: run() itself must not be called concurrently on the same
+  // instance, because it re-applies overrides to the shared parsed model.
+  //
+  // `should_continue`, if non-empty, is polled from the worker threads,
+  // one call at a time under a lock, so it need not be thread-safe itself.
+  // A `false` return stops every replicate and throws
+  // `rulemonkey::Cancelled` (or a replicate's own exception, if one had
+  // already failed); no partial result is returned.
+  //
+  // If replicates throw (an unsorted `ts.sample_times`, an allocation
+  // failure, or an exception escaping `should_continue`, including a
+  // `Cancelled` it throws itself),
+  // replicates numbered above the lowest failing one are stopped, every
+  // replicate below it runs to completion, and the lowest-numbered
+  // replicate's exception is rethrown — the same error whatever the thread
+  // count or timing.  The simulator stays usable after either kind of
+  // throw.  The molecule limit is not an error: a replicate that exceeds
+  // it stops firing and holds that state for its remaining samples, as in
+  // run(), and is averaged in like any other.  A rule's "propensity clamped
+  // to 0" warning prints once for the whole ensemble, from whichever
+  // replicate clamps it first.
+  //
+  // Throws std::runtime_error if `spec.n_reps < 1`, `spec.n_threads < 0`,
+  // or `ts.t_end` is earlier than `ts.t_start`.
+  EnsembleResult run_ensemble(const TimeSpec& ts, const EnsembleSpec& spec,
+                              std::uint64_t base_seed = 42,
+                              const CancelCallback& should_continue = {});
+
   // Runs a parameter sweep: for each value of `spec.parameter`, simulates the
   // model over `spec.per_point` and records the endpoint observable and
   // global-function values (the values at `per_point.t_end`).  This is the

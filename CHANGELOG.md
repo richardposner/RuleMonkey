@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Replicate ensembles: `run_ensemble()` and `rm_driver --reps` (issue
+  #113).** `run_ensemble(ts, EnsembleSpec{n_reps, n_threads,
+  keep_trajectories}, base_seed)` runs `n_reps` independent replicates on
+  worker threads and returns the per-time-point mean and sample standard
+  deviation (n - 1) of every observable and global function. Replicate `i`
+  is seeded `base_seed + i` and is bit-identical to `run(ts, base_seed + i)`,
+  so any one can be rerun alone. Statistics are folded in replicate order,
+  so the result is bit-identical for every thread count. Cancellation polls
+  the callback under a lock; a replicate's own exception stops only the
+  replicates numbered above it and is rethrown as itself, so the error
+  reported is the lowest-numbered one whatever the timing.
+
+  `rm_driver --reps N [--threads T] [--sd-out <path>]` writes the ensemble
+  mean as an ordinary `.gdat` on stdout and the SD in the same layout to
+  `--sd-out`, matching the `*.mean.tsv` / `*.std.tsv` reference pairs.
+  `--reps 1` prints exactly the single run. Single-trajectory output is
+  byte-identical to `main`.
+
+  `run()` on one simulator must still not be called from two threads at
+  once, since it re-applies overrides to the shared parsed model;
+  `run_ensemble()` is the supported way to parallelise one simulator.
+  `librulemonkey` now links `Threads::Threads`, and the installed package
+  config finds it for `find_package(RuleMonkey)` consumers.
+
+  A new `tsan` preset (`RULEMONKEY_ENABLE_TSAN`) and CI job run the
+  threaded tests under ThreadSanitizer.
+
+  A rule's "propensity clamped to 0" warning prints once for the whole
+  ensemble, not once per replicate. Like `run()`, `run_ensemble()` may be
+  called while a session is active.
+
 ### Fixed
 
 - **A function settled ahead of a function it reads got a stale value

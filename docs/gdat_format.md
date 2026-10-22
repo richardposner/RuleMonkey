@@ -144,6 +144,17 @@ Two header-parsing notes:
   emits the uniform grid; explicit times are an embedder-only feature
   (see `model_semantics.md`).
 
+## Ensemble output (`--reps`)
+
+`rm_driver --reps N` writes the per-time-point **mean** over N replicates
+in exactly the layout above, so any `.gdat` reader handles it unchanged.
+`--sd-out <path>` writes the sample standard deviation (`n - 1`
+denominator; all zero when N = 1) to a second file with the same header
+and time column.  Together they correspond to the
+`tests/reference/nfsim/ensemble/*.mean.tsv` / `*.std.tsv` pairs.  A mean
+of integer counts is generally not an integer, so do not parse ensemble
+columns as integers.
+
 ## See also
 
 - [`quickstart.md`](quickstart.md) — full command-line walkthrough.

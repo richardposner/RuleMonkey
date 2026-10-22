@@ -78,11 +78,19 @@ installed locally. The rest are local-only.
 ```bash
 build/release/rm_driver <model.xml> <t_end> <n_steps> [seed] [-no-bscb] \
     [--ignore-unsupported] [--save-state <path>] [--load-state <path>] \
-    [--t-start <time>] [--print-functions]
+    [--t-start <time>] [--print-functions] \
+    [--reps <n> [--threads <n>] [--sd-out <path>]]
 ```
 
 Output is tab-separated `.gdat` on stdout (header line beginning with `#`,
 then time + observable columns). CPU time is printed to stderr.
+
+With `--reps N`, `rm_driver` runs N replicates seeded `seed, seed+1, …`
+across `--threads` worker threads (default: one per hardware thread) and
+prints their per-time-point **mean** in the same `.gdat` layout;
+`--sd-out <path>` writes the sample standard deviation alongside.
+Replicate `i` is exactly what `rm_driver … <seed+i>` prints, and the
+thread count never changes the output.
 
 `rm_scan` sweeps one parameter and reports the endpoint response at each
 value — the RuleMonkey equivalent of BioNetGen's `parameter_scan` and
@@ -225,6 +233,23 @@ auto seg2 = sim.simulate(100.0, 200.0, 101);
 sim.save_state("checkpoint.bin");
 sim.destroy_session();
 ```
+
+Replicate ensembles for error bars — `run_ensemble` runs replicates on
+worker threads and returns the mean and sample SD per time point.
+Replicate `i` is seeded `base_seed + i`, bit-identical to
+`run(ts, base_seed + i)`, and the statistics are the same for any
+thread count:
+
+```cpp
+rulemonkey::EnsembleSpec es;
+es.n_reps = 100;
+es.n_threads = 0;                       // one per hardware thread
+auto ens = sim.run_ensemble(ts, es, /*base_seed=*/42);
+// ens.observable_mean[obs_idx][t], ens.observable_sd[obs_idx][t]
+```
+
+Call `run_ensemble` rather than `run()` from several threads: `run()`
+must not be called concurrently on one simulator instance.
 
 Cooperative cancellation for long runs — `run`, `simulate`, and
 `step_to` each take an optional `rulemonkey::CancelCallback`.  The SSA

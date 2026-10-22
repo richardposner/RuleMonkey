@@ -165,6 +165,51 @@ struct BifurcateResult {
   ScanResult backward;
 };
 
+// Specification for a replicate ensemble (run_ensemble, issue #113).
+//
+// Replicate `i` is seeded with `base_seed + i`, so each one is the exact
+// trajectory run(ts, base_seed + i) would produce.  `n_threads` changes
+// only how fast the ensemble finishes, never its result.
+struct EnsembleSpec {
+  int n_reps = 0; // number of replicates; must be >= 1
+  // Worker threads.  0 picks std::thread::hardware_concurrency(); 1 runs
+  // every replicate on the calling thread and spawns nothing.  Never more
+  // threads than replicates are started.
+  int n_threads = 0;
+  // Also return every replicate's full Result in `trajectories`.  Off by
+  // default, so a replicate's Result is dropped once it is folded into the
+  // statistics.  Folding is in replicate order, so a replicate that
+  // finishes ahead of a slower lower-numbered one is held until that one
+  // is folded: one slow replicate can keep up to n_reps - 1 Results alive.
+  bool keep_trajectories = false;
+};
+
+// run_ensemble result: per-time-point mean and sample standard deviation
+// (n - 1 denominator) across replicates.  The `*_mean` / `*_sd` arrays
+// share Result's column-major layout — `observable_mean[obs_idx][t]` —
+// with columns parallel to `observable_names` / `function_names` and rows
+// parallel to `time`.  With n_reps == 1 every SD is 0.
+struct EnsembleResult {
+  std::vector<double> time;
+  std::vector<std::string> observable_names;
+  std::vector<std::vector<double>> observable_mean;
+  std::vector<std::vector<double>> observable_sd;
+  std::vector<std::string> function_names;
+  std::vector<std::vector<double>> function_mean;
+  std::vector<std::vector<double>> function_sd;
+  int n_reps = 0;
+  std::uint64_t base_seed = 0;
+  // SSA events summed over every replicate.
+  int64_t event_count = 0;
+  // One Result per replicate, in replicate order, when
+  // EnsembleSpec::keep_trajectories is set; empty otherwise.
+  std::vector<Result> trajectories;
+
+  std::size_t n_times() const noexcept { return time.size(); }
+  std::size_t n_observables() const noexcept { return observable_names.size(); }
+  std::size_t n_functions() const noexcept { return function_names.size(); }
+};
+
 // One row of an enumerated species census: a canonical BNGL species
 // pattern string and the number of complex instances of that species
 // currently live in the pool.  Two complexes contribute to the same

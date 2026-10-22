@@ -2,6 +2,7 @@
 
 #include "energy_expand.hpp"
 #include "engine.hpp"
+#include "ensemble.hpp"
 #include "expr_eval.hpp"
 #include "model.hpp"
 #include "pattern_parser.hpp"
@@ -11,6 +12,7 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -3928,6 +3930,110 @@ Result RuleMonkeySimulator::run(const TimeSpec& ts, std::uint64_t seed,
   impl_->apply_overrides();
   Engine engine(impl_->model, seed, impl_->molecule_limit);
   return engine.run(ts, should_continue);
+}
+
+// ---------------------------------------------------------------------------
+// Replicate ensembles (issue #113)
+// ---------------------------------------------------------------------------
+
+namespace {
+
+// Running mean and sum of squared deviations (Welford) for one
+// [column][time] block.  add() must be fed replicates in replicate order:
+// that order, not the order workers finish in, is what makes the
+// statistics bit-identical across thread counts.
+struct WelfordBlock {
+  std::vector<std::vector<double>> mean;
+  std::vector<std::vector<double>> m2;
+
+  void add(const std::vector<std::vector<double>>& x, int k) {
+    if (k == 1) {
+      mean = x;
+      m2.assign(x.size(), {});
+      for (std::size_t c = 0; c < x.size(); ++c)
+        m2[c].assign(x[c].size(), 0.0);
+      return;
+    }
+    for (std::size_t c = 0; c < x.size(); ++c)
+      for (std::size_t t = 0; t < x[c].size(); ++t) {
+        double const delta = x[c][t] - mean[c][t];
+        mean[c][t] += delta / k;
+        m2[c][t] += delta * (x[c][t] - mean[c][t]);
+      }
+  }
+
+  // Sample standard deviation; 0 for a single replicate.
+  std::vector<std::vector<double>> sd(int n) const {
+    std::vector<std::vector<double>> out(m2.size());
+    for (std::size_t c = 0; c < m2.size(); ++c) {
+      out[c].resize(m2[c].size(), 0.0);
+      if (n > 1)
+        for (std::size_t t = 0; t < m2[c].size(); ++t)
+          out[c][t] = std::sqrt(m2[c][t] / (n - 1));
+    }
+    return out;
+  }
+};
+
+} // namespace
+
+EnsembleResult RuleMonkeySimulator::run_ensemble(const TimeSpec& ts, const EnsembleSpec& spec,
+                                                 std::uint64_t base_seed,
+                                                 const CancelCallback& should_continue) {
+  if (spec.n_reps < 1)
+    throw std::runtime_error("run_ensemble: n_reps must be >= 1 (got " +
+                             std::to_string(spec.n_reps) + ")");
+  if (spec.n_threads < 0)
+    throw std::runtime_error("run_ensemble: n_threads must be >= 0 (got " +
+                             std::to_string(spec.n_threads) + ")");
+  if (ts.t_end < ts.t_start)
+    throw std::runtime_error("run_ensemble: t_end (" + std::to_string(ts.t_end) +
+                             ") is earlier than t_start (" + std::to_string(ts.t_start) + ")");
+
+  // The one write to shared state, done before any worker exists.  From
+  // here on the model is only read: each Engine copies it at construction.
+  // An active session is untouched, as by run(): its engine has its own copy.
+  impl_->apply_overrides();
+  const Model& model = impl_->model;
+  int const molecule_limit = impl_->molecule_limit;
+  int const n_reps = spec.n_reps;
+
+  EnsembleResult out;
+  out.n_reps = n_reps;
+  out.base_seed = base_seed;
+  WelfordBlock obs_stats;
+  WelfordBlock fn_stats;
+  int folded = 0;
+
+  // One warn-once flag per rule for the whole ensemble, so a rule whose
+  // propensity clamps to 0 warns once rather than once per replicate.
+  std::vector<std::atomic<bool>> clamp_latch(model.rules.size());
+
+  detail::run_replicates(
+      n_reps, spec.n_threads, should_continue,
+      [&](int i, const CancelCallback& poll) {
+        Engine engine(model, base_seed + static_cast<std::uint64_t>(i), molecule_limit);
+        engine.share_clamp_warnings(clamp_latch.data());
+        return engine.run(ts, poll);
+      },
+      [&](Result&& r) {
+        if (++folded == 1) {
+          out.time = r.time;
+          out.observable_names = r.observable_names;
+          out.function_names = r.function_names;
+        }
+        obs_stats.add(r.observable_data, folded);
+        fn_stats.add(r.function_data, folded);
+        out.event_count += r.event_count;
+        if (spec.keep_trajectories)
+          out.trajectories.push_back(std::move(r));
+      });
+
+  out.observable_mean = std::move(obs_stats.mean);
+  out.observable_sd = obs_stats.sd(n_reps);
+  out.function_mean = std::move(fn_stats.mean);
+  out.function_sd = fn_stats.sd(n_reps);
+  return out;
 }
 
 // ---------------------------------------------------------------------------

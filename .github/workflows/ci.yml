@@ -125,6 +125,29 @@ jobs:
         # findings, which historically lacked symbolized traces.
         run: UBSAN_OPTIONS=print_stacktrace=1:halt_on_error=1 ASAN_OPTIONS=detect_leaks=0 ctest --preset asan
 
+  tsan:
+    # ThreadSanitizer run of the tests that drive the engine from several
+    # threads (run_ensemble, issue #113).  Every other test is single-
+    # threaded, where TSan has nothing to find, so only those are run.
+    # This is the gate that keeps the shared Model read-only for workers:
+    # a field the engine writes through a shared pointer would show up
+    # here as a race long before it showed up as a wrong ensemble mean.
+    # Linux only — one leg is enough for a data-race gate, and the asan
+    # job already covers the libc++ / libstdc++ split.
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Configure (tsan)
+        run: cmake --preset tsan
+
+      - name: Build (tsan)
+        run: cmake --build --preset tsan --target ensemble_test ensemble_scheduler_test cancellation_test
+
+      - name: Test (tsan)
+        run: TSAN_OPTIONS=halt_on_error=1 ctest --preset tsan -R '^(ensemble_test|ensemble_scheduler_test|cancellation_test)$'
+
   clang_tidy:
     # The clang-tidy gate, run somewhere it cannot be skipped.
     #

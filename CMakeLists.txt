@@ -85,6 +85,13 @@ add_library(RuleMonkey::rulemonkey ALIAS rulemonkey)
 
 target_compile_features(rulemonkey PUBLIC cxx_std_17)
 
+# run_ensemble() runs replicates on std::thread workers (issue #113).
+# PRIVATE on a static library still reaches consumers' link lines as
+# $<LINK_ONLY:Threads::Threads>, which is why RuleMonkeyConfig.cmake.in
+# re-finds Threads for find_package() users.
+find_package(Threads REQUIRED)
+target_link_libraries(rulemonkey PRIVATE Threads::Threads)
+
 # ---------------------------------------------------------------------------
 # Expression evaluator backend: ExprTk, via bngsim::ExprTkEvaluator.
 #
@@ -214,6 +221,38 @@ if(RULEMONKEY_ENABLE_ASAN)
 endif()
 
 # ---------------------------------------------------------------------------
+# Optional ThreadSanitizer (issue #113).
+#
+# run_ensemble() is the one place the engine runs on several threads at once:
+# workers build Engines from one shared, read-only Model and fold results
+# under a lock.  TSan is what proves "read-only" stays true as the model
+# grows fields.  Off by default; cmake --preset tsan turns it on, and CI runs
+# the threaded tests under it.  Exclusive with ASan — the two runtimes cannot
+# share a process.
+# ---------------------------------------------------------------------------
+option(RULEMONKEY_ENABLE_TSAN "Build with ThreadSanitizer" OFF)
+if(RULEMONKEY_ENABLE_TSAN)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        message(FATAL_ERROR "RULEMONKEY_ENABLE_TSAN requires Clang or GCC")
+    endif()
+    if(RULEMONKEY_ENABLE_ASAN)
+        message(FATAL_ERROR "RULEMONKEY_ENABLE_TSAN and RULEMONKEY_ENABLE_ASAN are exclusive")
+    endif()
+    set(_rm_tsan_flags -fsanitize=thread -fno-omit-frame-pointer)
+    target_compile_options(rulemonkey PRIVATE ${_rm_tsan_flags})
+    target_link_options   (rulemonkey PUBLIC  ${_rm_tsan_flags})
+    if(TARGET rm_bngsim_expr)
+        target_compile_options(rm_bngsim_expr PRIVATE ${_rm_tsan_flags})
+    endif()
+    foreach(_rm_cli_target rm_driver rm_scan)
+        if(TARGET ${_rm_cli_target})
+            target_compile_options(${_rm_cli_target} PRIVATE ${_rm_tsan_flags})
+        endif()
+    endforeach()
+    add_compile_options(${_rm_tsan_flags})
+endif()
+
+# ---------------------------------------------------------------------------
 # Canonical-label cache self-check (issue #9 §2 step 5, plan decision #6).
 #
 # The cached-incremental canonical-label layer (per-complex cached label +
@@ -312,6 +351,15 @@ if(RULEMONKEY_INSTALL AND RULEMONKEY_ENABLE_ASAN)
         "the asan runtime would propagate to every consumer via PUBLIC link "
         "options and break their builds.  Pass -DRULEMONKEY_INSTALL=OFF (or "
         "use the `asan` preset, which does this for you).")
+endif()
+
+if(RULEMONKEY_INSTALL AND RULEMONKEY_ENABLE_TSAN)
+    # Same hazard as the ASan guard above: the tsan link options are PUBLIC.
+    message(FATAL_ERROR
+        "RULEMONKEY_ENABLE_TSAN=ON is incompatible with RULEMONKEY_INSTALL=ON: "
+        "the tsan runtime would propagate to every consumer via PUBLIC link "
+        "options.  Pass -DRULEMONKEY_INSTALL=OFF (or use the `tsan` preset, "
+        "which does this for you).")
 endif()
 
 if(RULEMONKEY_INSTALL)
