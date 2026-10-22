@@ -1,0 +1,42 @@
+# Arrhenius rules neither the load-time expansion nor the exact path runs
+# (issue #109), each on molecule types of its own:
+#   Flip    a state change, which makes or breaks no bond
+#   Two     two bonds made at once
+#   Homo    a bond between two molecules of one type
+#   Ring    a bond closed inside one complex
+#   Excl    exclude constraints
+begin model
+begin parameters
+  Ea0 0.2
+  phi 0.35
+end parameters
+begin molecule types
+  S(x~0~1)
+  T1(b,c)
+  T2(a,d)
+  H(h)
+  R1(a,c)
+  R2(b,c)
+  E1(b,c)
+  E2(a)
+end molecule types
+begin seed species
+  S(x~0) 10
+  T1(b,c) 10
+  T2(a,d) 10
+  H(h) 10
+  R1(a,c!1).R2(b,c!1) 10
+  E1(b,c) 10
+  E2(a) 10
+end seed species
+begin reaction rules
+  Flip: S(x~0) -> S(x~1) Arrhenius(phi,Ea0)
+  Two: T1(b,c) + T2(a,d) -> T1(b!1,c!2).T2(a!1,d!2) Arrhenius(phi,Ea0)
+  Homo: H(h) + H(h) -> H(h!1).H(h!1) Arrhenius(phi,Ea0)
+  Ring: R1(a).R2(b) -> R1(a!1).R2(b!1) Arrhenius(phi,Ea0)
+  Excl: E1(b) + E2(a) -> E1(b!1).E2(a!1) Arrhenius(phi,Ea0) exclude_reactants(1,E1(c!+))
+end reaction rules
+end model
+begin actions
+  writeXML({overwrite=>1})
+end actions

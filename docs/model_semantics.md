@@ -508,7 +508,7 @@ treat at least one of these as a signal to refuse the model.
 | Trigger | Why refused |
 |---|---|
 | `<ListOfCompartments>` non-empty | RM does not implement compartment volume scaling — bimolecular rate constants would be silently incorrect. |
-| An `RateLaw type="Arrhenius"` rule outside the shapes the load-time expansion prices exactly | eBNGL energy rules are expanded at load time (see "Energy-based BNGL" below), and only a single bond made between two reactant patterns or broken within one, between molecules of two types, with nothing else in the reactant pattern, priced by energy patterns that are that bond alone or that bond plus one bond to a molecule of a third type. State-change energy rules, intramolecular ring-closure binding, and >2-reactant rules would be silently dropped; an energy pattern or reactant context outside that set would run at the wrong rate (issue #109). Either way the rule is refused, and the message names the pattern or context that put it outside. (A bare `<ListOfEnergyPatterns>` with `Function`-type rate laws is fully supported and is **not** a trigger.) |
+| An `RateLaw type="Arrhenius"` rule outside the shapes RM runs | RM runs an energy rule that makes one bond between two reactant patterns, or breaks one within one, between molecules of two types, with no other operation and no include/exclude constraint: expanded at load where that is exact, and otherwise counted at each firing (see "Energy-based BNGL" below). State-change energy rules, intramolecular ring-closure binding, same-type homodimer binding and >2-reactant rules would be silently dropped, and so would a rule off the expansion in a model with an energy pattern joined only by `.`, so they are refused, with a message naming the rule and the reason. (A bare `<ListOfEnergyPatterns>` with `Function`-type rate laws is fully supported and is **not** a trigger.) |
 | A rule with three or more `<ReactantPattern>` children, where a pattern's `.`-joined molecules are not bonded to each other, the rate law is not `Ele`, or there are more than 6 patterns | Rules of 3-6 reactant patterns under an elementary rate law are simulated, each pattern a single molecule or a bonded complex (see "N-ary reactant rules" below). The shapes listed here fall outside that path and would drop onto the two-slot machinery, whose slot B merges patterns 2..n into one bond-free pattern that scores zero embeddings for free reactants — the rule would silently hold zero propensity and never fire, with mass still conserved so the trajectory looks valid (issues #24, #26). Rewrite as a sequence of at most bimolecular steps. |
 | Any rule with `RateLaw type="Sat"` | Deprecated; rewrite as `MM(kcat, Km)`. |
 | An `MM(kcat,Km)` rule whose `Km` resolves to a negative value | Outside the rate law's domain: the discriminant `(S−Km−E)² + 4·Km·S` can go negative, and where it does not the expression still yields a finite but meaningless rate (issue #46). A `Km` that arrives *after* load through `set_param` / `parameter_scan` cannot be caught here and is clamped to zero propensity with one warning per rule instead. |
@@ -690,15 +690,20 @@ model simulated normally and mass stayed conserved.
 ## Energy-based BNGL (eBNGL)
 
 RM supports energy rules written with the `Arrhenius(phi, Ea0)` rate law
-for the **2-reactant binding** case, matching NFsim's own coverage
-(RuleWorld/nfsim commit `c4f1bb2`). No runtime free-energy computation
-happens; instead the model loader expands each energy rule at load time
-into a finite set of conventional rules with pre-computed rate constants
-(Sekar 2015, *Rule-based Modeling of Cell Signaling*, Ch. 3), which then
-run through the ordinary SSA loop unchanged. The port lives in
-`cpp/rulemonkey/energy_expand.{hpp,cpp}`.
+when the rule makes one bond between two reactant patterns, or breaks one
+within one, between molecules of two types, with no other operation. It
+runs each such rule one of two ways (issue #109):
 
-For a binding rule `mt1(s1) + mt2(s2) <-> mt1(s1!1).mt2(s2!1)`:
+- **Expanded at load**, where that is exact. The loader expands the rule
+  into a finite set of conventional rules with pre-computed rate constants
+  (Sekar 2015, *Rule-based Modeling of Cell Signaling*, Ch. 3; ported from
+  NFsim, RuleWorld/nfsim commit `c4f1bb2`), which then run through the
+  ordinary SSA loop unchanged. The port lives in
+  `cpp/rulemonkey/energy_expand.{hpp,cpp}`.
+- **Counted at each firing**, everywhere else (the exact path, below).
+
+For a binding rule `mt1(s1) + mt2(s2) <-> mt1(s1!1).mt2(s2!1)`, the
+expansion works like this:
 
 - The energy patterns that overlap the reaction-center bond are the only
   ones whose match count changes when the bond forms, so only they
@@ -756,22 +761,11 @@ the second rule `1-phi`, where BNG2 gives it `phi`. Given numbers instead
 of parameters, BNG2 writes each rule its own `_Aphi_N` and `_AEact0_N`, and
 the two are told apart.
 
-**Deferred** (refused at Tier 0, matching NFsim's binding-only coverage):
-state-change energy rules, intramolecular ring-closure binding, rules with
-more than two reactants, **same-type homodimer binding** (`A + A <-> A.A`;
-the context reactant attribution and the molecularity-1 symmetry factor are
-not handled for automorphic reactants), rules that **couple binding to
-another operation** (state change, molecule add/delete), and rules carrying
-**exclude/include constraints**. Energy patterns paired with `Function`-type
-rate laws that inline the Boltzmann factors by hand (e.g.
-`isingspin_localfcn`, `ft_energy_patterns`) are a separate, long-supported
-path and need no expansion.
-
-**Refused because the expansion would misprice them** (issue #109). The
-expansion turns each energy pattern holding the reaction-center bond into at
-most one condition, "this site of a center molecule is bound to anything",
-and builds every rule from the two bond sites alone. That is exact, and the
-rule expands, only when every energy pattern whose count the bond changes is
+**Which rules expand.** The expansion turns each energy pattern holding the
+reaction-center bond into at most one condition, "this site of a center
+molecule is bound to anything", and builds every rule from the two bond
+sites alone. That is exact only when every energy pattern whose count the
+bond changes is
 
 - the bond alone, `A(b!1).B(a!1)`,
 - the bond plus a `!+` on a site of one of its two molecules,
@@ -787,23 +781,90 @@ no `!?` that BNG2 counts more than once. BNG2 divides a pattern's matches
 by its automorphisms, so k `!?` components on the m same-named components
 the rest of the pattern leaves count C(m, k) times: `L(r!1,r!?).R(l!1)`
 counts twice on `L(r,r,r)`, and `L(r!1,r!?,r!?).R(l!1)` once. The rule's
-own reactant pattern must name the two bond sites and nothing else, `!?`
-aside, and a rule that breaks the bond must write `+` between its
-products.
+own reactant pattern must also name the two bond sites and nothing else,
+`!?` aside, and a rule that breaks the bond must write `+` between its
+products. An energy pattern that does not hold the bond and does not
+constrain either of its sites, such as `A(s~1)`, cannot change with it,
+and does not affect the rule.
 
-Outside that, the rule used to run at the wrong rate with no warning: an
-energy pattern with a state, a site required free, wildcard bonds only
+Outside that, the expansion drops or misapplies the context: an energy
+pattern with a state, a site required free, wildcard bonds only
 (`L(r!+,r!+)`), a `!+` or a second bond on a site named like the reaction
 site, a context site with more than one possible partner, context two
-bonds out, two context conditions (which RM applied when either was met),
-or a `!?` BNG2 counts more than once, or a state in the rule's own
-reactant pattern (which RM dropped, so the rule fired on complexes BNG2
-never lets react). Each is now refused, naming the pattern or context. An
-energy pattern that does not hold the bond and does not constrain either
-of its sites, such as `A(s~1)`, cannot change with it, so it does not
-affect the rule. A pattern whose molecules are joined only by `.` is
-refused, since joining or parting any two complexes can change its count.
-To simulate a refused model, use `generate_network()` + ODE/SSA.
+bonds out, two context conditions (which it applies when either is met),
+or a `!?` BNG2 counts more than once, and any context in the rule's own
+reactant pattern (which it drops, so the rule fires on complexes BNG2 never
+lets react). RuleMonkey 3.11.0 ran all of these through the expansion with
+no warning, 48 to 52 standard errors off BioNetGen's network on the issue's
+reproducers.
+
+**The exact path.** Every other rule runs as itself, with its own reactant
+and product patterns, and its rate is counted at each firing as BioNetGen's
+network counts it per reaction. BNG2 weighs an energy pattern in a species
+by its matches divided by its automorphisms (`EnergyPattern.pm`), and gives
+a reaction dG = Σ G × (weight in products − weight in reactants). Matches
+and automorphisms are counted by BNG2's own rules (`SpeciesGraph.pm`,
+`isomorphicToSubgraph`): a `!+` lands on any component with one bond, which
+in a pattern a `!+` or `!?` counts as, so `L(r!+,r!?)` has two
+automorphisms; a `~?` asks for some state. For a connected pattern, the
+matches a bond changes are exactly those that put some pattern component on
+one of the bond's two components, so RM counts dG of a firing from those
+alone, on the complexes the bond joins or parts
+(`cpp/rulemonkey/energy_match.{hpp,cpp}`). The rule rides the local-rate
+machinery: a per-molecule weight bounds the rate of any firing at that
+molecule, the engine draws firings against those weights, and keeps each
+with probability (its counted rate) / (the weights it was drawn against),
+so the rule fires at BNG2's rate.
+
+- A rule that breaks its bond keeps on a molecule the largest counted rate
+  among its bonds of the rule's kind.
+- A rule that makes its bond splits dG into a term each end's own complex
+  decides, and for each pattern bond of the rule's kind a product of the
+  matches on its two sides. Each end's weight carries its own term, and
+  the product wherever one side is a single site, so the weights are exact
+  unless an energy pattern has context on both sides of the bond, such as
+  `A(b!1,c!2).B(a!1,d!3).C(a!2).D(a!3)`. Such a product is bounded: end 0's
+  weight carries it at the most matches the far side can have, where that
+  raises the rate. A pair can then be drawn up to e^(c·|G|·L·R) times more
+  often than it fires (c = phi or 1-phi, L and R the two sides' most
+  matches). Where that factor exceeds e, the rule is split instead into one
+  rule per number of far-side matches, up to 8, each keeping only the pairs
+  whose far-side site is in its class, which prices every pair exactly. The
+  split rules are named after the rule with `_arr_c0`, `_arr_c1`, …
+  appended, as the expanded ones take `_arr_v0`, …. A product left bounded
+  past e is reported with a warning, since most draws may then be thinned
+  away.
+- A rule that makes its bond joins two complexes, as BNG2 applies a rule
+  with two reactant patterns, so a drawn pair already in one complex never
+  fires, under `-no-bscb` too.
+- `set_param` on `phi`, `Ea0`, an energy, or anything they are written in
+  terms of re-resolves them for the next run.
+
+The exact path does more work per event than the expansion: the engine
+recomputes the weights of every molecule in each complex an event changes,
+so the cost per event grows with the size of the complexes events touch,
+and in a gelling multivalent system with the size of the gel. On a
+bivalent ligand–receptor system that keeps forming and breaking chains, it
+measured 20 to 60 µs per event (2,000 to 20,000 molecules), against 2.5 µs
+for the same rule expanded, with almost no draw thinned away.
+
+**Refused** (Tier 0): energy rules that change a state or add or delete a
+molecule, rules that make or break more than one bond, intramolecular
+ring-closure binding, rules with more than two reactants, **same-type
+homodimer binding** (`A + A <-> A.A`; the context reactant attribution and
+the molecularity-1 symmetry factor are not handled for automorphic
+reactants), rules carrying **exclude/include constraints**, and, for a rule
+the expansion cannot price, an energy pattern whose molecules are joined
+only by `.`: BNG2 counts it per complex, so joining or parting two
+complexes can change its count, and so can the bond's sites going from
+bound to free. That refusal is spared where neither can happen: a pattern
+naming a molecule type no bond can bring into a complex with either of the
+rule's two, and, beside an unbinding written with `.` (which never parts a
+complex), a pattern that asks nothing of the bond's two sites. Each
+refusal names the rule and the reason. To simulate a refused model, use `generate_network()` + ODE/SSA.
+Energy patterns paired with `Function`-type rate laws that inline the
+Boltzmann factors by hand (e.g. `isingspin_localfcn`, `ft_energy_patterns`)
+are a separate, long-supported path and need no expansion.
 
 ## Embedder integration pattern
 
@@ -893,10 +954,11 @@ ticket.
   rules, intramolecular ring-closure binding, >2-reactant energy rules,
   same-type homodimer binding, binding coupled to another operation, and
   rules carrying exclude/include constraints — the same scope NFsim's own
-  eBNGL implements — and Arrhenius rules whose energy patterns or reactant
-  context the load-time expansion cannot price exactly
-  ([#109](https://github.com/richardposner/RuleMonkey/issues/109)). See
-  "Energy-based BNGL (eBNGL)" above.
+  eBNGL implements. Connected energy patterns and reactant context of any
+  shape run, counted at each firing where the load-time expansion cannot
+  price them ([#109](https://github.com/richardposner/RuleMonkey/issues/109));
+  an energy pattern joined only by `.` that the rule's bond can reach is
+  refused. See "Energy-based BNGL (eBNGL)" above.
 - Hybrid particle-population SSA — open work, no scheduled implementation.
 - Multi-molecule Fixed species — would require pattern-based
   re-instantiation; not currently implemented (refused at Tier 0).

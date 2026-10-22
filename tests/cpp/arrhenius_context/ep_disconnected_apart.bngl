@@ -1,0 +1,35 @@
+# An energy pattern joined only by `.`, A(b!+).X(), where X never binds
+# anything: no bond can bring an X into a complex with A or B, so the
+# pattern never matches, the A-B rule on the exact path (issue #109, its
+# reactant context) cannot change its count, and it runs, unbinding at
+# exp(-(Ea0 - phi*G_AB)) = exp(-0.9).
+begin model
+begin parameters
+  Ea0 0.2
+  phi 0.35
+  G_AB -2
+  G_XY -1
+end parameters
+begin molecule types
+  A(b,s~0~1)
+  B(a)
+  X()
+end molecule types
+begin seed species
+  A(b!1,s~1).B(a!1) 100
+  X() 10
+end seed species
+begin energy patterns
+  A(b!1).B(a!1) G_AB
+  A(b!+).X() G_XY
+end energy patterns
+begin observables
+  Molecules AB A(b!1).B(a!1)
+end observables
+begin reaction rules
+  Unbind: A(b!1,s~1).B(a!1) -> A(b,s~1) + B(a) Arrhenius(phi,Ea0)
+end reaction rules
+end model
+begin actions
+  writeXML({overwrite=>1})
+end actions

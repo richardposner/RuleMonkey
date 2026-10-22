@@ -61,6 +61,8 @@ MODELS = {
     "products_never_form": {"kind": "ode", "t_end": 500, "n_steps": 2},
     "arrhenius_formula": {"kind": "ode", "t_end": 500, "n_steps": 2},
     "arrhenius_rt": {"kind": "ode", "t_end": 500, "n_steps": 2},
+    "arrhenius_context": {"kind": "ode", "t_end": 2, "n_steps": 2},
+    "arrhenius_context_bind": {"kind": "ssa", "t_end": 60, "n_steps": 2, "reps": 1000},
 }
 
 

@@ -10,12 +10,15 @@ header comments, and the model-semantics doc.
 
 `rm_driver` refuses by default if the model uses a BNGL construct RM
 cannot honor (compartments, Sat / Hill rate laws, Arrhenius energy rules
-outside the shapes it expands exactly, `population` molecule types,
+that change a state, make two bonds, close a ring, join a homodimer, carry
+include/exclude constraints or meet an energy pattern joined only by `.`,
+`population` molecule types,
 multi-molecule Fixed species,
 n-ary rules outside the implemented shape, …).  Each refusal names the
 offending element and gives per-feature guidance.  (`FunctionProduct` rate laws, and
-`Arrhenius` energy rules in the shapes the load-time expansion prices exactly, are
-implemented — see [`model_semantics.md`](model_semantics.md).)
+`Arrhenius` energy rules that make or break one bond, with connected energy
+patterns and reactant context of any shape, are implemented — see
+[`model_semantics.md`](model_semantics.md).)
 
 Two ways forward:
 

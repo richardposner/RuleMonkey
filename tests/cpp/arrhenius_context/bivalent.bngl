@@ -1,0 +1,32 @@
+# A binding rule on the exact path (issue #109), between bivalent molecules
+# that bind into chains.  Its AddBond may name its two sites in either
+# order: the run is the same.
+begin model
+begin parameters
+  Ea0 2
+  phi 0.35
+  G 0
+  Gw -0.5
+end parameters
+begin molecule types
+  L(r,r)
+  R(l,l)
+end molecule types
+begin seed species
+  L(r,r) 200
+  R(l,l) 200
+end seed species
+begin energy patterns
+  L(r!1).R(l!1) G
+  L(r!+,r!+) Gw
+end energy patterns
+begin observables
+  Molecules Bonds L(r!1).R(l!1)
+end observables
+begin reaction rules
+  LR: L(r) + R(l) <-> L(r!1).R(l!1) Arrhenius(phi,Ea0)
+end reaction rules
+end model
+begin actions
+  writeXML({overwrite=>1})
+end actions

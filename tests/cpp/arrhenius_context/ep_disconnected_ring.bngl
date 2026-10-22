@@ -1,0 +1,33 @@
+# An energy pattern joined only by `.`, A().C(), that the rule's molecules
+# can reach, beside an unbinding written with `.` between its products: the
+# rule opens rings and never parts a complex, so it cannot change the
+# pattern's count, and runs on the exact path (issue #109).
+begin model
+begin parameters
+  Ea0 0.2
+  phi 0.35
+  G_AB -2
+  G_AC -1
+end parameters
+begin molecule types
+  A(x,c)
+  B(y,d)
+  C(a,b)
+end molecule types
+begin seed species
+  A(x!1,c!2).B(y!1,d!3).C(a!2,b!3) 100
+end seed species
+begin energy patterns
+  A(x!1).B(y!1) G_AB
+  A().C() G_AC
+end energy patterns
+begin observables
+  Molecules AB A(x!1).B(y!1)
+end observables
+begin reaction rules
+  Open: A(x!1).B(y!1) -> A(x).B(y) Arrhenius(phi,Ea0)
+end reaction rules
+end model
+begin actions
+  writeXML({overwrite=>1})
+end actions

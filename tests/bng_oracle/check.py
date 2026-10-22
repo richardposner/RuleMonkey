@@ -45,6 +45,8 @@ MODELS = {
     "products_never_form": {"t_end": 500, "n_steps": 2, "seeds": 24},
     "arrhenius_formula": {"t_end": 500, "n_steps": 2, "seeds": 24},
     "arrhenius_rt": {"t_end": 500, "n_steps": 2, "seeds": 24},
+    "arrhenius_context": {"t_end": 2, "n_steps": 2, "seeds": 24},
+    "arrhenius_context_bind": {"t_end": 60, "n_steps": 2, "seeds": 48},
 }
 
 Z_THRESHOLD = 6.0

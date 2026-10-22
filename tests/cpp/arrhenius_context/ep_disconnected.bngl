@@ -1,37 +1,32 @@
-# Issue #109: a context site whose second partner only a rule makes.  No seed
-# species holds A's c bound to D, but Dbind can bind it, so
-# A(b!1,c!2).B(a!1).C(a!2) cannot be read as "A's c is bound".  The Arrhenius
-# rule must be refused.
+# Issue #109: an energy pattern whose molecules are joined only by `.`.
+# BioNetGen counts A().C() once per A and C in one complex, so joining or
+# parting any two complexes can change its count, which the exact path's
+# count of the matches a bond changes does not see.  The Arrhenius rule must
+# be refused.
 begin model
 begin parameters
   Ea0 0.2
   phi 0.35
   G_AB -2
-  G_C -1
-  kd 1
+  G_AC -1
 end parameters
 begin molecule types
   A(b,c)
   B(a)
   C(a)
-  D(a)
 end molecule types
 begin seed species
   A(b!1,c!2).B(a!1).C(a!2) 1000
-  A(b!1,c).B(a!1) 1000
-  D(a) 1000
 end seed species
 begin energy patterns
   A(b!1).B(a!1) G_AB
-  A(b!1,c!2).B(a!1).C(a!2) G_C
+  A().C() G_AC
 end energy patterns
 begin observables
-  Species ABC A(b!1,c!2).B(a!1).C(a!2)
-  Species ABD A(b!1,c!2).B(a!1).D(a!2)
+  Molecules AB A(b!1).B(a!1)
 end observables
 begin reaction rules
   Unbind: A(b!1).B(a!1) -> A(b) + B(a) Arrhenius(phi,Ea0)
-  Dbind: A(c) + D(a) -> A(c!1).D(a!1) kd
 end reaction rules
 end model
 begin actions

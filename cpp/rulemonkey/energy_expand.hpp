@@ -19,8 +19,10 @@
 //
 // Scope (Phase 1, matching NFsim's current coverage): binding rules with
 // exactly two reactants.  State-change energy rules and >2-reactant rules
-// are refused upstream in the loader, and so is any rule whose energy
-// patterns the expansion cannot price exactly (inexact_reason, issue #109).
+// are refused upstream in the loader.  A rule whose energy patterns or
+// reactant context the expansion cannot price exactly (inexact_reason, issue
+// #109) is not expanded: it runs as itself, priced at each firing
+// (energy_match.hpp).
 
 #include <cmath>
 #include <map>

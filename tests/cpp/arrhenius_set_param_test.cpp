@@ -14,13 +14,25 @@
 //   reversible rule written either way round, unidirectional rules that make
 //   and break a bond, and a context-dependent energy pattern;
 //   tests/bng_oracle/xml/arrhenius_rt.xml, RT overridden to 2.5: energies in
-//   kJ/mol, divided by the model's own RT.
+//   kJ/mol, divided by the model's own RT;
+//   tests/bng_oracle/xml/arrhenius_context.xml and arrhenius_context_bind.xml,
+//   with an energy overridden to its own value: rules on the exact path,
+//   whose phi, Ea0 and energies apply_overrides re-resolves (issue #109).
+//
+// An override to the value a parameter already has cannot tell a value that
+// was re-resolved from one that was left alone, so arrhenius_context also
+// runs with its context energy G_X overridden to 0: every context pattern
+// then weighs nothing, and each context column must decay as the bare
+// column S0 does in the reference.  And with phi overridden to 0 every
+// unbinding takes exp(-Ea0), whatever its context, so each single-bond
+// column decays to 1000 exp(-2 exp(-0.2)) by t = 2.
 //
 // Each observable's mean over the seeds must fall within 6 standard errors
-// of the reference at t = 500, as check.py scores the suite.
+// of the reference at the end of the run, as check.py scores the suite.
 
 #include "rulemonkey/simulator.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -72,10 +84,24 @@ std::map<std::string, double> last_row(const std::string& path) {
   return out;
 }
 
-void score(const std::string& xml, const std::string& ref, const std::string& param, double value) {
+// Each observable's final mean with `param` overridden to `value`, against
+// the reference column of the same name, or against `as_column` for the
+// observables in `only` when that is given, or against `as_value` when the
+// reference is empty.
+void score(const std::string& xml, const std::string& ref, const std::string& param, double value,
+           double t_end = 500.0, const std::vector<std::string>& only = {},
+           const std::string& as_column = "", double as_value = 0.0) {
   constexpr int kSeeds = 24;
-  constexpr double kTEnd = 500.0;
-  auto const expected = last_row(ref);
+  double const kTEnd = t_end;
+  std::map<std::string, double> expected;
+  if (!ref.empty())
+    expected = last_row(ref);
+  for (const auto& name : only) {
+    if (!as_column.empty())
+      expected[name] = expected.at(as_column);
+    else if (ref.empty())
+      expected[name] = as_value;
+  }
   std::map<std::string, std::vector<double>> finals;
   for (int seed = 1; seed <= kSeeds; ++seed) {
     rulemonkey::RuleMonkeySimulator sim(xml);
@@ -85,6 +111,8 @@ void score(const std::string& xml, const std::string& ref, const std::string& pa
       finals[r.observable_names[i]].push_back(r.observable_data[i].back());
   }
   for (const auto& [name, vals] : finals) {
+    if (!only.empty() && std::find(only.begin(), only.end(), name) == only.end())
+      continue;
     auto it = expected.find(name);
     std::string where = xml;
     where += " with ";
@@ -129,6 +157,14 @@ int main(int argc, char* argv[]) {
     score(dir + "/xml/arrhenius_formula.xml", dir + "/reference/arrhenius_formula.mean.tsv", "phi",
           0.3);
     score(dir + "/xml/arrhenius_rt.xml", dir + "/reference/arrhenius_rt.mean.tsv", "RT", 2.5);
+    score(dir + "/xml/arrhenius_context.xml", dir + "/reference/arrhenius_context.mean.tsv", "G_X",
+          -1.0, 2.0);
+    score(dir + "/xml/arrhenius_context_bind.xml",
+          dir + "/reference/arrhenius_context_bind.mean.tsv", "Gs", -1.2, 60.0);
+    score(dir + "/xml/arrhenius_context.xml", dir + "/reference/arrhenius_context.mean.tsv", "G_X",
+          0.0, 2.0, {"S1", "F1", "RS", "PC", "T4", "Q4", "G1"}, "S0");
+    score(dir + "/xml/arrhenius_context.xml", "", "phi", 0.0, 2.0, {"S1", "S0", "F1", "F0"}, "",
+          1000.0 * std::exp(-2.0 * std::exp(-0.2)));
   } catch (const std::exception& e) {
     std::fprintf(stderr, "FAIL: exception: %s\n", e.what());
     ++g_failures;

@@ -1,0 +1,31 @@
+# A binding rule on the exact path (issue #109) whose only pair sits in one
+# complex: A and B both held on one scaffold.  A rule with two reactant
+# patterns joins two complexes, as BNG2 applies it, so the A-B bond never
+# forms, with or without -no-bscb.
+begin model
+begin parameters
+  Ea0 0
+  phi 0.35
+  G -1
+end parameters
+begin molecule types
+  S(a,b)
+  A(s,x)
+  B(s,y)
+end molecule types
+begin seed species
+  S(a!1,b!2).A(s!1,x).B(s!2,y) 1
+end seed species
+begin energy patterns
+  A(x!1).B(y!1) G
+end energy patterns
+begin observables
+  Molecules AB A(x!1).B(y!1)
+end observables
+begin reaction rules
+  Close: A(s!+,x) + B(y) -> A(s!+,x!1).B(y!1) Arrhenius(phi,Ea0)
+end reaction rules
+end model
+begin actions
+  writeXML({overwrite=>1})
+end actions

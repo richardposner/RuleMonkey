@@ -44,12 +44,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Arrhenius rules ran at the wrong rate wherever the load-time expansion
   could not represent an energy pattern's context, or the rule's own
-  (issue #109).** RM expands each Arrhenius rule at load into conventional
-  rules with fixed rates. The expansion turns each energy pattern holding
-  the rule's bond into at most one "this site of a center molecule is bound
-  to anything" condition, and builds every rule from the two bond sites
-  alone. Outside what that can express, it dropped or misapplied the
-  context with no warning:
+  (issue #109); they now run at BioNetGen's rate.** RM expanded each
+  Arrhenius rule at load into conventional rules with fixed rates. The
+  expansion turns each energy pattern holding the rule's bond into at most
+  one "this site of a center molecule is bound to anything" condition, and
+  builds every rule from the two bond sites alone. Outside what that can
+  express, it dropped or misapplied the context with no warning:
   - It dropped an energy pattern carrying a state, one written with
     wildcard bonds only (`L(r!+,r!+)`), and one whose context bond sits on
     a second site named like the reaction site.
@@ -69,20 +69,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   off BioNetGen's network. Results from 3.11.0 and earlier are wrong for
   any such model.
 
-  The expansion is exact only where every energy pattern whose count the
-  bond changes is the bond alone, the bond plus a `!+`, or the bond plus
-  one bond to a molecule of a third type that nothing else can bind. In
-  each case the extra site must be one its molecule type declares once,
-  with no state, no site required free, and no `!?` that BioNetGen counts
-  more than once. The rule's reactant pattern must also name only the two
-  bond sites, and a rule that breaks the bond must write `+` between its
-  products. Any other Arrhenius rule is now refused with an error naming
-  the energy pattern or context that puts it outside.
+  The expansion is kept where it is exact, and such a model runs
+  byte-identical to before. Every other Arrhenius rule now runs as itself,
+  with dG counted at each firing as BioNetGen's network counts it per
+  reaction (new `energy_match.{hpp,cpp}`):
+  - The weight is matches divided by automorphisms, both counted by
+    BioNetGen's rules, so a `!+` lands on a `!?` and a `~?` needs a state.
+  - The sum runs over the energy patterns the bond changes, which for a
+    connected pattern are the matches on the bond's two sites.
 
-  The nine reproducers and five more shapes are pinned in
-  `arrhenius_context_test`, and the gate's remaining branches in
-  `energy_expand_test`. Every other XML under `tests/` runs byte-identical
-  to `main`.
+  The rule draws firings against per-molecule weights that bound its rate,
+  and keeps each with probability rate / bound. The weights are exact
+  unless an energy pattern has context on both sides of the bond. Such a
+  pattern is bounded, and split into one rule per class of its far side
+  where the bound would inflate the rate past e. Each class rule, named
+  with `_arr_cK` appended, keeps only the pairs in its class. A pattern
+  left bounded past that is reported with a warning.
+
+  This costs more per event than the expansion: 20 to 60 µs against
+  2.5 µs on a bivalent ligand–receptor system of 2,000 to 20,000
+  molecules, growing with the size of the complexes events touch.
+
+  Still refused, with the rule and the reason named:
+  - an Arrhenius rule that changes a state, makes or breaks two bonds,
+    closes a ring, binds a homodimer, or carries include/exclude
+    constraints;
+  - a rule off the expansion whose bond can reach an energy pattern joined
+    only by `.` and change it.
+
+  The issue's nine reproducers, nine more unbinding shapes and ten binding
+  ones are pinned against BNG2 in the new `arrhenius_context` (unbinding,
+  ode) and `arrhenius_context_bind` (reversible binding, ssa) oracle
+  models; main misses them by up to 61 standard errors on binding and by
+  an unbounded z on a rule that never fires there. `energy_match_test` pins the
+  counting against BioNetGen's species weights, `arrhenius_context_test`
+  what is still refused, and `arrhenius_set_param_test` the exact path
+  under an override.
 - **A rule labelled `_reverse_X` took the reverse half's phi (issue
   #109).** BNG2 writes the reverse half of a reversible rule X as a rule
   named `_reverse_X`, and that name is the only mark the XML carries, so RM

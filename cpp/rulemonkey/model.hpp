@@ -5,6 +5,7 @@
 #include <unordered_map>
 #include <vector>
 
+#include "energy_match.hpp"
 #include "table_function.hpp"
 
 namespace rulemonkey {
@@ -286,6 +287,19 @@ struct RateLaw {
   // those slots before evaluating the rate, so the rate function sees the
   // counts NFsim's CompositeFunction would see.
   int max_reactant_count_index = 0;
+
+  // Arrhenius on the exact path (issue #109): a rule whose energy patterns or
+  // reactant context the load-time expansion cannot price exactly runs as
+  // itself, with BioNetGen's rate exp(-(Ea0 + phi*dG)) counted at each
+  // firing.  It rides the local-rate machinery: `arrhenius` set, a Function
+  // (unbinding) or FunctionProduct (binding) rate law with per-molecule
+  // factors, which are the weights ArrheniusExact describes.  phi and Ea0
+  // keep their sources so set_param re-resolves them.
+  std::shared_ptr<const ArrheniusExact> arrhenius;
+  double arr_phi = 0.0;
+  double arr_ea0 = 0.0;
+  std::string arr_phi_expr; // symbolic source — re-resolved in apply_overrides
+  std::string arr_ea0_expr; // symbolic source — re-resolved in apply_overrides
 
   // For MM
   double mm_Km = 0.0;
@@ -617,6 +631,11 @@ struct FixedSpecies {
 struct Model {
   std::vector<MoleculeType> molecule_types;
   std::unordered_map<std::string, int> molecule_type_index;
+
+  // Energy patterns compiled for the Arrhenius rules on the exact path
+  // (RateLaw::arrhenius, issue #109); each pattern's energy is re-resolved in
+  // apply_overrides.
+  ArrheniusModel arrhenius;
 
   std::vector<Rule> rules;
   std::vector<Observable> observables;
