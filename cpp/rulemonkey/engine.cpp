@@ -11816,9 +11816,13 @@ struct Engine::Impl {
       // Honor the caller's exact output instants (e.g. an experimental
       // dataset's time points).  The recorder advances a single cursor and
       // never looks back, so the list must be sorted ascending — validate and
-      // throw rather than silently dropping or mis-ordering samples.
-      for (std::size_t i = 1; i < ts.sample_times.size(); ++i) {
-        if (ts.sample_times[i] < ts.sample_times[i - 1])
+      // throw rather than silently dropping or mis-ordering samples.  A NaN
+      // passes any ordering test and then stalls the cursor, so every later
+      // sample recorded the final state; it is refused on its own.
+      for (std::size_t i = 0; i < ts.sample_times.size(); ++i) {
+        if (std::isnan(ts.sample_times[i]))
+          throw std::runtime_error("TimeSpec::sample_times must not contain NaN");
+        if (i > 0 && ts.sample_times[i] < ts.sample_times[i - 1])
           throw std::runtime_error("TimeSpec::sample_times must be sorted in "
                                    "ascending order");
       }

@@ -88,7 +88,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that is not finite, as `initialize()` already refuses such a `t_start`.
   `simulate()` also refuses a NaN segment start. Its tolerance check,
   `|t_start - session time| > tol`, is false for NaN, so the call ran with
-  its first row labelled NaN.
+  its first row labelled NaN. A NaN anywhere in `sample_times` is refused
+  as well. It passed the ascending-order check, then stalled the sample
+  cursor, so every later sample recorded the final state: with
+  `{0, NaN, 1, 2, 4}`, the rows at 1 and 2 held the state at 4.
 - **`simulate(TimeSpec)` ran a `t_end` before the session's time.** With
   `sample_times` set, it checked only the last sample against the session's
   time. A `t_end` before it ran nothing and labelled the session's state

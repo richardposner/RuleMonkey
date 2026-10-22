@@ -369,8 +369,8 @@ void check_tfun_counter(const std::string& tfun_xml) {
 // refused call leaves the session where it was.  simulate(TimeSpec) refuses
 // a t_end before the session's time, which bounds the run whatever the
 // samples are.  A NaN segment start, which simulate()'s tolerance check let
-// through, is refused too.  A zero-length window whose t_start drifted an
-// ulp past t_end is still accepted, as that tolerance says it is.
+// through, is refused too, and so is a NaN anywhere in sample_times.  A zero-length window whose
+// t_start drifted an ulp past t_end is still accepted, as that tolerance says it is.
 void check_refusals(const std::string& xml) {
   auto throws = [](const std::function<void()>& f) {
     try {
@@ -421,6 +421,19 @@ void check_refusals(const std::string& xml) {
   nan_start.sample_times = {std::nan(""), 2.0};
   check(throws([&] { sim.simulate(nan_start); }),
         "simulate(TimeSpec) whose first sample is NaN should throw");
+
+  // A NaN later in sample_times passed the ordering check and stalled the
+  // sample cursor, so every sample after it recorded the final state.
+  rulemonkey::TimeSpec nan_mid;
+  nan_mid.t_end = 4.0;
+  nan_mid.sample_times = {0.0, std::nan(""), 1.0, 2.0, 4.0};
+  check(throws([&] { one_shot.run(nan_mid, 1); }), "run() with a NaN sample time should throw");
+  rulemonkey::TimeSpec nan_mid_session = nan_mid;
+  nan_mid_session.sample_times = {1.0, std::nan(""), 2.0, 4.0};
+  check(throws([&] { sim.simulate(nan_mid_session); }),
+        "simulate(TimeSpec) with a NaN sample time should throw");
+  check(sim.current_time() == 1.0,
+        "a refused sample list moved the session to " + exact(sim.current_time()));
 
   rulemonkey::RuleMonkeySimulator drift(xml);
   drift.initialize(3, 0.3);
