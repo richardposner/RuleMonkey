@@ -69,6 +69,7 @@ add_library(rulemonkey STATIC
     cpp/rulemonkey/canonical.cpp
     cpp/rulemonkey/pattern_parser.cpp
     cpp/rulemonkey/energy_expand.cpp
+    cpp/rulemonkey/energy_match.cpp
 )
 
 target_include_directories(rulemonkey

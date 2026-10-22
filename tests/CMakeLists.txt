@@ -425,6 +425,16 @@ target_include_directories(energy_expand_test PRIVATE ${_rulemonkey_private_incl
 
 add_test(NAME energy_expand_test COMMAND energy_expand_test)
 
+# Exact Arrhenius free-energy changes (issue #109): the energy-pattern matcher
+# on hand-built graphs, scored against the dG BioNetGen's species weights
+# give each reaction, and the automorphism counts, cuts and bounds the exact
+# path is built from.
+add_executable(energy_match_test cpp/energy_match_test.cpp)
+target_link_libraries(energy_match_test PRIVATE rulemonkey)
+target_include_directories(energy_match_test PRIVATE ${_rulemonkey_private_include_dir})
+
+add_test(NAME energy_match_test COMMAND energy_match_test)
+
 # Runtime pattern-parser unit test (issue #9 §1 step 2).  Pure unit
 # test: parse_species_pattern is string + Model -> Pattern with no
 # engine state, so a hand-built Model drives the accepted grammar,
@@ -682,12 +692,12 @@ add_test(
         ${_rulemonkey_test_dir}/bng_oracle/xml/products_never_form.xml
 )
 
-# Arrhenius rules outside the shapes the load-time expansion prices exactly
-# (issue #109): the issue's nine reproducers, each refused with an Error that
-# names the rule and why, and the other checks on a rule's own reactant
-# pattern.  The controls are the shapes it prices exactly (the plain pair, and
-# the pair plus one bond to a third molecule type), which must load with no
-# Arrhenius diagnostic.
+# Which Arrhenius rules run and which are refused (issue #109): an energy
+# pattern joined only by `.`, and shapes neither the load-time expansion nor
+# the exact path runs, each refused with an Error that names the rule and
+# why; and models on either path, which must load with no Arrhenius
+# diagnostic.  The exact path's rates are pinned against BNG2 in the
+# BNG2-oracle suite (arrhenius_context, arrhenius_context_bind).
 add_executable(arrhenius_context_test cpp/arrhenius_context_test.cpp)
 target_link_libraries(arrhenius_context_test PRIVATE rulemonkey)
 
@@ -700,13 +710,16 @@ add_test(
         ${_rulemonkey_test_dir}/bng_oracle/xml/arrhenius_formula.xml
         ${_rulemonkey_test_dir}/bng_oracle/xml/arrhenius_rt.xml
         ${_rulemonkey_test_dir}/bng_oracle/xml/product_split.xml
+        ${_rulemonkey_test_dir}/bng_oracle/xml/arrhenius_context.xml
+        ${_rulemonkey_test_dir}/bng_oracle/xml/arrhenius_context_bind.xml
 )
 
-# Arrhenius rates under a parameter override (issue #107): once a parameter
-# is overridden, each expanded rule's rate is re-resolved from its expression
-# rather than the number computed at load.  The BNG2-oracle suite overrides
-# nothing, so this runs its two Arrhenius models with a no-op override and
-# scores them against the same BNG2 references.
+# Arrhenius rates under a parameter override (issues #107, #109): once a
+# parameter is overridden, each expanded rule's rate is re-resolved from its
+# expression rather than the number computed at load, and an exact-path
+# rule's phi, Ea0 and energies are re-resolved too.  The BNG2-oracle suite
+# overrides nothing, so this runs its Arrhenius models with a no-op override,
+# and one with its context energy switched off, against the BNG2 references.
 add_executable(arrhenius_set_param_test cpp/arrhenius_set_param_test.cpp)
 target_link_libraries(arrhenius_set_param_test PRIVATE rulemonkey)
 

@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Created by BioNetGen 2.9.3  -->
 <sbml xmlns="http://www.sbml.org/sbml/level3" level="3" version="1">
-  <model id="ep_free_site">
+  <model id="ep_disconnected">
     <ListOfParameters>
       <Parameter id="Ea0" type="Constant" value="0.2" expr="0.2"/>
       <Parameter id="phi" type="Constant" value="0.35" expr="0.35"/>
       <Parameter id="G_AB" type="Constant" value="-2" expr="-2"/>
-      <Parameter id="G_free" type="Constant" value="-1" expr="-1"/>
+      <Parameter id="G_AC" type="Constant" value="-1" expr="-1"/>
     </ListOfParameters>
     <ListOfMoleculeTypes>
       <MoleculeType id="A">
@@ -29,12 +29,12 @@
     <ListOfCompartments>
     </ListOfCompartments>
     <ListOfSpecies>
-      <Species id="S1"  concentration="1000" name="A(b!1,c).B(a!1)">
+      <Species id="S1"  concentration="1000" name="A(b!1,c!2).B(a!1).C(a!2)">
         <ListOfMolecules>
           <Molecule id="S1_M1" name="A">
             <ListOfComponents>
               <Component id="S1_M1_C1" name="b" numberOfBonds="1"/>
-              <Component id="S1_M1_C2" name="c" numberOfBonds="0"/>
+              <Component id="S1_M1_C2" name="c" numberOfBonds="1"/>
             </ListOfComponents>
           </Molecule>
           <Molecule id="S1_M2" name="B">
@@ -42,33 +42,15 @@
               <Component id="S1_M2_C1" name="a" numberOfBonds="1"/>
             </ListOfComponents>
           </Molecule>
+          <Molecule id="S1_M3" name="C">
+            <ListOfComponents>
+              <Component id="S1_M3_C1" name="a" numberOfBonds="1"/>
+            </ListOfComponents>
+          </Molecule>
         </ListOfMolecules>
         <ListOfBonds>
           <Bond id="S1_B1" site1="S1_M1_C1" site2="S1_M2_C1"/>
-        </ListOfBonds>
-      </Species>
-      <Species id="S2"  concentration="1000" name="A(b!1,c!2).B(a!1).C(a!2)">
-        <ListOfMolecules>
-          <Molecule id="S2_M1" name="A">
-            <ListOfComponents>
-              <Component id="S2_M1_C1" name="b" numberOfBonds="1"/>
-              <Component id="S2_M1_C2" name="c" numberOfBonds="1"/>
-            </ListOfComponents>
-          </Molecule>
-          <Molecule id="S2_M2" name="B">
-            <ListOfComponents>
-              <Component id="S2_M2_C1" name="a" numberOfBonds="1"/>
-            </ListOfComponents>
-          </Molecule>
-          <Molecule id="S2_M3" name="C">
-            <ListOfComponents>
-              <Component id="S2_M3_C1" name="a" numberOfBonds="1"/>
-            </ListOfComponents>
-          </Molecule>
-        </ListOfMolecules>
-        <ListOfBonds>
-          <Bond id="S2_B1" site1="S2_M1_C1" site2="S2_M2_C1"/>
-          <Bond id="S2_B2" site1="S2_M1_C2" site2="S2_M3_C1"/>
+          <Bond id="S1_B2" site1="S1_M1_C2" site2="S1_M3_C1"/>
         </ListOfBonds>
       </Species>
     </ListOfSpecies>
@@ -131,14 +113,13 @@
       </ReactionRule>
     </ListOfReactionRules>
     <ListOfObservables>
-      <Observable id="O1" name="AB1" type="Molecules">
+      <Observable id="O1" name="AB" type="Molecules">
         <ListOfPatterns>
           <Pattern id="O1_P1">
             <ListOfMolecules>
               <Molecule id="O1_P1_M1" name="A">
                 <ListOfComponents>
                   <Component id="O1_P1_M1_C1" name="b" numberOfBonds="1"/>
-                  <Component id="O1_P1_M1_C2" name="c" numberOfBonds="0"/>
                 </ListOfComponents>
               </Molecule>
               <Molecule id="O1_P1_M2" name="B">
@@ -149,28 +130,6 @@
             </ListOfMolecules>
             <ListOfBonds>
               <Bond id="O1_P1_B1" site1="O1_P1_M1_C1" site2="O1_P1_M2_C1"/>
-            </ListOfBonds>
-          </Pattern>
-        </ListOfPatterns>
-      </Observable>
-      <Observable id="O2" name="AB0" type="Molecules">
-        <ListOfPatterns>
-          <Pattern id="O2_P1">
-            <ListOfMolecules>
-              <Molecule id="O2_P1_M1" name="A">
-                <ListOfComponents>
-                  <Component id="O2_P1_M1_C1" name="b" numberOfBonds="1"/>
-                  <Component id="O2_P1_M1_C2" name="c" numberOfBonds="+"/>
-                </ListOfComponents>
-              </Molecule>
-              <Molecule id="O2_P1_M2" name="B">
-                <ListOfComponents>
-                  <Component id="O2_P1_M2_C1" name="a" numberOfBonds="1"/>
-                </ListOfComponents>
-              </Molecule>
-            </ListOfMolecules>
-            <ListOfBonds>
-              <Bond id="O2_P1_B1" site1="O2_P1_M1_C1" site2="O2_P1_M2_C1"/>
             </ListOfBonds>
           </Pattern>
         </ListOfPatterns>
@@ -198,24 +157,12 @@
           </ListOfBonds>
         </Pattern>
       </EnergyPattern>
-      <EnergyPattern id="EP2" pattern="A(b!1,c).B(a!1)" expression="G_free">
+      <EnergyPattern id="EP2" pattern="A().C()" expression="G_AC">
         <Pattern id="EP2_P1">
           <ListOfMolecules>
-            <Molecule id="EP2_P1_M1" name="A">
-              <ListOfComponents>
-                <Component id="EP2_P1_M1_C1" name="b" numberOfBonds="1"/>
-                <Component id="EP2_P1_M1_C2" name="c" numberOfBonds="0"/>
-              </ListOfComponents>
-            </Molecule>
-            <Molecule id="EP2_P1_M2" name="B">
-              <ListOfComponents>
-                <Component id="EP2_P1_M2_C1" name="a" numberOfBonds="1"/>
-              </ListOfComponents>
-            </Molecule>
+            <Molecule id="EP2_P1_M1" name="A"/>
+            <Molecule id="EP2_P1_M2" name="C"/>
           </ListOfMolecules>
-          <ListOfBonds>
-            <Bond id="EP2_P1_B1" site1="EP2_P1_M1_C1" site2="EP2_P1_M2_C1"/>
-          </ListOfBonds>
         </Pattern>
       </EnergyPattern>
     </ListOfEnergyPatterns>

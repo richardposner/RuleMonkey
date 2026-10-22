@@ -1,0 +1,260 @@
+# Arrhenius rules whose energy patterns, or own reactant pattern, carry
+# context the load-time expansion cannot price (issue #109), on the exact
+# path: each rule runs as itself and RuleMonkey counts dG at each firing, as
+# BioNetGen's network counts it per reaction.
+#
+# Every rule is a unidirectional unbinding of a seeded complex, on molecule
+# types of its own, so each column decays at a rate fixed by its context:
+# exp(-(Ea0 + phi*dG)) with dG the unbinding's.  With Ea0 = 0.2, phi = 0.35
+# and the pair's energy G_AB = -2, a complex whose context adds G_X = -1
+# unbinds at exp(-1.25) = 0.2865 and a bare one at exp(-0.9) = 0.4066.
+# RuleMonkey 3.11.0 ran each of the first eight cases 48-52 standard errors
+# off BioNetGen's network (issue #109's reproducers 1-8, in order), and
+# refused them after it; the rest are further shapes of the same kind.
+#
+#   S1 / S0      A state in a pattern: A1(b!1).B1(a!1,s~1), on s~1 and s~0.
+#   F1 / F0      A site the pattern requires free: A2(b!1,c).B2(a!1), on a
+#                free c and a c bound to C2.
+#   W2           Wildcard bonds only, L3(r!+,r!+): each bond of a doubly
+#                bound L3 unbinds at 0.2865.
+#   W1           A `!+` on a second site named like the reaction site,
+#                L4(r!1,r!+).R4(l!1), on a singly bound L4: 0.4066.
+#   RS / RR      A context bond on a second site named like the reaction
+#                site, L5(r!1,r!2).R5(l!1).S5(l!2), on L.R.S and L.R.R.
+#   PC / PD      A context site with two partners: A6(b!1,c!2).B6(a!1).C6(a!2),
+#                on c holding a C6 and a D6.
+#   T4 / T3      Context two bonds out, A7(b!1).B7(a!1,c!2).C7(b!2,d!3).D7(c!3),
+#                with and without the D7.
+#   Q4 / Q3      Two context bonds, A8(b!1,c!2,d!3).B8(a!1).C8(a!2).D8(a!3),
+#                with both and with c alone.
+#   R1 / R0      Context in the rule's own reactant pattern: A9(b!1,s~1).B9(a!1)
+#                unbinds at 0.4066 and A9(s~0) never.
+#   E1 / E0      The same with a third molecule, A14(b!1).B14(a!1,c!2).C14(a!2)
+#                (0.4066, and never without the C14), and with a site the
+#   H1 / H0      rule requires free, A15(b!1,c).B15(a!1) (0.4066, and never
+#                with c bound).
+#   X1 / X0      A context site whose second partner only a rule makes:
+#                A10(b!1,c!2).B10(a!1).C10(a!2) while Bind10 binds D10 to c.
+#   Y2 / Y1      A context site the type declares twice, A11(x,c,c):
+#                A11(x!1,c!2).B11(y!1).C11(a!2) counts once per bound c, so a
+#                complex with two C11 unbinds at exp(-1.6), one with one at
+#                0.2865.
+#   V1           A `!?` counted twice: L12(r!1,r!?).R12(l!1) on L12(r,r,r)
+#                adds 2*G_X, exp(-1.6); L12(r!1,r!?,r!?).R12(l!1), once, adds
+#                G_Y = -0.5 more, exp(-1.775).
+#   K1 / K0      An L16(r,r) holding two R16, one in s~1, which the pattern
+#                L16(r!1).R16(l!1,s~1) favours: the two bonds unbind at
+#                0.2865 and 0.4066.  L17/R17 the same with the pattern on
+#   J1 / J0      s~0, so whichever bond a molecule lists first, one pair has
+#                its faster bond first and the other last.
+#   P1 / P2      BioNetGen's automorphisms: L18(r!+,r!?) has two, since a `!+`
+#                lands on a `!?`, so it weighs 1/2 on a singly bound L18 and 1
+#                on a doubly bound one; unbinding takes exp(-1.075) and
+#                exp(-1.25) per bond.  L19(r~?!+,r!+) has one, since a `~?`
+#   Q2           needs a state: it weighs 2 on L19(r~0!1,r~0!2), so each bond
+#                unbinds at exp(-1.6).
+#   G1 / G0      A rule written with `.` between its products,
+#                A13(x!1).B13(y!1) -> A13(x).B13(y), under a context pattern
+#                on c: it opens the ring A13-B13-C13 at 0.2865 and never parts
+#                the chain.
+#
+# The references are BioNetGen's network, integrated (ode); every column is a
+# first-order decay, so the ODE is the mean of the SSA.
+begin model
+begin parameters
+  Ea0   0.2
+  phi   0.35
+  G_AB  -2
+  G_X   -1
+  G_Y   -0.5
+  kd    1
+end parameters
+begin molecule types
+  A1(b)
+  B1(a,s~0~1)
+  A2(b,c)
+  B2(a)
+  C2(a)
+  L3(r,r)
+  R3(l)
+  L4(r,r)
+  R4(l)
+  L5(r,r)
+  R5(l)
+  S5(l)
+  A6(b,c)
+  B6(a)
+  C6(a)
+  D6(a)
+  A7(b)
+  B7(a,c)
+  C7(b,d)
+  D7(c)
+  A8(b,c,d)
+  B8(a)
+  C8(a)
+  D8(a)
+  A9(b,s~0~1)
+  B9(a)
+  A10(b,c)
+  B10(a)
+  C10(a)
+  D10(a)
+  A11(x,c,c)
+  B11(y)
+  C11(a)
+  L12(r,r,r)
+  R12(l)
+  A13(x,c)
+  B13(y,d)
+  C13(a,b)
+  A14(b)
+  B14(a,c)
+  C14(a)
+  A15(b,c)
+  B15(a)
+  C15(a)
+  L16(r,r)
+  R16(l,s~0~1)
+  L17(r,r)
+  R17(l,s~0~1)
+  L18(r,r)
+  R18(l)
+  L19(r~0~1,r~0~1)
+  R19(l)
+end molecule types
+begin seed species
+  A1(b!1).B1(a!1,s~1) 1000
+  A1(b!1).B1(a!1,s~0) 1000
+  A2(b!1,c).B2(a!1) 1000
+  A2(b!1,c!2).B2(a!1).C2(a!2) 1000
+  L3(r!1,r!2).R3(l!1).R3(l!2) 1000
+  L4(r!1,r).R4(l!1) 1000
+  L5(r!1,r!2).R5(l!1).S5(l!2) 1000
+  L5(r!1,r!2).R5(l!1).R5(l!2) 1000
+  A6(b!1,c!2).B6(a!1).C6(a!2) 1000
+  A6(b!1,c!2).B6(a!1).D6(a!2) 1000
+  A7(b!1).B7(a!1,c!2).C7(b!2,d!3).D7(c!3) 1000
+  A7(b!1).B7(a!1,c!2).C7(b!2,d) 1000
+  A8(b!1,c!2,d!3).B8(a!1).C8(a!2).D8(a!3) 1000
+  A8(b!1,c!2,d).B8(a!1).C8(a!2) 1000
+  A9(b!1,s~1).B9(a!1) 1000
+  A9(b!1,s~0).B9(a!1) 1000
+  A10(b!1,c!2).B10(a!1).C10(a!2) 1000
+  A10(b!1,c).B10(a!1) 1000
+  D10(a) 1000
+  A11(x!1,c!2,c).B11(y!1).C11(a!2) 1000
+  A11(x!1,c!2,c!3).B11(y!1).C11(a!2).C11(a!3) 1000
+  L12(r!1,r,r).R12(l!1) 1000
+  A13(x!1,c!2).B13(y!1,d!3).C13(a!2,b!3) 1000
+  A13(x!1,c).B13(y!1,d) 1000
+  A14(b!1).B14(a!1,c!2).C14(a!2) 1000
+  A14(b!1).B14(a!1,c) 1000
+  A15(b!1,c).B15(a!1) 1000
+  A15(b!1,c!2).B15(a!1).C15(a!2) 1000
+  L16(r!1,r!2).R16(l!1,s~1).R16(l!2,s~0) 1000
+  L17(r!1,r!2).R17(l!1,s~1).R17(l!2,s~0) 1000
+  L18(r!1,r).R18(l!1) 1000
+  L18(r!1,r!2).R18(l!1).R18(l!2) 1000
+  L19(r~0!1,r~0!2).R19(l!1).R19(l!2) 1000
+end seed species
+begin energy patterns
+  A1(b!1).B1(a!1) G_AB
+  A1(b!1).B1(a!1,s~1) G_X
+  A2(b!1).B2(a!1) G_AB
+  A2(b!1,c).B2(a!1) G_X
+  L3(r!1).R3(l!1) G_AB
+  L3(r!+,r!+) G_X
+  L4(r!1).R4(l!1) G_AB
+  L4(r!1,r!+).R4(l!1) G_X
+  L5(r!1).R5(l!1) G_AB
+  L5(r!1,r!2).R5(l!1).S5(l!2) G_X
+  A6(b!1).B6(a!1) G_AB
+  A6(b!1,c!2).B6(a!1).C6(a!2) G_X
+  A7(b!1).B7(a!1) G_AB
+  A7(b!1).B7(a!1,c!2).C7(b!2,d!3).D7(c!3) G_X
+  A8(b!1).B8(a!1) G_AB
+  A8(b!1,c!2,d!3).B8(a!1).C8(a!2).D8(a!3) G_X
+  A9(b!1).B9(a!1) G_AB
+  A10(b!1).B10(a!1) G_AB
+  A10(b!1,c!2).B10(a!1).C10(a!2) G_X
+  A11(x!1).B11(y!1) G_AB
+  A11(x!1,c!2).B11(y!1).C11(a!2) G_X
+  L12(r!1).R12(l!1) G_AB
+  L12(r!1,r!?).R12(l!1) G_X
+  L12(r!1,r!?,r!?).R12(l!1) G_Y
+  A13(x!1).B13(y!1) G_AB
+  A13(x!1,c!+).B13(y!1) G_X
+  A14(b!1).B14(a!1) G_AB
+  A15(b!1).B15(a!1) G_AB
+  L16(r!1).R16(l!1) G_AB
+  L16(r!1).R16(l!1,s~1) G_X
+  L17(r!1).R17(l!1) G_AB
+  L17(r!1).R17(l!1,s~0) G_X
+  L18(r!1).R18(l!1) G_AB
+  L18(r!+,r!?) G_X
+  L19(r!1).R19(l!1) G_AB
+  L19(r~?!+,r!+) G_X
+end energy patterns
+begin observables
+  Molecules  S1  A1(b!1).B1(a!1,s~1)
+  Molecules  S0  A1(b!1).B1(a!1,s~0)
+  Molecules  F1  A2(b!1,c).B2(a!1)
+  Molecules  F0  A2(b!1,c!+).B2(a!1)
+  Species    W2  L3(r!+,r!+)
+  Molecules  W1  L4(r!1).R4(l!1)
+  Species    RS  L5(r!1,r!2).R5(l!1).S5(l!2)
+  Species    RR  L5(r!1,r!2).R5(l!1).R5(l!2)
+  Species    PC  A6(b!1,c!2).B6(a!1).C6(a!2)
+  Species    PD  A6(b!1,c!2).B6(a!1).D6(a!2)
+  Species    T4  A7(b!1).B7(a!1,c!2).C7(b!2,d!+)
+  Species    T3  A7(b!1).B7(a!1,c!2).C7(b!2,d)
+  Species    Q4  A8(b!1,c!+,d!+).B8(a!1)
+  Species    Q3  A8(b!1,c!+,d).B8(a!1)
+  Molecules  R1  A9(b!1,s~1).B9(a!1)
+  Molecules  R0  A9(b!1,s~0).B9(a!1)
+  Molecules  X1  A10(b!1,c!2).B10(a!1).C10(a!2)
+  Molecules  X0  A10(b!1).B10(a!1)
+  Species    Y2  A11(x!1,c!+,c!+).B11(y!1)
+  Species    Y1  A11(x!1,c!+,c).B11(y!1)
+  Molecules  V1  L12(r!1).R12(l!1)
+  Species    G1  A13(x!1,c!+).B13(y!1)
+  Species    G0  A13(x!1,c).B13(y!1)
+  Species    E1  A14(b!1).B14(a!1,c!+)
+  Species    E0  A14(b!1).B14(a!1,c)
+  Species    H1  A15(b!1,c).B15(a!1)
+  Species    H0  A15(b!1,c!+).B15(a!1)
+  Molecules  K1  R16(l!+,s~1)
+  Molecules  K0  R16(l!+,s~0)
+  Molecules  J1  R17(l!+,s~1)
+  Molecules  J0  R17(l!+,s~0)
+  Species    P1  L18(r!+,r)
+  Species    P2  L18(r!+,r!+)
+  Molecules  Q2  R19(l!+)
+end observables
+begin reaction rules
+  Unbind1:  A1(b!1).B1(a!1) -> A1(b) + B1(a) Arrhenius(phi, Ea0)
+  Unbind2:  A2(b!1).B2(a!1) -> A2(b) + B2(a) Arrhenius(phi, Ea0)
+  Unbind3:  L3(r!1).R3(l!1) -> L3(r) + R3(l) Arrhenius(phi, Ea0)
+  Unbind4:  L4(r!1).R4(l!1) -> L4(r) + R4(l) Arrhenius(phi, Ea0)
+  Unbind5:  L5(r!1).R5(l!1) -> L5(r) + R5(l) Arrhenius(phi, Ea0)
+  Unbind6:  A6(b!1).B6(a!1) -> A6(b) + B6(a) Arrhenius(phi, Ea0)
+  Unbind7:  A7(b!1).B7(a!1) -> A7(b) + B7(a) Arrhenius(phi, Ea0)
+  Unbind8:  A8(b!1).B8(a!1) -> A8(b) + B8(a) Arrhenius(phi, Ea0)
+  Unbind9:  A9(b!1,s~1).B9(a!1) -> A9(b,s~1) + B9(a) Arrhenius(phi, Ea0)
+  Unbind10: A10(b!1).B10(a!1) -> A10(b) + B10(a) Arrhenius(phi, Ea0)
+  Bind10:   A10(c) + D10(a) -> A10(c!1).D10(a!1) kd
+  Unbind11: A11(x!1).B11(y!1) -> A11(x) + B11(y) Arrhenius(phi, Ea0)
+  Unbind12: L12(r!1).R12(l!1) -> L12(r) + R12(l) Arrhenius(phi, Ea0)
+  Open13:   A13(x!1).B13(y!1) -> A13(x).B13(y) Arrhenius(phi, Ea0)
+  Unbind14: A14(b!1).B14(a!1,c!2).C14(a!2) -> A14(b) + B14(a,c!2).C14(a!2) Arrhenius(phi, Ea0)
+  Unbind15: A15(b!1,c).B15(a!1) -> A15(b,c) + B15(a) Arrhenius(phi, Ea0)
+  Unbind16: L16(r!1).R16(l!1) -> L16(r) + R16(l) Arrhenius(phi, Ea0)
+  Unbind17: L17(r!1).R17(l!1) -> L17(r) + R17(l) Arrhenius(phi, Ea0)
+  Unbind18: L18(r!1).R18(l!1) -> L18(r) + R18(l) Arrhenius(phi, Ea0)
+  Unbind19: L19(r!1).R19(l!1) -> L19(r) + R19(l) Arrhenius(phi, Ea0)
+end reaction rules
+end model
+begin actions
+  writeXML({overwrite=>1})
+end actions

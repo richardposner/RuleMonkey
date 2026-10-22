@@ -900,6 +900,38 @@ private:
   RemoveBondProfile remove_profile_;
 };
 
+// The molecule pool as the energy-pattern matcher reads it (energy_match.hpp):
+// a component's name is its molecule type's slot name, interned.
+class PoolView {
+public:
+  PoolView(const AgentPool& pool, const std::vector<std::vector<int>>& slot_names)
+      : pool_(pool), slot_names_(slot_names) {}
+  int type_of(int mol) const { return pool_.molecule(mol).type_index; }
+  int mol_of(int comp) const { return pool_.mol_of_comp(comp); }
+  int name_of(int comp) const {
+    const MoleculeInstance& m = pool_.molecule(pool_.mol_of_comp(comp));
+    for (std::size_t k = 0; k < m.comp_ids.size(); ++k)
+      if (m.comp_ids[k] == comp)
+        return slot_names_[m.type_index][k];
+    return -1;
+  }
+  int state_of(int comp) const { return pool_.component(comp).state_index; }
+  int partner_of(int comp) const { return pool_.component(comp).bond_partner; }
+  void comps_named(int mol, int name, std::vector<int>& out) const {
+    const MoleculeInstance& m = pool_.molecule(mol);
+    const auto& names = slot_names_[m.type_index];
+    for (std::size_t k = 0; k < m.comp_ids.size(); ++k)
+      if (names[k] == name)
+        out.push_back(m.comp_ids[k]);
+  }
+
+private:
+  // Not owned: a view lives for one weight or one firing.
+  const AgentPool& pool_; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+  const std::vector<std::vector<int>>&
+      slot_names_; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members)
+};
+
 // ===========================================================================
 // Pattern matching — embedding counting
 // ===========================================================================
@@ -3930,6 +3962,7 @@ struct Engine::Impl {
   double current_time = 0;
   int64_t event_count = 0;
   int64_t null_event_count = 0;
+  bool arrhenius_bound_warned_ = false;
   int molecule_limit;
   std::mt19937_64 rng;
   bool initialized = false;
@@ -8610,6 +8643,8 @@ struct Engine::Impl {
   // For pattern-level argument binding: evaluates observables across the
   // molecule's entire complex (complex-wide scope).
   double evaluate_local_rate(const Rule& rule, int mol_id) {
+    if (rule.rate_law.arrhenius)
+      return arrhenius_weight(rule, mol_id, 0);
     // DOR1 (issue #34): this side carries no per-instance factor, so it
     // weighs in at its plain embedding count.  Returning 1 here — rather than
     // branching at every call site — keeps local_propensity = count_a/corr_a.
@@ -8621,10 +8656,130 @@ struct Engine::Impl {
 
   // FunctionProduct B-side factor f2 evaluated at a reactant-B molecule.
   double evaluate_local_rate_b(const Rule& rule, int mol_id) {
+    if (rule.rate_law.arrhenius)
+      return arrhenius_weight(rule, mol_id, 1);
     if (rule.rate_law.unity_factor_b)
       return 1.0;
     return evaluate_local_factor(rule.rate_law.function_name_b,
                                  rule.rate_law.local_arg_is_molecule_b, mol_id);
+  }
+
+  // The weight an Arrhenius rule on the exact path keeps on a molecule at one
+  // end of its bond (issue #109), an upper bound on the rate of any firing
+  // there; arrhenius_accepts thins each firing down to its own rate.
+  //  - Unbinding: the largest rate among the molecule's bonds of the rule's
+  //    kind, each counted exactly.
+  //  - Binding: dG splits into a term each end's own complex decides
+  //    (em_delta_g_end) and, for each pattern bond of the rule's kind, a
+  //    product of matches on the two sides (ArrheniusExact::Cut).  Each
+  //    end's weight carries its own term, and a product whose other side is
+  //    the cut site alone, which is then exactly this side's matches.  The
+  //    end-0 weight also carries exp(-Ea0).  A product with context on both
+  //    sides is split by class (ArrheniusExact::split): this rule takes the
+  //    pairs whose end 1 matches side 1 a given number of ways, end 1's
+  //    weight is 0 for any other, and end 0's carries the product exactly.
+  //    One with too many classes to split is carried at its largest where
+  //    that raises the rate, and not at all where it lowers it.  So end-0
+  //    weight * end-1 weight bounds every pair's rate, and equals it unless
+  //    a product is left unsplit.
+  double arrhenius_weight(const Rule& rule, int mol, int end) const {
+    const ArrheniusExact& ax = *rule.rate_law.arrhenius;
+    const RateLaw& rl = rule.rate_law;
+    const ArrheniusModel& am = model.arrhenius;
+    double const coef = ax.reverse_half ? 1.0 - rl.arr_phi : rl.arr_phi;
+    PoolView const view(pool, am.slot_names);
+    const MoleculeInstance& m = pool.molecule(mol);
+    const auto& names = am.slot_names[m.type_index];
+    double best = 0.0;
+    for (std::size_t k = 0; k < m.comp_ids.size(); ++k) {
+      if (names[k] != ax.name[end])
+        continue;
+      int const c = m.comp_ids[k];
+      int const partner = pool.component(c).bond_partner;
+      if (!ax.binding) {
+        if (partner < 0 || view.type_of(view.mol_of(partner)) != ax.type[1] ||
+            view.name_of(partner) != ax.name[1])
+          continue;
+        double const dg = em_delta_g_bond(am, ax.patterns, view, c, partner, false);
+        best = std::max(best, em_arrhenius_rate(rl.arr_ea0, rl.arr_phi, dg, ax.reverse_half));
+        continue;
+      }
+      if (partner != -1)
+        continue;
+      double dg = em_delta_g_end(am, ax.patterns, view, c);
+      bool in_class = true;
+      for (std::size_t i = 0; i < ax.cuts.size() && in_class; ++i) {
+        const auto& cut = ax.cuts[i];
+        const EmPattern& p = am.patterns[cut.pattern];
+        double const per_match = p.energy / p.automorphisms;
+        // The class this rule takes for a split cut: how many ways side 1
+        // matches, which end 0 multiplies by exactly and end 1 must have.
+        int cls = -1;
+        for (std::size_t k = 0; k < ax.split.size(); ++k)
+          if (ax.split[k] == static_cast<int>(i))
+            cls = ax.split_class[k];
+        if (end == 1) {
+          if (cls >= 0)
+            in_class = em_count_rooted(cut.side1, view, cut.root_mol1, cut.root_comp1, c) == cls;
+          else if (cut.single0 && !cut.single1)
+            dg += per_match * static_cast<double>(em_count_rooted(cut.side1, view, cut.root_mol1,
+                                                                  cut.root_comp1, c));
+          continue;
+        }
+        if (cut.single0 && !cut.single1 && cls < 0)
+          continue; // end 1 carries it
+        if (cls < 0 && !cut.single1 && -coef * p.energy <= 0)
+          continue; // the product can only lower the rate: bound it by none
+        long const left = em_count_rooted(cut.side0, view, cut.root_mol0, cut.root_comp0, c);
+        double const right = cls >= 0 ? cls : (cut.single1 ? 1.0 : cut.bound1);
+        dg += per_match * static_cast<double>(left) * right;
+      }
+      if (!in_class)
+        continue;
+      double const ea0 = end == 0 ? rl.arr_ea0 : 0.0;
+      best = std::max(best, std::exp(-(ea0 + (coef * dg))));
+    }
+    return best;
+  }
+
+  // Whether a drawn firing of an Arrhenius rule on the exact path fires
+  // (issue #109): with probability its own rate, counted on the complexes it
+  // joins or parts, over the weights it was drawn against.  A binding rule
+  // joins two complexes, as BNG2 applies a rule with two reactant patterns,
+  // so a pair already in one complex never fires, under -no-bscb too.
+  bool arrhenius_accepts(int ri, const ReactionMatch& match) {
+    const Rule& rule = model.rules[ri];
+    const ArrheniusExact& ax = *rule.rate_law.arrhenius;
+    const RateLaw& rl = rule.rate_law;
+    int const c = match.comp_ids[ax.flat[0]];
+    int const d = match.comp_ids[ax.flat[1]];
+    int const x = pool.mol_of_comp(c);
+    int const y = pool.mol_of_comp(d);
+    if (ax.binding && pool.complex_of(x) == pool.complex_of(y))
+      return false;
+    PoolView const view(pool, model.arrhenius.slot_names);
+    // A rule split by class takes only the pairs whose end-1 site is in its
+    // class (ArrheniusExact::split); a molecule with sites in several
+    // classes is drawn by each class's rule, which keeps only its own.
+    for (std::size_t k = 0; k < ax.split.size(); ++k) {
+      const ArrheniusExact::Cut& cut = ax.cuts[ax.split[k]];
+      if (em_count_rooted(cut.side1, view, cut.root_mol1, cut.root_comp1, d) != ax.split_class[k])
+        return false;
+    }
+    double const dg = em_delta_g_bond(model.arrhenius, ax.patterns, view, c, d, ax.binding);
+    double const rate = em_arrhenius_rate(rl.arr_ea0, rl.arr_phi, dg, ax.reverse_half);
+    const RuleState& rs = rule_states[ri];
+    double const bound = ax.binding ? rs.mol_aux[x].local_rate * rs.mol_aux[y].local_rate_b
+                                    : rs.mol_aux[x].local_rate;
+    if (rate > bound * (1 + 1e-9) && !arrhenius_bound_warned_) {
+      // Cannot happen if the weights are right; say so rather than run on.
+      arrhenius_bound_warned_ = true;
+      fprintf(stderr,
+              "WARN: rule '%s': an Arrhenius firing's rate %g exceeds the weight %g it was "
+              "drawn against, so the rule runs slow; please report this\n",
+              rule.name.c_str(), rate, bound);
+    }
+    return uniform() * bound < rate;
   }
 
   // Evaluate one named local-function factor at a molecule.  Backs both the
@@ -12007,6 +12162,15 @@ struct Engine::Impl {
       // draws, so rejecting them as null events realizes BNG2's rate exactly.
       if (model.rules[selected].checks_product_split &&
           !products_split_as_written(model.rules[selected], match)) {
+        timing_sample += std::chrono::duration<double>(t1 - t0).count();
+        ++null_event_count;
+        continue;
+      }
+
+      // An Arrhenius rule on the exact path (issue #109) was drawn against
+      // weights that bound its rate; keeping the firing with probability
+      // rate / bound leaves it firing at the rate BNG2 counts for it.
+      if (model.rules[selected].rate_law.arrhenius && !arrhenius_accepts(selected, match)) {
         timing_sample += std::chrono::duration<double>(t1 - t0).count();
         ++null_event_count;
         continue;

@@ -1,13 +1,10 @@
-# Issue #109, case 9: context in the Arrhenius rule's own reactant pattern.
-# Only A(s~1) unbinds; RuleMonkey's load-time expansion builds its rules from
-# the two bond sites alone and drops the s~1.  The rule must be refused.
-#   A(s~1).B: k = exp(-(Ea0 + phi*dG)), dG = -G_AB = 2 -> exp(-0.9) = 0.4066
-#   A(s~0).B: never unbinds
+# An Arrhenius rule on the exact path (issue #109) in a model with no energy
+# patterns at all: its reactant pattern carries context, so it runs as
+# itself, and with nothing to count its dG is 0 and its rate exp(-Ea0).
 begin model
 begin parameters
-  Ea0 0.2
+  Ea0 0.5
   phi 0.35
-  G_AB -2
 end parameters
 begin molecule types
   A(b,s~0~1)
@@ -17,9 +14,6 @@ begin seed species
   A(b!1,s~1).B(a!1) 1000
   A(b!1,s~0).B(a!1) 1000
 end seed species
-begin energy patterns
-  A(b!1).B(a!1) G_AB
-end energy patterns
 begin observables
   Molecules AB1 A(b!1,s~1).B(a!1)
   Molecules AB0 A(b!1,s~0).B(a!1)

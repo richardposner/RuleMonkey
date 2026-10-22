@@ -1,0 +1,180 @@
+# Reversible Arrhenius binding whose energy patterns or reactant context the
+# load-time expansion cannot price (issue #109), on the exact path: both the
+# binding rule and its reverse half run as themselves, and RuleMonkey counts
+# dG at each firing, as BioNetGen's network counts it per reaction.  phi =
+# 0.35, so a rule that took 1-phi for phi, or the reverse, shows.
+#
+# The bond is weak (G = 6, Ea0 = 8), so about a third of each pool binds by
+# t = 60 and every energy below moves its columns several standard errors.
+#
+#   AB / ABcd    Cooperativity across the bond, A(b!1,c!2).B(a!1,d!3).C(a!2).D(a!3)
+#                worth Gx = -2: a match through the new bond needs context on
+#                both sides, so the rate is not a product of the two sides'.
+#   PQ / PQcd    The same, anti-cooperative: Gy = +1.5.
+#   LR / LRR     Wildcard bonds only, L(r!+,r!+), Gw = -1: binding the second
+#                R to L(r,r).
+#   MN           The pair named twice, M(r!1,r!2).N(l!1).N(l!2), on M(r,r,r):
+#                matches over the pattern's two automorphisms.
+#   ST1 / ST0    A state in a pattern: S(b!1,s~1).T(a!1), Gs = -1.2.
+#   UVfree       A site the pattern requires free: U(b!1,c).V(a!1), Gf = 0.8,
+#   UVbound      on U with c free and c bound to C.
+#   WX1 / WX0    A state in the rule's own reactant pattern,
+#                W(b,s~1) + X(a) <-> W(b!1,s~1).X(a!1): W(s~0) never binds.
+#   GH1 / GH0    Context on the far end only, G1(b!1).H1(a!1,s~1) worth
+#                Gs = -1.2: the rule's second reactant carries the term.
+#   IJ2 / IJ1    Cooperativity across the bond whose far side can match twice:
+#                I1(b!1,c!2).J1(a!1,d!3).K1(a!2).K2(a!3), Gx = -2, on a J1
+#                that declares two d, holding two K2 or one.
+#   SP / SU      A pattern with context on both sides that RuleMonkey splits
+#                by class, A2(b!1,c!2).C2(a!2).B2(a~P!1,d!3).D2(a!3) worth
+#                Gxs = -6, on a B2 with one free site in each class
+#                (a~P and a~U), unidirectional: each site binds at its own
+#                rate, drawn by the rule for its class.
+#   YZ1 / YZ0    A bond in the rule's own reactant pattern,
+#                Y(b,c!+) + Z(a) <-> Y(b!1,c!+).Z(a!1): only a Y whose c is
+#                bound binds.
+#
+# The references are an ensemble of BioNetGen's network SSA (ssa).
+begin model
+begin parameters
+  Ea0 8
+  phi 0.35
+  G 6
+  Gx -2
+  Gy 1.5
+  Gw -1
+  Gs -1.2
+  Gf 0.8
+  Gxs -6
+end parameters
+begin molecule types
+  A(b,c)
+  B(a,d)
+  C(a)
+  D(a)
+  P(b,c)
+  Q(a,d)
+  E(a)
+  F(a)
+  L(r,r)
+  R(l)
+  M(r,r,r)
+  N(l)
+  S(b,s~0~1)
+  T(a)
+  U(b,c)
+  V(a)
+  W(b,s~0~1)
+  X(a)
+  Y(b,c)
+  Z(a)
+  K(a)
+  G1(b)
+  H1(a,s~0~1)
+  I1(b,c)
+  J1(a,d,d)
+  K1(a)
+  K2(a)
+  A2(b,c)
+  C2(a)
+  B2(a~U~P,a~U~P,d)
+  D2(a)
+end molecule types
+begin seed species
+  A(b,c!1).C(a!1) 150
+  A(b,c) 150
+  B(a,d!1).D(a!1) 150
+  B(a,d) 150
+  P(b,c!1).E(a!1) 150
+  P(b,c) 150
+  Q(a,d!1).F(a!1) 150
+  Q(a,d) 150
+  L(r,r) 150
+  R(l) 300
+  M(r,r,r) 100
+  N(l) 300
+  S(b,s~0) 150
+  S(b,s~1) 150
+  T(a) 300
+  U(b,c!1).C(a!1) 150
+  U(b,c) 150
+  V(a) 300
+  W(b,s~0) 150
+  W(b,s~1) 150
+  X(a) 300
+  Y(b,c!1).K(a!1) 150
+  Y(b,c) 150
+  Z(a) 300
+  G1(b) 300
+  H1(a,s~1) 150
+  H1(a,s~0) 150
+  I1(b,c!1).K1(a!1) 150
+  I1(b,c) 150
+  J1(a,d!1,d!2).K2(a!1).K2(a!2) 100
+  J1(a,d!1,d).K2(a!1) 100
+  J1(a,d,d) 100
+  A2(b,c!1).C2(a!1) 200
+  B2(a~P,a~U,d!1).D2(a!1) 200
+end seed species
+begin energy patterns
+  A(b!1).B(a!1) G
+  A(b!1,c!2).B(a!1,d!3).C(a!2).D(a!3) Gx
+  P(b!1).Q(a!1) G
+  P(b!1,c!2).Q(a!1,d!3).E(a!2).F(a!3) Gy
+  L(r!1).R(l!1) G
+  L(r!+,r!+) Gw
+  M(r!1).N(l!1) G
+  M(r!1,r!2).N(l!1).N(l!2) Gw
+  S(b!1).T(a!1) G
+  S(b!1,s~1).T(a!1) Gs
+  U(b!1).V(a!1) G
+  U(b!1,c).V(a!1) Gf
+  W(b!1).X(a!1) G
+  Y(b!1).Z(a!1) G
+  G1(b!1).H1(a!1) G
+  G1(b!1).H1(a!1,s~1) Gs
+  I1(b!1).J1(a!1) G
+  I1(b!1,c!2).J1(a!1,d!3).K1(a!2).K2(a!3) Gx
+  A2(b!1).B2(a!1) G
+  A2(b!1,c!2).C2(a!2).B2(a~P!1,d!3).D2(a!3) Gxs
+end energy patterns
+begin observables
+  Molecules AB A(b!1).B(a!1)
+  Molecules ABcd A(b!1,c!+).B(a!1,d!+)
+  Molecules PQ P(b!1).Q(a!1)
+  Molecules PQcd P(b!1,c!+).Q(a!1,d!+)
+  Molecules LR L(r!1).R(l!1)
+  Species LRR L(r!+,r!+)
+  Molecules MN M(r!1).N(l!1)
+  Molecules ST1 S(b!1,s~1).T(a!1)
+  Molecules ST0 S(b!1,s~0).T(a!1)
+  Molecules UVfree U(b!1,c).V(a!1)
+  Molecules UVbound U(b!1,c!+).V(a!1)
+  Molecules WX1 W(b!1,s~1).X(a!1)
+  Molecules WX0 W(b!1,s~0).X(a!1)
+  Molecules YZ1 Y(b!1,c!+).Z(a!1)
+  Molecules YZ0 Y(b!1,c).Z(a!1)
+  Molecules GH1 G1(b!1).H1(a!1,s~1)
+  Molecules GH0 G1(b!1).H1(a!1,s~0)
+  Molecules IJ2 I1(b!1,c!+).J1(a!1,d!+,d!+)
+  Molecules IJ1 I1(b!1,c!+).J1(a!1,d!+,d)
+  Molecules SP A2(b!1).B2(a~P!1)
+  Molecules SU A2(b!1).B2(a~U!1)
+end observables
+begin reaction rules
+  AB: A(b) + B(a) <-> A(b!1).B(a!1) Arrhenius(phi,Ea0)
+  PQ: P(b) + Q(a) <-> P(b!1).Q(a!1) Arrhenius(phi,Ea0)
+  LR: L(r) + R(l) <-> L(r!1).R(l!1) Arrhenius(phi,Ea0)
+  MN: M(r) + N(l) <-> M(r!1).N(l!1) Arrhenius(phi,Ea0)
+  ST: S(b) + T(a) <-> S(b!1).T(a!1) Arrhenius(phi,Ea0)
+  UV: U(b) + V(a) <-> U(b!1).V(a!1) Arrhenius(phi,Ea0)
+  WX: W(b,s~1) + X(a) <-> W(b!1,s~1).X(a!1) Arrhenius(phi,Ea0)
+  YZ: Y(b,c!+) + Z(a) <-> Y(b!1,c!+).Z(a!1) Arrhenius(phi,Ea0)
+  GH: G1(b) + H1(a) <-> G1(b!1).H1(a!1) Arrhenius(phi,Ea0)
+  IJ: I1(b) + J1(a) <-> I1(b!1).J1(a!1) Arrhenius(phi,Ea0)
+  SPU: A2(b) + B2(a) -> A2(b!1).B2(a!1) Arrhenius(phi,Ea0)
+end reaction rules
+end model
+begin actions
+  writeXML({overwrite=>1})
+end actions
