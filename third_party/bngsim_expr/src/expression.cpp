@@ -32,6 +32,7 @@
 #include <deque>
 #include <initializer_list>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -94,18 +95,38 @@ namespace bngsim {
 // The region, from 1599 argument triples checked against a 40 to 60 digit
 // reference:
 //
-//   * `a` a non-positive integer: safe by construction, not by measurement. The
+//   * `a` a negative integer: safe by construction, not by measurement. The
 //     odd partial numerator carries z*(a+k) and reaches exactly zero at k = -a,
 //     so the fraction TERMINATES. What it computes there is a finite exact sum.
+//     Not `a == 0`: the odd numerators start at k = 1, so for a = 0 none of them
+//     vanishes and the fraction runs on (issue #768). mratio(0, 1, 100) is
+//     (e^100 - 1)/100 = 2.69e41 and this returned 1.28e15; mratio(0, 0.5, 40)
+//     came back negative.
 //   * `a <= 0` with `z <= 0`: 487 triples, none wrong. This is also where BNG
 //     models live, since a model builds a = -min(AT,BT) and z = -1/Keq. It
 //     stays true when a fit moves the counts off the integers, which is why the
 //     rule is written this way rather than as a bound on |z*a|/b^2 alone: such
 //     a bound refuses test_Mratio_1's own fit path.
+//     Except past z = -20 with b - a < 1, which the grid never reached (issue
+//     #1080). There the fraction converges to the ratio but loses about
+//     10*eps*sqrt(-z)/(b - a) of it, so with both b and |a| tiny it is wrong:
+//     with b in [1e-12, 10], |a| in [1e-15, 10] and z in [-2000, 0], 2605 of
+//     20000 triples were off by more than 1e-8, the worst by 1.2e-2, and past
+//     z = -1e5 by factors. mratio(-1e-12, 1e-9, -25) returned 5.56205069e-11
+//     where the ratio is 5.56205472e-11. That corner is summed directly up to
+//     z = -700 (mratio_series below) and refused here, which leaves anything
+//     further out to the asymptotic route. With b - a >= 1 the loss is below
+//     1e-13 out to z = -1e6, and what BNG builds, a = -min(AT,BT) with
+//     b = |AT-BT| + 1, has b - a >= 1 in any case.
 //   * |z| <= 20: the fraction was right at every one of 3400 hostile triples
 //     with |z| up to 50, chosen with small b and a on both sides of zero. The
 //     first wrong answer anywhere appears at |z| = 60 and is marginal (2e-08);
 //     the first serious one at |z| = 75. Twenty leaves a factor of three.
+//     No false limit there, but not every digit either (issue #1080): with
+//     |a| tiny next to a b below 1 the fraction lost up to 4.4e-7 near z = 20,
+//     and with b itself tiny just over 1e-8 near z = -20, here and in the
+//     clause above. Those arguments never reach this rule now; see
+//     mratio_series below.
 //   * b^2 >= 64*|z*a|, and for a positive z also 2*z <= b: the odd partial
 //     numerators are z*(a+k)/((b+k-2)(b+k-1)), so the first half of this is the
 //     statement that they start small and the fraction is a contraction from
@@ -113,6 +134,15 @@ namespace bngsim {
 //     with a margin: 32 was the last value that leaked nothing and 16 still let
 //     two through. The second half bounds the even partial numerators, which
 //     the first half does not reach at all; see the note on issue #456 below.
+//
+// All of it for `b > 0` only (issue #768). The grids behind every clause had a
+// positive b, and with b negative and not an integer the fraction settles on a
+// false limit inside each of them: 21 of 200 triples wrong at a < 0 and z <= 0
+// (mratio(-22.52, -25.18, -12.00) came back positive where the ratio is
+// -2.337), 28 of 200 at |z| <= 20, and 16 of 200 even where a is a negative
+// integer and the fraction terminates, out to the wrong sign
+// (mratio(-20, -23.34, -10.87) returned 5.935 where the ratio is -2.073). BNG
+// builds b = |AT-BT| + 1, so no model it writes has b <= 0.
 //
 // Everything else is refused, unless the asymptotic route below can vouch for
 // an answer of its own. That still gives up cases the fraction would have got
@@ -134,8 +164,14 @@ namespace bngsim {
 // Half of b leaves a factor of two under a threshold whose position is
 // understood rather than merely observed.
 static bool mratio_cf_is_trustworthy(double a, double b, double z) {
-    if (a <= 0.0 && a == std::floor(a)) {
+    if (!(b > 0.0)) {
+        return false;
+    }
+    if (a < 0.0 && a == std::floor(a)) {
         return true;
+    }
+    if (a <= 0.0 && z < -20.0 && b - a < 1.0) {
+        return false;
     }
     if (a <= 0.0 && z <= 0.0) {
         return true;
@@ -274,16 +310,30 @@ static bool mratio_asymptotic(double a, double b, double z, double *out) {
     if (z < 0.0) {
         const double x = -1.0 / z;
         sum_num = mratio_2f0(a + 1.0, a - b + 1.0, x, &err_num);
-        sum_den = mratio_2f0(a, a - b + 1.0, x, &err_den);
+        // a == 0 is M(0, b, z) = 1, which is all its expansion says: every term
+        // after the first carries a, and with 1/Gamma(a) = 0 it drops no branch.
+        // The zero-term rule above would report the unit first term as the
+        // error and refuse; it guards a sum that stopped without showing it had
+        // decayed, and this one is exact. It matters for a = 0 past z = -700
+        // with 0 < b < 1 (issue #1080), the one a = 0, z < 0, b > 0 the rule
+        // refuses, which the fraction got right unless b was tiny. A b <= 0
+        // asks here too and is answered on the same terms as any other.
+        if (a == 0.0) {
+            sum_den = 1.0;
+            err_den = 0.0;
+        } else {
+            sum_den = mratio_2f0(a, a - b + 1.0, x, &err_den);
+        }
         coeff = b / (-z);
     } else {
+        // a == 0 would divide by zero below. With z > 0 it is summed exactly
+        // before the fraction is asked (issue #768); refused here in any case.
+        if (a == 0.0) {
+            return false;
+        }
         const double x = 1.0 / z;
         sum_num = mratio_2f0(b - a, -a, x, &err_num);
         sum_den = mratio_2f0(b - a, 1.0 - a, x, &err_den);
-        // a == 0 would divide by zero here, but it is a non-positive integer, so
-        // the fraction is trusted there and this is never reached with it. The
-        // dropped-branch test below refuses it in any case, since lgamma(0) is
-        // +inf.
         coeff = b / a;
     }
     if (sum_num == 0.0 || sum_den == 0.0 || !mratio_is_finite(sum_num) ||
@@ -471,7 +521,161 @@ std::string expr_compat::exact_literals(const std::string &expr) {
     return out;
 }
 
+// a == 0 has a closed form (issue #768): M(0, b, z) = 1, so the ratio is
+// M(1, b+1, z) = sum_k z^k / (b+1)_k. For b > 0 and z > 0 every term is
+// positive, so the sum carries no cancellation, where the fraction runs on at
+// a = 0 (no odd numerator vanishes) and is only marginal inside |z| <= 20:
+// mratio(0, 1, 20) came out 8.7e-9 off. Not quite good to rounding, since each
+// term adds one: against mpmath over b up to 1e4 and z up to 2e4 the worst
+// was 2.6e-13. Past the largest term, at k = z - b - 1, the terms fall faster
+// than geometrically, so a term below eps of the sum ends it. A sum past the
+// largest double is +inf, which is the ratio rounded; the non-finite warner
+// reports it as such. The cap is reached only with b past about 5e8 and z
+// near b, where the terms fall too slowly (b = 5e8 with z = b + 8.3e5 needs
+// 1.06e6 terms, and its ratio is a finite e^704); the NaN then sends the call
+// on to the rule above, which refuses a = 0 with 2*z > b.
+//
+// The inf and NaN tests are comparisons rather than isinf/isnan because the
+// generated copy has to spell them that way (see mratio_is_finite), and the two
+// copies are kept spelled alike.
+static double mratio_a_zero_series(double b, double z) {
+    double term = 1.0;
+    double sum = 1.0;
+    for (int k = 0; k < 1000000; ++k) {
+        term *= z / (b + 1.0 + k);
+        sum += term;
+        if (sum > 1.7976931348623157e308) { // +inf
+            return sum;
+        }
+        if (z < b + 1.0 + k && term <= 1.0e-17 * sum) {
+            return sum;
+        }
+    }
+    return std::numeric_limits<double>::quiet_NaN();
+}
+
+// ─── Both series summed, where the fraction loses digits (issue #1080) ───────
+//
+// Inside |z| <= 20 the fraction converges to the ratio, but not to all of it.
+// It loses digits in proportion to how large the ratio is, about 1e-14*|R| for
+// a positive z. The ratio is large there when a is tiny next to b and b < 1:
+// M(a, b, z) stays near 1 while M(a+1, b+1, z) grows like e^z/b, so R reaches
+// 1e8 to 1e9 as z approaches 20. mratio(-1e-12, 0.0266641568, 19.3105334) came
+// out 2.235481406e8 where the ratio is 2.235481880e8. A tiny b with z near -20
+// loses the same way at the other end, where R is about 1e-9. Against mpmath at
+// 60 digits, over 20000 triples with |a| in [1e-15, 1e-2], b in [1e-9, 10] and
+// z in (-20, 20], 210 were off by more than 1e-8, the worst by 4.4e-7.
+//
+// Both Kummer functions are summed directly instead, when b > 0 and |alpha| < 1:
+//
+//   z > 0:  alpha = a,      R = M(alpha+1, b+1, x) / M(alpha, b, x),  x = z
+//   z < 0:  alpha = b - a,  R = M(alpha,   b+1, x) / M(alpha, b, x),  x = -z
+//
+// The second line is Kummer's transformation M(a, b, z) = e^z M(b-a, b, -z)
+// applied to both functions, whose e^z factors cancel. In that box the
+// numerator's terms all share one sign from the second onward, and so do the
+// denominator's: (alpha)_k keeps the sign of alpha once alpha + 1 > 0, and the
+// numerator's first parameter is alpha + 1 > 0 when z > 0. So the sums cancel
+// only where a Kummer function is itself near zero. That is a pole or a zero of
+// the ratio, where the problem is ill-conditioned whatever computes it.
+//
+// The denominator is summed times b, which keeps its second term alpha*x finite
+// however small b is. The fraction has no such care: mratio(0.5, 1e-300, 10)
+// came back as 1e-32, its Lentz floor, where the ratio is 2.1e-300.
+// Nothing overflows: for |alpha| < 1 and x <= 20 the numerator is below
+// (1+x)*e^x, and the denominator's terms after b add up to less than x*e^x.
+//
+// Measured against the same reference: none of 60000 triples drawn as above is
+// off by more than 1e-8 (worst 1.0e-12, beside a pole), and none of 20000 over
+// the whole box with b from 1e-300 to 1e8 (worst 2.7e-14). Placed within 1e-15
+// to 1e-3 of a pole, where the fraction is off by factors, the value is the
+// exact ratio at an `a` 1 to 16 ulps away, 4 or fewer in 1994 of 2193 cases.
+// That error is the problem's conditioning, not the method's.
+//
+// The box keeps the fraction everywhere else, which is where it measured clean
+// (0 of 20000 off with |a| in [1e-2, 10]): a negative integer a (BNG's) never
+// enters the box, and neither does a z < 0 with b >= 1 + a.
+//
+// Past z = -20 the fraction's loss goes on, and grows, where a <= 0 and
+// b - a < 1 (see mratio_cf_is_trustworthy). That corner is in the box out to
+// z = -700. With a <= 0, alpha = b - a is at least b, so every term of both
+// series is positive and nothing cancels at all. The bounds above become e^x
+// for the numerator and b + alpha*x*e^x for the denominator, under the largest
+// double for x <= 700. Past that the asymptotic route answers. There the branch
+// it drops is about x*e^(-x)/(b - a) of the one it keeps, so it vouches for
+// every b - a above about 1e-290; below that, out to z = -775 at most, the call
+// is refused, where the fraction returned its Lentz floor. Against mpmath, none
+// of 60000 triples with b in [1e-12, 10], |a| in [1e-15, 10] and z in
+// [-2000, 0] is off by more than 1e-8 (worst 4.2e-14; the fraction was off by
+// more than 1e-8 in 2605 of 20000, by up to 1.2e-2), and none of 6000 with b
+// down to 1e-300 and z out to -1e9 (worst 1.2e-14). It is slower than the
+// fraction was: about 7 us at z = -700 for the series and just past it for the
+// asymptotic route, against 2 us, and the same 6 us by z = -5000.
+//
+// The sum stops once a term is below 1e-17 of its series' absolute sum and the
+// ratio of successive terms is at most 1/2 for good. Each ratio is below
+// 2*x/(k+1), so from k + 1 >= 4*x on the rest of a series is no larger than its
+// last term. That is about 100 terms inside |z| <= 20 and 2800 at z = -700.
+//
+// The NaN test is a comparison, not isnan, for the reason given at
+// mratio_is_finite: the generated copy has to spell it so, and the two copies
+// are kept alike. A computed denominator of exactly zero gives an infinity,
+// which is a pole rounded, and the non-finite warner reports it.
+static bool mratio_series(double a, double b, double z, double *out) {
+    if (!(b > 0.0) || !mratio_is_finite(b) || z == 0.0) {
+        return false;
+    }
+    const double x = z > 0.0 ? z : -z;
+    const double alpha = z > 0.0 ? a : b - a;
+    const double shift = z > 0.0 ? 1.0 : 0.0;
+    if (!(alpha > -1.0 && alpha < 1.0)) {
+        return false;
+    }
+    if (!(x <= 20.0) && !(z < 0.0 && a <= 0.0 && x <= 700.0)) {
+        return false;
+    }
+    double tn = 1.0; // a term of M(alpha + shift, b + 1, x)
+    double sn = 1.0;
+    double an = 1.0;
+    double td = b; // a term of b * M(alpha, b, x)
+    double sd = b;
+    double ad = b;
+    for (int k = 0; k < 3000; ++k) {
+        tn = tn * ((alpha + shift + k) / (b + 1.0 + k)) * (x / (k + 1.0));
+        if (k == 0) {
+            td = alpha * x;
+        } else {
+            td = td * ((alpha + k) / (b + k)) * (x / (k + 1.0));
+        }
+        sn += tn;
+        sd += td;
+        an += std::abs(tn);
+        ad += std::abs(td);
+        if (k + 1.0 >= 4.0 * x && std::abs(tn) <= 1.0e-17 * an && std::abs(td) <= 1.0e-17 * ad) {
+            // b * sn would overflow for a b near the largest double, and sd / b
+            // for a tiny one, so the division is ordered by which side of 1 b is.
+            const double value = b < 1.0 ? b * sn / sd : sn / (sd / b);
+            if (!(value == value)) { // NaN
+                return false;
+            }
+            *out = value;
+            return true;
+        }
+    }
+    return false;
+}
+
 double expr_compat::mratio(double a, double b, double z) {
+    if (a == 0.0 && b > 0.0 && z > 0.0) {
+        const double summed = mratio_a_zero_series(b, z);
+        if (summed == summed) { // not NaN
+            return summed;
+        }
+    }
+    double series = 0.0;
+    if (mratio_series(a, b, z, &series)) {
+        return series;
+    }
     if (!mratio_cf_is_trustworthy(a, b, z)) {
         double asymptotic = 0.0;
         if (mratio_asymptotic(a, b, z, &asymptotic)) {
@@ -482,11 +686,12 @@ double expr_compat::mratio(double a, double b, double z) {
             "arguments and would return a wrong value without saying so, and the asymptotic "
             "expansion that covers part of the rest cannot vouch for an answer here either (a=" +
             std::to_string(a) + ", b=" + std::to_string(b) + ", z=" + std::to_string(z) +
-            "). The fraction is reliable when a is a non-positive integer, when a <= 0 and "
-            "z <= 0, when |z| <= 20, or when b*b >= 64*|z*a| and z is either negative or no "
-            "more than half of b. BNG builds a = -min(AT,BT) and z = -1/Keq, which is inside "
-            "that region, so a model reaching this is using mratio in its own way. See "
-            "lanl/bngsim issues #453 and #456.");
+            "). The fraction is reliable for b > 0, and then when a is a negative integer, "
+            "when a <= 0 and z <= 0 (past z = -20 only with b - a >= 1), when |z| <= 20, or "
+            "when b*b >= 64*|z*a| and z is either negative or no more than half of b. BNG "
+            "builds a = -min(AT,BT), b = |AT-BT|+1 and z = -1/Keq, which is inside that "
+            "region, so a model reaching this is using mratio in its own way. See "
+            "lanl/bngsim issues #453, #456, #768 and #1080.");
     }
     constexpr double eps = 1.0e-16;
     constexpr double tiny = 1.0e-32;
@@ -550,7 +755,19 @@ double expr_compat::mratio(double a, double b, double z) {
         if (std::abs(D) < tiny) {
             D = tiny;
         }
-        double C = q + p / Csave;
+        // C_1 = 1 + 1/tiny stands for infinity, so the step after it is
+        // C_2 = 1 exactly. Taking p/C_1 literally added p*1e-32, with
+        // p_2 = z*(a-b)/(b*(b+1)), and a b below about 1e-22 makes that
+        // anything at all: mratio(-4.12, 2.4e-279, -1.45) returned 1e-32, the
+        // floor, where the ratio is 8.5e-280 (issue #1080). While |p_2| is
+        // below 5.5e15, 1 + p*1e-32 rounds to 1, so nothing there changes by a
+        // bit; for BNG's arguments (b >= 1) passing it takes an equilibrium
+        // constant below 1e-16 times the larger count, 1e-13 at a thousand
+        // copies, and there it moves within rounding. A p_2 that overflowed
+        // keeps the old arithmetic, which makes the NaN it always made there.
+        // (Not mratio_is_finite, which stops at 1e308: a p_2 just under the
+        // largest double is a ratio near 1e-308, which still wants this step.)
+        double C = (j == 2 && std::abs(p) <= 1.7976931348623157e308) ? q : q + p / Csave;
         if (std::abs(C) < tiny) {
             C = tiny;
         }
@@ -1222,9 +1439,20 @@ ExprTkEvaluator::ExprTkEvaluator() : impl_(std::make_unique<Impl>()) {}
 
 ExprTkEvaluator::~ExprTkEvaluator() = default;
 
-void ExprTkEvaluator::define_variable(const std::string &name, double *addr) {
+bool ExprTkEvaluator::try_define_variable(const std::string &name, double *addr) {
     std::string mapped = expr_compat::compute_registration_name(name);
-    if (!impl_->symbol_table.add_variable(mapped, *addr)) {
+    if (!impl_->symbol_table.add_variable(mapped, *addr))
+        return false;
+    if (mapped != name && (name.empty() || name[0] != '_')) {
+        impl_->mangled_user_names[name] = mapped;
+    }
+    impl_->scalar_variable_names.insert(name);
+    return true;
+}
+
+void ExprTkEvaluator::define_variable(const std::string &name, double *addr) {
+    if (!try_define_variable(name, addr)) {
+        const std::string mapped = expr_compat::compute_registration_name(name);
         const bool reserved = expr_compat::is_exprtk_reserved(name);
         std::string detail;
         if (reserved) {
@@ -1235,28 +1463,45 @@ void ExprTkEvaluator::define_variable(const std::string &name, double *addr) {
                      mapped +
                      "', and that mangled key is already registered. Rename one of the "
                      "conflicting parameters.";
-        } else {
+        } else if (impl_->symbol_table.symbol_exists(mapped)) {
             detail = "name '" + name + "' (mapped: '" + mapped +
                      "') is already registered. Check the .net file for duplicate "
                      "parameter / observable / species names (case-sensitive).";
+        } else {
+            // add_variable gives the same `false` for a name that is no ExprTk
+            // symbol as for a duplicate, and a name like `k-1` or `2k` was told
+            // to look for a duplicate that is not there. Nothing holds the name,
+            // so the name itself was refused.
+            detail = "name '" + name + "' (mapped: '" + mapped +
+                     "') is not a valid identifier: one starts with a letter or an "
+                     "underscore and holds only letters, digits, underscores and "
+                     "periods (not as its last character). Rename it.";
         }
         throw std::runtime_error("ExprTk: failed to register variable '" + name + "'. " + detail);
     }
-    if (mapped != name && (name.empty() || name[0] != '_')) {
-        impl_->mangled_user_names[name] = mapped;
-    }
-    impl_->scalar_variable_names.insert(name);
 }
 
 void ExprTkEvaluator::define_constant(const std::string &name, double value) {
     impl_->add_remapped_constant(name, value);
 }
 
+// symbol_table.add_function() refuses a name that is already registered, or
+// that is not a valid ExprTk symbol, and the expression that later reads the
+// name binds whatever is there. define_variable throws on the same refusal; a
+// function has to as well, or a second table under one name (issue #772) is
+// dropped while the model goes on as if it had been registered.
+static void throw_function_not_registered(const std::string &name) {
+    throw std::runtime_error("ExprTk: failed to register function '" + name +
+                             "': the name is already registered or is not a valid "
+                             "identifier.");
+}
+
 void ExprTkEvaluator::define_function(const std::string &name, Func0 fn) {
     auto adapter = std::make_unique<StdFunc0Adapter<double>>(std::move(fn));
     adapter->warner = &impl_->nonfinite_warner;
     adapter->fname = name;
-    impl_->symbol_table.add_function(name, *adapter);
+    if (!impl_->symbol_table.add_function(name, *adapter))
+        throw_function_not_registered(name);
     impl_->user_functions.push_back(std::move(adapter));
 }
 
@@ -1264,7 +1509,8 @@ void ExprTkEvaluator::define_function(const std::string &name, Func1 fn) {
     auto adapter = std::make_unique<StdFunc1Adapter<double>>(std::move(fn));
     adapter->warner = &impl_->nonfinite_warner;
     adapter->fname = name;
-    impl_->symbol_table.add_function(name, *adapter);
+    if (!impl_->symbol_table.add_function(name, *adapter))
+        throw_function_not_registered(name);
     impl_->user_functions.push_back(std::move(adapter));
 }
 
@@ -1272,7 +1518,8 @@ void ExprTkEvaluator::define_function(const std::string &name, Func2 fn) {
     auto adapter = std::make_unique<StdFunc2Adapter<double>>(std::move(fn));
     adapter->warner = &impl_->nonfinite_warner;
     adapter->fname = name;
-    impl_->symbol_table.add_function(name, *adapter);
+    if (!impl_->symbol_table.add_function(name, *adapter))
+        throw_function_not_registered(name);
     impl_->user_functions.push_back(std::move(adapter));
 }
 
@@ -1280,7 +1527,8 @@ void ExprTkEvaluator::define_function(const std::string &name, Func3 fn) {
     auto adapter = std::make_unique<StdFunc3Adapter<double>>(std::move(fn));
     adapter->warner = &impl_->nonfinite_warner;
     adapter->fname = name;
-    impl_->symbol_table.add_function(name, *adapter);
+    if (!impl_->symbol_table.add_function(name, *adapter))
+        throw_function_not_registered(name);
     impl_->user_functions.push_back(std::move(adapter));
 }
 
