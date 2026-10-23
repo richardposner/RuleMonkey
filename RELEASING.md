@@ -58,6 +58,10 @@ the citation metadata:
 `build/<preset>/RuleMonkeyConfigVersion.cmake` is generated from
 `CMakeLists.txt` at configure time. Never edit it; check it in step 3.
 
+The date appears twice, in the changelog heading and in `date-released`. If the
+release PR merges on a later day than the one written, move both before
+tagging.
+
 ## 1. Close The Changelog
 
 Turn the open `## [Unreleased]` heading into the release section, leaving an
@@ -131,11 +135,12 @@ venv and `uvx` is the way to run it at CI's pin. The build writes `site/`, which
 is gitignored.
 
 ```bash
-.venv/bin/pre-commit run --files CHANGELOG.md CMakeLists.txt pyproject.toml CITATION.cff
+pre-commit run --files CHANGELOG.md CMakeLists.txt pyproject.toml CITATION.cff
 ```
 
-`pre-commit` *is* in `.venv`. Most hooks skip on this file set — that is
-expected, not a misconfiguration.
+Use `.venv/bin/pre-commit` if you set up the `.venv` the README describes; any
+`pre-commit` works, since it installs its own pinned hooks. Most hooks skip on
+this file set — that is expected, not a misconfiguration.
 
 ## 4. Commit And Pull Request
 
@@ -154,23 +159,29 @@ number moved the way it did. Cover:
   noting PyPI is out of scope.
 - A `Verified:` line listing all four gates from step 3 with their results.
 
-CI runs nine checks: `build` on macOS/Ubuntu/Windows, `asan` on macOS/Ubuntu,
-`clang_tidy`, `feature_coverage`, `perf_diff`, and `vendor_check`. Wait for all
-nine. `vendor_check` clones `lanl/bngsim` and byte-compares the vendored
+CI runs ten checks: `build` on macOS/Ubuntu/Windows, `asan` on macOS/Ubuntu,
+`tsan`, `clang_tidy`, `feature_coverage`, `perf_diff`, and `vendor_check`. Wait
+for all ten. `vendor_check` clones `lanl/bngsim` and byte-compares the vendored
 expression layer against it, so a green one here is also the first half of the
 evidence that step 7 will not be blocked.
 
-Squash-merge.
+Merge with a merge commit, not a squash. 3.11.0 and the PRs around it were
+merged that way, so the release commit keeps its message on `main`.
 
 ## 5. Tag
 
-Annotated tag, on the squashed release commit on `main`:
+Annotated tag, on the merge commit on `main`. First confirm its tree is the
+release commit's, so the tag names exactly what was verified:
 
 ```bash
 git checkout main && git pull --ff-only origin main
-git tag -a vX.Y.Z -m "RuleMonkey X.Y.Z" <release-commit>
+git diff <release-commit> <merge-commit>    # must print nothing
+git tag -a vX.Y.Z -m "RuleMonkey X.Y.Z" <merge-commit>
 git push origin vX.Y.Z
 ```
+
+3.11.0's tag is on its merge commit, f11c251, and BNGsim's `VENDOR.json`
+records that commit.
 
 Every 3.x tag is annotated with the message `RuleMonkey X.Y.Z`. A lightweight
 tag would break that consistency and lose the tagger date the release list
