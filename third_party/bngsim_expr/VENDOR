@@ -9,7 +9,7 @@ target instead.
 
 Source repo  : git@github.com:lanl/bngsim.git
 Source subdir: .
-Pinned commit: 6ce22768c8ccdcfb02b5ba999e0d84698d6726ad
+Pinned commit: 4361958f39a27b153974cff7f219d02627c0f3b8
 Metadata     : third_party/bngsim_expr/VENDOR.json
 
 Vendored files (copied verbatim, no edits):

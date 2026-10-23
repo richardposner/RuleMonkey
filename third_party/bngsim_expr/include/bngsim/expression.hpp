@@ -20,6 +20,13 @@ class ExpressionEvaluator {
     // Bind a named variable to a memory location (updated externally)
     virtual void define_variable(const std::string &name, double *addr) = 0;
 
+    // As define_variable, but a name that cannot be registered (one already
+    // registered, or not a valid symbol, like a .net species name `A()`) is
+    // refused by returning false instead of throwing. For the callers that skip
+    // such a name: a thrown and caught exception for each one cost a clone of a
+    // 300-species .net model 2 ms (issue #919).
+    virtual bool try_define_variable(const std::string &name, double *addr) = 0;
+
     // Define a named constant
     virtual void define_constant(const std::string &name, double value) = 0;
 
@@ -109,6 +116,7 @@ class ExprTkEvaluator : public ExpressionEvaluator {
     ExprTkEvaluator &operator=(ExprTkEvaluator &&) noexcept;
 
     void define_variable(const std::string &name, double *addr) override;
+    bool try_define_variable(const std::string &name, double *addr) override;
     void define_constant(const std::string &name, double value) override;
 
     void define_function(const std::string &name, Func0 fn) override;
