@@ -7,30 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.13.0] — 2026-11-12
+
 ### Deprecated
 
 - **`-no-bscb` and `set_block_same_complex_binding(false)` (issue #139).**
   Both turn off, for nearly every rule, the checks that apply BNGL's `+`:
   a bimolecular rule may then take both reactants from one complex, and a
-  rule's products need not come apart. That is NFsim run with neither `-cb` nor `-bscb`, a mode
-  without complex bookkeeping, and not a reading of BNGL: BNG2's network
-  never lets one complex supply both reactant patterns of a `+`, and
-  generates no reaction for a `+` that cannot hold. The flag let RM be
-  compared with NFsim references made in that mode, and those were
-  regenerated with `-bscb` on 2026-04-10. BNG2.pl's `simulate_nf` passes
-  `-cb` by default, and in NFsim 1.14.3 `-cb` alone already blocks
-  same-complex binding, so few NFsim runs ever used the loose mode.
-  Behaviour is unchanged. The first call with `false` in a process now
-  prints a one-line deprecation warning to stderr, which covers `rm_driver`
-  and `rm_scan` too, and `-no-bscb` is gone from their usage text. 4.0
-  removes the flag, the method and the mode, and RM then always applies
-  the `+`; a call with `true` only sets the default and can be deleted
-  now. Until then a new test, `no_bscb_deprecation_test`, pins the mode on
-  one `A(x,y!1).B(x,y!1)` dimer under `A(x) + B(x) <-> A(x!1).B(x!1)`: the
-  free x sites close the ring at kf and open it at kr with the flag off,
-  closed a fraction kf/(kf+kr) of the time as NFsim does with no flags
-  (0.46 and 0.48 at kf = kr = 1, two seeds), and never with it on, as in
-  BNG2's network and NFsim with `-cb` or `-bscb`.
+  rule's products need not come apart. That is NFsim run with neither
+  `-cb` nor `-bscb`, a mode without complex bookkeeping, and not a reading
+  of BNGL: BNG2's network never lets one complex supply both reactant
+  patterns of a `+`, and generates no reaction for a `+` that cannot hold.
+  The flag let RM be compared with NFsim references made in that mode, and
+  those were regenerated with `-bscb` on 2026-04-10. BNG2.pl's
+  `simulate_nf` passes `-cb` by default, and in NFsim 1.14.3 `-cb` alone
+  already blocks same-complex binding, so few NFsim runs ever used the
+  loose mode. Behaviour is unchanged. The first call with `false` in a
+  process now prints a one-line deprecation warning to stderr, which
+  covers `rm_driver` and `rm_scan` too, and `-no-bscb` is gone from their
+  usage text. 4.0 removes the flag, the method and the mode, and RM then
+  always applies the `+`; a call with `true` only sets the default and can
+  be deleted now. Until then a new test, `no_bscb_deprecation_test`, pins
+  the mode on one `A(x,y!1).B(x,y!1)` dimer under `A(x) + B(x) <->
+  A(x!1).B(x!1)`: the free x sites close the ring at kf and open it at kr
+  with the flag off, closed a fraction kf/(kf+kr) of the time as NFsim
+  does with no flags (0.46 and 0.48 at kf = kr = 1, two seeds), and never
+  with it on, as in BNG2's network and NFsim with `-cb` or `-bscb`.
 
 ### Fixed
 
@@ -3666,7 +3668,8 @@ The legacy implementation, RuleMonkey 2.0.25, was introduced in:
 > RG. *RuleMonkey: software for stochastic simulation of rule-based
 > models.* BMC Bioinformatics 11:404 (2010). PMID: 20673321.
 
-[Unreleased]: https://github.com/richardposner/RuleMonkey/compare/v3.12.0...HEAD
+[Unreleased]: https://github.com/richardposner/RuleMonkey/compare/v3.13.0...HEAD
+[3.13.0]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.13.0
 [3.12.0]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.12.0
 [3.11.0]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.11.0
 [3.10.1]: https://github.com/richardposner/RuleMonkey/releases/tag/v3.10.1

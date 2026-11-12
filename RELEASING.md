@@ -236,5 +236,6 @@ python3 bngsim/scripts/vendor_rulemonkey.py --rulemonkey-repo /tmp/rulemonkey-ve
 Neither `rulemonkey` nor `rulemonkey-harness` exists on PyPI, and
 `pyproject.toml` is not a distribution — it declares no build backend, and
 `harness/` is a flat directory of scripts with no package layout. There is
-nothing to upload. Tracked separately; both 3.10.0 and 3.10.1 say so explicitly
-in their release commits.
+nothing to upload. Issue #77 tracked publishing them and was closed as not
+planned on 2026-11-12: Python access to RuleMonkey is through BNGsim, which
+vendors it. Release commits say so explicitly, as 3.10.0 and 3.10.1 did.
