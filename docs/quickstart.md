@@ -51,9 +51,12 @@ build/release/rm_driver my_model.xml 10 100 7 > traj.gdat
 
 ### Strict BNGL semantics (default)
 
-`rm_driver` enables `block_same_complex_binding` by default, matching
-NFsim's `-bscb` flag.  Pass `-no-bscb` for parity with NFsim runs that
-omitted `-bscb`.  See [`model_semantics.md`](model_semantics.md).
+`rm_driver` applies BNGL's `+` as BioNetGen's network does
+(`block_same_complex_binding`): a bimolecular rule takes its reactants
+from different complexes, and molecules written into different product
+patterns end in different complexes.  The `-no-bscb` flag, which turns
+this off, is deprecated and will be removed in 4.0.  See
+[`model_semantics.md`](model_semantics.md) § "Strict BNGL semantics".
 
 ### State save / restore
 

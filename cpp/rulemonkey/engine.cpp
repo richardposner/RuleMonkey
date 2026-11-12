@@ -12078,8 +12078,10 @@ struct Engine::Impl {
       //
       // This enforces the RHS-`+` half of strict BNGL semantics.  It is
       // gated on `block_same_complex_binding` so that both halves of the
-      // `+` check (LHS binding and RHS unbinding) toggle together, matching
-      // NFsim's `-bscb` (which implies `-cb` and enables both checks).
+      // `+` check (LHS binding and RHS unbinding) toggle together; off is
+      // the deprecated loose mode (issue #139).  NFsim's `-bscb` blocks
+      // same-complex binding but does not always make this test
+      // (RuleWorld/nfsim#61).
       if (model.block_same_complex_binding &&
           !products_stay_apart(model.rules[selected], match, selected)) {
         timing_sample += std::chrono::duration<double>(t1 - t0).count();

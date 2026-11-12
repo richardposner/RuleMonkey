@@ -320,7 +320,7 @@ def main():
             "- RM event count comes from `RM_PRINT_TIMING=1` stderr "
             "(`events=N null=N`); NFsim event count from stdout "
             "(`You just simulated N reactions`).  Both count accepted SSA events.\n"
-            "- `-bscb` (Bind-Single-Copy-Bond) enabled on both engines.\n"
+            "- `-bscb` (block same-complex binding) enabled on both engines.\n"
             "- `n_steps` held constant; per-event cost should track engine work, "
             "not observable I/O.\n"
             "- Each rep uses a distinct seed (1..N), so event totals differ "

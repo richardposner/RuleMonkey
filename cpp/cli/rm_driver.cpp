@@ -1,5 +1,5 @@
 // RuleMonkey batch driver: run a model from XML and output .gdat format.
-// Usage: rm_driver <xml_path> <t_end> <n_steps> [seed] [-no-bscb]
+// Usage: rm_driver <xml_path> <t_end> <n_steps> [seed]
 //        [--ignore-unsupported] [--save-state <path>] [--load-state <path>]
 //        [--t-start <time>] [--print-functions] [--species <path>]
 //        [--reps <n> [--threads <n>] [--sd-out <path>]]
@@ -8,9 +8,11 @@
 //         --print-functions)
 // Stderr: CPU time in seconds
 //
-// RuleMonkey defaults to strict BNGL semantics (block_same_complex_binding=true,
-// matching NFsim -bscb).  Pass -no-bscb to disable the checks for testing
-// against NFsim runs that were done without -bscb/-cb.
+// RuleMonkey applies BNGL's `+` as BNG2.pl's network does
+// (block_same_complex_binding=true).  -no-bscb, which drops those checks
+// and runs NFsim's loose mode without complex bookkeeping, is deprecated
+// and goes in 4.0 (issue #139); the library prints the deprecation
+// warning.  -bscb, the default, is accepted.
 //
 // Pass --ignore-unsupported to suppress errors for unsupported BNGL features
 // in the XML (warnings are always printed).
@@ -130,7 +132,7 @@ void write_gdat(std::ostream& out, const std::vector<double>& time,
 
 int main(int argc, char* argv[]) {
   if (argc < 4) {
-    std::cerr << "Usage: rm_driver <xml_path> <t_end> <n_steps> [seed] [-no-bscb]"
+    std::cerr << "Usage: rm_driver <xml_path> <t_end> <n_steps> [seed]"
                  " [--ignore-unsupported] [--save-state <path>]"
                  " [--load-state <path>] [--t-start <time>] [--print-functions]"
                  " [--species <path>] [--reps <n> [--threads <n>] [--sd-out <path>]]\n";
@@ -167,7 +169,7 @@ int main(int argc, char* argv[]) {
     // (e.g. `--seed 7`) is not silently parsed as the seed positional via
     // `std::stoull` and crash with an opaque "stoull: no conversion".
     for (int i = 4; i < argc; ++i) {
-      if (std::strcmp(argv[i], "-no-bscb") == 0) {
+      if (std::strcmp(argv[i], "-no-bscb") == 0) { // deprecated (issue #139)
         bscb = false;
       } else if (std::strcmp(argv[i], "-bscb") == 0) {
         bscb = true;

@@ -734,6 +734,22 @@ add_test(
         ${_rulemonkey_test_dir}/bng_oracle/xml/products_never_form.xml
 )
 
+# block_same_complex_binding = false (CLI -no-bscb) is deprecated and goes in
+# 4.0 (issue #139).  Until then this pins the mode on one dimer whose free
+# sites can join only inside the complex: BNG2's network never closes that
+# ring, and the loose mode closes it at kf and opens it at kr, as NFsim does
+# with neither -cb nor -bscb.  Also pins the deprecation warning, printed
+# once per process, so the test captures its own stderr.
+add_executable(no_bscb_deprecation_test cpp/no_bscb_deprecation_test.cpp)
+target_link_libraries(no_bscb_deprecation_test PRIVATE rulemonkey)
+
+add_test(
+    NAME no_bscb_deprecation_test
+    COMMAND no_bscb_deprecation_test
+        ${_rulemonkey_test_dir}/cpp/no_bscb_ring_dimer_model.xml
+        ${CMAKE_CURRENT_BINARY_DIR}/no_bscb_deprecation_stderr.txt
+)
+
 # Which Arrhenius rules run and which are refused (issue #109): an energy
 # pattern joined only by `.`, and shapes neither the load-time expansion nor
 # the exact path runs, each refused with an Error that names the rule and
@@ -860,6 +876,27 @@ if(TARGET rm_driver)
     )
     set_tests_properties(rm_driver_reps_sd_out_unwritable PROPERTIES
         PASS_REGULAR_EXPRESSION "cannot open --sd-out path")
+
+    # -no-bscb still runs, deprecated (issue #139): the library prints the
+    # warning, so the flag must reach it, and the run must still write its
+    # output.  A PASS regex overrides the exit code, so it needs both, in
+    # either order (stderr and stdout are separate streams).  -bscb, the
+    # default, stays accepted and prints no warning.
+    add_test(
+        NAME rm_driver_no_bscb_deprecated
+        COMMAND rm_driver ${_rulemonkey_test_dir}/cpp/no_bscb_ring_dimer_model.xml 10 5 7 -no-bscb
+    )
+    set_tests_properties(rm_driver_no_bscb_deprecated PROPERTIES
+        PASS_REGULAR_EXPRESSION
+            "removed in RuleMonkey 4\\.0.*# time\tClosed|# time\tClosed.*removed in RuleMonkey 4\\.0")
+
+    add_test(
+        NAME rm_driver_bscb_silent
+        COMMAND rm_driver ${_rulemonkey_test_dir}/cpp/no_bscb_ring_dimer_model.xml 10 5 7 -bscb
+    )
+    set_tests_properties(rm_driver_bscb_silent PROPERTIES
+        PASS_REGULAR_EXPRESSION "# time\tClosed"
+        FAIL_REGULAR_EXPRESSION "deprecated")
 
     # A TotalRate rule whose reactant pattern can match one molecule more than
     # once is refused: NFsim expands it into one reaction class per symmetry
@@ -1025,6 +1062,17 @@ if(TARGET rm_scan)
     )
     set_tests_properties(rm_scan_bifurcate PROPERTIES
         PASS_REGULAR_EXPRESSION "A_1_fwd\tA_1_bwd")
+
+    # -no-bscb is deprecated (issue #139): the library's warning must show,
+    # and the scan must still write its output (see rm_driver_no_bscb_deprecated).
+    add_test(
+        NAME rm_scan_no_bscb_deprecated
+        COMMAND rm_scan ${_rulemonkey_test_dir}/cpp/no_bscb_ring_dimer_model.xml
+            --param kf --values 1,3 --t-end 10 -no-bscb
+    )
+    set_tests_properties(rm_scan_no_bscb_deprecated PROPERTIES
+        PASS_REGULAR_EXPRESSION
+            "removed in RuleMonkey 4\\.0.*# kf\tClosed|# kf\tClosed.*removed in RuleMonkey 4\\.0")
 
     # An invalid spec (n_points == 1 with distinct bounds) exits non-zero.
     add_test(
