@@ -1,0 +1,98 @@
+# A per-complex (context) count that changes when a bond forms or breaks
+# somewhere the event's own update does not look.
+#
+# An untransformed reactant pattern is counted once per matching complex
+# (GH #33, context_symmetry.bngl). That count is a property of the complexes,
+# so a merge or split moves it even when no molecule of the context pattern's
+# type changed: break the middle bond of E-A-B-B-A-E and the number of
+# complexes holding an E goes from 1 to 2. The engine keeps the per-complex
+# tally itself current by draining the pool's list of molecules that changed
+# complex. But the rule's PROPENSITY was recomputed only when a molecule of one
+# of the rule's own types was in the event's affected set, and that set reaches
+# only `max_pattern_depth` bonds out from the molecules the rule changed. Here
+# that depth is 1, and E sits two bonds from the B-B bond, so the propensity
+# kept the complex count from whenever an E molecule was last touched -- the
+# last time Cat itself fired -- while the true count flipped between 1 and 2
+# about a hundred times per unit time underneath it.
+#
+# Three channels, no molecule type shared between them:
+#
+#   Far    E-A-B-B-A-E chain, catalyst E two bonds from the bond that moves.
+#          Bimolecular context rule (the two-slot propensity).
+#   Near   E-B-B-E chain, catalyst one bond from it, inside the affected set.
+#          The control: identical chemistry, and it was always right.
+#   Nary   the Far chain again, with a three-pattern context rule, which takes
+#          the n-ary distinct-tuple machinery (GH #42) and had the same gap.
+#
+# Cut and Bind run at equal rates, so each chain spends half its time whole
+# (one catalyst complex) and half cut (two). BNG2's network gives Cat the same
+# rate constant on the whole chain and on each half, so the catalyst-complex
+# count averages 1.5 and S(p~1) grows at about 1.5 * k_cat * S per unit time.
+# RuleMonkey 3.12.0 read about 10% low on Far and Nary and right on Near.
+# A single chain per channel is deliberate: every Cat firing touches an E and
+# refreshes the stale count, so more chains would mean more refreshes and a
+# smaller, harder to see effect. The SSA reference is needed for the same
+# reason -- one chain is not a population the ODE describes.
+
+begin model
+begin parameters
+  k_cut   100
+  k_bind  100
+  k_cat   0.002
+  k_cat3  0.0004    # times 5 Tk complexes: the same rate per E complex as Cat
+  S0      1000
+end parameters
+
+begin molecule types
+  E(l)
+  A(e,b)
+  B(a,x)
+  S(p~0~1)
+  En(l)
+  Bn(a,x)
+  Sn(p~0~1)
+  Ek(l)
+  Ak(e,b)
+  Bk(a,x)
+  Sk(p~0~1)
+  Tk()
+end molecule types
+
+begin seed species
+  E(l!1).A(e!1,b!2).B(a!2,x!3).B(x!3,a!4).A(b!4,e!5).E(l!5)        1
+  S(p~0)                                                           S0
+  En(l!1).Bn(a!1,x!2).Bn(x!2,a!3).En(l!3)                          1
+  Sn(p~0)                                                          S0
+  Ek(l!1).Ak(e!1,b!2).Bk(a!2,x!3).Bk(x!3,a!4).Ak(b!4,e!5).Ek(l!5)  1
+  Sk(p~0)                                                          S0
+  Tk()                                                             5
+end seed species
+
+begin observables
+  Molecules Far    S(p~1)
+  Molecules Near   Sn(p~1)
+  Molecules Nary   Sk(p~1)
+  # whether each chain is whole, so the toggling the counts ride on is legible
+  Species   Far_whole   B(x!+)
+  Species   Near_whole  Bn(x!+)
+  Species   Nary_whole  Bk(x!+)
+end observables
+
+begin reaction rules
+  Cut:    B(x!1).B(x!1) -> B(x) + B(x)  k_cut
+  Bind:   B(x) + B(x) -> B(x!1).B(x!1)  k_bind
+  Cat:    E() + S(p~0) -> E() + S(p~1)  k_cat
+
+  Cut_n:  Bn(x!1).Bn(x!1) -> Bn(x) + Bn(x)  k_cut
+  Bind_n: Bn(x) + Bn(x) -> Bn(x!1).Bn(x!1)  k_bind
+  Cat_n:  En() + Sn(p~0) -> En() + Sn(p~1)  k_cat
+
+  Cut_k:  Bk(x!1).Bk(x!1) -> Bk(x) + Bk(x)  k_cut
+  Bind_k: Bk(x) + Bk(x) -> Bk(x!1).Bk(x!1)  k_bind
+  Cat_k:  Ek() + Sk(p~0) + Tk() -> Ek() + Sk(p~1) + Tk()  k_cat3
+end reaction rules
+end model
+
+begin actions
+  writeXML({overwrite=>1})
+end actions

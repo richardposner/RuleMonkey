@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **A per-complex reactant count reached the propensity late when a bond
+  formed or broke far from the rule's own molecules.** An untransformed
+  reactant pattern is counted once per matching complex (#33, #42). A
+  merge or split changes that count wherever in the complex the bond is,
+  and the per-complex tally followed it. But the rule's propensity was
+  recomputed only when a molecule of one of the rule's own types was in
+  the event's affected set, which reaches `max_pattern_depth` bonds out
+  from the molecules the event changed. Breaking the middle bond of
+  `E-A-B-B-A-E` takes the number of complexes holding an `E` from 1 to 2
+  with no `E` in that set, so `E() + S(p~0) -> E() + S(p~1)` kept the old
+  count until an `E` was next touched, in practice the next time the rule
+  itself fired. On one such chain cut and rejoined at rate 100 each,
+  `S(p~1)` at t = 100 over 96 seeds read 233.4 ± 1.8 against BNG2's SSA
+  258.6 ± 0.5 (z = −14), and 233.9 ± 1.5 against 258.8 ± 0.4 (z = −16)
+  for the same rule written with a third reactant pattern, which takes the
+  n-ary path. The same chain with its catalyst one bond from the cut was
+  always right. The tally drain now marks each rule whose tally it moved,
+  so the propensity is recomputed in the same event. New BNG2-oracle model
+  `context_remote_move`. Every other model in the four suites, 202 of
+  them, is byte-identical to 3.12.0 at seeds 1 and 2.
+
 ## [3.12.0] — 2026-10-22
 
 ### Added
