@@ -88,8 +88,8 @@ in BioNetGen, which generates no reaction for it (issue #105). Two shapes:
   patterns"** — `A(s~0).B(t~0) -> A(s~1) + B(t~1)` on an A bonded to a B.
   The `+` says they come apart, but the rule deletes nothing that could
   part them. Write the bond and delete it (`A(s~0,b!1).B(t~0,a!1) ->
-  A(s~1,b) + B(t~1,a)`), or a `.`. With `-no-bscb` the `+` between product
-  patterns is not tested, and this rule fires.
+  A(s~1,b) + B(t~1,a)`), or a `.`. With the deprecated `-no-bscb` the `+`
+  between product patterns is not tested, and this rule fires.
 
 This is a warning, unlike the n-ary refusal above. There RM would silently
 do something BioNetGen does not; here it does exactly what BioNetGen does,
@@ -124,16 +124,30 @@ The ExprTk parser message after the `—` pinpoints the offending token.
 
 ### Differs from NFsim by a small but reproducible amount
 
-RuleMonkey defaults to **strict BNGL semantics**
-(`block_same_complex_binding = true`, equivalent to NFsim's `-bscb`
-flag).  NFsim's default is non-strict: bimolecular rules can fire
-intra-complex, and DeleteBond on a ring bond does not check whether
-the products are actually disconnected.
+RuleMonkey applies **strict BNGL semantics**: the `+` holds on both sides
+of a rule, as in BioNetGen's network (`block_same_complex_binding =
+true`).  NFsim differs on each side.
 
-If you're comparing against an NFsim run that omitted `-bscb`, pass
-`-no-bscb` to `rm_driver` (or `set_block_same_complex_binding(false)`
-on the in-process API).  Otherwise the trajectories will diverge
-on any model with same-complex binding shapes or ring bonds.
+- **Reactant side.** NFsim blocks same-complex binding only when run with
+  `-cb` or `-bscb`.  BioNetGen's `simulate_nf` passes `-cb` by default
+  (`complex=>1`), so an NFsim run made through BNG2.pl blocks it too.  Run
+  directly with neither flag, or through `simulate_nf` with `complex=>0`,
+  NFsim keeps no complex bookkeeping and bimolecular rules fire inside a
+  complex.  BNGL does not define that mode, and trajectories made in it
+  diverge from RM's on any model with same-complex binding shapes.
+- **Product side.** Even with `-cb` or `-bscb`, NFsim 1.14.3 does not
+  always test the `+` between product patterns: a unimolecular `+` rule
+  that breaks a ring bond fires although the products stay connected,
+  where BioNetGen generates no reaction (RuleWorld/nfsim#61).  RM does what
+  BioNetGen does, so a model that breaks ring bonds can differ from NFsim
+  whatever its flags.  The BNG2-oracle suite (`tests/bng_oracle`) checks RM
+  against BioNetGen on such rules.
+
+To reproduce an NFsim run made with neither flag, run NFsim itself.
+RuleMonkey's `-no-bscb`
+(`set_block_same_complex_binding(false)` on the in-process API) copies
+the mode, but it is deprecated, prints a warning saying so, and will be
+removed in 4.0 (issue #139).
 
 See `model_semantics.md` § "Strict BNGL semantics" for the precise
 LHS-`+` and RHS-`+` rules RM enforces.

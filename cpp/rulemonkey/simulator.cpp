@@ -23,6 +23,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -4384,6 +4385,20 @@ void RuleMonkeySimulator::set_molecule_limit(int limit) {
 void RuleMonkeySimulator::set_block_same_complex_binding(bool value) {
   if (impl_->session)
     throw std::runtime_error("Cannot set_block_same_complex_binding during active session");
+  // `false` is deprecated, and the method goes in 4.0 (issue #139).  Say so
+  // once per process: a host that builds many simulators, such as a fitting
+  // loop, would otherwise repeat the line for every one.
+  if (!value) {
+    static std::once_flag warned;
+    std::call_once(warned, [] {
+      std::fprintf(stderr,
+                   "Warning: set_block_same_complex_binding(false) (-no-bscb) is deprecated and "
+                   "will be removed in RuleMonkey 4.0. It runs NFsim's loose mode without "
+                   "complex bookkeeping, which is not a BNGL semantics: a bimolecular rule may "
+                   "take both reactants from one complex, and a rule's products need not come "
+                   "apart. See issue #139.\n");
+    });
+  }
   impl_->model.block_same_complex_binding = value;
 }
 

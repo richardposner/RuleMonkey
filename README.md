@@ -76,7 +76,7 @@ installed locally. The rest are local-only.
 `rm_driver` runs a single trajectory:
 
 ```bash
-build/release/rm_driver <model.xml> <t_end> <n_steps> [seed] [-no-bscb] \
+build/release/rm_driver <model.xml> <t_end> <n_steps> [seed] \
     [--ignore-unsupported] [--save-state <path>] [--load-state <path>] \
     [--t-start <time>] [--print-functions] \
     [--reps <n> [--threads <n>] [--sd-out <path>]]
@@ -100,7 +100,7 @@ value — the RuleMonkey equivalent of BioNetGen's `parameter_scan` and
 build/release/rm_scan <model.xml> --param <name> \
     (--values v1,v2,... | --min <m> --max <x> --n-points <n> [--log]) \
     --t-end <t> [--t-start <t>] [--n-steps <k>] [--seed <s>] \
-    [--bifurcate] [--reset-conc 0|1] [--print-functions] [-no-bscb] \
+    [--bifurcate] [--reset-conc 0|1] [--print-functions] \
     [--ignore-unsupported]
 ```
 
@@ -108,18 +108,30 @@ Output is tab-separated `.scan` on stdout (one row per swept value).
 See [`docs/scan_format.md`](docs/scan_format.md) for the format and the
 BNG-semantics mapping.
 
-RuleMonkey defaults to strict BNGL semantics (`block_same_complex_binding`,
-equivalent to NFsim's `-bscb` flag). Pass `-no-bscb` for compatibility with
-NFsim runs that disabled this check.
+RuleMonkey applies BNGL's `+` as BioNetGen's network does: a bimolecular
+rule takes its reactants from different complexes, and molecules written
+into different product patterns end in different complexes. NFsim blocks
+same-complex binding when run with `-cb` or `-bscb`, and BioNetGen's
+`simulate_nf` passes `-cb` by default. Both CLIs still accept `-no-bscb`,
+which drops both checks to copy NFsim run with neither flag, a mode without
+complex bookkeeping that BNGL does not define. `-no-bscb` is deprecated and
+will be removed in 4.0 (issue #139).
 
 ## Behavior differences vs NFsim
 
 Three intentional differences are worth knowing about when comparing RM
 and NFsim runs of the same BNGL model:
 
-1. **Strict BNGL semantics on by default.** `block_same_complex_binding`
-   is enabled (equivalent to NFsim's `-bscb`). Pass `-no-bscb` to match
-   an NFsim run that disabled the check. See
+1. **Strict BNGL semantics.** RM enforces the `+` on both sides of a rule,
+   as BioNetGen's network does (`block_same_complex_binding`). NFsim
+   blocks same-complex binding only with `-cb` or `-bscb` (`simulate_nf`
+   passes `-cb` by default), and even then it does not always test the `+`
+   between product patterns: a unimolecular `+` rule breaks a ring bond
+   whose molecules stay connected, where BioNetGen generates no reaction
+   (RuleWorld/nfsim#61). Run with neither flag (directly, or `simulate_nf`
+   with `complex=>0`), NFsim also binds within a complex, a mode BNGL does
+   not define. To reproduce such a run, run NFsim. RM's `-no-bscb` copies
+   that mode, but it is deprecated and will be removed in 4.0. See
    [`docs/model_semantics.md`](docs/model_semantics.md) § "Strict BNGL
    semantics" for the precise LHS-`+` / RHS-`+` rules and
    [`docs/troubleshooting.md`](docs/troubleshooting.md) § "Differs from
@@ -195,7 +207,6 @@ Stateless one-shot simulation:
 #include <rulemonkey/simulator.hpp>
 
 rulemonkey::RuleMonkeySimulator sim("model.xml");
-sim.set_block_same_complex_binding(true);
 sim.set_param("kf", 0.5);
 
 rulemonkey::TimeSpec ts{ /*t_start=*/0.0, /*t_end=*/10.0, /*n_points=*/101 };
@@ -294,7 +305,7 @@ CMake snippets for both consumption modes).
   format spec, including precision and parsing recipes.
 - [`docs/troubleshooting.md`](docs/troubleshooting.md) — FAQ covering
   unsupported features, `set_param` gotchas, save/load schema
-  fingerprints, and the `-bscb` default difference vs NFsim.
+  fingerprints, and how RM's strict `+` compares with NFsim's flags.
 - [`docs/test_corpora.md`](docs/test_corpora.md) — the three BNGL
   parity suites (`feature_coverage`, `corpus`, `nfsim_basicmodels`),
   what each catches, and how to run them.  Separate from the C++

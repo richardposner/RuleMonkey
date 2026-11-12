@@ -72,6 +72,6 @@ Drift > 1.5× (slower at longer horizon) would suggest engine cost growing with 
 
 - Wall time is end-to-end subprocess wall (process spawn + XML load + simulate + observable record + exit).  Same for both engines, so ratios are fair; absolute numbers shift per machine.
 - RM event count comes from `RM_PRINT_TIMING=1` stderr (`events=N null=N`); NFsim event count from stdout (`You just simulated N reactions`).  Both count accepted SSA events.
-- `-bscb` (Bind-Single-Copy-Bond) enabled on both engines.
+- `-bscb` (block same-complex binding) enabled on both engines.
 - `n_steps` held constant; per-event cost should track engine work, not observable I/O.
 - Each rep uses a distinct seed (1..N), so event totals differ between reps; medians are reported.

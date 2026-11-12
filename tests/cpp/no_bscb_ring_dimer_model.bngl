@@ -1,0 +1,30 @@
+# One A-B dimer held together by its y sites, with free x sites that can
+# join only inside the complex (issue #139).  The `+` says the rule binds
+# two complexes and unbinds into two, so BNG2's network has no reaction
+# that closes the x ring: its reactions join dimers into chains, and with
+# one dimer none of them can fire.  With
+# block_same_complex_binding off (the deprecated -no-bscb), RM tests
+# neither half of the `+`: the ring closes at kf and opens at kr, as in
+# NFsim run with neither -cb nor -bscb.
+begin model
+begin parameters
+  kf 1
+  kr 1
+end parameters
+begin molecule types
+  A(x,y)
+  B(x,y)
+end molecule types
+begin seed species
+  A(x,y!1).B(x,y!1) 1
+end seed species
+begin observables
+  Molecules Closed A(x!+)
+end observables
+begin reaction rules
+  Ring: A(x) + B(x) <-> A(x!1).B(x!1) kf, kr
+end reaction rules
+end model
+begin actions
+  writeXML()
+end actions

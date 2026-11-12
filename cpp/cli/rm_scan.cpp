@@ -6,7 +6,11 @@
 //           (--values v1,v2,... | --min <m> --max <x> --n-points <n> [--log])
 //           --t-end <t> [--t-start <t>] [--n-steps <k>] [--seed <s>]
 //           [--bifurcate] [--reset-conc 0|1]
-//           [--print-functions] [-no-bscb] [--ignore-unsupported]
+//           [--print-functions] [--ignore-unsupported]
+//
+// -no-bscb, which runs NFsim's loose mode without complex bookkeeping
+// instead of BNGL's `+`, is deprecated and goes in 4.0 (issue #139); the
+// library prints the deprecation warning.
 //
 // Output: tab-separated `.scan` to stdout (see docs/scan_format.md).  CPU
 // time in seconds to stderr.
@@ -93,7 +97,7 @@ void usage() {
                "         (--values v1,v2,... | --min <m> --max <x> --n-points <n> [--log])\n"
                "         --t-end <t> [--t-start <t>] [--n-steps <k>] [--seed <s>]\n"
                "         [--bifurcate] [--reset-conc 0|1]\n"
-               "         [--print-functions] [-no-bscb] [--ignore-unsupported]\n";
+               "         [--print-functions] [--ignore-unsupported]\n";
 }
 
 } // namespace
@@ -161,7 +165,7 @@ int main(int argc, char* argv[]) {
         reset_conc = parse_int(take_value(i, argc, argv), "--reset-conc") != 0;
       } else if (std::strcmp(argv[i], "--print-functions") == 0) {
         print_functions = true;
-      } else if (std::strcmp(argv[i], "-no-bscb") == 0) {
+      } else if (std::strcmp(argv[i], "-no-bscb") == 0) { // deprecated (issue #139)
         bscb = false;
       } else if (std::strcmp(argv[i], "-bscb") == 0) {
         bscb = true;

@@ -201,12 +201,9 @@ def _classify_nfsim_error(stderr: str, stdout: str) -> str:
 
 def run_rm(entry: ModelEntry, seed: int, timeout: float) -> tuple[float, str]:
     """Returns (wall_seconds, error_msg). wall < 0 on error."""
+    # RM runs its default, BNGL's `+`; run_nfsim always passes `-bscb`, which blocks
+    # same-complex binding as RM does.
     cmd = [str(RM_DRIVER), str(entry.xml), str(entry.t_end), str(entry.n_steps), str(seed)]
-    if "-bscb" in entry.nfsim_flags:
-        # RM defaults to bscb=true, but make it explicit so the matrix is consistent.
-        pass
-    elif "-no-bscb" in entry.nfsim_flags:
-        cmd.append("-no-bscb")
     t0 = time.monotonic()
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)

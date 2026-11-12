@@ -40,10 +40,6 @@ int main(int argc, char* argv[]) {
   try {
     rulemonkey::RuleMonkeySimulator sim(xml_path);
 
-    // Strict BNGL semantics: bimolecular rules only fire across complexes
-    // (matches NFsim's -bscb flag).  Set false to allow intramolecular binding.
-    sim.set_block_same_complex_binding(true);
-
     // Surface any features the loaded model uses but RM does not implement.
     for (const auto& w : sim.unsupported_features()) {
       const char* level = (w.severity == rulemonkey::Severity::Error) ? "ERROR" : "WARN";
