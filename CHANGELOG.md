@@ -29,6 +29,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so the propensity is recomputed in the same event. New BNG2-oracle model
   `context_remote_move`. Every other model in the four suites, 202 of
   them, is byte-identical to 3.12.0 at seeds 1 and 2.
+- **Under a decimal-comma locale the loader read `0.5` as `0`, with no
+  error (issue #122).** A rule's `symmetry_factor` and a TFUN's inline
+  `xData`/`yData` were read with `std::stod`, which follows the decimal
+  point of the C locale and stops at the `.`. A TFUN read from a `.tfun`
+  file went through an iostream, which follows the C++ global locale; under
+  `de_DE` that takes the `.` for a thousands separator and refused `0
+  2.0` as a malformed line. Only a program that embeds RuleMonkey and sets
+  its own locale is affected: a ring closure (`symmetry_factor="0.5"`)
+  then never fired, and a TFUN of `0.5` read as 0. `rm_driver` and
+  `rm_scan` never set a locale. All three reads now use `strtod_l` with a
+  "C" locale of their own (`_strtod_l` on Windows), which returns the same
+  double `stod` returns in the "C" locale. They also refuse a value that is
+  only partly a number: `stod` read `0.5x` as 0.5. New
+  `locale_number_test` compares each model's trajectory under `de_DE`,
+  set by `setlocale` and as the C++ global locale, with the "C" locale's;
+  it is skipped where no decimal-comma locale is installed.
 
 ## [3.12.0] — 2026-10-22
 

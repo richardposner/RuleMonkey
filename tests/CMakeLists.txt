@@ -538,6 +538,22 @@ add_test(
         ${_rulemonkey_test_dir}/cpp/tfun_clock_rate_model.xml
 )
 
+# The loader reads numbers the way BNG2 writes them under a decimal-comma
+# locale, set by setlocale or as the C++ global locale (issue #122), and
+# refuses a value that is only partly a number.  Exits 77, reported as
+# skipped, where no decimal-comma locale is installed.
+add_executable(locale_number_test cpp/locale_number_test.cpp)
+target_link_libraries(locale_number_test PRIVATE rulemonkey)
+
+add_test(
+    NAME locale_number_test
+    COMMAND locale_number_test
+        ${_rulemonkey_test_dir}/cpp/locale_sym_model.xml
+        ${_rulemonkey_test_dir}/cpp/tfun_time_rate_model.xml
+        ${_rulemonkey_test_dir}/models/feature_coverage/xml/ft_tfun.xml
+)
+set_tests_properties(locale_number_test PROPERTIES SKIP_RETURN_CODE 77)
+
 # Function settle order (issue #111): RM settled its function table in
 # declaration order, and BNG2 2.9.3 writes a chain declared top down out of
 # dependency order, so a function read another's stale value -- a plain

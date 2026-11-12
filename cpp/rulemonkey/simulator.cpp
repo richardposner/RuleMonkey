@@ -1,5 +1,6 @@
 #include "rulemonkey/simulator.hpp"
 
+#include "c_number.hpp"
 #include "energy_expand.hpp"
 #include "engine.hpp"
 #include "ensemble.hpp"
@@ -1306,7 +1307,7 @@ try_expand_arrhenius(Rule& base, const XmlNode& rl_node, const EnergyFunction& e
   return ArrheniusPath::Consumed;
 }
 
-// Parse TFUN CSV values
+// Parse TFUN CSV values, in the "C" locale whatever the host's (issue #122).
 std::vector<double> parse_csv_doubles(const std::string& s, const std::string& ctx) {
   std::vector<double> vals;
   std::istringstream iss(s);
@@ -1315,7 +1316,7 @@ std::vector<double> parse_csv_doubles(const std::string& s, const std::string& c
     tok = trim(tok);
     if (tok.empty())
       throw std::runtime_error(ctx + ": empty value in CSV");
-    vals.push_back(std::stod(tok));
+    vals.push_back(parse_c_double(tok, ctx));
   }
   return vals;
 }
@@ -2167,9 +2168,9 @@ Model load_model(const std::string& xml_path,
       if (rule.name.empty())
         rule.name = rule.id;
 
-      auto sym = opt_attr(rrn, "symmetry_factor");
+      auto sym = trim(opt_attr(rrn, "symmetry_factor"));
       if (!sym.empty())
-        rule.symmetry_factor = std::stod(sym);
+        rule.symmetry_factor = parse_c_double(sym, "Rule '" + rule.id + "' symmetry_factor");
 
       // ID map for component resolution across patterns
       std::unordered_map<std::string, std::pair<int, int>> reactant_id_map;

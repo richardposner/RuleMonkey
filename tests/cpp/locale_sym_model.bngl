@@ -1,0 +1,25 @@
+# Fixture for locale_number_test (issue #122): a ring closure, which BNG2
+# writes with symmetry_factor="0.5".  Under a decimal-comma LC_NUMERIC the
+# loader read that as 0, so the rule's rate was 0 and Aopen never moved.
+
+begin model
+begin parameters
+  k 0.1
+end parameters
+begin molecule types
+  A(a,a)
+end molecule types
+begin seed species
+  A(a,a) 1000
+end seed species
+begin observables
+  Molecules Aopen A(a,a)
+end observables
+begin reaction rules
+  A(a,a) -> A(a!1,a!1) k
+end reaction rules
+end model
+
+begin actions
+  writeXML({overwrite=>1})
+end actions
