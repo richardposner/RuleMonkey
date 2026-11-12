@@ -359,10 +359,27 @@ The runtime severity model is two-level:
   intramolecular ring-closure must be written as an explicit
   `A(x).B(y) -> A(x!1).B(y!1)` rule. Disable via
   `set_block_same_complex_binding(false)` or the CLI `-no-bscb` flag for
-  parity with NFsim runs that omitted `-bscb`.
-- The same flag enforces the `+` between product patterns. Take a bond the
-  rule deletes between two molecules its map sends into different product
-  patterns. Once all of the rule's operations apply (every bond it breaks
+  parity with NFsim runs that omitted `-bscb`. With it off, one complex may
+  supply both reactant patterns of a bimolecular rule. That is all the flag
+  does.
+- The `+` between product patterns holds whatever the flag (issue #123).
+  Through 3.12.0 the flag switched this test too, so under `-no-bscb` a
+  rule whose `+` could not hold fired anyway: `L(r!1).R(l!1) -> L(r) +
+  R(l)` opened every L.R.L.R ring. BNG2 generates no reaction for it, and
+  has no such switch. A rule that deletes no bond or molecule parts
+  nothing, so under `-no-bscb` `E(s) + S(p~0) -> E(s) + S(p~1)` still fires
+  on an E and an S of one complex, as NFsim lets it.
+  One consequence under `-no-bscb`: a ring that the forward half of a
+  reversible binding rule closes inside one complex cannot be opened by
+  the reverse half, whose `+` cannot hold on a ring. Only a rule written
+  with `.` between its products, `R(r!1).L(l!1) -> R(r).L(l)`, opens it.
+  On the corpus model BLBR (`R(r) + L(l,l!+) <-> R(r!1).L(l!1,l!+)`, no
+  ring-closure rule), 995 of 1000 receptors end in closed rings by t = 10.
+  NFsim 1.14.3 without `-bscb` opens such rings; bngsim's vendored NFsim,
+  which tests the `+` whatever the flag (lanl/bngsim#1613), does not.
+- How the `+` is tested: take a bond the rule deletes between two
+  molecules its map sends into different product patterns. Once all of
+  the rule's operations apply (every bond it breaks
   or makes, every molecule it deletes), those two molecules must be in
   different complexes. Otherwise the event is a null event: `A(b!1).B(a!1)
   -> A(b) + B(a)` does not fire on a pair also joined by a second bond.
@@ -386,9 +403,8 @@ The runtime severity model is two-level:
   (`A(b!1).B(a!1,c!2).C(b!2) -> A(b) + C(b)`), a pattern cut into three
   pieces (`Ta(b!1,c!2).Tb(a!1).Tc(a!2) -> Ta(b,c) + Tb(a) + Tc(a)` on a
   Ta.Tb.Tc ring, which never fires), and a molecule joined to its pattern
-  only by `.`. The loader decides which rules need it; the `+` part of the
-  split follows this flag, except for a delete without `DeleteMolecules`,
-  which NFsim refuses and RM always tests in full.
+  only by `.`. The loader decides which rules need it, and the split tests
+  the `+` whatever the flag.
 - A rule whose right-hand side can never be true never fires, as in BNG2,
   which generates no reaction for it (issue #105). One kind writes two
   molecules into one product pattern that nothing joins: they come from
@@ -398,10 +414,9 @@ The runtime severity model is two-level:
   setting of the flag. The other kind writes two molecules of one complex
   into different product patterns and deletes no bond or molecule that
   could part them (`A(s~0).B(t~0) -> A(s~1) + B(t~1)`). That one never
-  fires under this flag; with it off, the `+` is not tested and the rule
-  fires, as a deleted bond's would. Either way the load reports the rule as
-  a warning, not an error: BNG2 runs the model, and the rule is almost
-  surely a mistake.
+  fires either, under either setting of the flag since issue #123. Either
+  way the load reports the rule as a warning, not an error: BNG2 runs the
+  model, and the rule is almost surely a mistake.
 
 ### Parameter overrides
 

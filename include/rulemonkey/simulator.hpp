@@ -460,7 +460,8 @@ public:
 
   // When true, bimolecular rules only fire between molecules in different
   // complexes (equivalent to NFsim's -bscb flag).  Default: true (strict
-  // BNGL semantics).
+  // BNGL semantics).  It does not affect the `+` between product patterns,
+  // which holds either way.
   // Throws std::runtime_error if a session is currently active.
   void set_block_same_complex_binding(bool value);
 

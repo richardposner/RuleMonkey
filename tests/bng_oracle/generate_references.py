@@ -64,6 +64,7 @@ MODELS = {
     "arrhenius_context": {"kind": "ode", "t_end": 2, "n_steps": 2},
     "arrhenius_context_bind": {"kind": "ssa", "t_end": 60, "n_steps": 2, "reps": 1000},
     "context_remote_move": {"kind": "ssa", "t_end": 100, "n_steps": 2, "reps": 1000},
+    "plus_no_bscb": {"kind": "ssa", "t_end": 5, "n_steps": 2, "reps": 1000},
 }
 
 

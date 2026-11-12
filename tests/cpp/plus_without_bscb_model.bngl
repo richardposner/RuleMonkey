@@ -1,0 +1,48 @@
+# Fixture for plus_without_bscb_test (issue #123): what -no-bscb still lets a
+# bimolecular rule do inside one complex once the `+` between product
+# patterns is tested whatever the flag.
+#
+# One complex holds an E and an S, another an F and a G, and there is no
+# other copy of any of them, so every pair either rule can draw lies inside
+# one complex.
+#
+#   Mod    deletes nothing, so its products come apart only if its reactants
+#          did. -no-bscb lets one complex supply both, and Mod then fires:
+#          the `+` is a question about what the rule parts, and it parts
+#          nothing. (BNG2 never lets one complex supply both reactant
+#          patterns, so it has no answer here; this follows NFsim, which
+#          lets the rule fire.)
+#   Close  makes a bond inside the complex, the ring closure -no-bscb exists
+#          to allow. One product pattern, so there is no `+` to test.
+
+begin model
+begin parameters
+  k  4    # k * t_end = 20: a rule that can fire has fired, but for e^-20
+end parameters
+
+begin molecule types
+  E(s,b)
+  S(p~0~1,e)
+  F(x,b)
+  G(y,f)
+end molecule types
+
+begin seed species
+  E(s,b!1).S(p~0,e!1)  1
+  F(x,b!1).G(y,f!1)    1
+end seed species
+
+begin observables
+  Molecules Mod_on   S(p~1)
+  Molecules Close_on F(x!+)
+end observables
+
+begin reaction rules
+  Mod:   E(s) + S(p~0) -> E(s) + S(p~1)  k
+  Close: F(x) + G(y) -> F(x!1).G(y!1)  k
+end reaction rules
+end model
+
+begin actions
+  writeXML({overwrite=>1})
+end actions

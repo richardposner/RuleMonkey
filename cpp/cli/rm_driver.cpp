@@ -9,8 +9,9 @@
 // Stderr: CPU time in seconds
 //
 // RuleMonkey defaults to strict BNGL semantics (block_same_complex_binding=true,
-// matching NFsim -bscb).  Pass -no-bscb to disable the checks for testing
-// against NFsim runs that were done without -bscb/-cb.
+// matching NFsim -bscb).  Pass -no-bscb to let one complex supply both
+// reactants of a bimolecular rule, for testing against NFsim runs that were
+// done without -bscb/-cb.  The `+` between product patterns holds either way.
 //
 // Pass --ignore-unsupported to suppress errors for unsupported BNGL features
 // in the XML (warnings are always printed).

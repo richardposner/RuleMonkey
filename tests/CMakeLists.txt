@@ -718,6 +718,19 @@ add_test(
         ${_rulemonkey_test_dir}/bng_oracle/xml/products_never_form.xml
 )
 
+# What -no-bscb still lets a bimolecular rule do inside one complex once the
+# `+` between product patterns holds either way (issue #123): a rule that
+# deletes nothing, and a ring closure, both fire there.  The other half is
+# the BNG2-oracle model plus_no_bscb, which check.py runs with -no-bscb.
+add_executable(plus_without_bscb_test cpp/plus_without_bscb_test.cpp)
+target_link_libraries(plus_without_bscb_test PRIVATE rulemonkey)
+
+add_test(
+    NAME plus_without_bscb_test
+    COMMAND plus_without_bscb_test
+        ${_rulemonkey_test_dir}/cpp/plus_without_bscb_model.xml
+)
+
 # Which Arrhenius rules run and which are refused (issue #109): an energy
 # pattern joined only by `.`, and shapes neither the load-time expansion nor
 # the exact path runs, each refused with an Error that names the rule and

@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`-no-bscb` no longer switches off the `+` between product patterns
+  (issue #123).** `block_same_complex_binding` decides whether one
+  complex may supply both reactant patterns of a bimolecular rule. Through
+  3.12.0 it also decided whether a rule's products had to come apart, so
+  under `-no-bscb` a rule whose `+` could not hold fired anyway. BNG2.pl
+  has no such switch: it generates no reaction for a `+` that cannot
+  hold. The products are now tested whatever the flag, in all three places
+  the flag gated: the bond-by-bond test of a deleted bond, the full
+  post-reaction split of issue #104, and the load-time verdict on a rule
+  that writes two molecules of one complex into different product
+  patterns and deletes nothing (issue #105), which now never fires. Under
+  `-no-bscb`, at t = 5 against BNG2's SSA:
+  - `L(r!1).R(l!1) -> L(r) + R(l)` on 100 L.R.L.R rings left 0 rings, now
+    100.
+  - The same with two reactant patterns, binding a C, left 0 to 7 of 200
+    C free, now 100.
+  - `Ad(b!1).Bd(a!1,c!2).Cd(b!2) -> Ad(b) + Cd(b) DeleteMolecules` on
+    rings an A-C bond keeps whole left 10 to 15 B, now 108.
+  - `Pa(s~0).Pb(t~0) -> Pa(s~1) + Pb(t~1)` fired on all 100 pairs, now
+    none.
+
+  A rule that deletes nothing parts nothing, so under `-no-bscb` `E(s) +
+  S(p~0) -> E(s) + S(p~1)` still fires on an E and an S of one complex,
+  as NFsim lets it. With the flag on, the default, nothing changes: all
+  204 models in the four suites are byte-identical to 3.12.0.
+
+  Under `-no-bscb`, a ring that the forward half of a reversible binding
+  rule closes inside one complex can no longer be opened by the reverse
+  half, whose `+` cannot hold on a ring; a rule written with `.` between
+  its products still opens it. Run with `-no-bscb`, 43 of the 204 models
+  change, the ring-forming ones. On BLBR (`R(r) + L(l,l!+) <->
+  R(r!1).L(l!1,l!+)`), 995 of 1000 receptors end in closed rings by t =
+  10, against 17 before. bngsim's vendored NFsim does the same
+  (lanl/bngsim#1613); NFsim 1.14.3 opens such rings. New
+  BNG2-oracle model `plus_no_bscb`, the first that `check.py` runs with a
+  driver flag (`"flags"` in its `MODELS` entry), and new
+  `plus_without_bscb_test`.
+
 ### Fixed
 
 - **A per-complex reactant count reached the propensity late when a bond

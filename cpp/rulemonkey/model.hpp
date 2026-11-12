@@ -345,12 +345,12 @@ struct Rule {
   // Number of separate ProductPatterns in the XML.  A DeleteBond whose two
   // molecules the map sends into different product patterns
   // (RuleOp::separates_products) must actually separate them: the `+`
-  // between product patterns requires distinct products.  When
-  // `model.block_same_complex_binding` is set, the engine checks this at
-  // fire time, whatever the rule's molecularity, and rejects an event that
-  // leaves the molecules still connected (e.g., breaking one bond in a
-  // ring).  Shapes that bond-by-bond check cannot decide are listed under
-  // checks_product_split below.
+  // between product patterns requires distinct products.  The engine checks
+  // this at fire time, whatever the rule's molecularity and whatever
+  // `model.block_same_complex_binding` says (issue #123), and rejects an
+  // event that leaves the molecules still connected (e.g., breaking one bond
+  // in a ring).  Shapes that bond-by-bond check cannot decide are listed
+  // under checks_product_split below.
   int n_product_patterns = 0;
   std::vector<int> product_pattern_starts; // analogous to reactant_pattern_starts
 
@@ -380,8 +380,8 @@ struct Rule {
   // Molecules the rule writes into different product patterns that start
   // in one complex, where the rule deletes no bond and no molecule that
   // could part them (`A(s~0).B(t~0) -> A(s~1) + B(t~1)`).  BNG2 generates
-  // no reaction for it; RM never fires it while block_same_complex_binding,
-  // which enforces the `+`, is on.
+  // no reaction for it, and RM never fires it, under either setting of
+  // block_same_complex_binding (issue #123).
   bool products_never_split = false;
   // The checks made bond by bond (RuleOp::separates_products and
   // ensure_connected) cannot decide this rule's `+` and `.`, so the engine
@@ -684,19 +684,17 @@ struct Model {
   // When true, bimolecular rules only fire between molecules in
   // DIFFERENT complexes (equivalent to NFsim's -bscb flag).
   //
-  // Default TRUE to match strict BNGL semantics: the `+` separator in a
-  // reversible rule has strict meaning in both directions.  For binding
-  // (L->R), `A + B` means the reactants come from two distinct complexes
-  // — intramolecular binding requires an explicit ring-closure rule of
-  // the form `A(x).B(y) -> A(x!1).B(y!1)` (dot on LHS).  For unbinding
-  // (R->L), `A + B` means the products end up in two distinct complexes,
-  // so the bond being broken must not leave the molecules connected
-  // through another path (the product molecularity check handles that
-  // on the unbinding side).
+  // Default TRUE to match strict BNGL semantics: `A + B` on the left of a
+  // rule means the reactants come from two distinct complexes, and
+  // intramolecular binding requires an explicit ring-closure rule of the
+  // form `A(x).B(y) -> A(x!1).B(y!1)` (dot on LHS).  NFsim without -bscb
+  // runs in a loose mode that lets one complex supply both, and false
+  // reproduces it for parity runs.
   //
-  // NFsim without -bscb/-cb runs in a loose mode that violates these
-  // strict semantics in exchange for speed; RuleMonkey defaults to the
-  // strict behaviour so it is always BNGL-correct.
+  // This flag governs the reactant side only.  `A + B` on the right, that
+  // the products end up in two distinct complexes, is enforced either way
+  // (issue #123): BNG2 has one answer to it, and it generates no reaction
+  // for a `+` that cannot hold.
   bool block_same_complex_binding = true;
 
   int mol_type_index(const std::string& name) const {

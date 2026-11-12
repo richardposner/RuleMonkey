@@ -3145,10 +3145,8 @@ Model load_model(const std::string& xml_path,
              "Rule '" + rule.id + "' (" + rule.name +
                  ") writes molecules that start in one complex into different product "
                  "patterns, and deletes no bond or molecule that could part them. "
-                 "BioNetGen generates no reaction for such a rule, and RM never fires it "
-                 "while block_same_complex_binding (the default) enforces the + between "
-                 "product patterns. Delete the bond that holds them together, or write a "
-                 ". between them."});
+                 "BioNetGen generates no reaction for such a rule, and RM never fires it. "
+                 "Delete the bond that holds them together, or write a . between them."});
     }
 
     // The `TotalRate` keyword.  BNG2.pl does not implement it for network

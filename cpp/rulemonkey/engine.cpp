@@ -5334,8 +5334,7 @@ struct Engine::Impl {
     // Before any propensity is set: set_rule_propensity reads it.
     for (int ri = 0; ri < n_rules; ++ri) {
       auto const& rule = model.rules[ri];
-      rule_states[ri].never_fires = rule.products_never_join ||
-                                    (rule.products_never_split && model.block_same_complex_binding);
+      rule_states[ri].never_fires = rule.products_never_join || rule.products_never_split;
     }
 
     // Precompute local_obs_indices: the observable slots that any local
@@ -11048,9 +11047,8 @@ struct Engine::Impl {
   // names carries the product pattern its map sends it to.  A piece holding
   // two product patterns breaks a `+`; a product pattern in two pieces
   // breaks a `.`; a piece holding none is a species the rule does not write,
-  // which only DeleteMolecules allows (issue #104).  The `+` is tested under
-  // -bscb, which enforces it, and always for a delete without the keyword:
-  // NFsim refuses that rule, so it has no loose reading to keep.
+  // which only DeleteMolecules allows (issue #104).  The `+` is tested
+  // whatever block_same_complex_binding says (issue #123).
   bool products_split_as_written(const Rule& rule, const ReactionMatch& match) const {
     std::unordered_set<int> deleted;
     bool counts_extra_pieces = false;
@@ -11069,7 +11067,6 @@ struct Engine::Impl {
         deleted.insert(mid);
       }
     }
-    bool const tests_plus = model.block_same_complex_binding || counts_extra_pieces;
 
     // Nodes: the surviving molecules of every complex the match touches, then
     // one per added molecule.
@@ -11164,7 +11161,7 @@ struct Engine::Impl {
       int const root = find(i);
       if (piece_pattern[root] < 0)
         piece_pattern[root] = p;
-      else if (piece_pattern[root] != p && tests_plus)
+      else if (piece_pattern[root] != p)
         return false; // a `+` holds together
       if (pattern_piece[p] < 0)
         pattern_piece[p] = root;
@@ -12076,12 +12073,14 @@ struct Engine::Impl {
       // by bond, and on every deleted bond of a rule with several product
       // patterns, mapped apart or not.
       //
-      // This enforces the RHS-`+` half of strict BNGL semantics.  It is
-      // gated on `block_same_complex_binding` so that both halves of the
-      // `+` check (LHS binding and RHS unbinding) toggle together, matching
-      // NFsim's `-bscb` (which implies `-cb` and enables both checks).
-      if (model.block_same_complex_binding &&
-          !products_stay_apart(model.rules[selected], match, selected)) {
+      // Made whatever block_same_complex_binding says (issue #123).  That
+      // flag decides whether one complex may supply both reactant patterns,
+      // the half of NFsim's -bscb that has a reading under -no-bscb.  Whether
+      // the products come apart has one answer in BNGL: BNG2 generates no
+      // reaction for a `+` that cannot hold.  A rule that deletes no such
+      // bond is not tested here, so under -no-bscb a rule that parts nothing
+      // still fires on two molecules of one complex, as NFsim lets it.
+      if (!products_stay_apart(model.rules[selected], match, selected)) {
         timing_sample += std::chrono::duration<double>(t1 - t0).count();
         ++null_event_count;
         continue;

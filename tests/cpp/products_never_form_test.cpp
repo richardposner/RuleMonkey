@@ -8,12 +8,12 @@
 //   * the load reports each such rule as a Warn, so rm_driver runs the model
 //     as BNG2 does instead of refusing it, and reports no other rule;
 //   * `Join`, `Bare` and `Lone`, which write two molecules nothing joins
-//     into one product pattern, never fire under either setting of
-//     block_same_complex_binding;
-//   * `Apart`, which writes two molecules of one complex into different
-//     product patterns and never parts them, is inert only while the flag
-//     enforces the `+` between product patterns.  With it off, the `+` is
-//     not tested, as for a deleted bond, and the rule fires at k.
+//     into one product pattern, and `Apart`, which writes two molecules of
+//     one complex into different product patterns and never parts them,
+//     never fire under either setting of block_same_complex_binding.  That
+//     flag decides only whether one complex may supply both reactant
+//     patterns; the `+` between product patterns holds either way (issue
+//     #123).
 
 #include "rulemonkey/simulator.hpp"
 
@@ -93,11 +93,11 @@ int main(int argc, char* argv[]) {
       check(final_value(r, "Join_on") == 0, "Join fired without block_same_complex_binding");
       check(final_value(r, "Bare_on") == 0, "Bare fired without block_same_complex_binding");
       check(final_value(r, "Lone_on") == 0, "Lone fired without block_same_complex_binding");
-      double const apart = final_value(r, "Apart_on");
-      check(std::abs(apart - expected) < tol,
-            "without block_same_complex_binding Apart should fire at k: expected " +
-                std::to_string(expected) + " +- " + std::to_string(tol) + ", observed " +
-                std::to_string(apart));
+      check(final_value(r, "Apart_on") == 0, "Apart fired without block_same_complex_binding");
+      double const bound = final_value(r, "Bound_on");
+      check(std::abs(bound - expected) < tol,
+            "Bound (control) should fire without block_same_complex_binding: " +
+                std::to_string(bound));
     }
   } catch (const std::exception& e) {
     std::fprintf(stderr, "FAIL: exception: %s\n", e.what());
