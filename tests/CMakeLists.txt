@@ -1054,7 +1054,20 @@ if(TARGET rm_driver)
         )
         # The 400-seed sampler model dominates; comfortably inside this on a
         # laptop, headroom for a loaded CI runner.
-        set_tests_properties(bng_oracle PROPERTIES TIMEOUT 600)
+        #
+        # A sanitizer build runs every one of the suite's rm_driver calls
+        # instrumented, and there 600 s left no headroom.  The ubuntu asan
+        # job took 435 s (PR #121) and 362 s (PR #136) on ordinary runners,
+        # and on a runner 1.6x slower across the whole suite (PR #138) it
+        # was killed at 600 s with 10 of its 13 models passed and none
+        # failed.  The longer
+        # limit applies to sanitizer builds only, so a release build that
+        # slows down still fails here.
+        set(_bng_oracle_timeout 600)
+        if(RULEMONKEY_ENABLE_ASAN OR RULEMONKEY_ENABLE_TSAN)
+            set(_bng_oracle_timeout 1800)
+        endif()
+        set_tests_properties(bng_oracle PROPERTIES TIMEOUT ${_bng_oracle_timeout})
     endif()
 endif()
 
