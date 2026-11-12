@@ -1,7 +1,7 @@
 # rulemonkey reference manifest
-# generated 2026-08-20T22:05:34Z
+# generated 2026-11-12T22:13:47Z
 # root tests/reference/basicmodels
-PROVENANCE.md	7b7caa1c06c84b317018df3f0b218ec7b2fbcb0bf0dd797f484f3a68ec99c1cf
+PROVENANCE.md	1fb5c31eae9b8f2945a1d4c22c38c32beb3319d5128cf9ac540d9e723fd8c9f7
 ensemble/r01.mean.tsv	e2e60b1a52146478995495545381802f4c6678034305b312ae9d3cf42ccd28c4
 ensemble/r01.std.tsv	64c84229922b4cf0e90641d9d7a8db309693d23f21f265aaadc1f93dceb91f04
 ensemble/r01.tint.tsv	1fe0db7fcf0c768a70e4bb0737e34eafa9664cd7f4f782c8e90b2b0be3bb8bdf

@@ -195,7 +195,7 @@ jobs:
     # Runs the full feature_coverage benchmark on every push / PR.  ctest
     # alone would not catch regressions in simulation correctness — the
     # smoke test only verifies the engine loads and steps an XML.  This
-    # job runs the 77-model RM-vs-NFsim z-score + RM-vs-ODE rel-err
+    # job runs the 90-model RM-vs-NFsim z-score + RM-vs-ODE rel-err
     # comparison that surfaced the self-binding propensity bug, the MM
     # silent-zero-rate bug, the TFUN sentinel typo, etc., in development.
     #
