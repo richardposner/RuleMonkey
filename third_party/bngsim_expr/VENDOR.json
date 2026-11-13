@@ -5,11 +5,11 @@
     "name": "BNGsim",
     "repo_remote": "git@github.com:lanl/bngsim.git",
     "repo_subdir": ".",
-    "branch_or_ref": "4361958f39a27b153974cff7f219d02627c0f3b8",
+    "branch_or_ref": "e527f6c206f071a03b6a5541b766b6a10e1a78bc",
     "current_branch": "main",
-    "commit": "4361958f39a27b153974cff7f219d02627c0f3b8"
+    "commit": "e527f6c206f071a03b6a5541b766b6a10e1a78bc"
   },
-  "imported_at_utc": "2026-10-22T23:50:46+00:00",
+  "imported_at_utc": "2026-11-13T01:38:22+00:00",
   "files": {
     "exprtk_header": {
       "path": "third_party/exprtk/exprtk.hpp",
@@ -21,22 +21,50 @@
     "expression_header": {
       "path": "third_party/bngsim_expr/include/bngsim/expression.hpp",
       "source_path": "include/bngsim/expression.hpp",
-      "sha256": "086d3b0c85ba7a6728a40f137ee3bf7500ea66ff557ca3ee738795356a1d93f5",
-      "bytes": 10300,
+      "sha256": "9e2f9787ae035a46634d8695d25703362b97aea2666434c665c46b0ed5b4cba7",
+      "bytes": 12140,
       "description": "BNGsim ExprTkEvaluator public wrapper header"
     },
     "expr_compat_header": {
       "path": "third_party/bngsim_expr/include/bngsim/expr_compat.hpp",
       "source_path": "include/bngsim/expr_compat.hpp",
-      "sha256": "c20c9f4240091316d7ccec83894bc186b20be48c30fd443e50d73ce15b928712",
-      "bytes": 3918,
+      "sha256": "7f1cd26d3304618f5463143e5956caa2449c296f66f31bb60b80ab4edb5d881a",
+      "bytes": 5592,
       "description": "BNGsim BNG<->ExprTk compatibility primitives (GH #49)"
+    },
+    "dual_header": {
+      "path": "third_party/bngsim_expr/include/bngsim/dual.hpp",
+      "source_path": "include/bngsim/dual.hpp",
+      "sha256": "da2737756b2e036972b133863942c8a812ced34a0d8cc5679ad324a406470668",
+      "bytes": 20290,
+      "description": "BNGsim forward-mode dual number type (lanl/bngsim#1330)"
+    },
+    "c_locale_numbers_header": {
+      "path": "third_party/bngsim_expr/include/bngsim/c_locale_numbers.hpp",
+      "source_path": "include/bngsim/c_locale_numbers.hpp",
+      "sha256": "3eaeb4f30456e3a5a9a5394565e9bc10051d5ee47d650206e78a98cd86af3a4d",
+      "bytes": 5624,
+      "description": "BNGsim C-locale number reading and writing (lanl/bngsim#1235)"
+    },
+    "exprtk_dual_pre_header": {
+      "path": "third_party/bngsim_expr/src/exprtk_dual_pre.hpp",
+      "source_path": "src/exprtk_dual_pre.hpp",
+      "sha256": "a802dfd9428b27f011c2c59289cec359c7568e3e8e8d6a8f92e37b37f8d0c756",
+      "bytes": 925,
+      "description": "ExprTk-on-Dual declarations ahead of exprtk.hpp (lanl/bngsim#1330)"
+    },
+    "exprtk_dual_header": {
+      "path": "third_party/bngsim_expr/src/exprtk_dual.hpp",
+      "source_path": "src/exprtk_dual.hpp",
+      "sha256": "26a84729ba07702388af6b4b2d907d4d737c72c57a91e9fc533c25ff33a846fd",
+      "bytes": 10984,
+      "description": "ExprTk-on-Dual numeric overloads (lanl/bngsim#1330)"
     },
     "expression_source": {
       "path": "third_party/bngsim_expr/src/expression.cpp",
       "source_path": "src/expression.cpp",
-      "sha256": "34b2012f32d032cd2ae825b0c2309f2e5ee376a02211abb7d481f34835c478cc",
-      "bytes": 82006,
+      "sha256": "ec340798b2909636b17c852581e88129e71e91f8a81cfb2c6569b857345b7e69",
+      "bytes": 94328,
       "description": "BNGsim ExprTkEvaluator implementation"
     }
   },

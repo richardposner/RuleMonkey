@@ -59,6 +59,26 @@ FILES = {
         "source_path": "include/bngsim/expr_compat.hpp",
         "description": "BNGsim BNG<->ExprTk compatibility primitives (GH #49)",
     },
+    "dual_header": {
+        "path": "third_party/bngsim_expr/include/bngsim/dual.hpp",
+        "source_path": "include/bngsim/dual.hpp",
+        "description": "BNGsim forward-mode dual number type (lanl/bngsim#1330)",
+    },
+    "c_locale_numbers_header": {
+        "path": "third_party/bngsim_expr/include/bngsim/c_locale_numbers.hpp",
+        "source_path": "include/bngsim/c_locale_numbers.hpp",
+        "description": "BNGsim C-locale number reading and writing (lanl/bngsim#1235)",
+    },
+    "exprtk_dual_pre_header": {
+        "path": "third_party/bngsim_expr/src/exprtk_dual_pre.hpp",
+        "source_path": "src/exprtk_dual_pre.hpp",
+        "description": "ExprTk-on-Dual declarations ahead of exprtk.hpp (lanl/bngsim#1330)",
+    },
+    "exprtk_dual_header": {
+        "path": "third_party/bngsim_expr/src/exprtk_dual.hpp",
+        "source_path": "src/exprtk_dual.hpp",
+        "description": "ExprTk-on-Dual numeric overloads (lanl/bngsim#1330)",
+    },
     "expression_source": {
         "path": "third_party/bngsim_expr/src/expression.cpp",
         "source_path": "src/expression.cpp",

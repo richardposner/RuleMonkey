@@ -9,13 +9,17 @@ target instead.
 
 Source repo  : git@github.com:lanl/bngsim.git
 Source subdir: .
-Pinned commit: 4361958f39a27b153974cff7f219d02627c0f3b8
+Pinned commit: e527f6c206f071a03b6a5541b766b6a10e1a78bc
 Metadata     : third_party/bngsim_expr/VENDOR.json
 
 Vendored files (copied verbatim, no edits):
   third_party/exprtk/exprtk.hpp <- bngsim third_party/exprtk/exprtk.hpp
   third_party/bngsim_expr/include/bngsim/expression.hpp <- bngsim include/bngsim/expression.hpp
   third_party/bngsim_expr/include/bngsim/expr_compat.hpp <- bngsim include/bngsim/expr_compat.hpp
+  third_party/bngsim_expr/include/bngsim/dual.hpp <- bngsim include/bngsim/dual.hpp
+  third_party/bngsim_expr/include/bngsim/c_locale_numbers.hpp <- bngsim include/bngsim/c_locale_numbers.hpp
+  third_party/bngsim_expr/src/exprtk_dual_pre.hpp <- bngsim src/exprtk_dual_pre.hpp
+  third_party/bngsim_expr/src/exprtk_dual.hpp <- bngsim src/exprtk_dual.hpp
   third_party/bngsim_expr/src/expression.cpp <- bngsim src/expression.cpp
 
 Refresh / drift-check
