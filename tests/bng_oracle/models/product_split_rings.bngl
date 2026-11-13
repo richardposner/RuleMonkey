@@ -3,40 +3,32 @@
 #
 # BioNetGen applies all of a rule's operations, then splits the result into
 # connected components. A component holding molecules the rule maps into two
-# product patterns breaks the `+`, and BNG2 generates no reaction. These four
+# product patterns breaks the `+`, and BNG2 generates no reaction. These
 # channels come from PR #137 (issue #123), which ran them under -no-bscb and
 # was closed unmerged; that flag is deprecated and goes in 4.0 (issue #139).
 # Here they check the default mode against BNG2's own network.
 #
-# Four channels, no molecule type shared between them. In each, rings that
+# The rings have four members, so breaking one bond leaves its two ends
+# joined the long way round, through the other two molecules.
+# product_split's rings are pairs joined by a second bond.
+#
+# Two channels, no molecule type shared between them. In each, rings that
 # the rule cannot part sit beside linear complexes it can, so a change that
 # stopped the rule altogether fails as surely as one that let it open rings.
 #
 #   Split  `L(r!1).R(l!1) -> L(r) + R(l)` on L.R.L.R rings and L.R dimers.
-#          Breaking one bond of a ring leaves L and R joined the long way
-#          round, through the other two molecules, so BNG2 splits only the
-#          dimers. product_split's rings are pairs joined by a second bond.
+#          BNG2 splits only the dimers.
 #   Grab   the same with two reactant patterns and a bond made:
 #          `L2(r!1,c).R2(l!1) + C(x) -> L2(r,c!2).C(x!2) + R2(l)`. Only
 #          the dimers take a C, so the C pool falls from 2N to N.
-#   Del    `Ad(b!1).Bd(a!1,c!2).Cd(b!2) -> Ad(b) + Cd(b)  DeleteMolecules`,
-#          which deletes the Bd, on Ad.Bd.Cd rings that an Ad-Cd bond keeps
-#          whole and on chains it does not: the engine's full post-reaction
-#          split (issue #104), in the shape of product_split_full's Plus_ring.
-#   Apart  `Pa(s~0).Pb(t~0) -> Pa(s~1) + Pb(t~1)`, which writes two bonded
-#          molecules into different product patterns and deletes nothing.
-#          BNG2 generates no reaction for it (issue #105) and RuleMonkey
-#          warns at load. The rule of products_never_form's Apart_on.
 #
-# The SSA reference is for Grab, whose C pool depletes as it binds; the
-# other channels are first order, where the ODE would serve as well.
+# The SSA reference is for Grab, whose C pool depletes as it binds; Split is
+# first order, where the ODE would serve as well.
 
 begin model
 begin parameters
   k_split  1
   k_grab   0.01
-  k_del    0.5
-  k_apart  1
   N        100
 end parameters
 
@@ -46,11 +38,6 @@ begin molecule types
   L2(r,r,c)
   R2(l,l)
   C(x)
-  Ad(b,c)
-  Bd(a,c)
-  Cd(b,a)
-  Pa(s~0~1,b)
-  Pb(t~0~1,a)
 end molecule types
 
 begin seed species
@@ -59,9 +46,6 @@ begin seed species
   L2(r!1,r!2,c).R2(l!2,l!3).L2(r!3,r!4,c).R2(l!4,l!1)  N
   L2(r!1,r,c).R2(l!1,l)                                N
   C(x)                                                 2*N
-  Ad(b!1,c!3).Bd(a!1,c!2).Cd(b!2,a!3)                  N
-  Ad(b!1,c).Bd(a!1,c!2).Cd(b!2,a)                      N
-  Pa(s~0,b!1).Pb(t~0,a!1)                              N
 end seed species
 
 begin observables
@@ -69,15 +53,11 @@ begin observables
   Species   Split_free_L L(r,r)
   Species   Grab_rings   L2(r!1,r!2).R2(l!2,l!3).L2(r!3,r!4).R2(l!4,l!1)
   Molecules Grab_free_C  C(x)
-  Molecules Del_B        Bd()
-  Molecules Apart_on     Pa(s~1)
 end observables
 
 begin reaction rules
   Split: L(r!1).R(l!1) -> L(r) + R(l)  k_split
   Grab:  L2(r!1,c).R2(l!1) + C(x) -> L2(r,c!2).C(x!2) + R2(l)  k_grab
-  Del:   Ad(b!1).Bd(a!1,c!2).Cd(b!2) -> Ad(b) + Cd(b)  k_del  DeleteMolecules
-  Apart: Pa(s~0).Pb(t~0) -> Pa(s~1) + Pb(t~1)  k_apart
 end reaction rules
 end model
 
