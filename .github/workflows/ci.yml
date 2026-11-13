@@ -265,9 +265,9 @@ jobs:
 
   vendor_check:
     # Guards the vendored BNGsim expression layer (issues #6 / #11) against
-    # drift.  scripts/vendor_exprtk.py --check byte-compares the four vendored
-    # files (exprtk.hpp + bngsim expression.hpp / expr_compat.hpp /
-    # expression.cpp) against their pinned lanl/bngsim commit.  Version skew
+    # drift.  scripts/vendor_exprtk.py --check byte-compares every file in its
+    # FILES table (exprtk.hpp, plus bngsim's expression.cpp and the bngsim
+    # headers it includes) against their pinned lanl/bngsim commit.  Version skew
     # between RuleMonkey's standalone copy and BNGsim's expression layer is an
     # ODR violation, so any drift here is a build failure.
     #
