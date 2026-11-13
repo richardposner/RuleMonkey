@@ -33,7 +33,9 @@ REF_DIR = os.path.join(SUITE_DIR, "reference")
 # seeds: enough that the SEM resolves the failure mode this model pins.  For
 # context_symmetry that is a factor of 2 or 3 on a pool of 4000, which a
 # handful of seeds already separates by tens of sigma; for context_sampler it
-# is a 34% shift on 8 molecules, which needs a few hundred.
+# is a 34% shift on 8 molecules, which needs a few hundred.  flags: extra
+# rm_driver arguments, after the seed; BNG2's reference takes none, since its
+# network has no switch.  Leave it out to run RuleMonkey as shipped.
 MODELS = {
     "context_symmetry": {"t_end": 2000, "n_steps": 2, "seeds": 24},
     "context_sampler": {"t_end": 500, "n_steps": 5, "seeds": 400},
@@ -48,6 +50,7 @@ MODELS = {
     "arrhenius_context": {"t_end": 2, "n_steps": 2, "seeds": 24},
     "arrhenius_context_bind": {"t_end": 60, "n_steps": 2, "seeds": 48},
     "context_remote_move": {"t_end": 100, "n_steps": 2, "seeds": 96},
+    "product_split_rings": {"t_end": 5, "n_steps": 2, "seeds": 24},
 }
 
 Z_THRESHOLD = 6.0
@@ -61,9 +64,9 @@ def read_tsv(path: str):
     return header, rows
 
 
-def run_driver(driver: str, xml: str, t_end, n_steps, seed: int):
+def run_driver(driver: str, xml: str, t_end, n_steps, seed: int, flags=()):
     proc = subprocess.run(
-        [driver, xml, str(t_end), str(n_steps), str(seed)],
+        [driver, xml, str(t_end), str(n_steps), str(seed), *flags],
         capture_output=True,
         text=True,
         timeout=300,
@@ -95,7 +98,9 @@ def check_model(driver: str, model: str, spec: dict) -> tuple[bool, str]:
     runs = []
     rm_header = None
     for seed in range(1, spec["seeds"] + 1):
-        h, rows = run_driver(driver, xml, spec["t_end"], spec["n_steps"], seed)
+        h, rows = run_driver(
+            driver, xml, spec["t_end"], spec["n_steps"], seed, spec.get("flags", ())
+        )
         rm_header = rm_header or h
         runs.append(rows)
 

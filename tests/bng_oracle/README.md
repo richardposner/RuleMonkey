@@ -41,7 +41,9 @@ substrate pools that deplete together and a catalyst-complex population that
 fluctuates as dimers form and break, so the ODE of the means is not the mean of
 the SSA. A stochastic reference sidesteps the question entirely — it is the same
 process, not an approximation to it. `context_remote_move` runs a single chain
-per channel, so it takes the SSA for the first reason.
+per channel, so it takes the SSA for the first reason. `product_split_rings`
+takes it for the second: one channel's rate is a product of two pools, dimers
+and free C, that deplete together.
 
 ## Models
 
@@ -56,6 +58,7 @@ per channel, so it takes the SSA for the first reason.
 | `product_split` | ode | **The `+` between product patterns.** A bond the rule deletes between molecules it maps into different product patterns must leave them in different complexes once all of the rule's operations apply, whatever the number of reactant patterns (issue #102). Two-reactant splits and a split that also makes a bond, on ring pairs (never fire) and single pairs (fire). A rule deleting both bonds of a ring (fires). A deleted bond whose ends stay in one product pattern, held by a ring (fires) or not (never fires). Controls: the one-reactant split, and an energy (Arrhenius) unbinding rule, which RuleMonkey expands at load. NFsim `-bscb` gets six of the eleven columns wrong. |
 | `product_split_full` | ode | **The `+` and `.` where a check bond by bond cannot decide them** (issue #104). A molecule deleted out of a complex under `DeleteMolecules`: a `+` between its neighbours on a chain (fires) and a ring (never fires), the same chain with an extra molecule on the deleted one (fires, the extra piece allowed), and a `.` on a ring (fires) and a chain (never fires). A delete without the keyword that leaves as many species as product patterns, but the wrong ones (never fires). A pattern cut into three pieces, under a `+` and under a `.`, on chains and rings. A molecule joined to its pattern only by `.`, on either side of a deleted bond, and held by a bond the rule keeps. |
 | `products_never_form` | ode | **A rule whose right-hand side can never be true** (issue #105). Two molecules in one product pattern that start in different reactant patterns, one of them named by no component, or that the rule creates, with no bond added between them; and two molecules of one complex written into different product patterns with nothing deleted between them. BNG2 generates no reaction for any of them. Controls: a created molecule the rule bonds, and a pair the rule does part. |
+| `product_split_rings` | ssa | **The `+` between product patterns on rings, under RuleMonkey's default flag.** Two channels from PR #137, which ran them under `-no-bscb` and was closed unmerged (issues #123, #139). The rings have four members, so the ends of the deleted bond stay joined the long way round, through the other two molecules, rather than by a second bond as on `product_split`'s rings. In each channel, rings the rule cannot part sit beside dimers it can, so a rule stopped altogether fails too. A unimolecular split, and the same with two reactant patterns and a bond made, whose C pool depletes as it binds, hence the SSA. Unlike the other models here, it pins no fix: RuleMonkey 3.13.0 passes it. NFsim 1.14.3, with `-bscb` or `-cb`, gets both channels wrong: it opens the rings. |
 | `arrhenius_formula` | ode | **The Arrhenius rate law as BNG2's network builds it** (issue #107): `exp(-(Ea0 + phi*dG))` with `dG` the reaction the rule writes, `1-phi` for the reverse half of a reversible rule, and no `RT`. phi = 0.3, and no parameter named `RT`. A reversible rule written as binding and one written as unbinding, unidirectional rules that make and break a bond, and a cooperative context pattern. And rules the modeler labelled `_reverse_Gone`, with no rule `Gone`, and `_reverse_Flip`, beside an unrelated rule `Flip`: rules as written, which take phi like any other, though BNG2 names the reverse half of a reversible rule that way (issue #109). And a cooperative pattern written with `!+`, which the load-time expansion prices exactly. |
 | `arrhenius_rt` | ode | **A parameter named `RT` is ordinary** (issue #107): energies in kJ/mol, divided by the model's own `RT` where they are used, as BNG2's `Models2/energy_example1.bngl` does. The same rates as `arrhenius_formula`'s reversible rule and bond-breaking rule. |
 | `arrhenius_context` | ode | **Arrhenius rules whose energy patterns or reactant context the load-time expansion cannot price** (issue #109), run on the exact path, with dG counted at each firing. Unidirectional unbinding of seeded complexes, one column pair per shape: a state in a pattern; a site it requires free; wildcard bonds only; a `!+` and a context bond on a second site named like the reaction site; a context site with two partners, one of them made only by a rule; context two bonds out; two context bonds; a context site declared twice; a `!?` BNG2 counts twice; a ring opened by a rule written with `.`; and a state, a third molecule and a free site in the rule's own reactant pattern. RuleMonkey 3.11.0 missed the issue's eight cases by 48-52 standard errors. |
@@ -71,8 +74,14 @@ python3 tests/bng_oracle/check.py --driver build/release/rm_driver
 
 Scoring is a z on the difference of two means, combining RuleMonkey's ensemble
 SEM with the reference's own in quadrature, so a stochastic reference is not
-treated as exact. Each model fails by tens of sigma against the engine before
-its fix, which is the property that makes them worth committing.
+treated as exact. Each model but `product_split_rings` fails by tens of sigma
+against the engine before its fix, which is the property that makes them
+worth committing; that one guards the default `+` on rings.
+
+A model's entry in `check.py`'s `MODELS` may carry `"flags"`, extra
+`rm_driver` arguments passed after the seed. BNG2's reference takes none, as
+its network has no switch. No model sets it today, so every model runs
+RuleMonkey's defaults.
 
 ## Regenerating
 

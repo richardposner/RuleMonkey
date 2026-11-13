@@ -1,7 +1,7 @@
 # Test corpora
 
 RuleMonkey's correctness story rests on four independent test suites
-totalling 203 BNGL models. Every check compares the RM trajectory
+totalling 204 BNGL models. Every check compares the RM trajectory
 against a gold-standard reference:
 
 - an NFsim ensemble, BNG2 ODE or a hand-rolled Gillespie SSA for the first
@@ -18,7 +18,7 @@ scored by relative error instead.
 | `feature_coverage` | 90 | NFsim 20-rep + BNG2 ODE | `harness/benchmark_feature_coverage.py` | ~3 min |
 | `corpus` | 71 | NFsim 100-rep ensemble (with 2 SSA exceptions) | `harness/benchmark_full.py` | smoke 2 min / guard 15 min / full 3 h |
 | `nfsim_basicmodels` | 29 | NFsim 100-rep ensemble | `harness/basicmodels.py` | ~5 min |
-| `bng_oracle` | 13 | BNG2 network: ODE, or an SSA ensemble | `tests/bng_oracle/check.py` (ctest `bng_oracle`) | ~40 s |
+| `bng_oracle` | 14 | BNG2 network: ODE, or an SSA ensemble | `tests/bng_oracle/check.py` (ctest `bng_oracle`) | ~40 s |
 
 Last full sweep of the three NFsim suites (2026-08-06): **182 / 182
 PASS** at the canonical verdict thresholds. CI runs `feature_coverage`
@@ -137,7 +137,7 @@ directory.
 
 ## `bng_oracle` — BioNetGen's own answer
 
-13 models (`tests/bng_oracle/models/*.bngl`) whose expected behaviour comes
+14 models (`tests/bng_oracle/models/*.bngl`) whose expected behaviour comes
 from BNG2.pl's `generate_network()` expansion rather than from an NFsim
 ensemble. A model belongs here when NFsim is wrong about it. An NFsim
 reference would then be permanently red for the wrong reason, and would pull
@@ -159,8 +159,8 @@ The models pin:
   propensity following that count in the same event when a bond forms or
   breaks out of the event's own reach;
 - whole-species deletes, and partial deletes without `DeleteMolecules`;
-- the `+` and `.` between product patterns (#102, #104), and rules whose
-  products can never form (#105);
+- the `+` and `.` between product patterns (#102, #104), including on rings
+  a rule cannot part, and rules whose products can never form (#105);
 - the Arrhenius rate law as BNG2's network builds it (#107, #109).
 
 The per-model table, with what each column pins, is in the suite's
@@ -241,7 +241,7 @@ tests/
     rm/
       summary.tsv                                    # RM wall times for the timing comparison
   bng_oracle/
-    models/*.bngl                                    # 13 BNGL sources
+    models/*.bngl                                    # 14 BNGL sources
     xml/*.xml                                        # BNG2-written XML
     reference/{model}.{mean,sem}.tsv                 # BNG2 network ODE or SSA reference
     check.py                                         # scorer (ctest bng_oracle)
