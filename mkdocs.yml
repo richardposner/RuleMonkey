@@ -69,6 +69,7 @@ plugins:
 nav:
   - Home: index.md
   - Quickstart: quickstart.md
+  - Embedding (C++ API): embedding.md
   - BNGL coverage and semantics: model_semantics.md
   - Troubleshooting and FAQ: troubleshooting.md
   - Output formats:

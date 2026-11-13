@@ -390,6 +390,16 @@ def main():
     rm_faster = sum(1 for s in speedups if s > 1.0)
     nf_faster = sum(1 for s in speedups if s < 1.0)
 
+    # Speedup by workload: rank the both-OK models by the slower engine's
+    # median wall time and compare the cheapest and costliest quarters, so
+    # the caveat reports what this run measured rather than a fixed claim.
+    by_cost = sorted(
+        (max(r["nf"].median(), r["rm"].median()), r["nf"].median() / r["rm"].median())
+        for r in rows
+        if r["rm"].ok and r["nf"].ok and r["rm"].median() > 0
+    )
+    quarter = len(by_cost) // 4
+
     # Write markdown.
     out_path: Path = args.out
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -434,11 +444,17 @@ def main():
             "and result write — same for both engines, so the ratio is fair, "
             "but absolute numbers shift across machines.\n"
         )
-        f.write(
-            "- Speedup depends on workload: long-horizon, high-event-rate models "
-            "show RM's biggest wins; short-horizon trivial models are near parity "
-            "or NFsim-favored due to RM's slightly heavier per-process startup.\n"
-        )
+        if quarter >= 2:
+            cheap = [s for _, s in by_cost[:quarter]]
+            costly = [s for _, s in by_cost[-quarter:]]
+            f.write(
+                "- Speedup depends on workload.  Ranked by the slower engine's "
+                "median wall time, the cheapest quarter of the scored models "
+                f"({quarter}) has a median speedup of {statistics.median(cheap):.2f}× "
+                f"(RM faster on {sum(1 for s in cheap if s > 1.0)}), and the costliest "
+                f"quarter {statistics.median(costly):.2f}× "
+                f"(RM faster on {sum(1 for s in costly if s > 1.0)}).\n"
+            )
         f.write(
             "- Single-replicate timings can be noisy.  See min/max columns for "
             "spread; the median column is what to quote.\n"

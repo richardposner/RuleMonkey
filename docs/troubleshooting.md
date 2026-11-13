@@ -317,11 +317,11 @@ currently in this repo's tree).
 
 ### My model runs slower than NFsim
 
-[`timing_comparison.md`](timing_comparison.md) breaks the 173-model
-RM-vs-NFsim comparison into six speedup buckets and explains where
-each engine wins.  The short version: RM wins on
-count-relation Species observables (`Species X R()=N` shapes) and
-short total-wall runs;  NFsim wins on heavy enzyme-kinetics models
-(`e1`–`e9`) and very-long stochastic runs.  Pattern canonical
-labelling (a candidate optimisation flagged in `CHANGELOG.md`) would
-narrow the latter.
+[`timing_comparison.md`](timing_comparison.md) compares RM and NFsim
+wall time on 169 models, measured on 2026-05-02 on the code that became
+3.1.2; see the note at its top.  In that run RM won on count-relation
+Species observables (`Species X R()=N` shapes) and short total-wall
+runs, and NFsim on heavy enzyme-kinetics models (`e1`–`e9`) and
+very-long stochastic runs.  The numbers will be regenerated after the
+efficiency work tracked in
+[#124](https://github.com/richardposner/RuleMonkey/issues/124).

@@ -308,6 +308,7 @@ The runtime severity model is two-level:
   both patterns' factors. RM applies it to the substrate, which reproduces
   BNG2 for the ordinary shape and anywhere the law is linear, and runs up to
   2x fast against BNG2 in saturation otherwise. Also warned at load.
+
 - **`TFUN`** — table-function rate laws backed by external `.tfun`
   files. RM searches both the XML directory and one level up to handle
   both author-side and harness-side layouts. Counter sources may be
@@ -452,6 +453,7 @@ The runtime severity model is two-level:
   Consequence worth stating plainly: a derived parameter *is*
   overridable even though BNG2 emitted its `value` as a literal. That
   was not true before 3.7.0 — see the issue #23 entry in the changelog.
+
 - Cascade order is the parameter declaration order in the XML, iterated
   to fixed point (capped at `parameter_count + 4` passes) both at load
   time and at `set_param` time.  An arbitrarily-deep chain of forward
@@ -492,6 +494,10 @@ The runtime severity model is two-level:
   segments of a stateful session.
 
 ### Functional surface
+
+[Embedding (C++ API)](embedding.md) is the guide to the whole API by task,
+including `run_ensemble`, `parameter_scan` and `bifurcate`, which this
+section does not list.
 
 - `set_param`, `clear_param_overrides`, `set_initial_amount`,
   `clear_initial_amount_overrides`, `set_molecule_limit`,

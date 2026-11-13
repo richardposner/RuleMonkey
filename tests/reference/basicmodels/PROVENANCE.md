@@ -12,8 +12,9 @@ The BNGL files in `tests/models/nfsim_basicmodels/` are derived from
 NFsim's own `validate/basicModels/` regression suite — small,
 purpose-built tests that NFsim used to verify specific behaviors of its
 rule engine. The suite was inherited when RuleMonkey was forked from
-NFsim and is preserved here as one of three test corpora (alongside
-`feature_coverage/` and the larger model corpus under `corpus/`).
+NFsim and is preserved here as one of four test suites (alongside
+`feature_coverage/`, the larger model corpus under `corpus/`, and the
+BNG2-oracle suite under `tests/bng_oracle/`).
 
 The 29 BNGL files cover: simple binding / unbinding / phosphorylation,
 multiple identical sites and dimerization, ring closure (single- and
